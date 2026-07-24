@@ -39,13 +39,38 @@ TOUTES vers un endpoint STT ».
 ### D2 — Enregistrement d'import minimal + idempotence composite
 
 Pas d'entité `MeetingOccurrence` à 6 tables maintenant (rejeté, cf. R2). Au 1er
-connecteur : un enregistrement **`MeetingImport`** minimal reliant artefact distant → job,
-avec **contrainte UNIQUE en base** (pas un check applicatif : deux webhooks simultanés).
+connecteur : un enregistrement **`MeetingImport`** minimal reliant artefact distant → job.
 
-Clé d'idempotence **composite** (jamais `external_meeting_id` seul — réutilisé par les
-réunions récurrentes Zoom / séries Teams / espaces Meet) :
-`provider + provider_account/tenant + external_occurrence_id + external_artifact_id`.
-À défaut d'`external_artifact_id` fourni : `… + artifact_type + artifact_variant + checksum`.
+**Clé de dédup NON-NULLE** (revue #3 : une contrainte `UNIQUE` PostgreSQL ordinaire
+laisse passer plusieurs `NULL` → un fallback avec `external_artifact_id` NULL ne
+protégerait pas). On dérive donc une **`dedup_key`** hachée, jamais nulle :
+- avec identifiant d'artefact :
+  `sha256(provider + provider_account_id + external_occurrence_id + external_artifact_id)` ;
+- sans (la plateforme n'en fournit pas) :
+  `sha256(provider + provider_account_id + external_occurrence_id + artifact_type + artifact_variant + checksum)`.
+Puis **`UNIQUE (dedup_key)`**. `external_meeting_id` seul est proscrit (réutilisé par les
+réunions récurrentes Zoom / séries Teams / espaces Meet).
+
+**Modèle minimal** : `id, provider, provider_account_id, external_occurrence_id,
+external_artifact_id, artifact_type, artifact_variant, sha256, dedup_key, status, job_id,
+correlation_id, attempt_count, last_error, next_retry_at, created_at, updated_at`.
+États : `received → fetching → stored → job_created → processing → completed`,
++ `failed_retryable | failed_final | ignored`.
+
+**Idempotence AUSSI côté serveur TranscrIA** (pas seulement dans le connecteur : si le
+job est créé mais la réponse réseau perdue, un retry créerait un 2e job). La création de
+job accepte un en-tête `Idempotency-Key: <dedup_key>` ; un retour avec la même clé renvoie
+le même `job_id`.
+
+### D2-bis — Réconciliation des événements manqués
+
+Les webhooks seuls ne garantissent pas « 0 perte silencieuse / ≥ 99 % importées ». Un
+**`ProviderReconciler`** périodique (patron commun, DoD A0) compare les artefacts réels
+de la plateforme à `MeetingImport` et importe le manquant, sans doublon (via `dedup_key`).
+Cas visés : enregistrement Zoom prêt sans webhook traité, abonnement Graph expiré, event
+Meet reçu avant que le fichier Drive existe, tâche Visio interrompue après création MinIO.
+DoD par connecteur : « un événement volontairement supprimé est rattrapé par la
+réconciliation sans créer de doublon ».
 
 ### D3 — Contrat provider segmenté par capacités
 
