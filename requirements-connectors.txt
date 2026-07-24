@@ -7,3 +7,4 @@
 
 # Récupération des artefacts MinIO/S3 (Visio post-réunion, Zoom Cloud Recording…).
 boto3>=1.34,<2.0
+cryptography>=42,<50  # Teams : déchiffrement des change notifications Graph (RSA-OAEP + AES)
