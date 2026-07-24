@@ -13,7 +13,9 @@ CONFIRMER contre une instance Visio réelle au gate E2E manuel — d'où le pars
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
+from connector_service.bridge import IngestResult, JobsApiBridge
 from connector_service.contract import ExternalMeetingOccurrence, RemoteArtifact
 
 PROVIDER = "visio"
@@ -84,3 +86,37 @@ class VisioTaskAdapter:
             f"{task.room}:{task.recording_date}:{task.recording_time}",
             task.filename,
         ))
+
+
+class ArtifactFetcher(Protocol):
+    """Récupère les octets d'un artefact distant (MinIO/S3, URL présignée…). Générique ;
+    INJECTÉ pour rester testable sans réseau ni dépendance S3 dure (le vrai client
+    boto3/minio est provisionné avec la brique connecteur)."""
+
+    async def fetch(self, artifact: RemoteArtifact) -> tuple[bytes, str]: ...
+
+
+class VisioIngestHandler:
+    """Orchestration post-réunion Visio : tâche → occurrence/artefact → fetch → ingest.
+
+    Sur réception d'une tâche Visio, produit UN job TranscrIA idempotent (la `dedup_key`
+    composite part en `Idempotency-Key` → un rejeu ne double pas). Le récepteur HTTP
+    (Flask) et le client MinIO réels ne sont que des adaptateurs autour de ce cœur.
+    """
+
+    def __init__(self, adapter: VisioTaskAdapter, fetcher: ArtifactFetcher, bridge: JobsApiBridge) -> None:
+        self._adapter = adapter
+        self._fetcher = fetcher
+        self._bridge = bridge
+
+    async def handle(self, payload: dict) -> IngestResult:
+        task = VisioTask.from_payload(payload)          # VisioTaskError si invalide
+        artifact = self._adapter.to_artifact(task)
+        occurrence = self._adapter.to_occurrence(task)
+        audio, filename = await self._fetcher.fetch(artifact)
+        return await self._bridge.ingest_recording(
+            audio, filename,
+            idempotency_key=self._adapter.dedup_key(task),
+            provider=PROVIDER,
+            external_meeting_id=occurrence.external_occurrence_id,
+        )

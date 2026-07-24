@@ -6,12 +6,15 @@ tolérant, exercé ici sur les cas valide / champ manquant / doublon.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
+from connector_service.bridge import JobsApiBridge
 from connector_service.providers.visio import (
+    VisioIngestHandler,
     VisioTask,
     VisioTaskAdapter,
     VisioTaskError,
@@ -78,3 +81,55 @@ class TestAdapter:
         t2 = VisioTask.from_payload(dict(FIXTURE, recording_date="2026-07-25",
                                          filename="recordings/room-alpha/2026-07-25-1430.mp3"))
         assert self.adapter.dedup_key(t1) != self.adapter.dedup_key(t2)
+
+
+class _FakeFetcher:
+    def __init__(self):
+        self.fetched: list = []
+
+    async def fetch(self, artifact):
+        self.fetched.append(artifact.storage_uri)
+        return b"VISIO-AUDIO", artifact.artifact_id.rsplit("/", 1)[-1]
+
+
+class _FakeServerTransport:
+    """Mime /v1/audio/ingest : une Idempotency-Key connue ⇒ même job (200 idempotent)."""
+
+    def __init__(self):
+        self._by_key: dict[str, str] = {}
+
+    async def request(self, method, url, *, headers, data=None, files=None):
+        key = headers["Idempotency-Key"]
+        if key in self._by_key:
+            return 200, {"job_id": self._by_key[key], "idempotent": True}
+        job_id = f"job-{len(self._by_key) + 1}"
+        self._by_key[key] = job_id
+        return 202, {"job_id": job_id}
+
+
+class TestIngestHandler:
+    def _handler(self, fetcher, transport):
+        return VisioIngestHandler(
+            VisioTaskAdapter(bucket="visio-recordings"),
+            fetcher,
+            JobsApiBridge("http://127.0.0.1:7870", "tia_x", transport),
+        )
+
+    def test_handle_tache_valide_ingere(self):
+        fetcher, tr = _FakeFetcher(), _FakeServerTransport()
+        res = asyncio.run(self._handler(fetcher, tr).handle(FIXTURE))
+        assert res.status_code == 202 and res.job_id == "job-1" and res.idempotent is False
+        assert fetcher.fetched == [
+            "s3://visio-recordings/recordings/room-alpha/2026-07-24-1430.mp3"]
+
+    def test_handle_tache_rejouee_ne_double_pas(self):
+        tr = _FakeServerTransport()
+        r1 = asyncio.run(self._handler(_FakeFetcher(), tr).handle(FIXTURE))
+        r2 = asyncio.run(self._handler(_FakeFetcher(), tr).handle(FIXTURE))  # rejeu
+        assert r1.job_id == r2.job_id == "job-1" and r2.idempotent is True
+
+    def test_handle_tache_invalide_leve(self):
+        bad = dict(FIXTURE)
+        del bad["sub"]
+        with pytest.raises(VisioTaskError, match="sub"):
+            asyncio.run(self._handler(_FakeFetcher(), _FakeServerTransport()).handle(bad))
