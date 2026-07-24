@@ -1,0 +1,9 @@
+# Dépendances OPT-IN du service connecteur de réunion (temps réel, A1+).
+# NON installées par défaut → image/install par défaut INCHANGÉE. Provisionnées par la
+# phase connecteur de l'installeur quand on active une brique (docs/TEMPS_REEL_REUNIONS.md).
+# Importées de façon PARESSEUSE dans connector_service → le package s'importe sans elles
+# (la CI teste la logique avec des mocks ; l'intégration réelle tourne sous Docker, marquée
+# `connector_real`).
+
+# Récupération des artefacts MinIO/S3 (Visio post-réunion, Zoom Cloud Recording…).
+boto3>=1.34,<2.0

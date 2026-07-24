@@ -49,4 +49,5 @@ markers = [
     # Smoke GPU RÉEL (C4, plan §3.14) : la frontière fakes ↔ matériel formalisée.
     # Collecté partout, SKIPPÉ sauf TRANSCRIA_GPU_REAL=1 (machine de dev GPU — PAS la CI).
     "gpu_real: smoke GPU réel (skip sauf TRANSCRIA_GPU_REAL=1)",
+    "connector_real: intégration connecteur RÉELLE Docker (MinIO…) — skip sauf TRANSCRIA_CONNECTOR_REAL=1",
 ]
