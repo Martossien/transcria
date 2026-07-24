@@ -1,8 +1,12 @@
 # Temps réel & connecteurs de réunion — plan directeur
 
-> **Statut** : plan (aucune ligne de code écrite). Document de travail, relu et
-> enrichi en plusieurs passes. Rien ici n'engage encore l'implémentation ;
-> chaque phase sera « go »-ée séparément.
+> **Statut** : plan directeur **partiellement implémenté**. Livré : Phase 0
+> (3 coutures), **Phase K** (façade STT `/v1/audio/transcriptions` + `/v1/audio/ingest`
+> fichier + garde durée), **micro direct** (Phase 0-bis). Aucun connecteur de
+> plateforme ni passerelle live n'est encore livré. Chaque phase suivante est
+> « go »-ée séparément. Le raisonnement d'architecture et les alternatives rejetées
+> vivent dans [`docs/adr/ADR-001-frontiere-ingestion-reunions.md`](adr/ADR-001-frontiere-ingestion-reunions.md)
+> (source de vérité des décisions) ; ce plan n'énonce que les décisions **actives**.
 
 ## Positionnement stratégique — pourquoi ce chantier
 
@@ -29,7 +33,7 @@ Ce chantier ne vise **qu'à combler le seul trou central**, sans toucher au cœu
 
 **Lecture** : 7 axes « Excellent » forment le moat (le « boring enterprise » en
 aval + souveraineté + liberté des modèles). Le trou central se scinde en **deux
-axes** (§Révision #16) : l'**ingestion auto post-réunion** — qu'on peut porter à
+axes** (ADR-001 D8) : l'**ingestion auto post-réunion** — qu'on peut porter à
 **Très bon** sur les 4 via les API officielles — et la **transcription live** —
 cible **Bon** sur Visio/Zoom seulement. Le **bot universel** reste hors périmètre
 assumé. (Le CRM/calendrier est faible aussi, mais périphérique — hors périmètre.)
@@ -70,17 +74,23 @@ pièces mobiles → **risque d'empirer ce déjà-faible**. Règle absolue : la c
 est **opt-in, isolée, jamais requise** — un TranscrIA « upload + pipeline »
 classique ne voit **rien** de neuf à installer.
 
-### 🔑 La clé de voûte : une façade STT unique (validée par l'analyse de code)
+### 🔑 La clé de voûte : une frontière d'ingestion commune (ADR-001 D1)
 
-L'analyse du **code réel** des plateformes (Visio, Vexa, Zoom RTMS, Teams Graph)
-montre qu'elles convergent TOUTES sur le même point : **l'audio part vers un
-endpoint STT externe pointé par URL**. Donc la brique la plus rentable = **une
-seule** :
+La couture commune n'est PAS un unique endpoint STT — l'analyse du code réel
+montre **trois voies** d'intégration distinctes (cf. ADR-001 D1) :
 
-> **Façade `POST /v1/audio/transcriptions` (OpenAI-audio) + ingestion fichier
-> post-réunion** (URL/fichier audio → job). Ces deux endpoints rendent TranscrIA
-> **feedable par toutes les plateformes ET par le micro direct**, par simple
-> config — sans réécrire aucun bot.
+1. **Artefacts post-réunion** (Zoom/Teams/Meet/Visio) → webhook + OAuth + fetch
+   MP4/VTT/WAV → stockage → **job async** (ingestion + API de jobs).
+2. **Média live** (LiveKit / Zoom RTMS / Meet Media API) → **passerelle live async**
+   → STT live + enregistrement horodaté → job final.
+3. **Client STT OpenAI** (micro / agent / Vexa) → `POST /v1/audio/transcriptions`
+   → réponse STT **synchrone bornée**.
+
+> **La façade OpenAI Audio (Phase K, livrée) est l'adaptateur de la voie 3**, pas
+> la frontière universelle. Les clients STT s'y branchent ; les plateformes
+> post-réunion se branchent sur l'ingestion d'artefacts + l'API de jobs ; le live
+> passe par la passerelle async. `POST /v1/audio/ingest` (Phase K) est l'embryon
+> de la voie 1 (dépôt **fichier**, le fetch URL contraint arrive au 1er connecteur).
 
 ### Découverte : le post-réunion est OFFICIEL sur les 4 plateformes
 
@@ -92,8 +102,8 @@ sert QUE pour le live de Meet/Teams (fragile, optionnel) :
 |---|---|---|
 | **Visio** (LiveKit) | Egress → URL POST | ✅ livekit-agent (natif) |
 | **Zoom** | Cloud Recording API | ✅ **RTMS** (officiel, par participant) |
-| **Teams** | **Graph** (VTT/MP4, webhook chiffré) | 🟠 bot RTM (MS déconseille) |
-| **Meet** | **Meet REST API v2 + Drive** | 🟠 bot navigateur seulement |
+| **Teams** | **Graph** (VTT/MP4, webhook chiffré, API facturées à l'usage) | 🟠 bot RTM (MS déconseille) |
+| **Meet** | **Meet REST API v2 + Drive** | 🔬 **Meet Media API** (officielle, Developer Preview) |
 | **Micro direct** (présentiel/dictée) | fichier → façade/job | ✅ WhisperLiveKit (WS) |
 
 → On couvre les 4 plateformes **en post-réunion sans une seule ligne de
@@ -101,86 +111,16 @@ browser-automation** ; le live seulement là où c'est propre (Visio natif, Zoom
 RTMS). **Vexa quitte la feuille de route principale** — réservé au Meet-LIVE
 optionnel (extrait de code, pas la plateforme).
 
-## Révision post-revue externe (2026-07-24)
+## Décisions d'architecture → ADR-001
 
-Une revue externe du plan a été triée point par point. Les corrections **retenues**
-(pas chères, structurantes, cohérentes avec les 6 principes) sont intégrées ci-dessous ;
-les propositions **rejetées** le sont explicitement pour ne pas les re-litiger.
-
-**Retenu :**
-1. **Frontière d'ingestion ≠ simple façade STT.** Trois familles d'intégration à
-   distinguer : (a) artefacts post-réunion (webhook + OAuth + fetch MP4/VTT), (b) média
-   live, (c) client STT OpenAI (Vexa/micro/agents). La façade `/v1/audio/transcriptions`
-   sert (c) ; `/v1/audio/ingest` est l'embryon de (a). **Correction Visio** : son
-   post-réunion POSTe une tâche + métadonnées à un service (pas un WAV brut vers un
-   endpoint OpenAI) → il faut un **adaptateur** (ou contribuer un callback générique
-   amont), PAS un swap d'URL « quasi nul ».
-2. **Idempotence composite** (à activer au 1er connecteur) : clé =
-   `provider + account/tenant + external_occurrence_id + artifact_type`, **contrainte
-   UNIQUE en base** (pas un check applicatif : deux webhooks simultanés). `external_meeting_id`
-   seul ne suffit pas (IDs Zoom récurrents / séries Teams / espaces Meet réutilisés).
-5. **Contrat `MeetingProvider` à segréger par capacités** (§4) : petites interfaces
-   `ArtifactProvider` / `LiveMediaProvider` / `ParticipantProvider` /
-   `PlatformTranscriptProvider` + un manifeste `ProviderCapabilities(post_meeting_recording,
-   post_meeting_transcript, live_audio, live_transcript, participant_identity,
-   separate_tracks)`. Évite d'imposer `stream_audio` à Teams-post. **À figer avant le 1er
-   connecteur.**
-6. **Séparer plan de contrôle et plan de données** : les événements
-   (`MeetingStarted`, `RecordingAvailable`…) sont de petits messages durables ; les
-   `AudioFrame` sont un flux lourd — pas dans le même bus. Désambiguïser les timestamps :
-   `media_timestamp` (position réunion) vs `wall_clock_timestamp` (UTC) vs séquence RTP.
-7. **Meet a une API live officielle** : **Meet Media API** (Developer Preview au 2026-07-24,
-   audio/vidéo/participants temps réel, projet GCP + OAuth + consentement requis). À évaluer
-   **avant** tout bot navigateur — cohérent avec « officiel > bot ». Vexa = repli expérimental.
-8. **Estimations = POC, pas prod.** Un connecteur SaaS distribuable (OAuth, scopes,
-   webhooks, reconnexion, crédits, revue éditeur) = plusieurs semaines. Zoom « post-réunion »
-   (Recording API) et « live » (RTMS) sont **deux phases distinctes**, pas un « ou ».
-10. **Transcription plateforme = artefact AUXILIAIRE**, jamais canonique par défaut :
-    aperçu immédiat, identité locuteurs, alignement piste↔personne, repli si pas
-    d'enregistrement, cross-check qualité, détection de noms propres. L'audio brut reste la
-    source préférée du canonical ; le pipeline reste l'autorité. Priorité des sources :
-    audio séparé > audio composite > transcription plateforme seule.
-13. **Façade STT synchrone bornée** (LIVRÉ) : `live.facade.max_sync_audio_mb` (défaut 25 Mo,
-    plafond OpenAI). Au-delà → 413 + renvoi vers `/v1/audio/ingest` (async). Empêche un
-    enregistrement complet de monopoliser un worker gunicorn sync.
-14. **Local-agreement seulement pour les backends à fenêtre glissante.** Un moteur au
-    streaming natif (Voxtral SSE, partial/final) garde sa sémantique ; local-agreement est
-    une stratégie de stabilisation, pas un traitement universel.
-18. **Seuils GO chiffrés** (provisoires, à recaler après prototypes) — rendent « Bon »
-    testable :
-    - *Post-réunion* : ≥ 99 % des réunions éligibles importées sans intervention ; 0 doublon ;
-      0 perte silencieuse ; p95 « artefact dispo → job créé » < 5 min ; reprise sans perte.
-    - *Live* : p95 premier partiel < 2,5 s ; p95 final live < 6 s ; couverture audio > 99,5 % ;
-      reconnexion < 10 s ; aucune perte silencieuse > 2 s.
-    - *Exploitation* : 100 % des webhooks traçables (`correlation_id`) ; 100 % des artefacts
-      avec checksum ; alertes sur abonnement OAuth/Graph expirant.
-
-**Direction juste mais différé (activé au 1er connecteur / à la passerelle live) :**
-- **Ref d'artefact + checksum** au-dessus de `Path` (`MediaArtifact(storage_uri, sha256,
-  media_type, track_id…)` + `ArtifactMaterializer`) quand le connecteur est distant/S3.
-  L'original reste immuable, le dérivé `canonical-16k` est produit ensuite (**déjà le cas**
-  dans le pipeline batch).
-- **Checklist SSRF** pour le fetch URL (HTTPS-only, allowlist par provider, blocage IP
-  privées/loopback, limites redirect/taille/MIME, checksum) — déjà anticipée : `/ingest`
-  est fichier-seul en Phase K, le fetch URL est différé Phase 1 pour cette raison.
-- **Identité machine** (service account scopé `meetings:create`/`artifacts:write`/`jobs:*`,
-  rotation/révocation/périmètre org) quand le connecteur devient un service permanent. Le
-  jeton `tia_` reste OK pour le prototype.
-- **Priorité GPU live ≠ batch** (quota sessions, préemption contrôlée, backpressure, mode
-  dégradé, buffer local) — à la passerelle live (phase 5+). Une session live ne doit pas
-  mourir parce que le 35B mouline.
-
-**Rejeté (sur-engineering vs « mesuré / ossature intacte / pas de spéculation ») :**
-- **Entité `MeetingOccurrence` à 6 sous-tables + `ProcessingJob` maintenant** : cathédrale
-  avant le 1er connecteur. On introduira un **enregistrement réunion minimal** au 1er
-  connecteur, à faire grossir quand un 2e connecteur prouve la forme.
-- **Provenance éclatée en 3 axes** (origin/stability/authority) + table `SegmentAlignment` :
-  churn d'un champ déjà livré, pour une feature pas encore live. On **garde** son bon noyau :
-  live et canonical sont deux **révisions distinctes** (ne pas écraser en place) — ce que
-  l'archi fait déjà (artefacts séparés). L'observation « 1 segment live → 3 canoniques » est
-  d'ailleurs l'argument CONTRE `SegmentAlignment` (coûteux, faible valeur).
-- **Front-load du modèle de domaine complet (« Phase 0A »)** : on garde l'ordre
-  valeur-d'abord (micro → Visio-post → …).
+Le tri des revues externes (retenu / différé / rejeté) et le raisonnement complet
+vivent dans [`docs/adr/ADR-001-frontiere-ingestion-reunions.md`](adr/ADR-001-frontiere-ingestion-reunions.md).
+Décisions actives à retenir ici : frontière d'ingestion à 3 voies (D1), enregistrement
+d'import minimal + idempotence composite (D2), contrat provider par capacités (D3),
+séparation contrôle/données (D4), révisions live/canonical distinctes (D5), provenance
+selon le moteur (D6), transcription plateforme = auxiliaire (D7), post-réunion officiel
+des 4 + Meet Media API avant bot (D8), façade sync bornée taille+durée (D9), gouvernance
+transversale (D10). Les sections ci-dessous reflètent ces décisions.
 
 ## 0. Principe directeur (non négociable)
 
@@ -278,18 +218,19 @@ visible mais rendent tout le reste « appelable ».
   - `partial` — texte instable du STT live (peut changer au prochain paquet) →
     posé par la chaîne live, jamais persisté comme livrable.
   - `provisional` — segment stabilisé par le STT live (ne bougera plus en
-    direct). **Mécanisme** : politique **local-agreement** (cf.
-    `ufal/whisper_streaming`, §8) — on ne fige un mot que si deux passes
-    successives du STT s'accordent ; on l'adapte au flux Voxtral streaming.
+    direct). **Mécanisme selon le backend** (ADR-001 D6) : le marqueur natif du
+    moteur quand il expose partial/final (ex. Voxtral SSE) ; **local-agreement**
+    (cf. `ufal/whisper_streaming`, §8) SEULEMENT pour un backend à fenêtres
+    glissantes — jamais une double passe artificielle sur un moteur au streaming natif.
   - `final_live` — segment final du **moteur temps réel** (fin de tour).
-  - `canonical` — segment recalculé et validé par le **pipeline TranscrIA**
-    (remplace `final_live` sur le même intervalle en fin de réunion).
-  - Transition clé : le pipeline offline **remplace** `final_live` par
-    `canonical` sans donner l'impression que le document « bouge tout seul »
-    (le direct était un suivi, le canonical est la référence).
+  - `canonical` — segment de la **révision documentaire de référence** (pipeline TranscrIA).
+  - Transition clé (ADR-001 D5) : à la fin du batch, la révision `canonical` devient
+    la révision **active/affichée par défaut** ; la révision `live` est **conservée**
+    (audit, diagnostic, comparaison), PAS écrasée en place. Le direct était un suivi,
+    le canonical est la référence — « le document de référence est maintenant disponible ».
 - **Affichage** : `partial`/`provisional` en gris (suivi), `final_live` figé,
-  `canonical` = le document officiel. Un lecteur voit toujours quel niveau de
-  confiance il lit.
+  `canonical` = le document officiel (avec « afficher la version du direct »). Un
+  lecteur voit toujours quel niveau de confiance il lit.
 - **DoD** : champ additif, défaut `canonical`, sérialisé (artefacts + éventuelle
   colonne), testé ; **zéro** changement de sortie sur les jobs batch existants
   (golden inchangés).
@@ -331,50 +272,53 @@ visible mais rendent tout le reste « appelable ».
   `config_classification.yaml`, validée, UI (`config_form.py`) + i18n FR/EN,
   doctor si un moteur live servi est déclaré sans runtime.
 
-## 4. Phase 1 — Contrat MeetingProvider + service async isolé
+## 4. Phase A0 — Contrat providers (par capacités) + service async isolé
 
-### Le contrat (Protocol)
+> **Nommage (ADR-001, revue #2 point 4)** : cette phase-CONTRAT est **A0**, distincte
+> de **A1** (Visio post-réunion). Le tableau §7 fait foi. « Phase 1 » n'est plus utilisé
+> (collision de numérotation). `A` = artefact/ingestion, `L` = live, `R` = recherche.
 
-> ⚠️ **Révisé (§Révision #5)** : ce protocole monolithique impose à chaque
-> plateforme des méthodes qu'elle ne supporte pas (Teams-post n'a pas de
-> `stream_audio`). À **segréger par capacités** — `ArtifactProvider`,
-> `LiveMediaProvider`, `ParticipantProvider`, `PlatformTranscriptProvider` — +
-> un manifeste `ProviderCapabilities(...)`. L'esquisse ci-dessous reste utile
-> pour la vue d'ensemble des opérations, mais l'implémentation part des petites
-> interfaces. À figer AVANT le 1er connecteur.
+### Le contrat — interfaces par capacités (ADR-001 D3)
 
-```
-class MeetingProvider:
-    async def authorize(self): ...
-    async def start_capture(self, meeting): ...
-    async def stop_capture(self, meeting): ...
-    async def participants(self, meeting): ...
-    async def stream_audio(self, meeting): ...        # yield AudioFrame
-    async def stream_transcript(self, meeting): ...   # yield TranscriptPartial/Final
-    async def fetch_final_artifacts(self, meeting): ...
-```
+Pas de `MeetingProvider` monolithique (rejeté : imposait `stream_audio` à Teams-post).
+De **petites interfaces** + un manifeste `ProviderCapabilities` ; un provider ne déclare
+que ce qu'il sait faire. Le **code du Protocol est un livrable de A0**, pas du plan :
 
-### Événements normalisés
-`MeetingStarted, MeetingEnded, ParticipantJoined, ParticipantLeft,
-ParticipantRenamed, AudioFrame, TranscriptPartial, TranscriptFinal,
-RecordingAvailable, PlatformTranscriptAvailable`.
+- `ArtifactProvider` — `fetch_artifacts(occurrence) -> [RemoteArtifact]`
+- `ParticipantProvider` — `fetch_participants(occurrence) -> [ExternalParticipant]`
+- `PlatformTranscriptProvider` — `fetch_platform_transcripts(occurrence) -> [RemoteTranscript]`
+- `LiveMediaProvider` — `open_session(occurrence) -> LiveMediaSession`
+- `ProviderCapabilities(post_meeting_recording, post_meeting_transcript, live_audio,
+  live_transcript, participant_identity, separate_tracks)`
+
+### Événements — plan de contrôle vs plan de données (ADR-001 D4)
+
+- **Plan de contrôle** (petits messages DURABLES) : `MeetingStarted, MeetingEnded,
+  ParticipantJoined, ParticipantLeft, ParticipantRenamed, RecordingAvailable,
+  PlatformTranscriptAvailable, LiveStreamInterrupted, LiveStreamRecovered`. Enveloppe :
+  `event_id, schema_version, provider, provider_account_id, external_occurrence_id,
+  correlation_id, occurred_at, received_at, deduplication_key, payload`.
+- **Plan de données** (flux LIVE, jamais dans le bus durable) : `AudioFrame,
+  TranscriptPartial, TranscriptFinal` — circulent dans la session média (WS/WebRTC/SDK).
 
 ### AudioFrame (champs minimum)
-`provider, external_meeting_id, participant_id, participant_display_name,
-track_id, sequence_number, start_timestamp, duration, sample_rate,
-audio_payload`.
+`provider, provider_account_id, external_occurrence_id, participant_id,
+participant_display_name, track_id, sequence_number, media_timestamp_ms,
+wall_clock_timestamp, duration_ms, encoding, sample_rate_hz, channels, sample_count,
+payload`. (Plus de `start_timestamp` ambigu : position réunion vs UTC explicitées.)
 
 ### Le pont vers TranscrIA
 Le service connecteur crée un job et pousse des artefacts via l'**API de jobs
 existante** (jamais d'accès direct au pipeline). Mécanisme concret :
-- **Auth = jeton d'API personnel** (`tia_<id>_<secret>`, Bearer) — déjà livré au
-  chantier identité lot 4, exactement l'usage prévu (machine-to-machine, aucun
-  cookie). Le connecteur est un « client API » comme un autre.
-- Il appelle les **routes ⭐ stables** (upload/process/status/download-*) ; un
-  job « meeting » peut nécessiter d'**étendre** le contrat v1 avec
-  `external_meeting_id` + métadonnées participants (à concevoir, additif).
-- **Idempotence** par `external_meeting_id` : un webhook rejoué ne crée pas un
-  second job.
+- **Auth** : jeton `tia_` (Bearer) suffit pour le prototype ; un **service account
+  scopé** (rotation/révocation/périmètre org) est le bon état pour un connecteur
+  permanent (ADR-001, différé).
+- Il appelle les **routes ⭐ stables** (upload/process/status/download-*).
+- **Idempotence composite** (ADR-001 D2) : enregistrement `MeetingImport` +
+  **contrainte UNIQUE en base** sur
+  `provider + provider_account/tenant + external_occurrence_id + external_artifact_id`
+  (à défaut d'artifact_id : `… + artifact_type + artifact_variant + checksum`). Un webhook
+  rejoué — ou deux webhooks simultanés — ne crée pas un second job.
 - Le service connecteur peut vivre sur une **autre machine** que le nœud GPU
   (il ne fait que capter + router ; le calcul reste côté TranscrIA).
 
@@ -438,15 +382,21 @@ pas le service async.
   fin de réunion ; latence live mesurée ; cas durs (§6) couverts par des tests
   de contrat ; VRAM du moteur live gérée (reclaim, cf. machine serrée).
 
-### Zoom — RTMS live ou Recording API — effort M
-- Même AudioFrame ; RTMS fournit PCM 16 k **par participant** + events +
-  transcription avec attribution, **sans bot visible**. L'essentiel n'est pas
-  l'audio (réutilisé) mais : OAuth/scopes Zoom, webhooks `rtms_started`/
-  `rtms_stopped`, autorisations admin/hôte, crédits Developer Pack, information
-  visible des participants.
-- **Fork de départ** : `zoom/rtms-samples` (§8, sample transcription en Python)
-  → adapter le flux audio en `AudioFrame` normalisé. RTMS étant du WebSocket
-  standard, pas besoin du SDK C++.
+### Zoom post-réunion (A2, Cloud Recording API) — effort M
+- Événement « enregistrement disponible » → OAuth → récupération des fichiers →
+  artefacts TranscrIA → job batch. Périmètre plus simple (pas de flux live), bon
+  premier connecteur OAuth propriétaire. **Distinct** du live RTMS ci-dessous — le
+  « ou » historique est supprimé (revue #2 point 12).
+
+### Zoom live (L2, RTMS) — effort L
+- RTMS fournit PCM L16 mono 16 k **par participant** (et/ou fusionné) + events +
+  transcription attribuée, **sans bot visible** ; format par défaut avec id, nom,
+  timestamp. L'essentiel n'est pas l'audio (réutilisé) mais : OAuth/scopes Zoom,
+  webhooks `rtms_started`/`rtms_stopped`, autorisations admin/hôte, **crédits Zoom
+  Developer Pack** (à porter dans une matrice de coûts, pas seulement les risques),
+  information visible des participants.
+- **Fork de départ** : `zoom/rtms-samples` (§8) → `AudioFrame` normalisé sur la
+  passerelle live (L0). RTMS = WebSocket standard, pas besoin du SDK C++.
 
 ### Teams post-réunion (Graph) — effort M
 - Notification Graph → récup VTT/MP4 + métadonnées (+ attribution des locuteurs
@@ -462,10 +412,16 @@ pas le service async.
 - Même forme que Teams/Visio post-réunion → job TranscrIA. **Zéro bot.** Requiert
   Google Workspace + enregistrement activé + OAuth (scopes Meet + Drive).
 
-### Meet-live & Teams-RTM (optionnels, fragiles) — effort L, conditionnel
-- **Meet-live** : aucune API temps réel officielle → **bot navigateur** (extraire
-  la capture de Vexa `capture-bridge.ts`). Fragile, dernier recours ; le
-  post-réunion officiel couvre déjà le besoin.
+### Meet-live (R1, recherche) & Teams-RTM (C1, dernier recours) — effort L, conditionnel
+- **Meet-live** : Google fournit une **API live officielle — Meet Media API**
+  (audio/vidéo/participants temps réel), en **Developer Preview** : inscription du
+  projet GCP + du principal OAuth + de **tous les participants** au programme, et
+  **plafond de flux virtuels** (au-delà, Meet ne transmet que les pistes jugées les
+  plus pertinentes — ne pas présumer recevoir toutes les pistes en grande réunion).
+  → **phase de RECHERCHE R1, sans engagement de prod**, AVANT tout bot navigateur.
+  Critères : inscription/consentement praticables, couverture audio mesurée selon le
+  nombre de participants, pas de trou au changement de locuteur, repli post-réunion
+  toujours dispo. Le bot Vexa (`capture-bridge.ts`) reste une référence expérimentale.
 - **Teams-RTM** : bot média temps réel .NET/Windows, gestion médias complexe.
   Microsoft **déconseille** (préfère Graph/Copilot). À ne lancer qu'avec un
   besoin contractuel que Graph ne couvre pas.
@@ -524,31 +480,33 @@ SRT) **ne change pas** — c'est le moat.
 
 ## 7. Séquencement & jalons
 
-| Phase | Quoi | Dépend | Effort |
-|---|---|---|---|
-| **0** — 3 coutures | provenance / source audio / 2 chaînes STT | — | S |
-| **K** — Façade STT (keystone) | `POST /v1/audio/transcriptions` (WAV→verbose_json) + ingestion fichier post-réunion (URL→job) | couture 2/3 | M |
-| **0-bis** — Micro direct | record-then-transcribe → façade ; live rolling = fork WhisperLiveKit | K | S |
-| **1** — Visio post-réunion | **adaptateur** au contrat Visio (tâche + métadonnées → réunion TranscrIA), PAS un simple swap d'URL (cf. §Révision #1) | K | M |
-| **2** — Zoom post-réunion | Cloud Recording API (OAuth) → `/ingest` | K | M |
-| **3** — Teams post-réunion (Graph) | webhook chiffré → fetch MP4/VTT → job | K | M |
-| **4** — Meet post-réunion (REST API v2) | poll artefacts Drive → job | K | M |
-| **5** — Passerelle live générique | plan de données audio séparé + contrat MeetingProvider par capacités (§4, §Révision #5/#6) | K + coutures | L |
-| **6** — Visio live | fork `multi_user_transcriber.py` + STT live sur la passerelle | 5 | L |
-| **7** — Zoom live (RTMS) | `zoom/rtms` sur la passerelle | 5 | L |
-| **8** — Meet live | **Meet Media API officielle** (Developer Preview) d'abord ; bot Vexa = repli (§Révision #7) | 5 | L, cond. |
-| **9** — Teams RTM | bot média temps réel — **dernier recours contractuel** (MS déconseille) | 5 | L, cond. |
+Nomenclature par flux (ADR-001, revue #2 point 4) : `A` = artefact/ingestion,
+`L` = live, `R` = recherche, `C` = contractuel. Fini les « Phase 1 » ambigus.
 
-- **Ordre** : 0 → **K** → (0-bis micro) → 1 Visio-post → 2 Zoom-post / 3 Teams /
-  4 Meet-post → 5 passerelle live → 6 Visio-live → 7 Zoom-RTMS → (8 Meet-live /
-  9 Teams-RTM si besoin). **Post-réunion d'abord sur les 4, live ensuite.**
-- **La façade STT (K) est LE pivot** : elle débloque le **post-réunion des 4
-  plateformes ET le micro**, avant tout service async lourd. Le contrat
-  `MeetingProvider` (§4, à segréger par capacités — §Révision #5) reste la
-  fondation du **live riche** (phase 5+), pas du chemin minimal.
+| ID | Quoi | Dépend | Effort |
+|---|---|---|---|
+| **0** ✅ | 3 coutures (provenance / source audio / 2 chaînes STT) | — | S |
+| **K** ✅ | Façade STT `/v1/audio/transcriptions` + `/v1/audio/ingest` fichier + gardes taille/durée | couture 2/3 | M |
+| **0-bis** ✅ | Micro direct (record-then-transcribe → upload) | K | S |
+| **A0** | Contrat providers **par capacités** + manifeste + événements contrôle/données + `MeetingImport` (idempotence composite) + service async isolé | K + coutures | M |
+| **A1** | Visio post-réunion — **adaptateur** au contrat Visio (tâche + métadonnées → réunion), PAS un swap d'URL (ADR-001 D8) | A0 | M→sem. |
+| **A2** | Zoom post-réunion — Cloud Recording API (OAuth) → `/ingest` | A0 | M→sem. |
+| **A3** | Teams post-réunion — Graph, webhook chiffré → fetch MP4/VTT (API facturées) | A0 | sem. |
+| **A4** | Meet post-réunion — REST API v2 + Drive → job | A0 | M |
+| **L0** | Passerelle live générique (plan de données audio séparé, D4) | A0 | L |
+| **L1** | Visio live — adapter le worker `multi_user_transcriber.py` sur la passerelle | L0 | L |
+| **L2** | Zoom live (RTMS) sur la passerelle | L0 | L→sem. |
+| **R1** | Meet live — **recherche Meet Media API** (preview, plafond de flux) ; bot = repli | L0 | rech. |
+| **C1** | Teams RTM — **dernier recours** (MS déconseille) | L0 | cond. |
+
+- **Ordre** : 0 → K → 0-bis (✅ livrés) → **A0 contrat** → A1 Visio-post → A2 Zoom-post /
+  A3 Teams / A4 Meet-post → L0 passerelle → L1 Visio-live → L2 Zoom-RTMS → (R1 Meet /
+  C1 Teams-RTM si besoin). **Post-réunion d'abord sur les 4, live ensuite.**
+- **A0 est le prérequis dur des connecteurs** : le contrat par capacités et
+  l'idempotence composite doivent être figés AVANT A1 (sinon on recode à chaque plateforme).
 - **Efforts = ordre de grandeur POC, pas prod.** Un connecteur SaaS durci (OAuth,
-  webhooks, reconnexion, renouvellement d'abonnement, revue éditeur) = plusieurs
-  semaines, pas quelques jours (cf. §Révision #8).
+  webhooks, reconnexion, renouvellement d'abonnement, crédits, revue éditeur) = plusieurs
+  semaines (ADR-001 D8).
 - **Micro direct = première classe** (source `mic`) : présentiel / dictée / solo,
   indépendant des plateformes.
 - **Règle de push inchangée** : chaque phase = suite verte + E2E réel 16/16 avant
@@ -624,14 +582,15 @@ navigateur** (fragile, CGU). On privilégie l'officiel ; le bot ne sert qu'au
 
 | Voie | Ce qu'on forke / config (précis) | Effort | Robustesse |
 |---|---|---|---|
-| **Façade STT (keystone)** | endpoint TranscrIA `POST /v1/audio/transcriptions` (WAV→verbose_json) + ingestion fichier post-réunion | fondation | — |
-| **Visio post-réunion** | config Visio `SUMMARY_SERVICE_ENDPOINT` = notre façade (Visio POSTe déjà l'URL S3 audio) | quasi nul | 🟢 natif |
-| **Visio live** | `suitenumerique/meet` → `src/agents/multi_user_transcriber.py` (MIT, ~225 l.), STT pluggable par env → nous ; client Kyutai = `livekit-plugins-kyutai-lasuite` (Apache-2.0) | faible-moyen | 🟢 natif |
-| **Zoom** | binding `zoom/rtms` (MIT, `pip install rtms`, `on_audio_data`, `data_opt=2` par participant) → WAV 16k → façade | ~1-2 j | 🟢 officiel |
-| **Teams** | `microsoftgraph/nodejs-webhooks-sample` (MIT, ~80 % du webhook+crypto) → fetch MP4/VTT → job | ~1-1,5 sem | 🟢 officiel |
+| **Façade STT (keystone)** | endpoint TranscrIA `POST /v1/audio/transcriptions` (WAV→verbose_json) + `/v1/audio/ingest` fichier | fondation ✅ livré | — |
+| **Visio post-réunion** | **adaptateur** au contrat Visio (tâche `/api/v1/tasks/` + métadonnées → réunion TranscrIA ; accès MinIO OU callback/URL présignée amont) — **PAS** un swap d'`SUMMARY_SERVICE_ENDPOINT` (Visio → WhisperX, contrat ≠ OpenAI) | M (POC), semaines (prod) | 🟢 natif |
+| **Visio live** | adapter le **worker Visio** `suitenumerique/meet` → `src/agents/multi_user_transcriber.py` (bâti sur LiveKit Agents, STT pluggable par env → nous) ; ⚠ egress = `RoomCompositeEgress` seul aujourd'hui, Track Egress = contribution amont | faible-moyen | 🟢 natif |
+| **Zoom post-réunion** | Cloud Recording API (OAuth) → fetch → job | M | 🟢 officiel |
+| **Zoom live** | binding `zoom/rtms` (`on_audio_data`, `data_opt=2` par participant, PCM L16 16k) → passerelle ; crédits Developer Pack | M (POC), semaines (prod) | 🟢 officiel |
+| **Teams post-réunion** | Graph (`microsoftgraph/nodejs-webhooks-sample` ~80 % webhook+crypto) → fetch MP4/VTT → job ; API facturées à l'usage | ~1-1,5 sem+ | 🟢 officiel |
 | **Meet post-réunion** | **Google Meet REST API v2** (`conferenceRecords.transcripts/recordings`) + Drive API → job | moyen | 🟢 officiel |
-| **Meet live** *(optionnel)* | extraire la capture Meet de Vexa (`capture-bridge.ts`, par locuteur) — **pas** la plateforme | — | 🟠 fragile |
-| **Micro direct** | fork front + serveur WS de `WhisperLiveKit` ; ou record-then-transcribe → façade | faible | 🟢 |
+| **Meet live** *(R1 recherche)* | **Meet Media API officielle** (Developer Preview, plafond de flux) ; Vexa `capture-bridge.ts` = repli expérimental | recherche | 🔬 preview |
+| **Micro direct** | ✅ **livré** (record-then-transcribe → upload) ; live rolling = fork `WhisperLiveKit` (à venir) | faible | 🟢 |
 | **Moteur STT live** | Nemotron-streaming 0.6B via audio.cpp (zéro stack) **ou** Kyutai `stt-1b-en_fr` via moshi-server (image `meet-kyutai-moshi-stt`, MIT) | moyen | 🟢 |
 
 **Confirmé par le code** : Vexa (`TRANSCRIPTION_SERVICE_URL`) ET Visio
@@ -644,19 +603,22 @@ capture-Meet, et **seulement si besoin** (Meet post-réunion étant officiel).
 
 ### Actées (validées par l'analyse de code des 4 plateformes)
 
-- **Keystone = la façade STT unique** (`/v1/audio/transcriptions` + ingestion
-  fichier post-réunion). **Premier livrable technique** ; tout s'y branche.
-- **Post-réunion officiel sur les 4** (Visio URL, Zoom Recording API, Teams
-  Graph, Meet REST API) → **zéro browser-bot** dans le cœur de la feuille de route.
-- **Live officiel** : Visio (livekit-agent natif) + Zoom (RTMS) — par participant,
-  souverain, qualité supérieure.
-- **Micro direct conservé, PREMIÈRE CLASSE** (source `mic`, couture 2) :
-  présentiel / dictée / solo, indépendant des plateformes ; record-then-transcribe
-  → façade, ou live rolling en forkant WhisperLiveKit. Un des premiers livrables.
+- **Frontière d'ingestion à 3 voies** (ADR-001 D1) : la façade OpenAI Audio
+  (`/v1/audio/transcriptions`, ✅ livrée) est l'adaptateur des clients STT, PAS la
+  frontière universelle ; les plateformes post-réunion passent par l'ingestion
+  d'artefacts + l'API de jobs, le live par la passerelle async.
+- **Post-réunion officiel sur les 4** (Visio via adaptateur, Zoom Recording API,
+  Teams Graph, Meet REST API) → **zéro browser-bot** dans le cœur de la feuille de route.
+- **Live officiel** : Visio (worker LiveKit natif) + Zoom (RTMS) — par participant,
+  souverain, qualité supérieure. **Meet-live** = Meet Media API officielle (preview,
+  recherche R1) avant tout bot.
+- **Micro direct ✅ LIVRÉ, PREMIÈRE CLASSE** (source `mic`, couture 2) :
+  record-then-transcribe → upload. Live rolling (fork WhisperLiveKit) à venir.
 - **Vexa rétrogradé** : référence + **extrait capture-Meet** pour le Meet-live
   *optionnel* seulement — on n'adopte PAS la plateforme (~80 % redondant).
-- **On ne réécrit aucun bot ; le feeder passe l'audio BRUT dans notre pipeline**
-  (jamais la transcription du bot → sinon on perd le moat).
+- **Feeder = audio brut préféré** ; la **transcription de la plateforme est un
+  artefact AUXILIAIRE** (aperçu/identité/repli/cross-check), jamais promue canonique
+  automatiquement (ADR-001 D7). On ne réécrit aucun bot.
 - **Capture opt-in/isolée** — déploiement du cœur inchangé.
 
 ### Encore ouverts (à trancher au moment)
@@ -713,6 +675,50 @@ capture-Meet, et **seulement si besoin** (Meet post-réunion étant officiel).
   tests-là ne sont pas toujours possibles en automatique** — on les documente et
   on les rejoue à la main avant chaque « go » plateforme.
 
+### Tests par capacité (une fois les interfaces segrégées — ADR-001 D3)
+Tests **communs** à tout adaptateur : enveloppe fournisseur, `correlation_id`, gestion
+des secrets, erreurs explicites, retry idempotent, absence de perte silencieuse, audit,
+isolation tenant. Puis par contrat : `ArtifactProvider` (artefact retardé, doublon,
+nouvel ETag/version, checksum incorrect, téléchargement interrompu, reprise) ;
+`LiveMediaProvider` (désordre/trous de séquence, reconnexion, mute, fin brutale,
+changement de piste, backpressure, timestamps) ; `ParticipantProvider` (reconnexion,
+anonyme, renommage, multi-appareils, micro de salle). Le provider factice existe en
+**plusieurs variantes de capacités**.
+
+## Mesure — seuils GO & points de mesure
+
+Rendent « Bon » testable (valeurs **provisoires**, à recaler après prototypes). Chaque
+métrique DOIT définir son point de mesure, sinon un connecteur passe à 99 % sur 10
+réunions et est déclaré prêt trop tôt.
+
+**Post-réunion** : ≥ 99 % des réunions éligibles importées sans intervention · 0 doublon
+visible · 0 perte silencieuse · p95 « artefact dispo → job créé » < 5 min · reprise sans perte.
+**Live** : p95 premier partiel < 2,5 s · p95 final live < 6 s · couverture audio > 99,5 % ·
+reconnexion < 10 s · aucune perte silencieuse > 2 s.
+**Exploitation** : 100 % des webhooks traçables (`correlation_id`) · 100 % des artefacts
+avec checksum · 100 % des sessions à état final explicite · alertes abonnement OAuth/Graph expirant.
+
+**Points de mesure** (formules) :
+- *latence premier partiel* = heure de rendu UI − `wall_clock_timestamp` du 1ᵉʳ échantillon couvert ;
+- *couverture audio* = durée non-muette couverte par ≥ 1 segment / durée non-muette attendue ;
+- *artefact → job* = création effective du job − émission de l'événement fournisseur ;
+- *0 doublon* = une occurrence externe + un artefact externe ⇒ un seul import logique + un seul job actif.
+- **Périmètre** : p95 **par plateforme**, **par taille de réunion**, **avec et sans reconnexion** ;
+  fenêtre d'observation minimale + nombre minimal de réunions **avant** de déclarer un GO.
+
+## Gouvernance de la capture (transversale — ADR-001 D10)
+
+Chapitre **transversal** (pas répété par connecteur). Chaque connecteur DOIT déclarer :
+- qui peut **activer** la capture (org/admin) ; comment les participants sont **informés** ;
+- quelle organisation est **propriétaire** des artefacts ; **où** sont stockées les données ;
+- **rétention** de l'original / du live / du canonical ; **suppression** propagée ou non au fournisseur ;
+- comportement si l'enregistrement est **désactivé** côté plateforme ;
+- comportement si un participant **refuse/interrompt** la capture ;
+- **journal d'audit** consultable ; **données envoyées** à un éventuel STT distant.
+
+Cohérent avec les signaux RGPD/PSSI déjà présents (voix enregistrées, lexiques,
+audits sans termes en clair). Un connecteur sans cette déclaration ne passe pas le « go ».
+
 ## 12. Glossaire
 
 - **Chaîne STT live/rapide** : moteur faible latence (Voxtral streaming) pour le
@@ -732,21 +738,25 @@ capture-Meet, et **seulement si besoin** (Meet post-réunion étant officiel).
 - [ ] **Stratégie** : forker la capture, ne RIEN réécrire ; effort sur le feeder.
 - [ ] **API officielle / SFU natif** privilégié ; bot-navigateur (CGU/fragile)
       seulement pour Meet, isolé.
-- [ ] **Feeder = audio brut → notre pipeline** (jamais la transcription du bot).
+- [ ] **Feeder = audio brut préféré** ; transcription plateforme = artefact
+      auxiliaire, jamais canonique automatique (ADR-001 D7).
 - [ ] **Déploiement du cœur inchangé** (capture opt-in, garde-fou du moat).
-- [ ] Provenance : les 4 états + transition `final_live → canonical` (couture 1).
-- [ ] Source audio : `file`/`mic`/`meeting` derrière une interface (couture 2).
-- [ ] 2 chaînes STT nommées + `live_stt_backend` (couture 3).
-- [ ] Contrat `MeetingProvider` + événements + `AudioFrame` (phase 1).
-- [ ] Service async **isolé** + garde import-linter (phase 1).
-- [ ] Pont via jetons d'API personnels + idempotence `external_meeting_id`.
+- [x] Provenance : les 4 états (couture 1) — révisions live/canonical distinctes (D5).
+- [x] Source audio : `file`/`mic` derrière une interface (couture 2 ; `meeting` à venir).
+- [x] 2 chaînes STT nommées + `live_stt_backend` (couture 3).
+- [ ] Contrat providers **par capacités** + manifeste + événements contrôle/données (A0, D3/D4).
+- [ ] Service async **isolé** + garde import-linter (A0).
+- [ ] Pont via jeton `tia_` (prototype) → service account scopé (permanent) ;
+      **idempotence composite + contrainte UNIQUE** (ADR-001 D2, jamais `external_meeting_id` seul).
 - [ ] Piste ≠ personne (diarisation par piste conservée).
 - [ ] Cas durs (réordonnancement, doublons, reconnexion, rename, overlap, arrêt).
-- [ ] **Objectif calibré = viser « Bon » (pas « Excellent »)** ; mesurer l'axe.
-- [x] **Keystone façade STT** (`/v1/audio/transcriptions` + `/v1/audio/ingest`) —
+- [ ] **Objectif calibré** : ingestion post-réunion « Très bon », live « Bon », bot universel hors périmètre.
+- [ ] **Gouvernance de la capture** (ADR-001 D10, §Gouvernance) : consentement, rétention, suppression, audit.
+- [x] **Keystone façade STT** (`/v1/audio/transcriptions` + `/v1/audio/ingest` fichier) —
       **LIVRÉ Phase K** (opt-in `live.facade.enabled`, jeton `tia_`, provenance
-      `final_live`, formats OpenAI json/verbose_json/text/srt). Reste Phase 1 :
-      idempotence `external_meeting_id` + récupération par URL (contrat MeetingProvider).
+      `final_live`, formats OpenAI, gardes taille+durée). Reste A0 : fetch URL contraint
+      (SSRF) + idempotence composite (contrat providers).
+- [x] **Micro direct** (Phase 0-bis) — record-then-transcribe, source `mic`, E2E walkthrough.
 - [ ] **Post-réunion officiel des 4** (Visio URL, Zoom Recording, Teams Graph, Meet REST API).
 - [ ] **UI** : config connecteurs (admin) + panneau live (provenance grise→canonical)
       + bouton micro ; pas d'UI morte ; i18n FR/EN.
