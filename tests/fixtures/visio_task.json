@@ -1,0 +1,9 @@
+{
+  "owner_id": "u-123e4567",
+  "filename": "recordings/room-alpha/2026-07-24-1430.mp3",
+  "email": "alice@example.org",
+  "sub": "oidc|alice-9f2c",
+  "room": "room-alpha",
+  "recording_date": "2026-07-24",
+  "recording_time": "14:30:00"
+}
