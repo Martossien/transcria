@@ -11,6 +11,7 @@ l'intégration réelle (test `connector_real`) tourne contre un vrai MinIO docke
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from connector_service.contract import RemoteArtifact
 
@@ -65,3 +66,45 @@ class MinioArtifactFetcher:
         # bloquer l'event loop du service async.
         data = await asyncio.get_event_loop().run_in_executor(None, self._get_bytes, bucket, key)
         return data, key.rsplit("/", 1)[-1]
+
+
+class HttpArtifactFetcher:
+    """Télécharge un artefact par HTTPS avec un jeton Bearer — Zoom (`download_url` +
+    `download_token`, 24 h) et Teams (Graph `…/recordings/{id}/content` + Bearer OAuth).
+
+    Le jeton dépend de l'artefact (jeton d'événement Zoom, ou jeton OAuth Teams) → il est
+    fourni par un `token_provider(artifact) -> str`. `requests` (bloquant) tourne dans un
+    exécuteur ; la session est INJECTABLE (CI mockée, sans réseau).
+    """
+
+    def __init__(
+        self,
+        token_provider: Callable[[RemoteArtifact], str],
+        *,
+        session=None,
+        timeout: float = 120.0,
+    ) -> None:
+        self._token_of = token_provider
+        self._session = session
+        self._timeout = timeout
+
+    def _get_bytes(self, url: str, token: str) -> bytes:
+        sess = self._session
+        if sess is None:
+            import requests  # déjà une dépendance TranscrIA
+
+            sess = requests
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        resp = sess.get(url, headers=headers, timeout=self._timeout)
+        raise_for = getattr(resp, "raise_for_status", None)
+        if callable(raise_for):
+            raise_for()
+        return resp.content
+
+    async def fetch(self, artifact: RemoteArtifact) -> tuple[bytes, str]:
+        token = self._token_of(artifact)
+        data = await asyncio.get_event_loop().run_in_executor(
+            None, self._get_bytes, artifact.storage_uri, token)
+        # Nom de fichier depuis l'id d'artefact (dernier segment) ou l'URL.
+        name = (artifact.artifact_id or artifact.storage_uri).rsplit("/", 1)[-1] or "recording"
+        return data, name
