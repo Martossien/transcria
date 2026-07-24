@@ -34,6 +34,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
 from transcria.config import get_config
+from transcria.ingestion.store import MeetingImportStore, compute_dedup_key
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
@@ -150,11 +151,61 @@ def facade_transcriptions():
     return Response(facade_format.full_text(segments), mimetype="text/plain; charset=utf-8")
 
 
+def _create_and_queue_job(cfg: dict, file, title: str):
+    """Crée → dépose → analyse → met en file un job depuis un fichier uploadé.
+
+    Primitives identiques au wizard (JobService + exécuteur), via l'API de jobs.
+    Retourne `(job_id, result, error)` : sur succès `result={job_id, profile_id, mode}`
+    et `error=None` ; sur échec `error=(réponse JSON, code)` (et `job_id` renseigné dès
+    qu'un job a été créé, pour le contexte d'erreur et la libération d'idempotence)."""
+    job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
+    JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+
+    analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
+    if analysis.get("error"):
+        return job_id, None, (jsonify({"error": f"Analyse impossible: {analysis['error']}",
+                                       "job_id": job_id}), 422)
+
+    audio_path = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).get_original_audio_path()
+    if audio_path is None:
+        return job_id, None, (jsonify({"error": "Fichier audio introuvable après dépôt",
+                                       "job_id": job_id}), 500)
+
+    executor = get_job_executor()
+    if executor is None:
+        return job_id, None, (jsonify({"error": "Worker de traitement indisponible",
+                                       "job_id": job_id}), 503)
+
+    profile, mode = profiles.resolve_request(None, "fast")
+    vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
+    try:
+        result = executor.submit_process(
+            job_id, str(audio_path), mode,
+            vram_profile=vram_profile, processing_profile_id=profile.id,
+        )
+    except TypeError as exc:  # exécuteur plus ancien sans kwargs — repli identique à api_process
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        result = executor.submit_process(job_id, str(audio_path), mode)
+    if not result.get("accepted"):
+        return job_id, None, (jsonify({"error": "Un traitement est déjà en cours",
+                                       "job_id": job_id}), 409)
+
+    JobStore.update(job_id, processing_mode=mode)
+    JobStore.update_state(job_id, JobState.READY_TO_PROCESS)
+    return job_id, {"job_id": job_id, "profile_id": profile.id, "mode": mode}, None
+
+
 @web_bp.route("/v1/audio/ingest", methods=["POST"])
 @facade_enabled
 @bearer_token_required
 def facade_ingest():
-    """Dépôt d'un enregistrement post-réunion → job TranscrIA (pipeline complet)."""
+    """Dépôt d'un enregistrement post-réunion → job TranscrIA (pipeline complet).
+
+    Idempotence côté serveur (ADR-001 D2) : un en-tête `Idempotency-Key` (le
+    connecteur y met sa clé composite provider+compte+occurrence+artefact) déduplique
+    l'import via `MeetingImport` — un rejeu renvoie le MÊME job, jamais un second.
+    """
     cfg = get_config()
     # Permission vérifiée en JSON (la façade /v1 n'est pas sous /api : un abort()
     # rendrait une page HTML — inadapté à un client machine).
@@ -173,56 +224,46 @@ def facade_ingest():
     provider = (request.form.get("provider") or "").strip() or None
     title = clean_job_title(request.form.get("title") or Path(file.filename).stem)
 
-    # Création → dépôt → analyse → mise en file : primitives identiques au wizard.
-    job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
-    JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+    # Idempotence : si une clé est fournie, on RÉSERVE l'import avant de créer le job.
+    idem = (request.headers.get("Idempotency-Key") or "").strip()
+    dedup_key = compute_dedup_key(idem) if idem else None
+    if dedup_key:
+        record, created = MeetingImportStore.get_or_create(
+            dedup_key, provider=provider, external_occurrence_id=external_meeting_id)
+        if not created:
+            # Doublon / rejeu / course perdue : on NE crée PAS un second job.
+            if record.job_id:
+                return jsonify({"job_id": record.job_id, "idempotent": True,
+                                "status_url": f"/api/jobs/{record.job_id}/status"}), 200
+            return jsonify({"status": "import_in_progress", "import_id": record.id}), 202
 
-    analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
-    if analysis.get("error"):
-        return jsonify({"error": f"Analyse impossible: {analysis['error']}", "job_id": job_id}), 422
+    job_id, result, error = _create_and_queue_job(cfg, file, title)
+    if error is not None:
+        if dedup_key:
+            MeetingImportStore.release(dedup_key)  # rejeu propre après échec
+        return error
+    if dedup_key:
+        MeetingImportStore.attach_job(dedup_key, result["job_id"])
 
-    audio_path = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).get_original_audio_path()
-    if audio_path is None:
-        return jsonify({"error": "Fichier audio introuvable après dépôt", "job_id": job_id}), 500
-
-    executor = get_job_executor()
-    if executor is None:
-        return jsonify({"error": "Worker de traitement indisponible", "job_id": job_id}), 503
-
-    profile, mode = profiles.resolve_request(None, "fast")
-    vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
-    try:
-        result = executor.submit_process(
-            job_id, str(audio_path), mode,
-            vram_profile=vram_profile, processing_profile_id=profile.id,
-        )
-    except TypeError as exc:  # exécuteur plus ancien sans kwargs — repli identique à api_process
-        if "unexpected keyword argument" not in str(exc):
-            raise
-        result = executor.submit_process(job_id, str(audio_path), mode)
-    if not result.get("accepted"):
-        return jsonify({"error": "Un traitement est déjà en cours", "job_id": job_id}), 409
-
-    JobStore.update(job_id, processing_mode=mode)
-    JobStore.update_state(job_id, JobState.READY_TO_PROCESS)
     audit_log(
         action=AuditAction.JOB_ENQUEUE,
         target_type="job",
-        target_id=job_id,
+        target_id=result["job_id"],
         target_label=title,
         details={
             "source": "facade_ingest",
             "provider": provider,
             "external_meeting_id": external_meeting_id,
-            "processing_profile_id": profile.id,
-            "mode": mode,
+            "idempotent": bool(dedup_key),
+            "processing_profile_id": result["profile_id"],
+            "mode": result["mode"],
         },
     )
     return jsonify({
-        "job_id": job_id,
+        "job_id": result["job_id"],
         "state": JobState.READY_TO_PROCESS.value,
-        "processing_profile_id": profile.id,
-        "mode": mode,
+        "processing_profile_id": result["profile_id"],
+        "mode": result["mode"],
         "external_meeting_id": external_meeting_id,
-        "status_url": f"/api/jobs/{job_id}/status",
+        "status_url": f"/api/jobs/{result['job_id']}/status",
     }), 202

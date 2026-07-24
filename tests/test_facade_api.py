@@ -245,3 +245,27 @@ class TestIngest:
         r = client.post("/v1/audio/ingest", headers=_auth(op_token),
                         data=_wav(), content_type="multipart/form-data")
         assert r.status_code == 409
+
+    def test_idempotency_key_rejeu_meme_job(self, client, facade_on, op_token, monkeypatch):
+        _wire_ingest(monkeypatch)
+        headers = {**_auth(op_token), "Idempotency-Key": "visio|acct|occ-" + uuid.uuid4().hex}
+        r1 = client.post("/v1/audio/ingest", headers=headers, data=_wav(),
+                         content_type="multipart/form-data")
+        assert r1.status_code == 202 and r1.get_json()["job_id"] == "jobK"
+        # Rejeu de la MÊME clé : même job, pas un second (200 idempotent).
+        r2 = client.post("/v1/audio/ingest", headers=headers, data=_wav(),
+                         content_type="multipart/form-data")
+        assert r2.status_code == 200
+        assert r2.get_json()["idempotent"] is True and r2.get_json()["job_id"] == "jobK"
+
+    def test_idempotency_release_apres_echec_permet_rejeu(self, client, facade_on, op_token, monkeypatch):
+        # L'analyse échoue → l'import réservé est libéré → un rejeu re-tente (pas bloqué
+        # en « import_in_progress »).
+        _wire_ingest(monkeypatch, analyze_result={"error": "audio corrompu"})
+        headers = {**_auth(op_token), "Idempotency-Key": "k-" + uuid.uuid4().hex}
+        r1 = client.post("/v1/audio/ingest", headers=headers, data=_wav(),
+                         content_type="multipart/form-data")
+        assert r1.status_code == 422
+        r2 = client.post("/v1/audio/ingest", headers=headers, data=_wav(),
+                         content_type="multipart/form-data")
+        assert r2.status_code == 422  # re-tenté, pas coincé
