@@ -45,6 +45,9 @@ def build_policy(nonce: str | None) -> str:
         ("style-src", ("'self'", "'unsafe-inline'", _CDN)),   # Bootstrap : styles inline
         ("img-src", ("'self'", "data:")),
         ("font-src", ("'self'", _CDN)),
+        # blob: pour l'aperçu de l'enregistrement micro (URL.createObjectURL) — sans lui,
+        # <audio src="blob:…"> serait bloqué sous CSP enforce (media-src retombe sur default-src).
+        ("media-src", ("'self'", "blob:")),
         ("connect-src", ("'self'",)),
         ("object-src", ("'none'",)),
         ("base-uri", ("'self'",)),

@@ -86,7 +86,10 @@ class JobFilesystem:
         if not input_dir.is_dir():
             return None
         for f in sorted(input_dir.iterdir()):
-            if f.suffix.lower() in (".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"):
+            # Garder EN PHASE avec security.allowed_upload_extensions (loader.py) : cette
+            # liste vit ici pour rester sans dépendance à la config, mais tout format
+            # accepté à l'upload doit être détectable ici (sinon « aucun fichier audio »).
+            if f.suffix.lower() in (".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg", ".webm"):
                 return f
         return None
 

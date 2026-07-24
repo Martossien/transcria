@@ -34,6 +34,7 @@ from transcria.jobs.store import JobStore
 # Accès PAR MODULE : les tests substituent alert_admin_vram_wait à la source.
 from transcria.notifications import admin_alerts
 from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
+from transcria.services.audio_source import MIC
 from transcria.services.job_executor import SPEAKER_MODE, SUMMARY_MODE, get_job_executor
 from transcria.services.job_service import JobService
 from transcria.stt.speaker_detection import SpeakerDetector
@@ -137,6 +138,11 @@ def api_upload(job_id: str):
     info = JobService.upload(job.id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
     if job.title == DEFAULT_JOB_TITLE:
         job.title = clean_job_title(Path(file.filename).stem or file.filename)
+    # Provenance de l'entrée (couture 2 « source audio ») : le micro direct poste
+    # source=mic ; sinon fichier classique. On ne trace que le cas non-défaut pour
+    # ne pas toucher l'extra_data des uploads existants (défaut inchangé).
+    if (request.form.get("source") or "").strip().lower() == MIC:
+        JobStore.update_extra_data(job.id, lambda d: {**d, "source": MIC})
     # §5.6 (opt-in) : enchaîner analyse → mise en file du résumé pendant que
     # l'utilisateur remplit le wizard — l'attente perçue de l'étape résumé fond.
     _maybe_autostart_summary(cfg, job.id)

@@ -89,6 +89,7 @@ window.__WIZARD_LEX_TERMS__ = {{ (meeting.termes_suspects if (meeting.get('terme
 </script>
 <script src="{{ asset_url('js/wizard-api.js') }}"></script>
 <script src="{{ asset_url('js/wizard.js') }}"></script>
+<script src="{{ asset_url('js/mic_recorder.js') }}"></script>
 <datalist id="lexicon-cat-list">{% for cat in lexicon_categories %}<option value="{{ cat }}"></option>{% endfor %}</datalist>
 <template id="lexicon-prio-tpl">{% for prio in lexicon_priorities %}<option value="{{ prio }}">{{ lexicon_priority_label(prio) }}</option>{% endfor %}</template>
 {# Initialisation de page : JS extrait (vague A3) — job_wizard_page.js (après wizard.js). #}

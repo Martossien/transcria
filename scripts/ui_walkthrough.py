@@ -148,6 +148,33 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("création de job", False, str(exc)[:120])
 
+    def mic_recording(self) -> None:
+        """Micro direct (record-then-transcribe) sur un job FRAIS : enregistre depuis
+        le faux micro, écoute l'aperçu, dépose → déverrouille les profils comme un
+        upload fichier. Prouve toute la chaîne getUserMedia → MediaRecorder → /upload."""
+        try:
+            self.page.goto(f"{self.base}/", wait_until="networkidle")
+            self.page.fill('input[name="title"]', "Walkthrough micro")
+            self.page.click('form[action="/jobs/new"] button[type="submit"], form[action="/jobs/new"] [type="submit"]')
+            self.page.wait_for_load_state("networkidle")
+            self.check("bouton micro présent à l'étape fichier",
+                       self.page.locator('[data-action="TranscrIA.startMicRecording"]').count() > 0)
+            # Enregistrer → l'indicateur d'enregistrement apparaît (getUserMedia OK).
+            self.page.locator('[data-action="TranscrIA.startMicRecording"]').first.click()
+            self.page.wait_for_selector("#mic-recording:not(.d-none)", timeout=10000)
+            self.page.wait_for_timeout(1500)  # capter ~1,5 s de tonalité de synthèse
+            # Arrêter → l'aperçu (audio + boutons) apparaît (blob assemblé).
+            self.page.click('[data-action="TranscrIA.stopMicRecording"]')
+            self.page.wait_for_selector("#mic-preview:not(.d-none)", timeout=10000)
+            self.shot("03b_mic_preview")
+            # Utiliser l'enregistrement → upload (source=mic) → reload → profils déverrouillés.
+            self.page.click('[data-action="TranscrIA.uploadMicRecording"]')
+            self.page.wait_for_selector(".profile-pill:not([disabled])", timeout=20000)
+            self.check("micro : profils déverrouillés après dépôt de l'enregistrement",
+                       self.page.locator(".profile-pill:not([disabled])").count() > 0)
+        except Exception as exc:  # noqa: BLE001
+            self.check("micro direct", False, str(exc)[:160])
+
     def config_editor(self) -> None:
         self.page.goto(f"{self.base}/admin/config", wait_until="networkidle")
         self.shot("04_config_form")
@@ -635,13 +662,20 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # Flags fake-media : le micro direct (getUserMedia + MediaRecorder) doit
+        # fonctionner sans périphérique réel ni prompt de permission — Chromium émet
+        # une tonalité de synthèse et auto-accorde l'accès micro.
+        browser = p.chromium.launch(headless=True, args=[
+            "--use-fake-device-for-media-stream",
+            "--use-fake-ui-for-media-stream",
+        ])
         page = browser.new_page()
         wt = Walkthrough(page, args.base_url, out)
         try:
             wt.admin_password = args.password
             wt.login(args.user, args.password)
             wt.create_job_and_open_wizard()
+            wt.mic_recording()
             wt.config_editor()
             wt.admin_pages()
             wt.admin_crud()

@@ -180,7 +180,7 @@
   "transcria.web.request_helpers": 3,
   "transcria.web.routes": 6,
   "transcria.web.ui_labels": 1,
-  "transcria.web.wizard_api": 31,
+  "transcria.web.wizard_api": 32,
   "transcria.workflow": 3,
   "transcria.workflow.checkpoints": 3,
   "transcria.workflow.concurrency_profile": 1,

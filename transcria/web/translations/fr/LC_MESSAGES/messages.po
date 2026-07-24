@@ -5353,6 +5353,30 @@ msgstr "Façade STT temps réel"
 msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
 msgstr "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
 
+msgid "Arrêter"
+msgstr "Arrêter"
+
+msgid "Ou enregistrez directement depuis votre micro :"
+msgstr "Ou enregistrez directement depuis votre micro :"
+
+msgid "Enregistrer au micro"
+msgstr "Enregistrer au micro"
+
+msgid "Micro inaccessible : autorisez le microphone puis réessayez."
+msgstr "Micro inaccessible : autorisez le microphone puis réessayez."
+
+msgid "Recommencer"
+msgstr "Recommencer"
+
+msgid "Enregistrement…"
+msgstr "Enregistrement…"
+
+msgid "Utiliser cet enregistrement"
+msgstr "Utiliser cet enregistrement"
+
+msgid "Votre navigateur ne permet pas l'enregistrement audio."
+msgstr "Votre navigateur ne permet pas l'enregistrement audio."
+
 #~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 #~ msgstr "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 

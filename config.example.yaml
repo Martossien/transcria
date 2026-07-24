@@ -884,6 +884,7 @@ security:
     - ".mp4"
     - ".flac"
     - ".ogg"
+    - ".webm"   # micro direct (MediaRecorder → opus) ; lu par ffmpeg
   # Documents présentés joints au contexte du résumé (étape 3 du wizard). Extraction
   # texte pur-Python ; formats XML modernes uniquement (.doc/.ppt hérités non gérés).
   allowed_document_extensions:

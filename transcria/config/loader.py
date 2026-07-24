@@ -755,7 +755,9 @@ _DEFAULT_CONFIG = {
         "retention_days": 365,
         "allow_job_delete": True,
         "max_upload_size_mb": 1024,
-        "allowed_upload_extensions": [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"],
+        # .webm = conteneur natif de MediaRecorder (micro direct, Chrome → opus) ; lu
+        # par ffmpeg. Garder EN PHASE avec la détection de JobFilesystem.get_original_audio_path.
+        "allowed_upload_extensions": [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg", ".webm"],
         # Documents présentés joints au contexte du résumé (étape 3 du wizard). Formats
         # XML modernes uniquement (extraction pur-Python) ; distinct de l'audio ci-dessus.
         "allowed_document_extensions": [".pdf", ".docx", ".pptx", ".txt"],

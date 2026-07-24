@@ -16,11 +16,40 @@
       </div>
     {% else %}
       <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
-      <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg" class="form-control mb-2">
+      <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg,.webm" class="form-control mb-2">
       <button class="btn btn-primary" data-action="TranscrIA.uploadFile">
         <span id="upload-spinner" class="spinner d-none"></span> {{ _('Téléverser') }}
       </button>
       <div id="upload-result" class="mt-2"></div>
+
+      {# Micro direct (record-then-transcribe) : enregistre depuis le micro puis dépose
+         le blob par le MÊME endpoint d'upload (source=mic). Comportement piloté par
+         mic_recorder.js ; le markup et les libellés vivent ici (i18n template). #}
+      <div id="mic-recorder" class="mt-3 pt-2 border-top">
+        <p class="text-muted small mb-1">{{ _('Ou enregistrez directement depuis votre micro :') }}</p>
+        <button class="btn btn-outline-secondary btn-sm" data-action="TranscrIA.startMicRecording">
+          <i class="bi bi-mic"></i> {{ _('Enregistrer au micro') }}
+        </button>
+        <div id="mic-recording" class="d-none mt-2">
+          <span class="text-danger align-middle">
+            <i class="bi bi-record-circle"></i> {{ _('Enregistrement…') }} <span id="mic-timer">0</span>&nbsp;s
+          </span>
+          <button class="btn btn-danger btn-sm ms-2" data-action="TranscrIA.stopMicRecording">
+            <i class="bi bi-stop-fill"></i> {{ _('Arrêter') }}
+          </button>
+        </div>
+        <div id="mic-preview" class="d-none mt-2">
+          <audio id="mic-audio" controls class="d-block mb-2 w-100"></audio>
+          <button class="btn btn-success btn-sm" data-action="TranscrIA.uploadMicRecording">
+            <span id="mic-upload-spinner" class="spinner d-none"></span>
+            {{ _('Utiliser cet enregistrement') }}
+          </button>
+          <button class="btn btn-outline-secondary btn-sm ms-1" data-action="TranscrIA.startMicRecording">
+            <i class="bi bi-arrow-repeat"></i> {{ _('Recommencer') }}
+          </button>
+        </div>
+        <div id="mic-result" class="mt-2"></div>
+      </div>
     {% endif %}
 
     <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent.
