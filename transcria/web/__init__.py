@@ -7,6 +7,7 @@ de routes s'enregistre à l'import (le décorateur ``@web_bp.route`` fait foi) ;
 from transcria.web import (  # noqa: F401 — accrochage des routes au blueprint à l'import
     admin_routes,
     downloads_api,
+    facade_api,
     health_routes,
     lexicon_api,
     pages_routes,

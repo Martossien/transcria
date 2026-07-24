@@ -130,6 +130,15 @@ _DEFAULT_CONFIG = {
         "cohere_model_revision": "",
         "pyannote_model": "pyannote/speaker-diarization-community-1",
     },
+    # Temps réel & connecteurs de réunion (docs/TEMPS_REEL_REUNIONS.md). Tout est
+    # OPT-IN, défaut OFF : sans activation, aucune route façade n'existe et la
+    # surface d'API par défaut est strictement inchangée.
+    "live": {
+        # Façade STT keystone : POST /v1/audio/transcriptions (OpenAI-audio) +
+        # ingestion fichier POST /v1/audio/ingest (→ job). false = endpoints absents
+        # (404). Rend TranscrIA feedable par les connecteurs de réunion et le micro.
+        "facade": {"enabled": False},
+    },
     "cohere": {
         "chunk_length_s": 30,
         "max_new_tokens": 448,

@@ -5341,6 +5341,18 @@ msgstr "Live STT backend (real-time)"
 msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
 msgstr "Real-time chain (low latency) — empty = no live. Requires a model DESIGNED for streaming (nemotron-streaming, voxtralrt); never a batch model (see docs/TEMPS_REEL_REUNIONS.md)."
 
+msgid "Temps réel & connecteurs"
+msgstr "Real-time & connectors"
+
+msgid "Façade STT et ingestion des réunions (opt-in, désactivé par défaut)."
+msgstr "Meeting STT facade and ingestion (opt-in, disabled by default)."
+
+msgid "Façade STT temps réel"
+msgstr "Real-time STT facade"
+
+msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
+msgstr "Exposes POST /v1/audio/transcriptions (OpenAI-audio transcription) and POST /v1/audio/ingest (upload a meeting recording → job). Disabled = endpoints absent. Authenticated by a personal API token (see docs/TEMPS_REEL_REUNIONS.md)."
+
 #~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 #~ msgstr "Refinement applied (version v%(v)s) — the documents above are regenerated on every download and include your changes."
 

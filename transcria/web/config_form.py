@@ -52,6 +52,17 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         ],
     },
     {
+        "title": _l("Temps réel & connecteurs"),
+        "help": _l("Façade STT et ingestion des réunions (opt-in, désactivé par défaut)."),
+        "fields": [
+            {"path": "live.facade.enabled", "label": _l("Façade STT temps réel"), "type": "bool",
+             "help": _l("Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et "
+                        "POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). "
+                        "Désactivé = endpoints absents. Authentifié par jeton d'API personnel "
+                        "(cf. docs/TEMPS_REEL_REUNIONS.md).")},
+        ],
+    },
+    {
         "title": _l("LLM d'arbitrage"),
         "help": _l("Résumé et correction par la LLM locale OpenAI-compatible."),
         "fields": [

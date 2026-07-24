@@ -193,8 +193,10 @@
 | `/metrics` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/ready` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
+| `/v1/audio/ingest` | POST | — | Dépôt d'un enregistrement post-réunion → job TranscrIA (pipeline complet). | `transcria.web.facade_api` |
+| `/v1/audio/transcriptions` | POST | — | Transcription STT sans état, compatible OpenAI Audio Transcriptions. | `transcria.web.facade_api` |
 
-_Portail TranscrIA (app principale) : 128 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 130 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

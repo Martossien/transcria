@@ -641,7 +641,10 @@ capture-Meet, et **seulement si besoin** (Meet post-réunion étant officiel).
 - [ ] Piste ≠ personne (diarisation par piste conservée).
 - [ ] Cas durs (réordonnancement, doublons, reconnexion, rename, overlap, arrêt).
 - [ ] **Objectif calibré = viser « Bon » (pas « Excellent »)** ; mesurer l'axe.
-- [ ] **Keystone façade STT** (`/v1/audio/transcriptions` + ingestion fichier).
+- [x] **Keystone façade STT** (`/v1/audio/transcriptions` + `/v1/audio/ingest`) —
+      **LIVRÉ Phase K** (opt-in `live.facade.enabled`, jeton `tia_`, provenance
+      `final_live`, formats OpenAI json/verbose_json/text/srt). Reste Phase 1 :
+      idempotence `external_meeting_id` + récupération par URL (contrat MeetingProvider).
 - [ ] **Post-réunion officiel des 4** (Visio URL, Zoom Recording, Teams Graph, Meet REST API).
 - [ ] **UI** : config connecteurs (admin) + panneau live (provenance grise→canonical)
       + bouton micro ; pas d'UI morte ; i18n FR/EN.

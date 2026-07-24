@@ -29,6 +29,7 @@ exposed:
 - gpu.preemption
 - i18n.available_locales
 - i18n.default_locale
+- live.facade.enabled
 - models.diarization_backend
 - models.live_stt_backend
 - models.stt_backend

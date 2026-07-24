@@ -72,18 +72,10 @@ def bearer_token_allowed(view):
                 user = authenticate_token(raw)
                 if user is None:
                     # Traçabilité : une tentative avec un jeton invalide/expiré/révoqué
-                    # est un signal de sécurité (jeton volé, sondage). On journalise le
-                    # token_id (partie PUBLIQUE) — jamais le secret. Un usage RÉUSSI n'est
-                    # pas audité par requête (le polling inonderait) : les actions en aval
-                    # portent déjà l'utilisateur, et token.last_used_at trace l'usage.
-                    from transcria.audit.decorator import audit_log
-                    from transcria.audit.models import AuditAction
-                    from transcria.auth.api_tokens import parse_token
-
-                    parsed = parse_token(raw)
-                    audit_log(AuditAction.LOGIN_FAILED, target_label="api_token",
-                              details={"reason": "api_token_invalid",
-                                       "token_id": parsed[0] if parsed else None})
+                    # est un signal de sécurité (jeton volé, sondage). Un usage RÉUSSI
+                    # n'est PAS audité par requête (le polling inonderait) : les actions
+                    # en aval portent déjà l'utilisateur, et token.last_used_at trace l'usage.
+                    _audit_invalid_api_token(raw)
                     return jsonify({"error": "Jeton d'API invalide, expiré ou révoqué"}), 401
                 from flask import session
                 from flask_login import login_user
@@ -91,6 +83,53 @@ def bearer_token_allowed(view):
                 login_user(user, remember=False)
                 session.permanent = False
                 session.modified = False        # pas de Set-Cookie : jeton ≠ session
+        return view(*args, **kwargs)
+
+    return wrapper
+
+
+def _audit_invalid_api_token(raw: str) -> None:
+    """Trace une tentative avec un jeton `tia_` invalide/expiré/révoqué (signal de
+    sécurité). On journalise le token_id (partie PUBLIQUE) — jamais le secret."""
+    from transcria.audit.decorator import audit_log
+    from transcria.audit.models import AuditAction
+    from transcria.auth.api_tokens import parse_token
+
+    parsed = parse_token(raw)
+    audit_log(AuditAction.LOGIN_FAILED, target_label="api_token",
+              details={"reason": "api_token_invalid", "token_id": parsed[0] if parsed else None})
+
+
+def bearer_token_required(view):
+    """Exige un jeton d'API personnel valide — 401 JSON sinon (API machine-to-machine).
+
+    Contrairement à ``bearer_token_allowed`` (repli silencieux sur le cookie de
+    session), l'absence OU l'invalidité du jeton est ici un 401 JSON sec. Adapté à
+    la façade ``/v1`` : hors préfixe ``/api``, le handler d'auth global ne renvoie
+    pas le 401 JSON (il redirigerait) — on l'impose donc ici. En cas de succès,
+    l'utilisateur propriétaire est connecté pour CETTE requête seulement (aucun
+    cookie émis) : ``@requires``/vérifications de permission voient alors le user.
+    """
+    import functools
+
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        raw = auth_header[len("Bearer "):].strip() if auth_header.startswith("Bearer ") else ""
+        from transcria.auth.api_tokens import TOKEN_PREFIX, authenticate_token
+
+        if not raw.startswith(TOKEN_PREFIX):
+            return jsonify({"error": "Jeton d'API requis (Authorization: Bearer tia_…)"}), 401
+        user = authenticate_token(raw)
+        if user is None:
+            _audit_invalid_api_token(raw)
+            return jsonify({"error": "Jeton d'API invalide, expiré ou révoqué"}), 401
+        from flask import session
+        from flask_login import login_user
+
+        login_user(user, remember=False)
+        session.permanent = False
+        session.modified = False        # pas de Set-Cookie : jeton ≠ session
         return view(*args, **kwargs)
 
     return wrapper

@@ -50,7 +50,27 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_security(cfg.get("security", {}), result)
     _check_maintenance(cfg.get("maintenance", {}), result)
     _check_i18n(cfg.get("i18n", {}), result)
+    _check_live(cfg.get("live", {}), result)
     return result
+
+
+def _check_live(cfg: dict, r: ValidationResult) -> None:
+    """Section `live` (temps réel & connecteurs) — tout opt-in, défaut OFF.
+
+    Voir docs/TEMPS_REEL_REUNIONS.md. Seule la façade STT keystone est instruite
+    ici ; les connecteurs par plateforme s'ajouteront comme sous-sections.
+    """
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("live: doit être un objet YAML")
+        return
+    facade = cfg.get("facade")
+    if facade is not None:
+        if not isinstance(facade, dict):
+            r.add_error("live.facade: doit être un objet YAML")
+        else:
+            _check_bool(facade, "enabled", "live.facade.enabled", r)
 
 
 # Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale
