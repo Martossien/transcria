@@ -79,12 +79,14 @@ class HttpArtifactFetcher:
 
     def __init__(
         self,
-        token_provider: Callable[[RemoteArtifact], str],
+        token_provider: Callable[[RemoteArtifact], str] | None = None,
         *,
         session=None,
         timeout: float = 120.0,
     ) -> None:
-        self._token_of = token_provider
+        # Défaut : le jeton éphémère porté par l'artefact (Zoom download_token). Pour un
+        # jeton OAuth (Teams/Meet), injecter un provider qui l'acquiert/rafraîchit.
+        self._token_of = token_provider or (lambda art: art.auth_token or "")
         self._session = session
         self._timeout = timeout
 

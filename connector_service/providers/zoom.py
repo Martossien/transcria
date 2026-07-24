@@ -90,6 +90,7 @@ class ZoomRecordingAdapter:
             storage_uri=rec.download_url,          # HTTPS + download_token (pas s3://)
             media_type="audio/mp4" if rec.file_extension == "m4a" else "video/mp4",
             artifact_type="recording",
+            auth_token=rec.download_token,         # jeton éphémère porté par l'événement
         )
 
     def dedup_key(self, rec: ZoomRecording) -> str:

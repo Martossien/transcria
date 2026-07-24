@@ -18,6 +18,7 @@ import asyncio
 from flask import Flask, jsonify, request
 
 from connector_service.providers.teams import TeamsNotificationError
+from connector_service.providers.visio import VisioTaskError
 from connector_service.providers.zoom import ZoomEventError
 from connector_service.signatures import verify_zoom_signature, zoom_url_validation
 
@@ -30,6 +31,15 @@ def _run_handler(handler, payload, parse_error):
     except Exception:  # noqa: BLE001 — échec fetch/ingest → 502, jamais un 500 opaque
         return jsonify({"error": "ingestion échouée"}), 502
     return jsonify({"job_id": result.job_id, "idempotent": result.idempotent}), 202
+
+
+def register_visio_receiver(app: Flask, *, api_token: str, handler) -> None:
+    @app.post("/api/v1/tasks/")
+    def visio_task():
+        if request.headers.get("Authorization", "") != f"Bearer {api_token}":
+            return jsonify({"error": "non autorisé"}), 401
+        payload = request.get_json(silent=True) or {}
+        return _run_handler(handler, payload, VisioTaskError)
 
 
 def register_zoom_receiver(app: Flask, *, secret_token: str, handler) -> None:

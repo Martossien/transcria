@@ -53,6 +53,10 @@ class RemoteArtifact:
     size_bytes: int | None = None
     sha256: str | None = None
     participant_id: str | None = None
+    # Jeton ÉPHÉMÈRE de téléchargement porté par l'événement (ex. Zoom `download_token`,
+    # 24 h). En mémoire uniquement (jamais persisté). None quand le fetch s'authentifie
+    # autrement (OAuth Teams/Meet, credentials MinIO).
+    auth_token: str | None = None
 
 
 @dataclass(frozen=True)
