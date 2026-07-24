@@ -388,6 +388,7 @@ def _check_services(svc: dict, r: ValidationResult) -> None:
 def _check_models(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
     _check_stt_backend(mod, r, cfg)
     _check_summary_stt_backend(mod, r, cfg)
+    _check_live_stt_backend(mod, r, cfg)
     _check_str(mod, "default_stt_model", "models.default_stt_model", r)
     _check_str(mod, "fallback_stt_model", "models.fallback_stt_model", r)
     _check_str(mod, "cohere_model_path", "models.cohere_model_path", r)
@@ -469,6 +470,25 @@ def _check_summary_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None 
     r.add_error(
         f"models.summary_stt_backend='{backend}' invalide. "
         f"null (= backend principal), l'un de : {', '.join(sorted(_VALID_STT_BACKENDS))}, "
+        f"ou un backend SERVI déclaré avec une url dans inference.stt.backends.<nom>"
+    )
+
+
+def _check_live_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
+    """`models.live_stt_backend` : null (= pas de chaîne live) ou même règle que
+    `stt_backend` (natif du registre, ou servi routé avec url). Couture 3 du
+    chantier temps réel (docs/TEMPS_REEL_REUNIONS.md)."""
+    backend = mod.get("live_stt_backend")
+    if backend is None:
+        return
+    if isinstance(backend, str) and backend in _VALID_STT_BACKENDS:
+        return
+    routed = (((cfg or {}).get("inference", {}) or {}).get("stt", {}) or {}).get("backends", {}) or {}
+    if isinstance(backend, str) and str((routed.get(backend) or {}).get("url") or "").strip():
+        return
+    r.add_error(
+        f"models.live_stt_backend='{backend}' invalide. "
+        f"null (= pas de chaîne live), l'un de : {', '.join(sorted(_VALID_STT_BACKENDS))}, "
         f"ou un backend SERVI déclaré avec une url dans inference.stt.backends.<nom>"
     )
 

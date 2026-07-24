@@ -30,6 +30,7 @@ exposed:
 - i18n.available_locales
 - i18n.default_locale
 - models.diarization_backend
+- models.live_stt_backend
 - models.stt_backend
 - models.summary_stt_backend
 - notifications.email.base_url

@@ -5335,6 +5335,12 @@ msgstr "The last summary could not be generated: the arbitration LLM produced no
 msgid "Générer le résumé"
 msgstr "Generate summary"
 
+msgid "Backend STT live (temps réel)"
+msgstr "Live STT backend (real-time)"
+
+msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
+msgstr "Real-time chain (low latency) — empty = no live. Requires a model DESIGNED for streaming (nemotron-streaming, voxtralrt); never a batch model (see docs/TEMPS_REEL_REUNIONS.md)."
+
 #~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 #~ msgstr "Refinement applied (version v%(v)s) — the documents above are regenerated on every download and include your changes."
 

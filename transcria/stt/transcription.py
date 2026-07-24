@@ -14,6 +14,7 @@ from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.stt.corpus import build_segment_corpus, summarize_corpus
 from transcria.stt.forced_alignment import ForcedAlignmentService
+from transcria.stt.provenance import stamp_provenance
 from transcria.stt.reliability import SegmentReliabilityScorer
 from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
 from transcria.stt.transcriber_factory import create_transcriber
@@ -183,6 +184,9 @@ class Transcriber:
         )
         segments = self._cleanup_transcription_segments(segments, sl, language=lang)
         segments = self._score_segment_reliability(segments, fs, sl)
+        # Couture 1 : le pipeline batch est la RÉFÉRENCE → provenance canonical
+        # (défaut). Additif, ignoré par le SRT ; le live posera d'autres états.
+        segments = stamp_provenance(segments)
         corpus_summary = self._write_stt_corpus(job, segments, backend, fs, sl)
         backend_metadata = self._backend_metadata()
         if backend_metadata:

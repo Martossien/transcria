@@ -61,6 +61,16 @@ def summary_backend(config: dict) -> str:
     return models.get("summary_stt_backend") or models.get("stt_backend", "cohere")
 
 
+def live_backend(config: dict) -> str | None:
+    """Backend de la CHAÎNE LIVE (temps réel) : `models.live_stt_backend`, ou
+    `None` si aucune chaîne live n'est configurée (couture 3, temps réel).
+
+    Symétrique de `summary_backend` mais SANS repli sur le backend principal :
+    le live exige un moteur *conçu* streaming ; à défaut, pas de live (None).
+    """
+    return config.get("models", {}).get("live_stt_backend") or None
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 

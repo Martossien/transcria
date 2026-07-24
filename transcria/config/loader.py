@@ -117,6 +117,11 @@ _DEFAULT_CONFIG = {
         # rapide (ex. "kroko", CPU pur) accélère la phase la plus visible sans
         # toucher à la qualité du SRT final. Bascule du défaut : après bench.
         "summary_stt_backend": None,
+        # Backend de la CHAÎNE LIVE (temps réel, faible latence) : null = pas de
+        # chaîne live (comportement historique). Distinct du STT de référence du
+        # pipeline (docs/TEMPS_REEL_REUNIONS.md, couture 3). Moteurs *conçus*
+        # streaming : nemotron-streaming, kyutai, voxtralrt — jamais un batch.
+        "live_stt_backend": None,
         "diarization_backend": "pyannote",
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",

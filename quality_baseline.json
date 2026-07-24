@@ -1,6 +1,6 @@
 {
  "cycles": 0,
- "deep_config_chains": 196,
+ "deep_config_chains": 197,
  "deferred_internal_imports": 82,
  "fanout": {
   "inference_service": 1,
@@ -117,6 +117,7 @@
   "transcria.queue.store": 6,
   "transcria.queue.wait_estimate": 4,
   "transcria.services": 3,
+  "transcria.services.audio_source": 1,
   "transcria.services.config_service": 3,
   "transcria.services.job_executor": 17,
   "transcria.services.job_service": 10,
@@ -150,7 +151,7 @@
   "transcria.stt.speaker_detection": 3,
   "transcria.stt.summary": 7,
   "transcria.stt.transcriber_factory": 5,
-  "transcria.stt.transcription": 12,
+  "transcria.stt.transcription": 13,
   "transcria.stt.voxtral_transcriber": 5,
   "transcria.stt.whisper_transcriber": 4,
   "transcria.voice": 1,
