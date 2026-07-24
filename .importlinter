@@ -10,6 +10,7 @@
 root_packages =
     transcria
     inference_service
+    connector_service
 include_external_packages = True
 # Les imports sous `if TYPE_CHECKING:` ne sont pas des dépendances d'exécution
 # (B1 lot 3 : l'app Flask injectée dans scheduler/job_executor n'est qu'une annotation).
@@ -100,3 +101,16 @@ forbidden_modules =
     transcria.workflow
     transcria.queue
     transcria.services
+
+# A0 temps réel (2026-07-24) — ISOLATION du service connecteur async : le cœur sync
+# (transcria) et le service d'inférence n'importent JAMAIS `connector_service`. Le
+# connecteur parle à TranscrIA par HTTP (API de jobs), jamais par import interne — il
+# peut vivre sur une autre machine. (docs/adr/ADR-001-frontiere-ingestion-reunions.md)
+[importlinter:contract:connecteur-isole]
+name = Le cœur n'importe pas le service connecteur async
+type = forbidden
+source_modules =
+    transcria
+    inference_service
+forbidden_modules =
+    connector_service

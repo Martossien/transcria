@@ -9,7 +9,7 @@ select = ["E", "W", "F", "I"]
 # versions de ruff → on force `alembic` en third-party (ce qu'il est) et on épingle
 # nos paquets first-party.
 [tool.ruff.lint.isort]
-known-first-party = ["transcria", "inference_service"]
+known-first-party = ["transcria", "inference_service", "connector_service"]
 known-third-party = ["alembic"]
 
 [tool.mypy]

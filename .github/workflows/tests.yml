@@ -63,10 +63,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
+        run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I
 
       - name: Type check (mypy)
-        run: mypy transcria/ inference_service/ --ignore-missing-imports
+        run: mypy transcria/ inference_service/ connector_service/ --ignore-missing-imports
 
       - name: i18n — catalogues à jour, complets et compilés
         run: python scripts/i18n_check.py
