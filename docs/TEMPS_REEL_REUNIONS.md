@@ -16,6 +16,16 @@
 > vivent dans [`docs/adr/ADR-001-frontiere-ingestion-reunions.md`](adr/ADR-001-frontiere-ingestion-reunions.md)
 > (source de vérité des décisions) ; ce plan n'énonce que les décisions **actives**.
 
+> **MàJ 2026-07-25 — câblage réel + bot.** Les transports OFFICIELS sont désormais câblés
+> (glue réelle dep-gated derrière les points d'injection, cœurs testés CI) : Visio/LiveKit,
+> Zoom RTMS (2-WS), STT Kyutai + WhisperLiveKit, Meet Media (WebRTC/aiortc). Un **pont PCM
+> neutre** unifie l'intégration de tout acquéreur média externe. Un **bot navigateur** (fallback
+> SORTANT-seul, marche derrière firewall/proxy ; sous-paquet isolé opt-in, banc d'essai Jitsi)
+> couvre le live là où l'officiel manque. **Découpe v1/v2** : v1 = Visio (officiel), Zoom (RTMS+
+> bot), Teams (bot), Meet (officiel) ; **v2** = bot Meet (anti-bot) + Teams-live officiel (sidecar
+> .NET — la lib média `Microsoft.Skype.Bots.Media` est Windows-only, .NET lui-même tourne sous
+> Linux). Tout en commits ; le gate réel (E2E par plateforme) reste à faire ensemble.
+
 ## Positionnement stratégique — pourquoi ce chantier
 
 TranscrIA est **fort sur son cœur** : donner le son d'une réunion + sa
