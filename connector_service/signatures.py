@@ -37,6 +37,20 @@ def verify_zoom_signature(secret_token: str, timestamp: str, raw_body: str, sign
     return hmac.compare_digest(zoom_signature(secret_token, timestamp, raw_body), signature or "")
 
 
+def rtms_handshake_signature(client_id: str, client_secret: str,
+                             meeting_uuid: str, rtms_stream_id: str) -> str:
+    """Signature du handshake RTMS (≠ signature webhook) : HMAC-SHA256(client_secret,
+    ``"{client_id},{meeting_uuid},{rtms_stream_id}"``) en hex. Envoyée dans le message
+    `msg_type:1` du WebSocket de signaling (cf. rtms-samples RTMS_CONNECTION_FLOW).
+
+    ⚠️ Les identifiants RTMS peuvent provenir d'une app Zoom distincte de l'app S2S OAuth
+    (téléchargement des enregistrements) — ne pas réutiliser le même couple à l'aveugle.
+    """
+    message = f"{client_id},{meeting_uuid},{rtms_stream_id}"
+    return hmac.new(client_secret.encode("utf-8"), message.encode("utf-8"),
+                    hashlib.sha256).hexdigest()
+
+
 def zoom_url_validation(secret_token: str, plain_token: str) -> dict:
     """Réponse au défi `endpoint.url_validation` : Zoom envoie `plainToken`, on renvoie
     `{plainToken, encryptedToken}` où encryptedToken = HMAC-SHA256(secret, plainToken)."""
