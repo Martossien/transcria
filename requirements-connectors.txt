@@ -17,3 +17,5 @@ livekit-api>=0.8,<2.0
 websockets>=12,<14
 # STT live Kyutai/moshi : WebSocket msgpack `/api/asr-streaming` (float32 24 kHz).
 msgpack>=1.0,<2.0
+# Meet Media API live (R1) : client WebRTC receive-only (offer/answer + Opus→PCM 48 kHz).
+aiortc>=1.6,<2.0
