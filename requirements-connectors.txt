@@ -13,3 +13,5 @@ google-auth>=2.20,<3.0
 # Visio/LiveKit live (L1) : client WebRTC temps réel (rtc) + génération de jetons (api).
 livekit>=0.18,<2.0
 livekit-api>=0.8,<2.0
+# Zoom RTMS live (L2) : WebSockets signaling + média (messages JSON).
+websockets>=12,<14
