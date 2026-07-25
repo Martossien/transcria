@@ -1,10 +1,18 @@
 # Temps réel & connecteurs de réunion — plan directeur
 
-> **Statut** : plan directeur **partiellement implémenté**. Livré : Phase 0
-> (3 coutures), **Phase K** (façade STT `/v1/audio/transcriptions` + `/v1/audio/ingest`
-> fichier + garde durée), **micro direct** (Phase 0-bis). Aucun connecteur de
-> plateforme ni passerelle live n'est encore livré. Chaque phase suivante est
-> « go »-ée séparément. Le raisonnement d'architecture et les alternatives rejetées
+> **Statut** : plan directeur **largement implémenté côté code**. **✅ livré + gate réel** :
+> Phase 0 (3 coutures), **Phase K** (façade STT `/v1/audio/transcriptions` + `/v1/audio/ingest`
+> fichier + garde durée), **micro direct** (Phase 0-bis). **🧪 cœur implémenté + suite CI
+> verte, avec transports INJECTÉS (I/O réel à valider au gate manuel)** : A0 (contrat par
+> capacités + `MeetingImport` idempotent + pont), A1–A4 (post-réunion Visio/Zoom/Teams/Meet :
+> OAuth, signatures/déchiffrement, adaptateurs, fetchers), L0 (passerelle live → segments à
+> provenance + relais live→batch), L1 (Visio/LiveKit), L2 (Zoom RTMS), STT live (Kyutai
+> msgpack + WhisperLiveKit lines/buffer), R1 (Meet Media WebRTC, démux CSRC 48 k) et C1
+> (Teams RTM, dernier recours). Les formats de chaque transport sont **vérifiés par audit
+> croisé contre les dépôts OSS de référence** (rtms-samples, moshi, WhisperLiveKit,
+> livekit-agents, meet-media-api-samples, graph webhooks) — cf. commits `fix(connecteurs)`
+> + `feat(connecteurs)`. Reste au gate manuel : brancher les sockets/WebRTC réels et les
+> identifiants live (prévu). Le raisonnement d'architecture et les alternatives rejetées
 > vivent dans [`docs/adr/ADR-001-frontiere-ingestion-reunions.md`](adr/ADR-001-frontiere-ingestion-reunions.md)
 > (source de vérité des décisions) ; ce plan n'énonce que les décisions **actives**.
 
@@ -505,21 +513,24 @@ SRT) **ne change pas** — c'est le moat.
 Nomenclature par flux (ADR-001, revue #2 point 4) : `A` = artefact/ingestion,
 `L` = live, `R` = recherche, `C` = contractuel. Fini les « Phase 1 » ambigus.
 
+Légende : **✅** livré + gate réel · **🧪** cœur implémenté + suite CI verte, transports
+INJECTÉS (I/O réel à valider au gate manuel).
+
 | ID | Quoi | Dépend | Effort |
 |---|---|---|---|
 | **0** ✅ | 3 coutures (provenance / source audio / 2 chaînes STT) | — | S |
 | **K** ✅ | Façade STT `/v1/audio/transcriptions` + `/v1/audio/ingest` fichier + gardes taille/durée | couture 2/3 | M |
 | **0-bis** ✅ | Micro direct (record-then-transcribe → upload) | K | S |
-| **A0** | Contrat providers **par capacités** + manifeste + événements contrôle/données + `MeetingImport` (idempotence composite) + service async isolé | K + coutures | M |
-| **A1** | Visio post-réunion — **adaptateur** au contrat Visio (tâche + métadonnées → réunion), PAS un swap d'URL (ADR-001 D8) | A0 | M→sem. |
-| **A2** | Zoom post-réunion — Cloud Recording API (OAuth) → `/ingest` | A0 | M→sem. |
-| **A3** | Teams post-réunion — Graph, webhook chiffré → fetch MP4/VTT (API facturées) | A0 | sem. |
-| **A4** | Meet post-réunion — REST API v2 + Drive → job | A0 | M |
-| **L0** | Passerelle live générique (plan de données audio séparé, D4) | A0 | L |
-| **L1** | Visio live — adapter le worker `multi_user_transcriber.py` sur la passerelle | L0 | L |
-| **L2** | Zoom live (RTMS) sur la passerelle | L0 | L→sem. |
-| **R1** | Meet live — **recherche Meet Media API** (preview, plafond de flux) ; bot = repli | L0 | rech. |
-| **C1** | Teams RTM — **dernier recours** (MS déconseille) | L0 | cond. |
+| **A0** 🧪 | Contrat providers **par capacités** + manifeste + événements contrôle/données + `MeetingImport` (idempotence composite) + service async isolé | K + coutures | M |
+| **A1** 🧪 | Visio post-réunion — **adaptateur** au contrat Visio (tâche + métadonnées → réunion), PAS un swap d'URL (ADR-001 D8) | A0 | M→sem. |
+| **A2** 🧪 | Zoom post-réunion — Cloud Recording API (OAuth) → `/ingest` | A0 | M→sem. |
+| **A3** 🧪 | Teams post-réunion — Graph, webhook chiffré → fetch MP4/VTT (API facturées) | A0 | sem. |
+| **A4** 🧪 | Meet post-réunion — REST API v2 + Drive → job (pagination + statut HTTP durcis) | A0 | M |
+| **L0** 🧪 | Passerelle live générique (plan de données audio séparé, D4) + relais live→batch + STT live Kyutai/WhisperLiveKit | A0 | L |
+| **L1** 🧪 | Visio live — mapping `rtc.AudioFrame`→`RawFrame` (LiveKit), séquence/horloge synthé | L0 | L |
+| **L2** 🧪 | Zoom live (RTMS) — handshake signé, keepalive, parse audio niché, `data_opt=2` par participant | L0 | L→sem. |
+| **R1** 🧪 | Meet live — Meet Media API WebRTC (preview), démux CSRC→participant 48 k, plafond 3 flux | L0 | rech. |
+| **C1** 🧪 | Teams RTM — **dernier recours** (MS déconseille) | L0 | cond. |
 
 - **Ordre** : 0 → K → 0-bis (✅ livrés) → **A0 contrat** → A1 Visio-post → A2 Zoom-post /
   A3 Teams / A4 Meet-post → L0 passerelle → L1 Visio-live → L2 Zoom-RTMS → (R1 Meet /
