@@ -11,9 +11,15 @@ Google Workspace réel au gate manuel.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
-from connector_service.contract import ExternalMeetingOccurrence, RemoteArtifact
+from connector_service.contract import (
+    ExternalMeetingOccurrence,
+    ProviderCapabilities,
+    RemoteArtifact,
+)
 
 PROVIDER = "meet"
 
@@ -85,3 +91,55 @@ class MeetRecordingAdapter:
             rec.conference_record_id,
             rec.recording_id,
         ))
+
+
+def _requests_get(url: str, *, headers: dict) -> tuple[int, dict]:
+    import requests  # dép TranscrIA
+
+    resp = requests.get(url, headers=headers, timeout=30)
+    try:
+        body = resp.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    return resp.status_code, (body if isinstance(body, dict) else {})
+
+
+class MeetApiClient:
+    """Meet REST API v2 — liste les enregistrements d'un conferenceRecord (poll /
+    réconciliation). `oauth` = GoogleOAuth ; `http_get` injectable (CI mockée)."""
+
+    API = "https://meet.googleapis.com/v2"
+
+    def __init__(self, oauth, *, http_get: Callable[..., tuple[int, dict]] | None = None) -> None:
+        self._oauth = oauth
+        self._get = http_get or _requests_get
+
+    def list_recordings(self, conference_record_id: str) -> tuple[dict, str]:
+        token = self._oauth.token()
+        _status, body = self._get(
+            f"{self.API}/conferenceRecords/{conference_record_id}/recordings",
+            headers={"Authorization": f"Bearer {token}"})
+        return body, token
+
+
+class MeetArtifactProvider:
+    """`ArtifactProvider` Meet pour le reconciler (Meet = POLL, pas de webhook). L'artefact
+    porte le jeton Google (`auth_token`) → le fetcher Drive télécharge via Bearer."""
+
+    capabilities = ProviderCapabilities(post_meeting_recording=True, post_meeting_transcript=True)
+
+    def __init__(self, client: MeetApiClient) -> None:
+        self._client = client
+        self._adapter = MeetRecordingAdapter()
+
+    async def fetch_artifacts(self, occurrence: ExternalMeetingOccurrence) -> list[RemoteArtifact]:
+        body, token = await asyncio.get_event_loop().run_in_executor(
+            None, self._client.list_recordings, occurrence.external_occurrence_id)
+        artifacts: list[RemoteArtifact] = []
+        for resource in body.get("recordings") or []:
+            try:
+                rec = MeetRecording.from_recording(resource)
+            except MeetRecordingError:
+                continue                       # non finalisé / sans Drive → ignoré
+            artifacts.append(replace(self._adapter.to_artifact(rec), auth_token=token))
+        return artifacts

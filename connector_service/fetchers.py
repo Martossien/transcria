@@ -110,3 +110,38 @@ class HttpArtifactFetcher:
         # Nom de fichier depuis l'id d'artefact (dernier segment) ou l'URL.
         name = (artifact.artifact_id or artifact.storage_uri).rsplit("/", 1)[-1] or "recording"
         return data, name
+
+
+class GoogleDriveFetcher:
+    """Télécharge un fichier Drive (`gdrive://{file_id}`) via l'API Drive (Bearer Google).
+
+    Le jeton vient de l'artefact (`auth_token`, posé par le provider Meet) ou d'un
+    `GoogleOAuth` de repli. Session injectable (CI mockée).
+    """
+
+    API = "https://www.googleapis.com/drive/v3/files"
+
+    def __init__(self, oauth=None, *, session=None, timeout: float = 180.0) -> None:
+        self._oauth = oauth
+        self._session = session
+        self._timeout = timeout
+
+    def _get_bytes(self, file_id: str, token: str) -> bytes:
+        sess = self._session
+        if sess is None:
+            import requests  # dép TranscrIA
+
+            sess = requests
+        resp = sess.get(f"{self.API}/{file_id}?alt=media",
+                        headers={"Authorization": f"Bearer {token}"}, timeout=self._timeout)
+        raise_for = getattr(resp, "raise_for_status", None)
+        if callable(raise_for):
+            raise_for()
+        return resp.content
+
+    async def fetch(self, artifact: RemoteArtifact) -> tuple[bytes, str]:
+        file_id = artifact.storage_uri.replace("gdrive://", "", 1)
+        token = artifact.auth_token or (self._oauth.token() if self._oauth else "")
+        data = await asyncio.get_event_loop().run_in_executor(
+            None, self._get_bytes, file_id, token)
+        return data, file_id
