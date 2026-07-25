@@ -91,3 +91,27 @@ class LiveSession:
                 elif hyp.words and self._on_partial:
                     self._on_partial(_segment(hyp.words, PARTIAL))
         return finals
+
+
+class LiveConnectorSession:
+    """Réunion LIVE de bout en bout (ADR-001 D5) : le SUIVI en direct (segments
+    `final_live`) PUIS, à la fin de réunion, l'ingestion de l'enregistrement complet via
+    le pont → le pipeline batch produit le `canonical` de référence. Le direct ne remplace
+    jamais le batch : il le précède.
+
+    `recording_supplier()` fournit l'audio complet en fin de réunion (artefact post-réunion
+    de la plateforme) ; `dedup_key` porte l'idempotence serveur (rejeu → même job).
+    """
+
+    def __init__(self, live_session: LiveSession, bridge) -> None:
+        self._live = live_session
+        self._bridge = bridge
+
+    async def run(self, provider, occurrence, *, recording_supplier, dedup_key: str,
+                  filename: str = "recording"):
+        finals = await self._live.run(provider, occurrence)          # suivi live
+        audio, name = await recording_supplier()                     # enregistrement complet
+        result = await self._bridge.ingest_recording(
+            audio, name or filename, idempotency_key=dedup_key,
+            provider=occurrence.provider, external_meeting_id=occurrence.external_occurrence_id)
+        return finals, result

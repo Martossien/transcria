@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 
+from connector_service.bridge import JobsApiBridge
 from connector_service.contract import AudioFrame, ExternalMeetingOccurrence
 from connector_service.live.agreement import Word
-from connector_service.live.session import Hypothesis, LiveSession
+from connector_service.live.session import Hypothesis, LiveConnectorSession, LiveSession
 
 OCC = ExternalMeetingOccurrence(provider="visio", provider_account_id="a",
                                 external_occurrence_id="occ-1")
@@ -75,3 +76,34 @@ def test_moteur_streaming_natif():
     assert col.partial == ["hi"]                          # partial natif
     assert [s.text for s in finals] == ["hi there"]
     assert col.provisional == []                          # pas de local-agreement
+
+
+class _FakeIngestTransport:
+    def __init__(self):
+        self.calls: list = []
+
+    async def request(self, method, url, *, headers, data=None, files=None):
+        self.calls.append({"idem": headers.get("Idempotency-Key"),
+                           "provider": (data or {}).get("provider"),
+                           "meeting": (data or {}).get("external_meeting_id")})
+        return 202, {"job_id": "job-live-1"}
+
+
+async def _full_recording():
+    return b"FULL-MEETING-AUDIO", "meeting.mp4"
+
+
+def test_relais_live_puis_ingest_batch():
+    # Le direct produit le suivi (final_live) PUIS l'enregistrement complet est ingéré
+    # (le batch produira le canonical) — avec la dedup_key en Idempotency-Key.
+    transcriber = _Transcriber([Hypothesis(_w("bonjour", "le", "monde"), is_final=True)],
+                               local_agreement=False)
+    tr = _FakeIngestTransport()
+    session = LiveConnectorSession(LiveSession(transcriber),
+                                   JobsApiBridge("http://127.0.0.1:7870", "tia_x", tr))
+    finals, result = asyncio.run(session.run(
+        _FakeProvider(), OCC, recording_supplier=_full_recording, dedup_key="visio|a|occ-1|art"))
+    assert [s.text for s in finals] == ["bonjour le monde"] and finals[0].provenance == "final_live"
+    assert result.job_id == "job-live-1"
+    assert tr.calls[0]["idem"] == "visio|a|occ-1|art" and tr.calls[0]["provider"] == "visio"
+    assert tr.calls[0]["meeting"] == "occ-1"
