@@ -19,3 +19,6 @@ websockets>=12,<14
 msgpack>=1.0,<2.0
 # Meet Media API live (R1) : client WebRTC receive-only (offer/answer + Opus→PCM 48 kHz).
 aiortc>=1.6,<2.0
+# Bot de réunion (fallback SORTANT, phase installeur DÉDIÉE opt-in) : navigateur headless.
+# ⚠ Chrome + Xvfb à provisionner à part — JAMAIS dans l'image par défaut.
+playwright>=1.40,<2.0

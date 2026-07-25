@@ -1,0 +1,86 @@
+"""Driver Jitsi (banc d'essai du bot) — Playwright, dep opt-in. Gate manuel.
+
+Jitsi (`meet.jit.si` ou instance auto-hébergée) est public et sans compte → il permet de
+valider EN VRAI toute la chaîne du bot (join + capture WebRTC + push sur le pont) en local,
+avant de dériver Zoom-web/Teams/Meet (mêmes étapes, autres sélecteurs). NON testable en CI.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+_CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
+
+
+class JitsiDriver:
+    """`BrowserDriver` Jitsi. Lance Chromium (Playwright), injecte le payload de capture (avec
+    l'URL du pont), rejoint la salle, et suit la présence pour détecter la fin. Le durcissement
+    (aloneness fine, reconnexion, sélecteurs multilingues) se règle au gate."""
+
+    def __init__(self, bridge_url: str, *, headless: bool = True,
+                 alone_poll_s: float = 5.0, max_duration_s: float = 4 * 3600) -> None:
+        self._bridge_url = bridge_url
+        self._headless = headless
+        self._alone_poll_s = alone_poll_s
+        self._max_duration_s = max_duration_s
+        self._pw: Any = None
+        self._browser: Any = None
+        self._page: Any = None
+
+    async def open(self, meeting_url: str) -> None:
+        from playwright.async_api import async_playwright  # dép opt-in
+
+        self._pw = await async_playwright().start()
+        self._browser = await self._pw.chromium.launch(
+            headless=self._headless,
+            args=["--use-fake-ui-for-media-stream", "--no-sandbox",
+                  "--disable-blink-features=AutomationControlled"])
+        self._page = await self._browser.new_page()
+        # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
+        await self._page.add_init_script(
+            f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};")
+        await self._page.add_init_script(path=str(_CAPTURE_JS))
+        await self._page.goto(meeting_url)
+
+    async def request_join(self, display_name: str) -> None:
+        page = self._page
+        # Renseigne le nom d'affichage si l'écran d'accueil le demande, puis rejoint.
+        name_box = page.get_by_placeholder("Enter your name")
+        if await name_box.count():
+            await name_box.first.fill(display_name)
+        join = page.get_by_role("button", name="Join")
+        if await join.count():
+            await join.first.click()
+
+    async def wait_admission(self, timeout_s: float) -> bool:
+        # Salles Jitsi publiques : pas de lobby → on attend que la conférence soit chargée.
+        try:
+            await self._page.wait_for_selector(
+                "#largeVideoContainer, .filmstrip", timeout=timeout_s * 1000)
+            return True
+        except Exception:  # noqa: BLE001 — timeout = non admis / salle indisponible
+            return False
+
+    async def run_until_ended(self) -> str:
+        import asyncio
+        waited = 0.0
+        while waited < self._max_duration_s:
+            await asyncio.sleep(self._alone_poll_s)
+            waited += self._alone_poll_s
+            # Présence : nombre de participants distants (0 = seul → on quitte).
+            count = await self._page.evaluate(
+                "document.querySelectorAll('.filmstrip .videocontainer').length")
+            if isinstance(count, int) and count <= 1:
+                return "left_alone"
+        return "max_duration"
+
+    async def leave(self) -> None:
+        hangup = self._page.get_by_role("button", name="Leave the meeting")
+        if await hangup.count():
+            await hangup.first.click()
+
+    async def close(self) -> None:
+        if self._browser is not None:
+            await self._browser.close()
+        if self._pw is not None:
+            await self._pw.stop()
