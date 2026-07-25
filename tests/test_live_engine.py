@@ -18,14 +18,22 @@ OCC = ExternalMeetingOccurrence(provider="visio", provider_account_id="a",
 def test_parse_event_words_et_final():
     hyp = parse_event({"words": [{"text": "bonjour", "start": 0.0, "end": 0.5},
                                  {"text": "monde", "start": 0.5, "end": 1.0}], "final": True})
-    assert [w.text for w in hyp.words] == ["bonjour", "monde"] and hyp.is_final is True
-    assert hyp.words[0].start == 0.0
+    assert [w.text for w in hyp.partial] == ["bonjour", "monde"] and hyp.is_final is True
+    assert hyp.partial[0].start == 0.0 and not hyp.committed
 
 
 def test_parse_event_texte_seul():
     hyp = parse_event({"text": "salut tout le monde"})
-    assert [w.text for w in hyp.words] == ["salut", "tout", "le", "monde"]
+    assert [w.text for w in hyp.partial] == ["salut", "tout", "le", "monde"]
     assert hyp.is_final is False
+
+
+def test_parse_event_committed_partial_split():
+    """Format réel des serveurs natifs : préfixe stable + queue instable séparés."""
+    hyp = parse_event({"committed": [{"text": "bonjour", "start": 0.0, "end": 0.5}],
+                       "partial": [{"text": "le", "start": 0.5, "end": 0.7}], "final": False})
+    assert [w.text for w in hyp.committed] == ["bonjour"]
+    assert [w.text for w in hyp.partial] == ["le"] and hyp.is_final is False
 
 
 class _FakeProvider:

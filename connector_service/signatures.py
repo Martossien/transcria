@@ -57,8 +57,10 @@ def decrypt_teams_content(encrypted: dict, private_key_pem: bytes) -> bytes:
 
     Étapes (doc Microsoft) : 1) déchiffrer `dataKey` (RSA-OAEP) avec la clé privée du
     certificat fourni à l'abonnement ; 2) vérifier `dataSignature` = HMAC-SHA256(dataKey,
-    data_b64) ; 3) déchiffrer `data` en AES-256-CBC (IV = 16 premiers octets de dataKey),
-    retirer le padding PKCS7. Retourne le JSON en clair (bytes).
+    OCTETS CHIFFRÉS) — le HMAC porte sur le contenu chiffré décodé du base64, PAS sur la
+    chaîne base64 (cf. certHelper.js `hmac.write(payload, 'base64')` et le sample .NET
+    `Convert.FromBase64String(data)`) ; 3) déchiffrer `data` en AES-256-CBC (IV = 16 premiers
+    octets de dataKey), retirer le padding PKCS7. Retourne le JSON en clair (bytes).
     """
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import padding as apad
@@ -73,16 +75,16 @@ def decrypt_teams_content(encrypted: dict, private_key_pem: bytes) -> bytes:
         apad.OAEP(mgf=apad.MGF1(algorithm=hashes.SHA1()), algorithm=hashes.SHA1(), label=None),
     )
 
-    data_b64 = encrypted["data"]
+    ciphertext = base64.b64decode(encrypted["data"])
     expected_sig = base64.b64encode(
-        hmac.new(data_key, data_b64.encode("utf-8"), hashlib.sha256).digest()
+        hmac.new(data_key, ciphertext, hashlib.sha256).digest()
     ).decode("ascii")
     if not hmac.compare_digest(expected_sig, encrypted.get("dataSignature", "")):
         raise TeamsDecryptError("signature HMAC du contenu Teams invalide")
 
     cipher = Cipher(algorithms.AES(data_key), modes.CBC(data_key[:16]))
     decryptor = cipher.decryptor()
-    padded = decryptor.update(base64.b64decode(data_b64)) + decryptor.finalize()
+    padded = decryptor.update(ciphertext) + decryptor.finalize()
     pad_len = padded[-1]
     if pad_len < 1 or pad_len > 16:
         raise TeamsDecryptError("padding PKCS7 invalide")

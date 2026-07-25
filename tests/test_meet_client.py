@@ -8,7 +8,11 @@ import pytest
 from connector_service.contract import ExternalMeetingOccurrence, RemoteArtifact
 from connector_service.fetchers import GoogleDriveFetcher
 from connector_service.oauth import GoogleOAuth, OAuthError
-from connector_service.providers.meet import MeetApiClient, MeetArtifactProvider
+from connector_service.providers.meet import (
+    MeetApiClient,
+    MeetArtifactProvider,
+    MeetRecordingError,
+)
 
 OCC = ExternalMeetingOccurrence(provider="meet", provider_account_id="spaces/s",
                                 external_occurrence_id="conf-abc")
@@ -37,10 +41,36 @@ def test_meet_client_list_recordings():
     def http_get(url, *, headers):
         calls.append({"url": url, "headers": headers})
         return 200, RECORDINGS
-    body, token = MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
-    assert token == "GOOGLE-BEARER" and len(body["recordings"]) == 2
+    recordings, token = MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
+    assert token == "GOOGLE-BEARER" and len(recordings) == 2
     assert calls[0]["url"].endswith("/conferenceRecords/conf-abc/recordings")
     assert calls[0]["headers"]["Authorization"] == "Bearer GOOGLE-BEARER"
+
+
+def test_meet_client_pagination():
+    """Suit `nextPageToken` et concatène toutes les pages."""
+    pages = [
+        (200, {"recordings": [{"name": "conferenceRecords/conf-abc/recordings/rec-1",
+                               "state": "FILE_GENERATED", "driveDestination": {"file": "d1"}}],
+               "nextPageToken": "PAGE2"}),
+        (200, {"recordings": [{"name": "conferenceRecords/conf-abc/recordings/rec-2",
+                               "state": "FILE_GENERATED", "driveDestination": {"file": "d2"}}]}),
+    ]
+    seen = []
+
+    def http_get(url, *, headers):
+        seen.append(url)
+        return pages[len(seen) - 1]
+    recordings, _ = MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
+    assert [r["driveDestination"]["file"] for r in recordings] == ["d1", "d2"]
+    assert "pageToken=PAGE2" in seen[1]
+
+
+def test_meet_client_statut_http_erreur_leve():
+    def http_get(url, *, headers):
+        return 503, {}
+    with pytest.raises(MeetRecordingError, match="503"):
+        MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
 
 
 def test_meet_provider_finalise_seulement():

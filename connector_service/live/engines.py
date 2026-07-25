@@ -5,10 +5,13 @@ testable en CI ; l'**I/O réel** (connexion SSE audio.cpp Nemotron/Voxtral, ou W
 msgpack Kyutai/moshi) est INJECTÉ via `open_stream` — un adaptateur confirmé contre le
 vrai serveur au gate manuel. Un événement du serveur est un dict normalisé :
 
-    {"words": [{"text","start","end"}, …], "text": "...", "final": bool}
+    {"committed": [{"text","start","end"}, …],   # mots devenus STABLES (delta) → provisional
+     "partial":   [{"text","start","end"}, …],   # queue INSTABLE                → partial
+     "final": bool}                               # frontière de tour            → final_live
 
-- moteur SANS partial/final natifs → `uses_local_agreement=True` (la session stabilise) ;
-- moteur streaming natif (Voxtral SSE, Kyutai) → `False` + `final` marque la fin de tour.
+Rétro-compat : un moteur simple peut n'émettre que `{"words": [...]}` (ou `{"text": "..."}`),
+traités comme `partial` — un moteur à fenêtre glissante y met son hypothèse cumulative et
+`uses_local_agreement=True` laisse la session stabiliser.
 """
 from __future__ import annotations
 
@@ -23,17 +26,29 @@ from connector_service.live.session import Hypothesis
 OpenStream = Callable[[AsyncIterator[AudioFrame]], AsyncIterator[dict]]
 
 
+def _words(raw: object) -> list[Word]:
+    if not isinstance(raw, list):
+        return []
+    return [Word(str(w.get("text") or ""), float(w.get("start") or 0.0),
+                 float(w.get("end") or 0.0)) for w in raw if isinstance(w, dict)]
+
+
 def parse_event(event: dict) -> Hypothesis:
-    """Événement serveur normalisé → `Hypothesis`. Accepte `words` [{text,start,end}] ;
-    à défaut, découpe `text` en mots horodatés grossièrement."""
-    raw_words = event.get("words")
-    if isinstance(raw_words, list) and raw_words:
-        words = [Word(str(w.get("text") or ""), float(w.get("start") or 0.0),
-                      float(w.get("end") or 0.0)) for w in raw_words if isinstance(w, dict)]
-    else:
-        words = [Word(tok, float(i), float(i + 1))
-                 for i, tok in enumerate(str(event.get("text") or "").split())]
-    return Hypothesis(words, is_final=bool(event.get("final")))
+    """Événement serveur normalisé → `Hypothesis` (committed/partial/is_final).
+
+    `committed`/`partial` [{text,start,end}] sont pris tels quels. À défaut, `words`
+    (ou `text` découpé) est traité comme la queue `partial` — l'accumulation stable est
+    alors laissée au moteur natif (committed) ou au LocalAgreement de la session."""
+    committed = _words(event.get("committed"))
+    partial = _words(event.get("partial"))
+    if not committed and not partial:
+        raw_words = event.get("words")
+        if isinstance(raw_words, list) and raw_words:
+            partial = _words(raw_words)
+        else:
+            partial = [Word(tok, float(i), float(i + 1))
+                       for i, tok in enumerate(str(event.get("text") or "").split())]
+    return Hypothesis(committed=committed, partial=partial, is_final=bool(event.get("final")))
 
 
 class StreamingTranscriber:

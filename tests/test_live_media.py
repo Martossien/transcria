@@ -59,7 +59,8 @@ class _RecordingTranscriber:
     async def stream(self, frames):
         async for f in frames:
             self.seen.append(f.participant_id)
-        yield Hypothesis([Word(t, i, i + 1) for i, t in enumerate(["bonjour", "le", "monde"])],
+        yield Hypothesis(committed=[Word(t, i, i + 1)
+                                    for i, t in enumerate(["bonjour", "le", "monde"])],
                          is_final=True)
 
 

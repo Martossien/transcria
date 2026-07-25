@@ -53,10 +53,12 @@ def _run(transcriber, col):
 
 
 def test_moteur_fenetre_glissante_local_agreement():
+    # Fenêtre glissante : l'hypothèse cumulative complète arrive dans `partial`,
+    # le LocalAgreement de la session confirme le préfixe stable.
     hyps = [
-        Hypothesis(_w("bonjour", "le"), is_final=False),
-        Hypothesis(_w("bonjour", "le", "monde"), is_final=False),
-        Hypothesis(_w("bonjour", "le", "monde"), is_final=True),
+        Hypothesis(partial=_w("bonjour", "le"), is_final=False),
+        Hypothesis(partial=_w("bonjour", "le", "monde"), is_final=False),
+        Hypothesis(partial=_w("bonjour", "le", "monde"), is_final=True),
     ]
     col = _Collector()
     finals = _run(_Transcriber(hyps, local_agreement=True), col)
@@ -67,15 +69,18 @@ def test_moteur_fenetre_glissante_local_agreement():
 
 
 def test_moteur_streaming_natif():
+    # Kyutai-like : mots DÉJÀ committés (→ provisional) + queue instable (→ partial),
+    # puis fin de tour (→ final_live). Les 3 provenances sont produites sur le path natif.
     hyps = [
-        Hypothesis(_w("hi"), is_final=False),
-        Hypothesis(_w("hi", "there"), is_final=True),
+        Hypothesis(committed=_w("hi"), partial=_w("th"), is_final=False),
+        Hypothesis(committed=_w("there"), is_final=True),
     ]
     col = _Collector()
     finals = _run(_Transcriber(hyps, local_agreement=False), col)
-    assert col.partial == ["hi"]                          # partial natif
+    assert col.provisional == ["hi", "there"]             # préfixe stable figé en direct
+    assert col.partial == ["th"]                          # queue instable affichée
     assert [s.text for s in finals] == ["hi there"]
-    assert col.provisional == []                          # pas de local-agreement
+    assert finals[0].provenance == "final_live"
 
 
 class _FakeIngestTransport:
@@ -96,7 +101,7 @@ async def _full_recording():
 def test_relais_live_puis_ingest_batch():
     # Le direct produit le suivi (final_live) PUIS l'enregistrement complet est ingéré
     # (le batch produira le canonical) — avec la dedup_key en Idempotency-Key.
-    transcriber = _Transcriber([Hypothesis(_w("bonjour", "le", "monde"), is_final=True)],
+    transcriber = _Transcriber([Hypothesis(committed=_w("bonjour", "le", "monde"), is_final=True)],
                                local_agreement=False)
     tr = _FakeIngestTransport()
     session = LiveConnectorSession(LiveSession(transcriber),

@@ -12,7 +12,7 @@ connecteur reste ISOLÉ du cœur (contrat import-linter).
 """
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from typing import NamedTuple, Protocol, runtime_checkable
 
 from connector_service.contract import AudioFrame, ExternalMeetingOccurrence
@@ -24,8 +24,21 @@ FINAL_LIVE = "final_live"
 
 
 class Hypothesis(NamedTuple):
-    words: list[Word]
-    is_final: bool = False        # marqueur natif de fin de tour (moteurs streaming)
+    """État STT à un instant, tel que le livrent les vrais serveurs (audit croisé) :
+    aucun n'émet un `final:bool` par mot sur une liste unique — ils séparent le préfixe
+    STABLE de la queue INSTABLE. On modélise donc les deux explicitement.
+
+    - `committed` : mots devenus stables à CET événement (delta) → provenance `provisional` ;
+      Kyutai (mots jamais révisés) et WhisperLiveKit (`lines` fermées) les remplissent.
+    - `partial` : queue encore instable, remplace l'affichage gris → provenance `partial` ;
+      pour un moteur à FENÊTRE GLISSANTE (`uses_local_agreement=True`), on y met l'hypothèse
+      cumulative COMPLÈTE et le `LocalAgreement` de la session fait la stabilisation.
+    - `is_final` : frontière de tour/segment → provenance `final_live`.
+    """
+
+    committed: Sequence[Word] = ()
+    partial: Sequence[Word] = ()
+    is_final: bool = False
 
 
 class Segment(NamedTuple):
@@ -45,7 +58,7 @@ class LiveTranscriber(Protocol):
     def stream(self, frames: AsyncIterator[AudioFrame]) -> AsyncIterator[Hypothesis]: ...
 
 
-def _segment(words: list[Word], provenance: str) -> Segment:
+def _segment(words: Sequence[Word], provenance: str) -> Segment:
     return Segment(" ".join(w.text for w in words),
                    words[0].start if words else 0.0,
                    words[-1].end if words else 0.0, provenance)
@@ -66,12 +79,15 @@ class LiveSession:
         le batch produira le `canonical` de référence)."""
         finals: list[Segment] = []
         agree = LocalAgreement() if self._t.uses_local_agreement else None
+        turn: list[Word] = []                          # accumulateur du tour (path natif)
         async for hyp in self._t.stream(provider.stream_audio(occurrence)):
             if agree is not None:
-                newly = agree.insert(hyp.words)
+                # Fenêtre glissante : l'hypothèse cumulative complète est dans `partial`.
+                full = list(hyp.partial)
+                newly = agree.insert(full)
                 if newly and self._on_provisional:
                     self._on_provisional(_segment(newly, PROVISIONAL))
-                tail = agree.partial(hyp.words)
+                tail = agree.partial(full)
                 if tail and self._on_partial:
                     self._on_partial(_segment(tail, PARTIAL))
                 if hyp.is_final:
@@ -82,14 +98,20 @@ class LiveSession:
                         self._on_final(seg)
                     agree = LocalAgreement()          # nouveau tour
             else:
-                # Moteur au streaming natif : non-final = partial, final = final_live.
+                # Streaming natif : committed = stables (provisional), partial = tail instable.
+                if hyp.committed:
+                    turn.extend(hyp.committed)
+                    if self._on_provisional:
+                        self._on_provisional(_segment(hyp.committed, PROVISIONAL))
+                if hyp.partial and self._on_partial:
+                    self._on_partial(_segment(hyp.partial, PARTIAL))
                 if hyp.is_final:
-                    seg = _segment(hyp.words, FINAL_LIVE)
+                    words = turn + list(hyp.partial)   # la queue instable est finalisée
+                    seg = _segment(words, FINAL_LIVE)
                     finals.append(seg)
                     if self._on_final:
                         self._on_final(seg)
-                elif hyp.words and self._on_partial:
-                    self._on_partial(_segment(hyp.words, PARTIAL))
+                    turn = []                          # nouveau tour
         return finals
 
 

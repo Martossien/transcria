@@ -65,8 +65,9 @@ def _encrypt_like_graph(plaintext: bytes, public_key) -> dict:
     encryptor = Cipher(algorithms.AES(data_key), modes.CBC(data_key[:16])).encryptor()
     ciphertext = encryptor.update(padded) + encryptor.finalize()
     data_b64 = base64.b64encode(ciphertext).decode("ascii")
+    # Graph signe les OCTETS CHIFFRÉS (pas la chaîne base64) — cf. certHelper.js / sample .NET.
     signature = base64.b64encode(
-        hmac.new(data_key, data_b64.encode("utf-8"), hashlib.sha256).digest()).decode("ascii")
+        hmac.new(data_key, ciphertext, hashlib.sha256).digest()).decode("ascii")
     return {"data": data_b64, "dataKey": base64.b64encode(enc_key).decode("ascii"),
             "dataSignature": signature}
 
@@ -82,5 +83,25 @@ def test_teams_signature_falsifiee_rejetee():
     key, priv_pem = _rsa_keypair()
     encrypted = _encrypt_like_graph(b'{"tampered":true}', key.public_key())
     encrypted["dataSignature"] = base64.b64encode(b"x" * 32).decode("ascii")
+    with pytest.raises(TeamsDecryptError, match="signature"):
+        decrypt_teams_content(encrypted, priv_pem)
+
+
+def test_teams_signature_sur_chaine_base64_rejetee():
+    """Verrou de régression : le HMAC signé sur la CHAÎNE base64 (mauvaise convention,
+    le bug corrigé) doit être REJETÉ — Graph signe les octets chiffrés décodés."""
+    key, priv_pem = _rsa_keypair()
+    encrypted = _encrypt_like_graph(b'{"id":"REC-1"}', key.public_key())
+    data_key_wrong = None  # on ne connaît pas dataKey ici ; on reconstruit la mauvaise sig
+    # Reproduit l'ancienne convention (HMAC sur data_b64.encode) via la clé re-dérivée :
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding as apad
+
+    data_key_wrong = key.decrypt(
+        base64.b64decode(encrypted["dataKey"]),
+        apad.OAEP(mgf=apad.MGF1(hashes.SHA1()), algorithm=hashes.SHA1(), label=None))
+    encrypted["dataSignature"] = base64.b64encode(
+        hmac.new(data_key_wrong, encrypted["data"].encode("utf-8"),
+                 hashlib.sha256).digest()).decode("ascii")
     with pytest.raises(TeamsDecryptError, match="signature"):
         decrypt_teams_content(encrypted, priv_pem)

@@ -114,12 +114,25 @@ class MeetApiClient:
         self._oauth = oauth
         self._get = http_get or _requests_get
 
-    def list_recordings(self, conference_record_id: str) -> tuple[dict, str]:
+    def list_recordings(self, conference_record_id: str) -> tuple[list[dict], str]:
+        """Liste TOUS les enregistrements du conferenceRecord (pagination `nextPageToken`).
+        Lève `MeetRecordingError` sur statut HTTP non-200 (le reconciler retentera)."""
         token = self._oauth.token()
-        _status, body = self._get(
-            f"{self.API}/conferenceRecords/{conference_record_id}/recordings",
-            headers={"Authorization": f"Bearer {token}"})
-        return body, token
+        base = f"{self.API}/conferenceRecords/{conference_record_id}/recordings"
+        headers = {"Authorization": f"Bearer {token}"}
+        recordings: list[dict] = []
+        page_token = ""
+        while True:
+            url = f"{base}?pageToken={page_token}" if page_token else base
+            status, body = self._get(url, headers=headers)
+            if status != 200:
+                raise MeetRecordingError(
+                    f"Meet API statut {status} sur conferenceRecords/"
+                    f"{conference_record_id}/recordings")
+            recordings.extend(r for r in (body.get("recordings") or []) if isinstance(r, dict))
+            page_token = str(body.get("nextPageToken") or "")
+            if not page_token:
+                return recordings, token
 
 
 class MeetArtifactProvider:
@@ -133,10 +146,10 @@ class MeetArtifactProvider:
         self._adapter = MeetRecordingAdapter()
 
     async def fetch_artifacts(self, occurrence: ExternalMeetingOccurrence) -> list[RemoteArtifact]:
-        body, token = await asyncio.get_event_loop().run_in_executor(
+        recordings, token = await asyncio.get_event_loop().run_in_executor(
             None, self._client.list_recordings, occurrence.external_occurrence_id)
         artifacts: list[RemoteArtifact] = []
-        for resource in body.get("recordings") or []:
+        for resource in recordings:
             try:
                 rec = MeetRecording.from_recording(resource)
             except MeetRecordingError:
