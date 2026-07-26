@@ -21,9 +21,14 @@ class JitsiDriver:
     (aloneness fine, reconnexion, sélecteurs multilingues) se règle au gate."""
 
     def __init__(self, bridge_url: str, *, headless: bool = True, alone_poll_s: float = 5.0,
-                 alone_confirmations: int = 3, max_duration_s: float = 4 * 3600) -> None:
+                 alone_confirmations: int = 3, max_duration_s: float = 4 * 3600,
+                 ignore_https_errors: bool = False) -> None:
         self._bridge_url = bridge_url
         self._headless = headless
+        # Instance auto-hébergée à certificat auto-signé (bancs d'essai) : accepté au niveau
+        # du CONTEXTE Playwright, pas par un flag Chromium global — la confiance TLS reste
+        # normale pour les vraies réunions.
+        self._ignore_https_errors = ignore_https_errors
         self._alone_poll_s = alone_poll_s
         self._alone_confirmations = alone_confirmations   # polls consécutifs avant de conclure « seul »
         self._max_duration_s = max_duration_s
@@ -37,7 +42,8 @@ class JitsiDriver:
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(
             headless=self._headless, args=list(CHROMIUM_ARGS))
-        self._page = await self._browser.new_page()
+        self._page = await self._browser.new_page(
+            ignore_https_errors=self._ignore_https_errors)
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         await self._page.add_init_script(
             f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};")
@@ -52,7 +58,10 @@ class JitsiDriver:
             await name_box.first.wait_for(state="visible", timeout=15000)
         if await name_box.count():
             await name_box.first.fill(display_name)
-        join = page.get_by_role("button", name="Join")
+        # `data-testid` est le sélecteur STABLE de Jitsi (vérifié) ; repli par rôle+texte.
+        join = page.locator("[data-testid='prejoin.joinMeeting']")
+        if not await join.count():
+            join = page.get_by_role("button", name="Join")
         if await join.count():
             await join.first.click()
 
@@ -65,6 +74,17 @@ class JitsiDriver:
         except Exception:  # noqa: BLE001 — timeout = non admis / salle indisponible
             return False
 
+    # Présence : on interroge l'ÉTAT DE L'APPLICATION Jitsi (`APP.conference.membersCount`),
+    # pas des classes CSS — vérifié en vrai, et bien plus stable que du scraping DOM (les
+    # sélecteurs de filmstrip changent d'une version à l'autre). -1 = état indisponible.
+    _MEMBERS_JS = """() => {
+      try {
+        if (window.APP && APP.conference && typeof APP.conference.membersCount === 'number')
+          return APP.conference.membersCount;
+      } catch (e) {}
+      return -1;
+    }"""
+
     async def run_until_ended(self) -> str:
         import asyncio
         waited = 0.0
@@ -73,13 +93,12 @@ class JitsiDriver:
             await asyncio.sleep(self._alone_poll_s)
             waited += self._alone_poll_s
             try:
-                count = await self._page.evaluate(
-                    "document.querySelectorAll('.filmstrip .videocontainer').length")
+                members = await self._page.evaluate(self._MEMBERS_JS)
             except Exception:  # noqa: BLE001 — page fermée/crashée
                 return "error"
-            # count==0 = sélecteur probablement obsolète (même pas notre tuile) → on n'agit
-            # PAS dessus ; seul un « uniquement nous » (==1) répété conclut « seul ».
-            if isinstance(count, int) and count == 1:
+            # membersCount == 1 → il ne reste que nous. -1 (état illisible) : on n'agit PAS,
+            # mieux vaut rester que quitter une réunion pleine sur une sonde défaillante.
+            if isinstance(members, int) and 0 <= members <= 1:
                 alone_streak += 1
                 if alone_streak >= self._alone_confirmations:
                     return "left_alone"

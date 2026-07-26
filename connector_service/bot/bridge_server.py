@@ -14,15 +14,21 @@ from typing import Any
 from connector_service.contract import ExternalMeetingOccurrence
 
 
+def decode_bridge_message(raw: Any) -> list[dict]:
+    """Un message WS brut (str/bytes JSON) → [dict] ou [] si illisible (frame corrompue,
+    message de contrôle…). Sous forme de liste pour composer sans exception."""
+    try:
+        msg = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    return [msg] if isinstance(msg, dict) else []
+
+
 async def decode_bridge_frames(raw_stream: AsyncIterator[Any]) -> AsyncIterator[dict]:
     """Messages WS bruts (str/bytes JSON) → dicts. Ignore le JSON illisible (frame corrompue)
     sans casser le flux."""
     async for raw in raw_stream:
-        try:
-            msg = json.loads(raw)
-        except (ValueError, TypeError):
-            continue
-        if isinstance(msg, dict):
+        for msg in decode_bridge_message(raw):
             yield msg
 
 

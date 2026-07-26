@@ -76,6 +76,16 @@
     })();
   }
 
+  // Toutes les pistes audio reçues ne sont pas des locuteurs. Sur Jitsi on voit aussi :
+  //  - `mixedmslabel` : le MIXAGE de toute la salle → le capter transcrirait tout en DOUBLE ;
+  //  - `remote-audio-N` : emplacements RÉCEPTEURS pré-alloués, sans locuteur associé.
+  // Les vraies pistes portent l'identifiant du participant (`<endpoint>-audio-0-1`).
+  const PLACEHOLDER_STREAM = /^remote-(audio|video)-\d+$/;
+  function isNotSpeaker(id) {
+    const s = String(id);
+    return s.indexOf("mixedmslabel") !== -1 || PLACEHOLDER_STREAM.test(s);
+  }
+
   // Interception WebRTC : chaque piste audio reçue est routée vers pipeTrack.
   const NativeRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function (...args) {
@@ -84,6 +94,7 @@
       if (event.track && event.track.kind === "audio") {
         // Attribution fine (endpoint id / DOM) affinée au gate ; par défaut = id de piste.
         const pid = (event.streams[0] && event.streams[0].id) || event.track.id;
+        if (isNotSpeaker(pid)) return;      // mixage global / emplacement vide
         pipeTrack(event.track, pid);
       }
     });
