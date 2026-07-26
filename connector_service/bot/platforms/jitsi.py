@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from connector_service.bot.browser import CHROMIUM_ARGS
+from connector_service.bot.platforms.call_health import CallHealthMonitor
 from connector_service.bot.platforms.jitsi_state import (
     CONFERENCE_STATE_JS,
     KICK_LISTENER_JS,
@@ -61,7 +62,8 @@ class JitsiDriver:
     (aloneness fine, reconnexion, sélecteurs multilingues) se règle au gate."""
 
     def __init__(self, bridge_url: str, *, headless: bool = True, alone_poll_s: float = 5.0,
-                 alone_timeout_s: float = 30.0, max_duration_s: float = 4 * 3600,
+                 alone_timeout_s: float = 30.0, no_media_timeout_s: float = 180.0,
+                 ice_timeout_s: float = 30.0, max_duration_s: float = 4 * 3600,
                  ignore_https_errors: bool = False, prejoin_timeout_ms: int = 15000,
                  admission_poll_s: float = 1.0,
                  capture_options: dict | None = None) -> None:
@@ -73,6 +75,11 @@ class JitsiDriver:
         self._ignore_https_errors = ignore_https_errors
         self._alone_poll_s = alone_poll_s
         self._alone_timeout_s = alone_timeout_s   # durée SEUL avant de quitter
+        self._no_media_timeout_s = no_media_timeout_s
+        self._ice_timeout_s = ice_timeout_s
+        # Vrai pendant un arrêt volontaire : évite de qualifier de panne un
+        # navigateur qu'on est justement en train de fermer.
+        self._shutting_down = False
         self._max_duration_s = max_duration_s
         self._prejoin_timeout_ms = prejoin_timeout_ms
         self._admission_poll_s = admission_poll_s
@@ -162,20 +169,32 @@ class JitsiDriver:
         return False
 
     async def run_until_ended(self) -> str:
+        """Surveille la réunion et rend le MOTIF de sortie.
+
+        Motifs de succès : `left_alone`, `removed`, `conference_ended`, `max_duration`.
+        Motifs d'échec : `no_media`, `ice_failed`, `browser_lost` — la distinction compte,
+        elle décide si la session est rejouable.
+        """
         import asyncio
         import time
+
+        health = CallHealthMonitor(alone_timeout_s=self._alone_timeout_s,
+                                   no_media_timeout_s=self._no_media_timeout_s,
+                                   ice_timeout_s=self._ice_timeout_s)
         waited = 0.0
-        # Hystérésis TEMPORELLE : on retient l'INSTANT où l'on s'est retrouvé seul et on
-        # l'oublie dès que quelqu'un revient. Un simple compteur de sondages dépendrait de
-        # la période d'interrogation et déclencherait au mauvais moment si elle change.
-        alone_since: float | None = None
         while waited < self._max_duration_s:
             await asyncio.sleep(self._alone_poll_s)
             waited += self._alone_poll_s
             try:
                 raw = await self._page.evaluate(CONFERENCE_STATE_JS)
-            except Exception:  # noqa: BLE001 — page fermée/crashée
-                return "error"
+            except Exception:  # noqa: BLE001
+                # Toute erreur d'exécution ici (script gelé, contact perdu, page morte) veut
+                # dire la même chose : le navigateur ne répond plus. On ne cherche pas à
+                # distinguer les causes — sauf pendant un arrêt volontaire, où c'est normal.
+                if self._shutting_down:
+                    return "stopped"
+                return "browser_lost"
+
             phase = interpret_conference_state(raw)
             # Un modérateur peut sortir le bot, ou clore la réunion : sans ces deux sorties,
             # le bot tournerait dans le vide jusqu'à sa durée maximale.
@@ -183,18 +202,10 @@ class JitsiDriver:
                 return "removed"
             if phase is ConferencePhase.ENDED:
                 return "conference_ended"
-            members = (raw or {}).get("membersCount")
-            if not isinstance(members, int):
-                members = -1
-            # membersCount == 1 → il ne reste que nous. -1 (état illisible) : on n'agit PAS,
-            # mieux vaut rester que quitter une réunion pleine sur une sonde défaillante.
-            if isinstance(members, int) and 0 <= members <= 1:
-                if alone_since is None:
-                    alone_since = time.monotonic()
-                elif (time.monotonic() - alone_since) >= self._alone_timeout_s:
-                    return "left_alone"
-            else:
-                alone_since = None          # quelqu'un est là : le compte à rebours retombe
+
+            verdict = health.observe(raw, time.monotonic())
+            if verdict:
+                return verdict
         return "max_duration"
 
     async def leave(self) -> None:
@@ -203,6 +214,7 @@ class JitsiDriver:
             await hangup.first.click()
 
     async def close(self) -> None:
+        self._shutting_down = True
         try:
             if self._browser is not None:
                 await self._browser.close()
