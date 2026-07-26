@@ -34,6 +34,8 @@ from connector_service.bot.browser import CHROMIUM_ARGS  # noqa: E402
 from connector_service.bot.platforms.jitsi import JitsiDriver  # noqa: E402
 from connector_service.bot.runner import run_bot_session  # noqa: E402
 from connector_service.contract import ExternalMeetingOccurrence  # noqa: E402
+from connector_service.live.facade_client import facade_transcriber  # noqa: E402
+from connector_service.live.facade_stt import FacadeTranscriber  # noqa: E402
 
 
 class FakeParticipant:
@@ -85,6 +87,23 @@ class FakeParticipant:
                 await self._pw.stop()
 
 
+class TeeTranscriber:
+    """Mesure l'énergie captée PUIS délègue au vrai moteur STT : on voit d'un coup d'œil si
+    un silence de transcription vient de la CAPTURE (rien de sonore) ou du MOTEUR."""
+
+    def __init__(self, counter, inner):
+        self._counter = counter
+        self._inner = inner
+        self.uses_local_agreement = inner.uses_local_agreement
+
+    def stream(self, frames):
+        async def _tee():
+            async for frame in frames:
+                self._counter.observe(frame)
+                yield frame
+        return self._inner.stream(_tee())
+
+
 class FrameCounter:
     """Transcripteur factice : compte les frames PCM par participant et trace la progression.
     Remplacé par le vrai moteur live (Kyutai/WhisperLiveKit) une fois la capture validée."""
@@ -109,26 +128,32 @@ class FrameCounter:
             return 0
         return max(abs(v) for v in struct.unpack(f"<{count}h", payload[:count * 2]))
 
+    def observe(self, frame) -> None:
+        """Comptabilise une frame (utilisable aussi en dérivation, cf. TeeTranscriber)."""
+        self._observe(frame)
+
     async def stream(self, frames):
         async for frame in frames:
-            self.per_participant[frame.participant_id] += 1
-            if frame.participant_display_name:
-                self.names[frame.participant_id] = frame.participant_display_name
-            self.bytes_total += len(frame.payload)
-            peak = self._peak_amplitude(frame.payload)
-            self.peak = max(self.peak, peak)
-            pid = frame.participant_id
-            self.peak_by_participant[pid] = max(self.peak_by_participant.get(pid, 0), peak)
-            if peak > 500:                            # ~1,5 % de l'échelle : au-dessus du bruit
-                self.loud_frames += 1
-                self.loud_by_participant[pid] += 1
-            total = sum(self.per_participant.values())
-            if total % 50 == 0:                       # trace périodique, sans noyer la console
-                print(f"  … {total} frames | {self.bytes_total // 1024} Ko | "
-                      f"crête={self.peak} | sonores={self.loud_frames} | "
-                      f"participants={dict(self.per_participant)}", flush=True)
+            self._observe(frame)
         return
         yield  # pragma: no cover  (générateur : aucun segment, on ne transcrit pas ici)
+
+    def _observe(self, frame) -> None:
+        self.per_participant[frame.participant_id] += 1
+        if frame.participant_display_name:
+            self.names[frame.participant_id] = frame.participant_display_name
+        self.bytes_total += len(frame.payload)
+        peak = self._peak_amplitude(frame.payload)
+        self.peak = max(self.peak, peak)
+        pid = frame.participant_id
+        self.peak_by_participant[pid] = max(self.peak_by_participant.get(pid, 0), peak)
+        if peak > 500:                            # ~1,5 % de l'échelle : au-dessus du bruit
+            self.loud_frames += 1
+            self.loud_by_participant[pid] += 1
+        total = sum(self.per_participant.values())
+        if total % 200 == 0:                      # trace périodique, sans noyer la console
+            print(f"  … {total} frames | crête={self.peak} | sonores={self.loud_frames} | "
+                  f"{dict(self.per_participant)}", flush=True)
 
 
 async def main() -> int:
@@ -141,9 +166,15 @@ async def main() -> int:
     parser.add_argument("--name", default="TranscrIA-bot", help="nom affiché du bot")
     parser.add_argument("--insecure", action="store_true",
                         help="accepte un certificat auto-signé (instance auto-hébergée)")
-    parser.add_argument("--participant-audio", metavar="FICHIER.wav",
-                        help="voix jouée par le participant factice (WAV 48 kHz mono) — "
-                             "de la vraie parole, bien plus représentative qu'une tonalité")
+    parser.add_argument("--transcribe", metavar="URL",
+                        help="transcrire en direct via la façade TranscrIA (ex. "
+                             "http://127.0.0.1:7870) — sinon on ne fait que compter le PCM")
+    parser.add_argument("--token-file", help="fichier contenant le jeton d'API de la façade")
+    parser.add_argument("--language", default=None, help="langue forcée (ex. fr)")
+    parser.add_argument("--participant-audio", metavar="FICHIER.wav", action="append",
+                        help="voix jouée par un participant factice (WAV 48 kHz mono). "
+                             "RÉPÉTABLE : un participant par occurrence → permet de tester "
+                             "plusieurs intervenants, en alternance comme en simultané.")
     parser.add_argument("--fake-participant", action="store_true",
                         help="lance un 2e navigateur qui rejoint et émet du son "
                              "(gate AUTONOME, sans humain)")
@@ -156,6 +187,12 @@ async def main() -> int:
         external_occurrence_id=args.meeting_url.rstrip("/").rsplit("/", 1)[-1])
 
     counter = FrameCounter()
+    transcriber = counter
+    if args.transcribe:
+        token = Path(args.token_file).read_text().strip() if args.token_file else ""
+        transcriber = TeeTranscriber(counter, FacadeTranscriber(
+            facade_transcriber(args.transcribe, token, language=args.language)))
+        print(f"→ STT       : façade {args.transcribe} (transcription en direct)")
     driver = JitsiDriver(f"ws://127.0.0.1:{args.port}", headless=not args.show,
                          alone_poll_s=5.0, max_duration_s=args.seconds,
                          ignore_https_errors=args.insecure)
@@ -164,30 +201,48 @@ async def main() -> int:
     print(f"→ pont PCM : ws://127.0.0.1:{args.port}")
     print(f"→ mode     : {'fenêtre visible' if args.show else 'headless'}")
 
-    participant = None
+    participants: list = []
     if args.fake_participant:
-        print("→ participant factice : connexion (émet la tonalité du périph. factice)…",
-              flush=True)
-        participant = FakeParticipant(args.meeting_url,
-                                      ignore_https_errors=args.insecure,
-                                      audio_file=args.participant_audio)
-        joined = await participant.join()
-        print(f"→ participant factice : {'DANS LA SALLE' if joined else 'ÉCHEC DU JOIN'}\n",
-              flush=True)
+        audios = args.participant_audio or [None]
+        for index, audio in enumerate(audios, start=1):
+            label = f"Intervenant-{index}" if len(audios) > 1 else "Participant-Test"
+            print(f"→ participant factice : {label} ({audio or 'tonalité'})…", flush=True)
+            fake = FakeParticipant(args.meeting_url, label,
+                                   ignore_https_errors=args.insecure, audio_file=audio)
+            joined = await fake.join()
+            participants.append(fake)
+            print(f"   {label} : {'DANS LA SALLE' if joined else 'ÉCHEC DU JOIN'}", flush=True)
+        print(flush=True)
     else:
         print("→ REJOINS LA MÊME SALLE ET PARLE pendant que ça tourne…\n", flush=True)
 
     try:
         outcome, _segments = await asyncio.wait_for(
-            run_bot_session(args.meeting_url, occurrence, driver, counter,
+            run_bot_session(args.meeting_url, occurrence, driver, transcriber,
                             display_name=args.name, bridge_port=args.port),
             timeout=args.seconds + 120)
     except asyncio.TimeoutError:
         print("\n❌ ÉCHEC : la session n'a pas rendu la main (blocage).")
         return 2
     finally:
-        if participant is not None:
-            await participant.close()
+        for fake in participants:
+            await fake.close()
+
+    if args.transcribe:
+        print("\n────────── TRANSCRIPTION EN DIRECT ──────────")
+        if not _segments:
+            print("  (aucun segment — voir les diagnostics ci-dessous)")
+        for seg in _segments:
+            print(f"  [{seg.speaker or '?'}] {seg.text}")
+        print(f"\n  {len(_segments)} segment(s), "
+              f"{len({s.speaker for s in _segments})} locuteur(s) distinct(s)")
+        print(f"  capture : {sum(counter.per_participant.values())} frames, "
+              f"crête={counter.peak}, sonores={counter.loud_frames}")
+        for pid in counter.per_participant:
+            print(f"   • {pid:14s} {counter.names.get(pid,'?'):18s} "
+                  f"crête={counter.peak_by_participant.get(pid,0):5d} "
+                  f"sonores={counter.loud_by_participant.get(pid,0)}")
+        return 0 if _segments else 1
 
     total = sum(counter.per_participant.values())
     print("\n────────── RÉSULTAT DU GATE ──────────")

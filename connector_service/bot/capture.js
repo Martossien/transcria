@@ -11,6 +11,8 @@
   "use strict";
   const BRIDGE_URL = window.__TRANSCRIA_BRIDGE_URL__ || "ws://127.0.0.1:8791";
   const TARGET_RATE = 16000;
+  // Seuil (échelle s16) au-dessus duquel une piste est jugée PORTEUSE de voix.
+  const VOICE_THRESHOLD = 300;
 
   let socket = null;
   function connect() {
@@ -46,16 +48,24 @@
   }
 
   // Consomme une piste audio distante → frames AudioData → push PCM sur le pont.
-  function pipeTrack(track, participantId, participantName, onEnded) {
+  //
+  // Une plateforme expose souvent PLUSIEURS pistes pour le même locuteur, dont des muettes,
+  // et l'ordre d'arrivée varie d'une session à l'autre. Choisir « la première identifiée »
+  // menait donc à capter du silence une fois sur deux. Règle retenue, objective : une piste
+  // doit d'abord PROUVER qu'elle porte du son ; la première qui le prouve prend la place du
+  // participant, les autres sont abandonnées. Rien n'est émis tant que la preuve n'est pas
+  // faite (le silence de tête n'a de toute façon aucune valeur pour la transcription).
+  function pipeTrack(track, trackId, participantId, participantName, onEnded) {
     if (!("MediaStreamTrackProcessor" in window)) return; // WebCodecs requis
     attachSink(track);                                    // OBLIGATOIRE (voir ci-dessus)
     const processor = new window.MediaStreamTrackProcessor({ track });
     const reader = processor.readable.getReader();
+    let owns = false;
     (async function pump() {
       for (;;) {
         const { value: frame, done } = await reader.read();
         if (done) {
-          if (onEnded) onEnded();                         // libère le participant
+          if (owns && onEnded) onEnded();                 // libère le participant
           return;
         }
         try {
@@ -64,6 +74,22 @@
           // et annoncer stéréo corromprait le PCM (interprété interleaved en aval).
           const buf = new Float32Array(frame.numberOfFrames);
           frame.copyTo(buf, { planeIndex: 0 });
+
+          if (!owns) {
+            let peak = 0;
+            for (let i = 0; i < buf.length; i++) {
+              const a = Math.abs(buf[i]);
+              if (a > peak) peak = a;
+            }
+            // Pas encore de son audible : on n'émet rien et on ne réserve rien.
+            if (peak * 32767 < VOICE_THRESHOLD) continue;
+            // Une autre piste a déjà prouvé sa voix pour ce participant → celle-ci est un
+            // doublon, on l'abandonne.
+            if (activeByParticipant.has(participantId)) return;
+            activeByParticipant.set(participantId, trackId);
+            owns = true;
+          }
+
           if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
               participant_id: participantId,
@@ -161,10 +187,9 @@
             if (anyIdentityResolved && PLACEHOLDER_ID.test(fallback)) return;
             pid = fallback;
           }
-          // Un locuteur = une piste : on ignore les pistes surnuméraires du même participant.
-          if (activeByParticipant.has(pid)) return;
-          activeByParticipant.set(pid, trackId);
-          pipeTrack(track, pid, name, () => {
+          // La place du participant est prise à la PREUVE de voix (cf. pipeTrack), pas ici :
+          // l'ordre d'arrivée des pistes n'est pas fiable.
+          pipeTrack(track, trackId, pid, name, () => {
             if (activeByParticipant.get(pid) === trackId) activeByParticipant.delete(pid);
           });
         });

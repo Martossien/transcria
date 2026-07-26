@@ -39,6 +39,7 @@ class Hypothesis(NamedTuple):
     committed: Sequence[Word] = ()
     partial: Sequence[Word] = ()
     is_final: bool = False
+    speaker: str = ""             # locuteur (réunion multi-intervenants) — "" si inconnu
 
 
 class Segment(NamedTuple):
@@ -46,6 +47,7 @@ class Segment(NamedTuple):
     start: float
     end: float
     provenance: str
+    speaker: str = ""             # locuteur attribué (vide si la source ne le fournit pas)
 
 
 @runtime_checkable
@@ -58,10 +60,10 @@ class LiveTranscriber(Protocol):
     def stream(self, frames: AsyncIterator[AudioFrame]) -> AsyncIterator[Hypothesis]: ...
 
 
-def _segment(words: Sequence[Word], provenance: str) -> Segment:
+def _segment(words: Sequence[Word], provenance: str, speaker: str = "") -> Segment:
     return Segment(" ".join(w.text for w in words),
                    words[0].start if words else 0.0,
-                   words[-1].end if words else 0.0, provenance)
+                   words[-1].end if words else 0.0, provenance, speaker)
 
 
 class LiveSession:
@@ -87,10 +89,10 @@ class LiveSession:
                 full = list(hyp.partial)
                 newly = agree.insert(full)
                 if newly and self._on_provisional:
-                    self._on_provisional(_segment(newly, PROVISIONAL))
+                    self._on_provisional(_segment(newly, PROVISIONAL, hyp.speaker))
                 tail = agree.partial(full)
                 if tail and self._on_partial:
-                    self._on_partial(_segment(tail, PARTIAL))
+                    self._on_partial(_segment(tail, PARTIAL, hyp.speaker))
                 if hyp.is_final:
                     # On NE recrée PAS LocalAgreement : l'hypothèse serveur reste cumulative
                     # (hypothesis[n:] rejouerait tout le début). Un curseur borne le tour.
@@ -99,7 +101,7 @@ class LiveSession:
                     turn_words = before[turn_start:] + rest
                     turn_start = len(before) + len(rest)
                     if turn_words:                     # jamais de final vide
-                        seg = _segment(turn_words, FINAL_LIVE)
+                        seg = _segment(turn_words, FINAL_LIVE, hyp.speaker)
                         finals.append(seg)
                         if self._on_final:
                             self._on_final(seg)
@@ -108,13 +110,13 @@ class LiveSession:
                 if hyp.committed:
                     turn.extend(hyp.committed)
                     if self._on_provisional:
-                        self._on_provisional(_segment(hyp.committed, PROVISIONAL))
+                        self._on_provisional(_segment(hyp.committed, PROVISIONAL, hyp.speaker))
                 if hyp.partial and self._on_partial:
-                    self._on_partial(_segment(hyp.partial, PARTIAL))
+                    self._on_partial(_segment(hyp.partial, PARTIAL, hyp.speaker))
                 if hyp.is_final:
                     words = turn + list(hyp.partial)   # la queue instable est finalisée
                     if words:                          # jamais de final vide
-                        seg = _segment(words, FINAL_LIVE)
+                        seg = _segment(words, FINAL_LIVE, hyp.speaker)
                         finals.append(seg)
                         if self._on_final:
                             self._on_final(seg)
