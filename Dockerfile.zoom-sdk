@@ -1,0 +1,128 @@
+# syntax=docker/dockerfile:1
+#
+# Image BOT ZOOM — Meeting SDK NATIF pour Linux (pas de navigateur).
+# Cf. docs/TEMPS_REEL_REUNIONS.md et docs/BOT_REUNION.md.
+#
+# POURQUOI PAS LE BOT NAVIGATEUR (`Dockerfile.bot`) POUR ZOOM :
+#   Zoom REFUSE l'automatisation de son client Web — le gate manuel s'est heurté à un
+#   reCAPTCHA que rien ne permet de franchir légitimement. Sa documentation recommande
+#   explicitement le SDK natif pour un bot headless Linux. Ce n'était donc pas un défaut à
+#   corriger dans le pilote navigateur, mais la mauvaise porte d'entrée.
+#
+# CE QUE LE SDK NATIF APPORTE EN PLUS, et qui justifie une seconde image :
+#   - l'audio arrive PAR PARTICIPANT avec son identifiant (`onOneWayAudioRawDataReceived`),
+#     donc les locuteurs sont NOMMÉS — limite que le pilote Web documentait comme
+#     insurmontable ;
+#   - l'entrée est silencieuse NATIVEMENT (`isAudioOff`/`isVideoOff`) : aucun risque de
+#     rejouer le bip entendu dans la réunion lors des essais Jitsi ;
+#   - la liste des participants est interrogeable, ce qui rend la santé d'appel fiable au
+#     lieu de reposer sur des heuristiques de page.
+#
+# ⚠ CONTRAINTES ASSUMÉES, à connaître avant d'exploiter :
+#   - la dépendance pèse ~275 Mo (`libmeetingsdk.so` seul en fait 207) et n'existe qu'en
+#     x86_64 Linux → elle reste OPT-IN, comme `aiortc` ou `livekit-rtc`, et l'image
+#     applicative n'est pas touchée ;
+#   - le SDK n'admet **qu'une instance par processus** (`SDKERR_OTHER_SDK_INSTANCE_RUNNING`) :
+#     une réunion = un conteneur. C'est déjà le modèle du bot navigateur, mais ici c'est une
+#     contrainte du SDK, pas un choix ;
+#   - le SDK est un CLIENT ZOOM complet : sans D-Bus ni PulseAudio il ne renvoie pas d'erreur,
+#     il **plante par segfault** (constaté). Tout l'amorçage est dans
+#     `docker/zoom_sdk_entrypoint.sh`.
+#
+# ISOLATION : seul `connector_service/` est copié, comme pour le bot navigateur — le cœur
+# applicatif n'est pas embarqué (contrat d'architecture).
+#
+# Build :
+#   docker build -f Dockerfile.zoom-sdk -t transcria-zoom-sdk:latest .
+# Lancement (une réunion) :
+#   docker run --rm \
+#     -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
+#     -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
+#     transcria-zoom-sdk:latest --meeting "578 629 7113" --passcode ●●●●●●
+
+FROM debian:bookworm-slim
+
+# Sources apt écrites EXPLICITEMENT : `main` + `security`, sans la suite `-updates`.
+# Deux raisons, la seconde apprise à ses dépens :
+#   1. l'image n'a besoin que de paquets stables — `-updates` n'apporte rien ici ;
+#   2. certains réseaux interposent un cache qui sert des index PÉRIMÉS. La suite `-updates`
+#      est celle qui dérive le plus vite : `apt-get update` échoue alors, ou les paquets
+#      renvoient 404 parce que l'index annonce des versions retirées du pool. Ne pas la
+#      déclarer supprime le problème sans désactiver les contrôles de validité — désactiver
+#      `Check-Valid-Until` ferait perdre une protection réelle contre le rejeu d'index anciens.
+# Le miroir reste paramétrable si celui par défaut est inaccessible ou en retard :
+#     docker build --build-arg APT_MIRROR=ftp.fr.debian.org -f Dockerfile.zoom-sdk .
+ARG APT_MIRROR=deb.debian.org
+RUN printf 'deb http://%s/debian bookworm main\ndeb http://%s/debian-security bookworm-security main\n' \
+        "${APT_MIRROR}" "${APT_MIRROR}" > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources
+
+# Liste RÉDUITE AU NÉCESSAIRE, et vérifiée par `ldd` sur la bibliothèque du SDK dans cette
+# image même — pas recopiée d'un exemple. Elle est bien plus courte que celle de l'exemple C++
+# officiel de Zoom parce que la roue Python EMBARQUE déjà Qt5, xcb, glib et krb5 (~275 Mo) :
+# ces paquets système seraient redondants.
+#
+# Ce qui reste, et pourquoi :
+#   - `dbus`            : le SDK ouvre un bus système au démarrage ;
+#   - `pulseaudio`      : il exige un périphérique de sortie, même en rejoignant micro coupé ;
+#   - `libasound2-plugins` : greffon ALSA → PulseAudio (sinon ALSA cherche une carte absente) ;
+#   - `pciutils`        : fournit `lspci`, que le SDK invoque pour sonder le matériel ;
+#   - `procps`          : `pactl`/l'amorçage attendent des utilitaires de base de processus ;
+#   - `libgl1`          : seule bibliothèque graphique que la roue n'embarque PAS. Repérée par
+#     le garde-fou de build ci-dessous, pas devinée — Qt la charge même sans rien afficher.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        python3 \
+        python3-pip \
+        dbus \
+        pulseaudio \
+        pulseaudio-utils \
+        libasound2-plugins \
+        libgl1 \
+        pciutils \
+        procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# PulseAudio en mode système REFUSE les clients qui ne sont pas dans `pulse-access`, même à
+# root et même quand la socket est ouverte en écriture à tous : le refus se lit
+# « Connection failure: Access denied », sans indiquer la cause. L'appartenance doit être
+# accordée ICI, au build : les groupes supplémentaires d'un processus sont figés à son
+# lancement, donc un `usermod` fait dans l'entrypoint n'aurait aucun effet sur lui-même.
+RUN usermod -aG pulse-access root
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+WORKDIR /app
+
+# Dépendances Python du bot uniquement (le cœur n'est pas embarqué) :
+#  - zoom-meeting-sdk : bindings Python du SDK Linux, licence BSD. La roue EMBARQUE le SDK
+#    natif et toutes ses bibliothèques : aucun téléchargement manuel ni acceptation de licence
+#    à faire à la main. Version FIGÉE — ces bindings sont en bêta et l'API des rappels bruts
+#    pourrait bouger d'une version à l'autre.
+#  - websockets/requests : pont PCM et appels à la façade TranscrIA.
+ARG ZOOM_MEETING_SDK_VERSION=0.0.27
+RUN pip install --no-cache-dir \
+        "zoom-meeting-sdk==${ZOOM_MEETING_SDK_VERSION}" \
+        "websockets>=12,<14" "requests>=2.31"
+
+# Garde-fou de build : si une bibliothèque manquait, le SDK ne le dirait pas — il planterait
+# à l'exécution, dans une réunion. On échoue donc ICI, au build, où le diagnostic est lisible.
+COPY docker/zoom_sdk_verify_libs.py /usr/local/bin/zoom-sdk-verify-libs
+RUN python3 /usr/local/bin/zoom-sdk-verify-libs
+
+# Code du bot, copié APRÈS les dépendances : une modification n'invalide pas le cache.
+COPY connector_service/ /app/connector_service/
+COPY docker/zoom_sdk_entrypoint.sh /usr/local/bin/zoom-sdk-entrypoint
+RUN chmod +x /usr/local/bin/zoom-sdk-entrypoint
+
+# Le SDK écrit ses journaux et sa base d'état sous $HOME : sans HOME accessible en écriture,
+# il échoue de façon opaque (« failed to open file … errno = 2 »).
+ENV HOME=/app/state
+RUN mkdir -p /app/state
+
+# Contrairement au bot navigateur, on reste root : PulseAudio en mode `--system` et le démon
+# D-Bus l'exigent, et ce conteneur n'exécute AUCUN code tiers (pas de moteur JavaScript) —
+# le risque qui justifiait `pwuser` côté navigateur n'existe pas ici.
+ENTRYPOINT ["/usr/local/bin/zoom-sdk-entrypoint", "python3", "-m", "connector_service.bot.zoom_sdk"]
