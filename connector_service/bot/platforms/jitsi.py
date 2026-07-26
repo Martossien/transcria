@@ -13,6 +13,9 @@ from typing import Any
 from connector_service.bot.browser import CHROMIUM_ARGS
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
+# Résolveur d'identité SPÉCIFIQUE à Jitsi : traduit une piste WebRTC en participant nommé,
+# en interrogeant l'état de l'application. `capture.js` reste générique.
+_IDENTITY_JS = Path(__file__).resolve().parent / "jitsi_identity.js"
 
 # Le bot est un AUDITEUR : il ne doit RIEN émettre. Sans ça, le périphérique média factice
 # du navigateur (indispensable pour rejoindre) diffuse sa tonalité de test dans la réunion —
@@ -64,6 +67,7 @@ class JitsiDriver:
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         await self._page.add_init_script(
             f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};")
+        await self._page.add_init_script(path=str(_IDENTITY_JS))
         await self._page.add_init_script(path=str(_CAPTURE_JS))
         await self._page.goto(_muted_url(meeting_url))
 

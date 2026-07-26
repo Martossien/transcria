@@ -41,10 +41,14 @@ class FakeParticipant:
     factice de Chromium). Permet un gate AUTONOME : plus besoin d'un humain qui parle."""
 
     def __init__(self, meeting_url: str, name: str = "Participant-Test", *,
-                 ignore_https_errors: bool = False) -> None:
+                 ignore_https_errors: bool = False, audio_file: str | None = None) -> None:
         self._url = meeting_url
         self._name = name
         self._ignore_https_errors = ignore_https_errors
+        # Fichier WAV joué comme micro : indispensable pour tester avec de la VRAIE PAROLE.
+        # La tonalité du périphérique factice ne convient pas — le traitement audio des
+        # plateformes (suppression de bruit) écrase les sons stationnaires.
+        self._audio_file = audio_file
         self._pw = None
         self._browser = None
 
@@ -52,7 +56,10 @@ class FakeParticipant:
         from playwright.async_api import async_playwright
 
         self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=True, args=list(CHROMIUM_ARGS))
+        args = list(CHROMIUM_ARGS)
+        if self._audio_file:
+            args.append(f"--use-file-for-fake-audio-capture={self._audio_file}")
+        self._browser = await self._pw.chromium.launch(headless=True, args=args)
         page = await self._browser.new_page(
             ignore_https_errors=self._ignore_https_errors)
         await page.goto(self._url, timeout=45000, wait_until="domcontentloaded")
@@ -86,9 +93,12 @@ class FrameCounter:
 
     def __init__(self) -> None:
         self.per_participant: Counter[str] = Counter()
+        self.names: dict[str, str] = {}     # participant → nom affiché (mappage plateforme)
         self.bytes_total = 0
         self.peak = 0                      # amplitude max rencontrée (0..32767)
         self.loud_frames = 0               # frames au-dessus du seuil de « vrai son »
+        self.peak_by_participant: dict[str, int] = {}
+        self.loud_by_participant: Counter[str] = Counter()
 
     @staticmethod
     def _peak_amplitude(payload: bytes) -> int:
@@ -102,11 +112,16 @@ class FrameCounter:
     async def stream(self, frames):
         async for frame in frames:
             self.per_participant[frame.participant_id] += 1
+            if frame.participant_display_name:
+                self.names[frame.participant_id] = frame.participant_display_name
             self.bytes_total += len(frame.payload)
             peak = self._peak_amplitude(frame.payload)
             self.peak = max(self.peak, peak)
+            pid = frame.participant_id
+            self.peak_by_participant[pid] = max(self.peak_by_participant.get(pid, 0), peak)
             if peak > 500:                            # ~1,5 % de l'échelle : au-dessus du bruit
                 self.loud_frames += 1
+                self.loud_by_participant[pid] += 1
             total = sum(self.per_participant.values())
             if total % 50 == 0:                       # trace périodique, sans noyer la console
                 print(f"  … {total} frames | {self.bytes_total // 1024} Ko | "
@@ -126,6 +141,9 @@ async def main() -> int:
     parser.add_argument("--name", default="TranscrIA-bot", help="nom affiché du bot")
     parser.add_argument("--insecure", action="store_true",
                         help="accepte un certificat auto-signé (instance auto-hébergée)")
+    parser.add_argument("--participant-audio", metavar="FICHIER.wav",
+                        help="voix jouée par le participant factice (WAV 48 kHz mono) — "
+                             "de la vraie parole, bien plus représentative qu'une tonalité")
     parser.add_argument("--fake-participant", action="store_true",
                         help="lance un 2e navigateur qui rejoint et émet du son "
                              "(gate AUTONOME, sans humain)")
@@ -151,7 +169,8 @@ async def main() -> int:
         print("→ participant factice : connexion (émet la tonalité du périph. factice)…",
               flush=True)
         participant = FakeParticipant(args.meeting_url,
-                                      ignore_https_errors=args.insecure)
+                                      ignore_https_errors=args.insecure,
+                                      audio_file=args.participant_audio)
         joined = await participant.join()
         print(f"→ participant factice : {'DANS LA SALLE' if joined else 'ÉCHEC DU JOIN'}\n",
               flush=True)
@@ -176,6 +195,10 @@ async def main() -> int:
     print(f"fin de session : {outcome.reason}")
     print(f"frames PCM     : {total}  ({counter.bytes_total // 1024} Ko)")
     print(f"participants   : {dict(counter.per_participant) or '—'}")
+    print(f"noms résolus   : {counter.names or '— (aucun nom : mappage à vérifier)'}")
+    for pid in counter.per_participant:
+        print(f"   • {pid:28s} crête={counter.peak_by_participant.get(pid, 0):5d} "
+              f"sonores={counter.loud_by_participant.get(pid, 0)}")
     print(f"amplitude crête: {counter.peak} / 32767")
     print(f"frames sonores : {counter.loud_frames} "
           f"({(100 * counter.loud_frames // total) if total else 0} %)")

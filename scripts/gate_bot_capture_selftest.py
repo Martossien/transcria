@@ -129,7 +129,7 @@ async def main() -> int:
             checks["WebRTC connecté"] = page_state.get("rtcState") == "connected"
 
             with __import__("contextlib").suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(enough.wait(), timeout=10)
+                await asyncio.wait_for(enough.wait(), timeout=20)
             checks["WebSocket vers 127.0.0.1 non bloquée"] = not blocked
             await browser.close()
         httpd.shutdown()

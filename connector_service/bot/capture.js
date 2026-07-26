@@ -46,7 +46,7 @@
   }
 
   // Consomme une piste audio distante → frames AudioData → push PCM sur le pont.
-  function pipeTrack(track, participantId) {
+  function pipeTrack(track, participantId, participantName, onEnded) {
     if (!("MediaStreamTrackProcessor" in window)) return; // WebCodecs requis
     attachSink(track);                                    // OBLIGATOIRE (voir ci-dessus)
     const processor = new window.MediaStreamTrackProcessor({ track });
@@ -54,7 +54,10 @@
     (async function pump() {
       for (;;) {
         const { value: frame, done } = await reader.read();
-        if (done) return;
+        if (done) {
+          if (onEnded) onEnded();                         // libère le participant
+          return;
+        }
         try {
           // AudioData est f32-PLANAIRE : le plan 0 = canal 0 (gauche), numberOfFrames
           // échantillons. On force le MONO (suffisant pour le STT) — lire channels*frames
@@ -64,6 +67,7 @@
           if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
               participant_id: participantId,
+              participant_name: participantName || "",
               pcm: floatToPcm16Base64(buf),
               sample_rate_hz: frame.sampleRate || TARGET_RATE,
               channels: 1,
@@ -91,6 +95,42 @@
   // qu'une seule fois, sinon l'audio serait dupliqué.
   const piped = new Set();
 
+  // UNE seule piste active PAR PARTICIPANT. Indispensable : une plateforme peut exposer
+  // plusieurs pistes pour le même locuteur (transceiver mappé + piste nommée par endpoint),
+  // dont certaines SILENCIEUSES. Les brancher toutes entrelacerait du silence dans sa parole.
+  const activeByParticipant = new Map();
+
+  // Identité : `capture.js` reste GÉNÉRIQUE — chaque plateforme fournit son résolveur via
+  // `window.__TRANSCRIA_RESOLVE_IDENTITY__` (cf. platforms/*_identity.js). L'état de
+  // l'application arrive parfois APRÈS la piste : on lui laisse un court délai, puis on
+  // retombe sur l'identifiant de flux (dégradé mais jamais bloquant).
+  const IDENTITY_TIMEOUT_MS = 2500;
+  const IDENTITY_POLL_MS = 250;
+  // Noms d'emplacements récepteurs génériques (`remote-audio-1`…) : ils ne désignent aucun
+  // locuteur en propre. Cf. la politique de repli plus bas.
+  const PLACEHOLDER_ID = /^remote-(audio|video)(-\d+)*$/;
+  let anyIdentityResolved = false;
+
+  function resolveIdentity(track, streamId) {
+    return new Promise((resolve) => {
+      let waited = 0;
+      (function attempt() {
+        let found = null;
+        try {
+          if (typeof window.__TRANSCRIA_RESOLVE_IDENTITY__ === "function") {
+            found = window.__TRANSCRIA_RESOLVE_IDENTITY__(track, streamId);
+          }
+        } catch (e) {
+          found = null;
+        }
+        if (found && found.id) return resolve(found);
+        if (waited >= IDENTITY_TIMEOUT_MS) return resolve(null);
+        waited += IDENTITY_POLL_MS;
+        setTimeout(attempt, IDENTITY_POLL_MS);
+      })();
+    });
+  }
+
   // Interception WebRTC : chaque piste audio reçue est routée vers pipeTrack.
   const NativeRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function (...args) {
@@ -99,12 +139,35 @@
       if (event.track && event.track.kind === "audio") {
         // Attribution fine (endpoint id / DOM) affinée au gate ; par défaut = id de piste.
         const streamId = (event.streams[0] && event.streams[0].id) || "";
-        const trackId = event.track.id;
+        const track = event.track;
+        const trackId = track.id;
         if (isMixedStream(streamId) || isMixedStream(trackId)) return;  // mixage global
         if (piped.has(trackId)) return;                                  // déjà branchée
         piped.add(trackId);
-        // Identifiant : on préfère le flux (porte l'endpoint) ; sinon la piste.
-        pipeTrack(event.track, streamId || trackId);
+
+        resolveIdentity(track, streamId).then((identity) => {
+          let pid;
+          let name = "";
+          if (identity && identity.id) {
+            pid = identity.id;
+            name = identity.name || "";
+            anyIdentityResolved = true;
+          } else {
+            const fallback = streamId || trackId;
+            // Piste NON identifiable et au nom d'emplacement générique : c'est un récepteur
+            // pré-alloué, doublon SILENCIEUX d'un locuteur déjà capté (mesuré : crête 0).
+            // Garde-fou : on ne l'écarte que si la plateforme a su identifier au moins une
+            // piste — sinon (aucun résolveur) mieux vaut capter en dégradé que rien du tout.
+            if (anyIdentityResolved && PLACEHOLDER_ID.test(fallback)) return;
+            pid = fallback;
+          }
+          // Un locuteur = une piste : on ignore les pistes surnuméraires du même participant.
+          if (activeByParticipant.has(pid)) return;
+          activeByParticipant.set(pid, trackId);
+          pipeTrack(track, pid, name, () => {
+            if (activeByParticipant.get(pid) === trackId) activeByParticipant.delete(pid);
+          });
+        });
       }
     });
     return pc;
