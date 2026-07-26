@@ -40,13 +40,14 @@ def _options(source) -> tuple[str | None, str | None]:
     return language, backend
 
 
-def _transcribe(audio_path: Path, language: str | None, backend: str | None) -> dict:
-    """Transcrit un fichier avec le moteur STT du nœud et rend un dict sérialisable."""
-    from transcria.stt.transcriber_factory import create_transcriber
+def _engine():
+    return current_app.extensions["transcribe_engine"]
 
-    config = current_app.config["TRANSCRIA_CONFIG"]
-    transcriber = create_transcriber(config, backend=backend)
-    segments = transcriber.transcribe(audio_path, language=language or "fr")
+
+def _transcribe(audio_path: Path, language: str | None, backend: str | None) -> dict:
+    """Transcrit un fichier via le moteur RÉSIDENT du nœud (modèle chargé une fois,
+    accès sérialisé) et rend un dict sérialisable."""
+    segments = _engine().transcribe(audio_path, language=language or "fr", backend=backend)
     # Le pipeline manipule des segments DICT (cf. facade_format / stamp_provenance) :
     # on les renvoie tels quels, en normalisant seulement les types.
     items: list[dict] = [

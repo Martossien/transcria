@@ -139,3 +139,49 @@ def test_runner_erreur_navigateur_ne_pend_pas():
     outcome, _segments = _run(driver, transcriber, port)
 
     assert outcome.reason == "error"             # remonté proprement, pas de crash
+
+
+class _NoticingDriver(FakeBrowserDriver):
+    """Driver qui apprend l'adresse RÉELLE du pont (port auto-alloué)."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.bridge_url_received: str | None = None
+
+    def set_bridge_url(self, bridge_url: str) -> None:
+        self.bridge_url_received = bridge_url
+        self._bridge_url = bridge_url
+
+
+def test_port_du_pont_auto_alloue():
+    """Un port FIXE ferait entrer en collision plusieurs bots sur la même machine."""
+    transcriber = _CountingTranscriber()
+    driver = _NoticingDriver("ws://127.0.0.1:0", frame_count=3)
+
+    async def _main():
+        return await asyncio.wait_for(
+            run_bot_session("https://x/salle", OCC, driver, transcriber), 15)
+
+    outcome, _ = asyncio.run(_main())
+    assert driver.bridge_url_received is not None
+    port = int(driver.bridge_url_received.rsplit(":", 1)[1])
+    assert port > 0                                    # port réel attribué par le système
+    assert outcome.admitted and transcriber.seen == ["alice"] * 3
+
+
+def test_deux_bots_simultanes_ne_se_marchent_pas_dessus():
+    """10 réunions = 10 bots : chacun doit avoir SON pont et SES frames."""
+    async def _one(name: str, frames: int):
+        transcriber = _CountingTranscriber()
+        driver = _NoticingDriver("ws://127.0.0.1:0", frame_count=frames)
+        outcome, segments = await run_bot_session(f"https://x/{name}", OCC, driver, transcriber)
+        return driver.bridge_url_received, transcriber.seen, outcome
+
+    async def _main():
+        return await asyncio.wait_for(
+            asyncio.gather(_one("salle-a", 4), _one("salle-b", 6)), 30)
+
+    (url_a, seen_a, out_a), (url_b, seen_b, out_b) = asyncio.run(_main())
+    assert url_a != url_b                              # ports DISTINCTS
+    assert len(seen_a) == 4 and len(seen_b) == 6       # aucun mélange de flux
+    assert out_a.admitted and out_b.admitted

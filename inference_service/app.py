@@ -22,6 +22,7 @@ from inference_service.routes.health import health_bp
 from inference_service.routes.transcribe import transcribe_bp
 from inference_service.routes.voice_embed import voice_embed_bp
 from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
+from inference_service.transcribe_engine import TranscribeEngine
 from transcria.config import load_config
 from transcria.gpu.stt_engine_supervisor import build_stt_supervisor
 
@@ -52,6 +53,7 @@ def create_app(
     config: dict | None = None,
     engine: VoiceEmbedEngine | None = None,
     diarize_engine: DiarizeEngine | None = None,
+    transcribe_engine: TranscribeEngine | None = None,
 ) -> Flask:
     """Crée l'app du service.
 
@@ -86,6 +88,7 @@ def create_app(
     # Moteurs résidents, partagés par toutes les requêtes (verrou interne par moteur → GPU sérialisé).
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
     app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
+    app.extensions["transcribe_engine"] = transcribe_engine or TranscribeEngine(config)
     # Superviseur STT singleton : mémorise le « dernier usage » par moteur (idle-stop).
     app.extensions["stt_supervisor"] = build_stt_supervisor(config)
 

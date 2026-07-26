@@ -56,6 +56,11 @@ class JitsiDriver:
         self._browser: Any = None
         self._page: Any = None
 
+    def set_bridge_url(self, bridge_url: str) -> None:
+        """Adresse RÉELLE du pont, connue seulement après ouverture du serveur (port auto).
+        Appelée avant `open()` — le payload de capture est injecté avec cette URL."""
+        self._bridge_url = bridge_url
+
     async def open(self, meeting_url: str) -> None:
         from playwright.async_api import async_playwright  # dép opt-in
 

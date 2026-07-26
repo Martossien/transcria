@@ -24,11 +24,21 @@ from connector_service.live.session import LiveSession
 _log = logging.getLogger(__name__)
 
 
+def _resolve_bound_port(server: Any, requested: int) -> int:
+    """Port RÉELLEMENT ouvert par le serveur du pont (utile quand on a demandé 0)."""
+    if requested:
+        return requested
+    try:
+        return int(server.sockets[0].getsockname()[1])
+    except Exception:  # noqa: BLE001 — implémentation sans `sockets` : on garde la demande
+        return requested
+
+
 async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrence,
                           driver: BrowserDriver, transcriber: Any, *,
                           provider_name: str = "bot", display_name: str = "TranscrIA",
                           bridge_host: str = "127.0.0.1",
-                          bridge_port: int = 8791) -> tuple[BotOutcome, list]:
+                          bridge_port: int = 0) -> tuple[BotOutcome, list]:
     """Déroule une réunion via bot : le payload JS pousse le PCM sur le pont, une `LiveSession`
     le transcrit pendant que l'orchestrateur pilote le navigateur. Retourne (issue, segments)."""
     # Le payload de capture se (re)connecte PLUSIEURS fois au cours d'une réunion : la page
@@ -51,6 +61,14 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
             _log.debug("connexion du pont terminée: %r", exc)
 
     server = await serve_bot_bridge(bridge_host, bridge_port, _on_connection)
+    # Port 0 = le système en attribue un LIBRE. Indispensable pour faire tourner PLUSIEURS
+    # bots sur une même machine (10 réunions = 10 ponts) : un port fixe les ferait entrer en
+    # collision et un seul bot fonctionnerait. Le driver est informé de l'adresse réelle.
+    actual_port = _resolve_bound_port(server, bridge_port)
+    set_bridge_url = getattr(driver, "set_bridge_url", None)
+    if callable(set_bridge_url):
+        set_bridge_url(f"ws://{bridge_host}:{actual_port}")
+    _log.info("pont PCM du bot en écoute sur ws://%s:%d", bridge_host, actual_port)
 
     async def _messages(_occurrence: ExternalMeetingOccurrence) -> AsyncIterator[dict]:
         while True:
