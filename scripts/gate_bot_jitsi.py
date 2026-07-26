@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import struct
 import sys
 from collections import Counter
 from pathlib import Path
@@ -86,14 +87,30 @@ class FrameCounter:
     def __init__(self) -> None:
         self.per_participant: Counter[str] = Counter()
         self.bytes_total = 0
+        self.peak = 0                      # amplitude max rencontrée (0..32767)
+        self.loud_frames = 0               # frames au-dessus du seuil de « vrai son »
+
+    @staticmethod
+    def _peak_amplitude(payload: bytes) -> int:
+        """Amplitude crête d'une frame PCM s16le. Distingue du VRAI SON d'un flux silencieux :
+        un compteur de frames seul ne le dit pas (WebRTC émet aussi pendant les silences)."""
+        count = len(payload) // 2
+        if count == 0:
+            return 0
+        return max(abs(v) for v in struct.unpack(f"<{count}h", payload[:count * 2]))
 
     async def stream(self, frames):
         async for frame in frames:
             self.per_participant[frame.participant_id] += 1
             self.bytes_total += len(frame.payload)
+            peak = self._peak_amplitude(frame.payload)
+            self.peak = max(self.peak, peak)
+            if peak > 500:                            # ~1,5 % de l'échelle : au-dessus du bruit
+                self.loud_frames += 1
             total = sum(self.per_participant.values())
             if total % 50 == 0:                       # trace périodique, sans noyer la console
                 print(f"  … {total} frames | {self.bytes_total // 1024} Ko | "
+                      f"crête={self.peak} | sonores={self.loud_frames} | "
                       f"participants={dict(self.per_participant)}", flush=True)
         return
         yield  # pragma: no cover  (générateur : aucun segment, on ne transcrit pas ici)
@@ -159,6 +176,9 @@ async def main() -> int:
     print(f"fin de session : {outcome.reason}")
     print(f"frames PCM     : {total}  ({counter.bytes_total // 1024} Ko)")
     print(f"participants   : {dict(counter.per_participant) or '—'}")
+    print(f"amplitude crête: {counter.peak} / 32767")
+    print(f"frames sonores : {counter.loud_frames} "
+          f"({(100 * counter.loud_frames // total) if total else 0} %)")
 
     if not outcome.admitted:
         print("\n❌ Le bot n'a pas été admis : vérifier l'URL, le lobby, les sélecteurs de join.")
@@ -168,7 +188,11 @@ async def main() -> int:
         print("   Pistes : WebCodecs (MediaStreamTrackProcessor) indisponible dans ce Chromium,")
         print("   payload non injecté, ou aucune piste audio distante (personne ne parlait).")
         return 1
-    print("\n✅ CAPTURE VALIDÉE : le PCM par participant atteint la session live.")
+    if counter.loud_frames == 0:
+        print("\n⚠️  Flux capté mais SILENCIEUX (aucune frame au-dessus du bruit) :")
+        print("   le micro était-il coupé ? Personne n'a parlé ? Le son est-il bien transmis ?")
+        return 1
+    print("\n✅ CAPTURE VALIDÉE : de l'audio RÉEL par participant atteint la session live.")
     print("   Prochaine étape : remplacer FrameCounter par le vrai moteur STT live.")
     return 0
 

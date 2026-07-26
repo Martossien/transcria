@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import json
 import socket
+import struct
 import sys
 import threading
 from functools import partial
@@ -140,10 +141,23 @@ async def main() -> int:
     decoded = parse_bridge_message(json.loads(received[0])) if received else None
     checks["PCM décodable en RawFrame"] = decoded is not None
 
+    # Le comptage de frames ne suffit PAS : un flux peut couler en étant SILENCIEUX (zéros).
+    # On exige donc du signal réel — l'oscillateur de la boucle doit ressortir.
+    peak = 0
+    for raw in received:
+        msg = parse_bridge_message(json.loads(raw))
+        if not msg:
+            continue
+        payload = msg[1]
+        n = len(payload) // 2
+        if n:
+            peak = max(peak, max(abs(v) for v in struct.unpack(f"<{n}h", payload[:n * 2])))
+    checks["PCM NON silencieux (signal réel)"] = peak > 500
+
     print("\n────────── AUTO-TEST DE LA CAPTURE ──────────")
     for label, ok in checks.items():
         print(f"  [{'OK ' if ok else 'ÉCHEC'}] {label}")
-    print(f"\nframes reçues : {len(received)}")
+    print(f"\nframes reçues : {len(received)} | amplitude crête : {peak}/32767")
     if decoded:
         pid, payload, rate, chans, _name, _ts = decoded
         print(f"1re frame     : participant={pid!r} {len(payload)} octets "
