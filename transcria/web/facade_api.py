@@ -151,13 +151,26 @@ def facade_transcriptions():
     return Response(facade_format.full_text(segments), mimetype="text/plain; charset=utf-8")
 
 
-def _create_and_queue_job(cfg: dict, file, title: str):
+def _create_and_queue_job(cfg: dict, file, title: str, *,
+                          processing_profile_id: str | None = None,
+                          requested_mode: str | None = None):
     """Crée → dépose → analyse → met en file un job depuis un fichier uploadé.
 
     Primitives identiques au wizard (JobService + exécuteur), via l'API de jobs.
     Retourne `(job_id, result, error)` : sur succès `result={job_id, profile_id, mode}`
     et `error=None` ; sur échec `error=(réponse JSON, code)` (et `job_id` renseigné dès
-    qu'un job a été créé, pour le contexte d'erreur et la libération d'idempotence)."""
+    qu'un job a été créé, pour le contexte d'erreur et la libération d'idempotence).
+
+    Le profil/mode est CHOISI PAR L'APPELANT : une réunion à plusieurs intervenants doit
+    pouvoir demander un profil qui DIARISE (`quality`), sans quoi le compte rendu ne sépare
+    pas les personnes partageant un même micro (salle de réunion). Défaut `fast` inchangé.
+    """
+    try:
+        profile, mode = profiles.resolve_request(processing_profile_id,
+                                                 requested_mode or "fast")
+    except (KeyError, ValueError) as exc:
+        return None, None, (jsonify({"error": f"Profil ou mode inconnu: {exc}"}), 400)
+
     job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
 
@@ -176,7 +189,6 @@ def _create_and_queue_job(cfg: dict, file, title: str):
         return job_id, None, (jsonify({"error": "Worker de traitement indisponible",
                                        "job_id": job_id}), 503)
 
-    profile, mode = profiles.resolve_request(None, "fast")
     vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
     try:
         result = executor.submit_process(
@@ -237,7 +249,12 @@ def facade_ingest():
                                 "status_url": f"/api/jobs/{record.job_id}/status"}), 200
             return jsonify({"status": "import_in_progress", "import_id": record.id}), 202
 
-    job_id, result, error = _create_and_queue_job(cfg, file, title)
+    # Réunion à plusieurs intervenants : l'appelant peut demander un profil qui DIARISE
+    # (`mode=quality`), indispensable pour séparer les personnes d'une même salle.
+    job_id, result, error = _create_and_queue_job(
+        cfg, file, title,
+        processing_profile_id=(request.form.get("processing_profile_id") or "").strip() or None,
+        requested_mode=(request.form.get("mode") or "").strip() or None)
     if error is not None:
         if dedup_key:
             MeetingImportStore.release(dedup_key)  # rejeu propre après échec

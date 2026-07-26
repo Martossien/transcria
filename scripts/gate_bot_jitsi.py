@@ -33,9 +33,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from connector_service.bot.browser import CHROMIUM_ARGS  # noqa: E402
 from connector_service.bot.platforms.jitsi import JitsiDriver  # noqa: E402
 from connector_service.bot.runner import run_bot_session  # noqa: E402
+from connector_service.bridge import JobsApiBridge  # noqa: E402
 from connector_service.contract import ExternalMeetingOccurrence  # noqa: E402
 from connector_service.live.facade_client import facade_transcriber  # noqa: E402
 from connector_service.live.facade_stt import FacadeTranscriber  # noqa: E402
+from connector_service.live.recorder import MeetingMixer  # noqa: E402
+from connector_service.transports import RequestsTransport  # noqa: E402
 
 
 class FakeParticipant:
@@ -91,15 +94,25 @@ class TeeTranscriber:
     """Mesure l'énergie captée PUIS délègue au vrai moteur STT : on voit d'un coup d'œil si
     un silence de transcription vient de la CAPTURE (rien de sonore) ou du MOTEUR."""
 
-    def __init__(self, counter, inner):
+    def __init__(self, counter, inner, mixer=None):
         self._counter = counter
         self._inner = inner
+        # Enregistreur : le direct attribue PAR PISTE (une salle de réunion = plusieurs
+        # personnes sur une seule piste, donc fusionnées). L'enregistrement complet repart
+        # ensuite dans le pipeline batch, dont la DIARISATION sépare ces voix (ADR-001 D5).
+        self._mixer = mixer
+        self._t0 = None
         self.uses_local_agreement = inner.uses_local_agreement
 
     def stream(self, frames):
         async def _tee():
+            import time
             async for frame in frames:
                 self._counter.observe(frame)
+                if self._mixer is not None:
+                    if self._t0 is None:
+                        self._t0 = time.monotonic()
+                    self._mixer.add(frame.payload, time.monotonic() - self._t0)
                 yield frame
         return self._inner.stream(_tee())
 
@@ -171,6 +184,9 @@ async def main() -> int:
                              "http://127.0.0.1:7870) — sinon on ne fait que compter le PCM")
     parser.add_argument("--token-file", help="fichier contenant le jeton d'API de la façade")
     parser.add_argument("--language", default=None, help="langue forcée (ex. fr)")
+    parser.add_argument("--ingest", action="store_true",
+                        help="en fin de réunion, ingérer l'enregistrement complet → job batch "
+                             "AVEC DIARISATION (sépare les personnes d'une même salle)")
     parser.add_argument("--participant-audio", metavar="FICHIER.wav", action="append",
                         help="voix jouée par un participant factice (WAV 48 kHz mono). "
                              "RÉPÉTABLE : un participant par occurrence → permet de tester "
@@ -190,8 +206,9 @@ async def main() -> int:
     transcriber = counter
     if args.transcribe:
         token = Path(args.token_file).read_text().strip() if args.token_file else ""
+        mixer = MeetingMixer(48000) if args.ingest else None
         transcriber = TeeTranscriber(counter, FacadeTranscriber(
-            facade_transcriber(args.transcribe, token, language=args.language)))
+            facade_transcriber(args.transcribe, token, language=args.language)), mixer)
         print(f"→ STT       : façade {args.transcribe} (transcription en direct)")
     driver = JitsiDriver(f"ws://127.0.0.1:{args.port}", headless=not args.show,
                          alone_poll_s=5.0, max_duration_s=args.seconds,
@@ -236,6 +253,18 @@ async def main() -> int:
             print(f"  [{seg.speaker or '?'}] {seg.text}")
         print(f"\n  {len(_segments)} segment(s), "
               f"{len({s.speaker for s in _segments})} locuteur(s) distinct(s)")
+        if args.ingest and mixer is not None and mixer.duration_s > 0:
+            print("\n────────── ENREGISTREMENT → PIPELINE BATCH ──────────")
+            wav = mixer.to_wav()
+            print(f"  mixage : {mixer.duration_s:.0f} s, {len(wav)//1024} Ko")
+            bridge = JobsApiBridge(args.transcribe, token, RequestsTransport())
+            result = await bridge.ingest_recording(
+                wav, f"{occurrence.external_occurrence_id}.wav",
+                idempotency_key=f"bot|{occurrence.external_occurrence_id}",
+                provider="bot", external_meeting_id=occurrence.external_occurrence_id,
+                mode="quality")   # profil DIARISANT : sépare les personnes d'une même salle
+            print(f"  job créé : {result.job_id} (la diarisation séparera les locuteurs "
+                  f"d'une même salle)")
         print(f"  capture : {sum(counter.per_participant.values())} frames, "
               f"crête={counter.peak}, sonores={counter.loud_frames}")
         for pid in counter.per_participant:

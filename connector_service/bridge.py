@@ -52,9 +52,14 @@ class JobsApiBridge:
         idempotency_key: str,
         provider: str | None = None,
         external_meeting_id: str | None = None,
+        mode: str | None = None,
     ) -> IngestResult:
         """POST /v1/audio/ingest. `idempotency_key` porte l'idempotence côté serveur :
-        deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`)."""
+        deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`).
+
+        `mode` choisit le profil de traitement : une réunion doit demander `quality`, le
+        seul qui DIARISE — sans lui, les personnes partageant un micro (salle de réunion)
+        restent fusionnées dans le compte rendu."""
         headers = {
             "Authorization": f"Bearer {self._token}",
             "Idempotency-Key": idempotency_key,
@@ -64,6 +69,8 @@ class JobsApiBridge:
             data["provider"] = provider
         if external_meeting_id:
             data["external_meeting_id"] = external_meeting_id
+        if mode:
+            data["mode"] = mode
         status, body = await self._transport.request(
             "POST", f"{self._base}/v1/audio/ingest",
             headers=headers, data=data, files={"file": (filename, audio)},
