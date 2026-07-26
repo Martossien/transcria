@@ -120,7 +120,7 @@ sert QUE pour le live de Meet/Teams (fragile, optionnel) :
 | Plateforme | Post-réunion (officiel, ZÉRO bot) | Live temps réel |
 |---|---|---|
 | **Visio** (LiveKit) | Egress → URL POST | ✅ livekit-agent (natif) |
-| **Zoom** | Cloud Recording API | ✅ **RTMS** (officiel, par participant) |
+| **Zoom** | Cloud Recording API | ✅ **RTMS** (officiel, par participant) — ou **Meeting SDK natif** (bot, par participant, locuteurs nommés) |
 | **Teams** | **Graph** (VTT/MP4, webhook chiffré, API facturées à l'usage) | 🟠 bot RTM (MS déconseille) |
 | **Meet** | **Meet REST API v2 + Drive** | 🔬 **Meet Media API** (officielle, Developer Preview) |
 | **Micro direct** (présentiel/dictée) | fichier → façade/job | ✅ WhisperLiveKit (WS) |
@@ -129,6 +129,17 @@ sert QUE pour le live de Meet/Teams (fragile, optionnel) :
 browser-automation** ; le live là où c'est propre (Visio natif, Zoom RTMS, Meet via
 Media API officielle en recherche). **Vexa quitte la feuille de route principale** —
 repli expérimental du Meet-live seulement (extrait de code, pas la plateforme).
+
+**Correction apportée en cours de chantier (juillet 2026) — Zoom par bot.** Le pilote
+navigateur écrit pour Zoom (`bot/platforms/zoom_web.py`) est **inexploitable** : le client Web
+de Zoom oppose un reCAPTCHA à toute automatisation (vérifié au gate — le nom est saisi, le
+bouton s'active, le clic aboutit, et Zoom refuse en silence). La documentation de Zoom
+recommande d'ailleurs explicitement le **SDK natif** pour un bot headless Linux. Ce chemin est
+implémenté (`live/zoom_sdk_transport.py`, `Dockerfile.zoom-sdk`) et vaut mieux que RTMS quand
+l'hôte ne peut pas activer RTMS, puisqu'il n'exige **rien de l'hôte** pour une réunion du
+compte propriétaire de l'app. Il **nomme les locuteurs**, ce dont le navigateur était
+incapable. Réserve à connaître : une réunion d'un compte **externe** impose une revue de l'app
+par Zoom — là, RTMS activé par l'hôte reste la seule voie sans démarche.
 
 ## Décisions d'architecture → ADR-001
 

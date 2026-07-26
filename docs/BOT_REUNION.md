@@ -6,7 +6,20 @@ aux connecteurs officiels (qui reçoivent des webhooks et exigent donc un port o
 n'établit que des connexions **sortantes** — il traverse un pare-feu ou un proxy d'entreprise
 sans ouverture entrante.
 
-Plateforme prise en charge aujourd'hui : **Jitsi** (instance publique ou auto-hébergée).
+Deux bots coexistent, parce que les plateformes n'ouvrent pas la même porte :
+
+| Bot | Plateformes | Comment il entre | Image |
+|---|---|---|---|
+| **Navigateur** | Jitsi (publique ou auto-hébergée) | Chromium headless, capture WebRTC dans la page | `Dockerfile.bot` |
+| **SDK natif Zoom** | Zoom | Meeting SDK officiel pour Linux, sans navigateur | `Dockerfile.zoom-sdk` |
+
+Pourquoi deux : **Zoom refuse l'automatisation de son client Web** (reCAPTCHA, constaté au
+gate) et recommande explicitement le SDK natif pour un bot headless Linux. Ce n'était donc pas
+un défaut à corriger dans le pilote navigateur, mais la mauvaise porte d'entrée. Le SDK
+apporte en prime ce que le navigateur ne pouvait pas donner : **les locuteurs sont nommés**.
+
+Les deux partagent l'aval (façade STT, session live, provenance) et **les mêmes codes de
+retour** : l'orchestration n'a pas à les distinguer.
 
 ---
 
@@ -25,7 +38,10 @@ cohérent avec une politique de consentement.
 
 ---
 
-## 2. Installation
+## 2. Installation du bot navigateur
+
+> Les sections 2 à 5 concernent le **bot navigateur** (Jitsi). Pour Zoom, allez directement
+> à la section 6 : l'installation, le lancement et les vérifications y diffèrent.
 
 ```bash
 docker build -f Dockerfile.bot -t transcria-bot:latest .
@@ -123,10 +139,86 @@ plateformes appliquent une suppression de bruit qui l'efface. Utilisez de la **v
 
 ---
 
-## 6. Limites connues
+## 6. Bot ZOOM (SDK natif)
 
-- **Une seule plateforme** : Jitsi. Zoom-web, Teams et Meet demanderont chacun leur pilote.
-- **Salle protégée par mot de passe** : détectée (code `1`), pas franchie.
-- **Pas de reprise automatique** après perte du navigateur : le conteneur sort en code `2`,
-  c'est à l'orchestrateur de relancer.
+### 6.1 Ce qu'il faut obtenir de Zoom
+
+Créez une app de type **« Meeting SDK »** sur [marketplace.zoom.us](https://marketplace.zoom.us),
+puis relevez son **Client ID** et son **Client Secret**.
+
+Le point qui décide de tout est **sur quel compte** l'app est créée :
+
+| Réunion à rejoindre | Ce qu'il faut | Revue de l'app par Zoom |
+|---|---|---|
+| Du **compte propriétaire de l'app** | la signature JWT seule | **non** |
+| D'un compte **externe** (client) | + jeton ZAK ou OBF | **oui** |
+
+Autrement dit : pour vos propres réunions, rien d'autre à faire. Pour celles de tiers, Zoom
+impose une revue de l'app — **aucun code ne dispense de cette démarche** (durci depuis mars
+2026). L'alternative sans revue est que l'**hôte** active RTMS, déjà pris en charge par
+TranscrIA (`connector_service/live/rtms_transport.py`).
+
+### 6.2 Installation et lancement
+
+```bash
+docker build -f Dockerfile.zoom-sdk -t transcria-zoom-sdk:latest .
+
+docker run --rm \
+  -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
+  -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
+  transcria-zoom-sdk:latest --meeting "https://us05web.zoom.us/j/5786297113?pwd=…"
+```
+
+`--meeting` accepte aussi bien le **lien d'invitation** (le code secret en est extrait) que le
+numéro sous sa forme affichée (`578 629 7113`).
+
+Le **Client Secret se lit uniquement dans l'environnement** : il n'existe volontairement
+aucune option de ligne de commande pour lui, qui le rendrait lisible dans la liste des
+processus de la machine.
+
+### 6.3 Points d'exploitation propres à ce bot
+
+- **Une instance SDK par processus** (`SDKERR_OTHER_SDK_INSTANCE_RUNNING`) : une réunion = un
+  conteneur. C'est une contrainte de la bibliothèque, pas un choix.
+- **Dépendance de ~275 Mo**, x86_64 Linux uniquement. Elle reste confinée à cette image.
+- **Le conteneur est indispensable** : le SDK est un client Zoom complet et exige D-Bus et
+  PulseAudio. Sans eux il ne renvoie pas d'erreur, il **plante par segfault**. Ne cherchez pas
+  à le lancer hors conteneur.
+- **Débit audio** : 32 kHz par défaut, 48 kHz possible. Le SDK n'offre pas 16 kHz.
+
+### 6.4 Vérifier
+
+```bash
+docker run --rm -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
+  --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
+  -v "$PWD/scripts:/app/scripts:ro" transcria-zoom-sdk:latest \
+  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "578 629 7113" --seconds 60
+```
+
+Le gate échoue explicitement si l'audio est capté mais **sans locuteur nommé** : ce serait
+perdre l'apport principal du SDK sans que rien ne le signale.
+
+---
+
+## 7. Limites connues
+
+**Communes**
+
+- **Salle d'attente / mot de passe** : détectés (code `1`), pas franchis — seul l'hôte débloque.
+- **Pas de reprise automatique** : le conteneur sort en code `2`, c'est à l'orchestrateur de
+  relancer.
+
+**Bot navigateur**
+
+- **Une seule plateforme** : Jitsi. Teams et Meet demanderont chacun leur pilote.
 - **Le nom d'un locuteur** est résolu à l'arrivée de sa piste, pas rafraîchi ensuite.
+- **Zoom n'est PAS couvert par ce bot** : son client Web refuse l'automatisation.
+
+**Bot Zoom (SDK natif)**
+
+- **Réunions externes** : exigent une revue de l'app par Zoom (cf. 6.1).
+- **Bindings en bêta** (`zoom-meeting-sdk`) : la version est figée dans l'image, une montée
+  demande de revérifier l'API des rappels bruts.
+- **File audio bornée** : si le moteur STT ne suit pas durablement, les frames les plus
+  anciennes sont écartées — et journalisées. Un direct qui retarde de dix minutes n'a plus
+  d'intérêt ; un trou signalé reste exploitable.
