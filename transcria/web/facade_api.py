@@ -190,6 +190,14 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
                                        "job_id": job_id}), 503)
 
     vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
+    # Durée audio portée par l'entrée de file (comme la voie wizard) : en déploiement SPLIT,
+    # la page File n'accède pas aux fichiers du job — sans ça l'estimation d'attente est vide.
+    try:
+        analysis_meta = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).load_json(
+            "metadata/audio_analysis.json") or {}
+        vram_profile["audio_seconds"] = float(analysis_meta.get("duration_seconds") or 0.0)
+    except Exception:  # noqa: BLE001 — best-effort, l'attente retombe sur le fichier sinon
+        pass
     try:
         result = executor.submit_process(
             job_id, str(audio_path), mode,

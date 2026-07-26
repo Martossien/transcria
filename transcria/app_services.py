@@ -471,3 +471,22 @@ def start_runtime(app: Flask, cfg: dict, role: str, *, start_background_services
 
     logger.info("Process démarré (rôle=%s, scheduler=%s, stockage_jobs=%s)",
                 role, run_scheduler, backend_name(cfg))
+    warn_facade_inference_on_web_role(cfg, role, logger)
+
+
+def warn_facade_inference_on_web_role(cfg: dict, role: str, logger) -> None:
+    """Avertit si la façade STT SYNCHRONE est active sur un tier `web`.
+
+    `POST /v1/audio/transcriptions` fait l'inférence DANS CE PROCESS (pas dans la file) :
+    le nœud doit donc disposer du matériel STT. En déploiement SPLIT, une frontale `web`
+    sans GPU accepterait les requêtes puis échouerait (ou ramerait sur CPU) — mieux vaut
+    le dire au démarrage que le découvrir en réunion. Le modèle reste par ailleurs RÉSIDENT
+    dans le process web et occupe sa VRAM, au détriment de la file de traitement.
+    """
+    facade = ((cfg.get("live") or {}).get("facade") or {})
+    if facade.get("enabled") and role == "web":
+        logger.warning(
+            "live.facade.enabled sur un rôle 'web' : /v1/audio/transcriptions transcrit "
+            "DANS CE PROCESS — ce nœud doit avoir le matériel STT, sinon les appels "
+            "échoueront. Sur une frontale sans GPU, désactiver la façade STT ici."
+        )
