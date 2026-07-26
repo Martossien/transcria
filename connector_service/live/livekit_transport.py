@@ -18,6 +18,7 @@ from typing import Any
 
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live._demux import DemuxedFrame
+from connector_service.net_proxy import clear_proxy_env_if_bypassed
 
 _STOP = object()
 
@@ -77,7 +78,12 @@ def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 1
     `DemuxedFrame` par frame. NON testé en CI → confirmé au gate manuel."""
     def _factory(occurrence: ExternalMeetingOccurrence) -> AsyncIterator[DemuxedFrame]:
         async def _open() -> AsyncIterator[DemuxedFrame]:
-            from livekit import rtc  # dép opt-in, gate manuel
+            from livekit import rtc  # dép opt-in
+
+            # Le client LiveKit honore `http_proxy` mais IGNORE `no_proxy` : derrière un
+            # proxy d'entreprise, même une connexion à 127.0.0.1 part au proxy et se fait
+            # refuser (constaté : 403 Forbidden). On rétablit la règle attendue.
+            clear_proxy_env_if_bypassed(url)
 
             room = rtc.Room()
             fan = AudioFanIn()

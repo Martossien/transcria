@@ -28,7 +28,9 @@ def livekit_access_token(api_key: str, api_secret: str, room: str, *,
                          identity: str = DEFAULT_IDENTITY, name: str = "") -> str:
     """Jeton d'accès LiveKit (`room_join` + `can_subscribe`) pour le bot transcripteur.
     Dépend de `livekit-api` (importé paresseusement) ; confirmé au gate manuel."""
-    from livekit import api  # dép opt-in
+    # `livekit.api` est un paquet-espace de noms (livekit-api) : l'analyse statique
+    # ne le résout pas, mais l'import fonctionne à l'exécution (vérifié).
+    from livekit import api  # type: ignore[attr-defined]  # dép opt-in
 
     grants = api.VideoGrants(room_join=True, room=room, can_subscribe=True)
     token = api.AccessToken(api_key, api_secret).with_identity(identity).with_grants(grants)
