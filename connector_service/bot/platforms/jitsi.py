@@ -10,6 +10,8 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
+from connector_service.bot.browser import CHROMIUM_ARGS
+
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 
 
@@ -34,9 +36,7 @@ class JitsiDriver:
 
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(
-            headless=self._headless,
-            args=["--use-fake-ui-for-media-stream", "--no-sandbox",
-                  "--disable-blink-features=AutomationControlled"])
+            headless=self._headless, args=list(CHROMIUM_ARGS))
         self._page = await self._browser.new_page()
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         await self._page.add_init_script(

@@ -32,9 +32,23 @@
     return btoa(bin);
   }
 
+  // Chromium ne fait COULER une piste audio distante que si elle est branchée à un
+  // « puits » audio : sans ça, MediaStreamTrackProcessor ne rend JAMAIS de frame (vérifié).
+  // Un élément <audio> MUET suffit (le bot n'émet aucun son). On garde la référence pour
+  // que le ramasse-miettes ne coupe pas le puits.
+  const sinks = [];
+  function attachSink(track) {
+    const el = new Audio();
+    el.srcObject = new MediaStream([track]);
+    el.muted = true;
+    el.play().catch(() => {});
+    sinks.push(el);
+  }
+
   // Consomme une piste audio distante → frames AudioData → push PCM sur le pont.
   function pipeTrack(track, participantId) {
     if (!("MediaStreamTrackProcessor" in window)) return; // WebCodecs requis
+    attachSink(track);                                    // OBLIGATOIRE (voir ci-dessus)
     const processor = new window.MediaStreamTrackProcessor({ track });
     const reader = processor.readable.getReader();
     (async function pump() {
