@@ -1,7 +1,8 @@
-"""Vérification/déchiffrement des webhooks plateforme (A2/A3 — sécurité).
+"""Signatures et déchiffrement côté plateforme (A2/A3 — sécurité).
 
 - **Zoom** : signature HMAC-SHA256 des webhooks + réponse au défi de validation d'URL
-  (`endpoint.url_validation`). Stdlib (hmac/hashlib), zéro dépendance.
+  (`endpoint.url_validation`), signature du handshake RTMS, et **signature d'entrée en
+  réunion du Meeting SDK** (JWT HS256). Stdlib (hmac/hashlib), zéro dépendance.
 - **Teams** : déchiffrement des *change notifications* Graph avec resource data chiffrée —
   RSA-OAEP (clé symétrique) → AES-256-CBC (contenu), signature HMAC-SHA256 vérifiée. C'est
   le gros du connecteur Teams. `cryptography` (importé paresseusement, dép opt-in).
@@ -15,6 +16,8 @@ import base64
 import binascii
 import hashlib
 import hmac
+import json
+import time
 
 
 # --------------------------------------------------------------------------- #
@@ -50,6 +53,91 @@ def rtms_handshake_signature(client_id: str, client_secret: str,
     message = f"{client_id},{meeting_uuid},{rtms_stream_id}"
     return hmac.new(client_secret.encode("utf-8"), message.encode("utf-8"),
                     hashlib.sha256).hexdigest()
+
+
+# --- Signature d'entrée en réunion (Meeting SDK) --- #
+# Régime d'autorisation, vérifié sur la doc Zoom (juillet 2026) — à connaître avant d'exploiter :
+#   • réunion DU COMPTE propriétaire de l'app → cette signature SUFFIT (aucune revue Zoom,
+#     aucun jeton ZAK/OBF, aucun identifiant de connexion Zoom) ;
+#   • réunion EXTERNE → il faut EN PLUS un jeton ZAK ou OBF et une revue de l'app par Zoom
+#     (durci depuis mars 2026). Aucun code ne contourne cela : c'est une décision de Zoom.
+# Pour une réunion externe sans revue, la voie restante est que l'HÔTE active RTMS
+# (cf. `rtms_handshake_signature` et `live/rtms_transport.py`).
+_SDK_EXP_MIN_S = 1800           # 30 min : plancher imposé par Zoom (exp - iat)
+_SDK_EXP_MAX_S = 48 * 3600      # 48 h  : plafond imposé par Zoom
+
+ROLE_PARTICIPANT = 0            # ce que demande un bot d'écoute
+ROLE_HOST = 1
+
+
+def _b64url(raw: bytes) -> str:
+    """Base64 « URL-safe » SANS remplissage — encodage imposé par JWT (RFC 7515 §2)."""
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def normalize_meeting_number(meeting_number: str | int) -> str:
+    """« 578 629 7113 » → « 5786297113 ».
+
+    Les identifiants Zoom se lisent et se transmettent par groupes de chiffres (c'est la forme
+    affichée dans les invitations), alors que le JWT exige la forme compacte. Normaliser ici
+    évite un refus d'entrée dont la cause serait invisible côté exploitation.
+    """
+    digits = "".join(char for char in str(meeting_number) if char.isdigit())
+    if not digits:
+        raise ValueError("numéro de réunion Zoom vide ou non numérique")
+    return digits
+
+
+def zoom_meeting_sdk_signature(client_id: str, client_secret: str,
+                               meeting_number: str | int, *,
+                               role: int = ROLE_PARTICIPANT,
+                               expires_in_s: int = 2 * 3600,
+                               clock_skew_s: int = 30,
+                               now: float | None = None) -> str:
+    """Signature d'entrée du Meeting SDK : JWT HS256 signé avec le *Client Secret*.
+
+    Charge utile imposée par Zoom : `appKey`/`sdkKey` (le Client ID, dupliqués pour
+    compatibilité), `mn` (numéro de réunion) et `role` — ces deux derniers sont OBLIGATOIRES
+    pour le SDK Web —, `iat`, `exp` et `tokenExp`.
+
+    `iat` est volontairement ANTIDATÉ de `clock_skew_s` : une horloge locale en avance de
+    quelques secondes sur celle de Zoom fait rejeter un jeton par ailleurs valide, et le
+    diagnostic est pénible (Zoom ne dit pas pourquoi). `tokenExp` est aligné sur `exp`.
+
+    Le secret ne sort jamais d'ici : il ne sert qu'à signer, et n'apparaît pas dans le jeton.
+    """
+    if not client_id or not client_secret:
+        raise ValueError("Client ID et Client Secret requis pour signer l'entrée Zoom")
+    if role not in (ROLE_PARTICIPANT, ROLE_HOST):
+        raise ValueError(f"rôle Zoom invalide : {role!r} (0 = participant, 1 = hôte)")
+    # Bornes de Zoom : hors plage, l'entrée est refusée. Échouer ici, avec un message clair,
+    # vaut mieux qu'un refus opaque au moment de rejoindre la réunion.
+    if not _SDK_EXP_MIN_S <= expires_in_s <= _SDK_EXP_MAX_S:
+        raise ValueError(
+            f"durée de validité hors bornes Zoom : {expires_in_s}s "
+            f"(attendu entre {_SDK_EXP_MIN_S} et {_SDK_EXP_MAX_S})")
+
+    issued_at = int(time.time() if now is None else now) - clock_skew_s
+    expires_at = issued_at + expires_in_s
+    payload = {
+        "appKey": client_id,
+        "sdkKey": client_id,
+        "mn": normalize_meeting_number(meeting_number),
+        "role": int(role),
+        "iat": issued_at,
+        "exp": expires_at,
+        "tokenExp": expires_at,
+    }
+
+    def _segment(obj: dict) -> str:
+        # `sort_keys` rend la signature REPRODUCTIBLE (à horloge figée) : sans cela, l'ordre
+        # d'itération d'un dict deviendrait un détail dont dépendraient les tests.
+        return _b64url(json.dumps(obj, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+
+    signing_input = f"{_segment({'alg': 'HS256', 'typ': 'JWT'})}.{_segment(payload)}"
+    digest = hmac.new(client_secret.encode("utf-8"), signing_input.encode("ascii"),
+                      hashlib.sha256).digest()
+    return f"{signing_input}.{_b64url(digest)}"
 
 
 def zoom_url_validation(secret_token: str, plain_token: str) -> dict:
