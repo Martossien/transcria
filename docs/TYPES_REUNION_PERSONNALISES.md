@@ -1,7 +1,10 @@
 # Types de réunion personnalisés — analyse et plan
 
-> **Statut : 🟢 LIVRÉ (lots A→F, 2026-07-03) — reste : validation E2E GPU réelle du
-> lot D (suggestion + extraction sur audio réel) à rejouer par l'opérateur.**
+> **Statut : 🟡 LIVRÉ AVEC RÉSERVES (lots A→G, 2026-07-03).**
+> Reste : validation E2E GPU réelle du lot D (suggestion + extraction sur audio réel) à
+> rejouer par l'opérateur, **et quatre points ouverts relevés à la revue du 2026-07-26
+> (P6-P9, §12)** — le parcours phare « dupliquer-d'abord » est dégradé sur la page de garde
+> DOCX et sur l'indicateur de quorum, sans qu'aucun test ne le détecte.
 > Demande utilisateurs (2026-07) : les 18 types de réunion du rapport Word sont très
 > appréciés ; les utilisateurs veulent **créer les leurs** et les **partager aux autres**.
 > Ce document est la source de vérité du chantier : analyse de l'existant, conception
@@ -427,9 +430,9 @@ Chaque lot est livrable, testé, CI verte, sans dépendre des suivants.
   Pillow** (600×200 max, EXIF supprimé), matérialisé dans le job
   (`context/type_logo.png`, purgé au retour à un type intégré), inséré en couverture ;
   `branding.footer_text` (≤ 120) au pied de page. Source de vérité des unités :
-  `ORDERABLE_SECTIONS` dans le catalogue. Littéral résiduel connu : le badge « crise »
-  de la couverture teste encore `mtype == "Réunion de crise"` (comportement intégré,
-  hors périmètre fiche — noté pour une v2 éventuelle `behavior.crisis`).
+  `ORDERABLE_SECTIONS` dans le catalogue. ⚠️ **Affirmation corrigée à la revue du
+  2026-07-26** : ce lot annonçait « un littéral résiduel » (le badge « crise »). Il y en a
+  en réalité **huit**, sur deux chaînes de `docx_report.py` — voir P6.
 - [x] **Lot D — Prompts** (2026-07-03) : indices déplacés du prompt vers le catalogue,
   3 placeholders (`{{TYPES_REUNION}}`, `{{INDICES_TYPES}}`, `{{CHAMPS_EXTRACTION_TYPE}}`)
   substitués par `meeting_type_prompts.build_prompt_substitutions` (types visibles du
@@ -490,6 +493,10 @@ prompts ; D est le lot le plus délicat (LLM réelle en jeu → validation E2E G
 | P3 | Qualité des contributions communautaires | Revue de PR + validation stricte à l'import ; le README de `community/` fixe la barre |
 | P4 | `routes.py:209` (JSON précalculé à l'import) est un piège de cache — d'autres constantes du même genre peuvent exister | Lot A : grep systématique des usages de S1-S4 |
 | P5 | i18n : les fiches sont en français (comme le produit) ; le format a `schema_version` pour une future localisation | Assumé, cohérent avec la position README |
+| P6 | **La couverture DOCX reste pilotée par des NOMS de types intégrés** — `docx_report.py:717-728` (sous-titre) et `:762-776` (tableau de méta-données) comparent `mtype` à huit littéraux (`Réunion client`, `Point projet`, `Réunion projet`, `Entretien individuel`, `CODIR / COMEX`, `Réunion de crise`) | **OUVERT (revue 2026-07-26)**. Conséquence concrète sur le parcours phare « dupliquer-d'abord » : un type dupliqué de « Réunion client » CONSERVE les champs `nom_client`/`ref_contrat` (la duplication les copie) mais porte un autre nom → le sous-titre de couverture et la ligne « Réf. contrat » **disparaissent silencieusement**. Idem pour « Point projet » (`chef_de_projet`, `sprint`) et « Entretien individuel » (`periode_evaluee`, `evaluateur`). La donnée n'est pas perdue — `_section_type_specific` l'affiche génériquement — mais la mise en valeur en couverture, qui est ce que l'utilisateur duplique pour la garder, l'est. Correctif attendu : piloter ces deux chaînes par la FICHE (ex. `cover.subtitle_from: [nom_client]`, `cover.meta: [{key, label}]`) plutôt que par le nom |
+| P7 | **Le quorum est piloté par le NOM côté wizard, par le COMPORTEMENT côté rendu** — `wizard.js:326,334` teste `meetingType === 'CSE' \|\| 'CSE extraordinaire'`, alors que `docx_report.py:497` lit `custom_behavior.quorum` | **OUVERT (revue 2026-07-26)**. L'éditeur hérite bien `behavior.quorum` à la duplication (`meeting_types.js:300`) : un « CSE Société X » obtient donc le quorum dans le DOCX, **mais pas l'indicateur de quorum en direct** à l'étape 4. Cause racine : `job_wizard.html:85` n'expose que `{type: champs}` au JS, jamais les comportements. Correctif attendu : remonter les comportements au wizard et remplacer l'égalité de nom par la lecture du comportement. Même remarque pour le dictionnaire de titres `wizard.js:295-306`, qui retombe sur « Informations complémentaires » pour tout type personnalisé |
+| P8 | **Les libellés anglais des 18 intégrés sont en dur** dans `meeting_type_catalog.py:297-313`, indexés par leur nom français | **OUVERT (revue 2026-07-26)**, faible gravité. Tension avec la décision D3 (« les 18 intégrés sortent du code vers un fichier de données ») : ces libellés sont de la donnée par type et auraient leur place dans `meeting_types.yaml`. Sans conséquence fonctionnelle aujourd'hui |
+| P9 | **Aucun test ne couvre P6 ni P7** : les 96 tests du chantier passent alors que le parcours « dupliquer-d'abord » est dégradé | **OUVERT (revue 2026-07-26)**. Le trou est structurel : les tests DOCX vérifient les 18 intégrés (non-régression) et l'ordre des sections, jamais le rendu d'un type PERSONNALISÉ dupliqué d'un intégré à comportement. C'est précisément le cas d'usage cible du chantier |
 
 ---
 
