@@ -14,14 +14,17 @@ import base64
 import time
 from collections.abc import Callable
 
+from connector_service.http_defaults import DEFAULT_HTTP_TIMEOUT_S
+
 # http_post(url, *, data, headers) -> (status, json_dict)
 HttpPost = Callable[..., "tuple[int, dict]"]
 
 
-def _requests_post(url: str, *, data: dict, headers: dict) -> tuple[int, dict]:
+def _requests_post(url: str, *, data: dict, headers: dict,
+                   timeout_s: float = DEFAULT_HTTP_TIMEOUT_S) -> tuple[int, dict]:
     import requests  # dép TranscrIA
 
-    resp = requests.post(url, data=data, headers=headers, timeout=30)
+    resp = requests.post(url, data=data, headers=headers, timeout=timeout_s)
     try:
         body = resp.json()
     except Exception:  # noqa: BLE001

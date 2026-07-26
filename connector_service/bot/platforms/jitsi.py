@@ -42,7 +42,8 @@ class JitsiDriver:
 
     def __init__(self, bridge_url: str, *, headless: bool = True, alone_poll_s: float = 5.0,
                  alone_confirmations: int = 3, max_duration_s: float = 4 * 3600,
-                 ignore_https_errors: bool = False) -> None:
+                 ignore_https_errors: bool = False, prejoin_timeout_ms: int = 15000,
+                 capture_options: dict | None = None) -> None:
         self._bridge_url = bridge_url
         self._headless = headless
         # Instance auto-hébergée à certificat auto-signé (bancs d'essai) : accepté au niveau
@@ -52,6 +53,10 @@ class JitsiDriver:
         self._alone_poll_s = alone_poll_s
         self._alone_confirmations = alone_confirmations   # polls consécutifs avant de conclure « seul »
         self._max_duration_s = max_duration_s
+        self._prejoin_timeout_ms = prejoin_timeout_ms
+        # Réglages de capture transmis au payload (seuil de voix, délais d'identité…) :
+        # ils dépendent du terrain, ils ne doivent pas vivre en dur dans le JS.
+        self._capture_options = dict(capture_options or {})
         self._pw: Any = None
         self._browser: Any = None
         self._page: Any = None
@@ -70,8 +75,10 @@ class JitsiDriver:
         self._page = await self._browser.new_page(
             ignore_https_errors=self._ignore_https_errors)
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
+        import json as _json
         await self._page.add_init_script(
-            f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};")
+            f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};\n"
+            f"window.__TRANSCRIA_CAPTURE__ = {_json.dumps(self._capture_options)};")
         await self._page.add_init_script(path=str(_IDENTITY_JS))
         await self._page.add_init_script(path=str(_CAPTURE_JS))
         await self._page.goto(_muted_url(meeting_url))
@@ -81,7 +88,8 @@ class JitsiDriver:
         # Attend le rendu (React) du prejoin avant les count() instantanés (toléré absent).
         name_box = page.get_by_placeholder("Enter your name")
         with contextlib.suppress(Exception):
-            await name_box.first.wait_for(state="visible", timeout=15000)
+            await name_box.first.wait_for(state="visible",
+                                          timeout=self._prejoin_timeout_ms)
         if await name_box.count():
             await name_box.first.fill(display_name)
         # `data-testid` est le sélecteur STABLE de Jitsi (vérifié) ; repli par rôle+texte.

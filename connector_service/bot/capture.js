@@ -9,16 +9,22 @@
 //   { participant_id, participant_name, pcm (base64 s16le), sample_rate_hz, channels }
 (function () {
   "use strict";
+  // Réglages INJECTABLES (`window.__TRANSCRIA_CAPTURE__`) : ces valeurs dépendent de la
+  // plateforme et du terrain (micros faibles, salles bruyantes, application lente à publier
+  // son état). Les figer obligerait à modifier ce fichier pour chaque cas — le driver les
+  // fournit, avec des défauts sûrs ici.
+  const OPTS = window.__TRANSCRIA_CAPTURE__ || {};
   const BRIDGE_URL = window.__TRANSCRIA_BRIDGE_URL__ || "ws://127.0.0.1:8791";
-  const TARGET_RATE = 16000;
+  const TARGET_RATE = OPTS.target_rate_hz || 16000;
   // Seuil (échelle s16) au-dessus duquel une piste est jugée PORTEUSE de voix.
-  const VOICE_THRESHOLD = 300;
+  const VOICE_THRESHOLD = OPTS.voice_threshold || 300;
+  const RECONNECT_MS = OPTS.reconnect_ms || 1000;
 
   let socket = null;
   function connect() {
     socket = new WebSocket(BRIDGE_URL);
     socket.binaryType = "arraybuffer";
-    socket.onclose = () => setTimeout(connect, 1000); // reconnexion simple
+    socket.onclose = () => setTimeout(connect, RECONNECT_MS); // reconnexion simple
   }
   connect();
 
@@ -130,8 +136,8 @@
   // `window.__TRANSCRIA_RESOLVE_IDENTITY__` (cf. platforms/*_identity.js). L'état de
   // l'application arrive parfois APRÈS la piste : on lui laisse un court délai, puis on
   // retombe sur l'identifiant de flux (dégradé mais jamais bloquant).
-  const IDENTITY_TIMEOUT_MS = 2500;
-  const IDENTITY_POLL_MS = 250;
+  const IDENTITY_TIMEOUT_MS = OPTS.identity_timeout_ms || 2500;
+  const IDENTITY_POLL_MS = OPTS.identity_poll_ms || 250;
   // Noms d'emplacements récepteurs génériques (`remote-audio-1`…) : ils ne désignent aucun
   // locuteur en propre. Cf. la politique de repli plus bas.
   const PLACEHOLDER_ID = /^remote-(audio|video)(-\d+)*$/;

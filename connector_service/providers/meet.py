@@ -20,6 +20,7 @@ from connector_service.contract import (
     ProviderCapabilities,
     RemoteArtifact,
 )
+from connector_service.http_defaults import DEFAULT_HTTP_TIMEOUT_S
 
 PROVIDER = "meet"
 
@@ -93,10 +94,11 @@ class MeetRecordingAdapter:
         ))
 
 
-def _requests_get(url: str, *, headers: dict) -> tuple[int, dict]:
+def _requests_get(url: str, *, headers: dict,
+                  timeout_s: float = DEFAULT_HTTP_TIMEOUT_S) -> tuple[int, dict]:
     import requests  # dép TranscrIA
 
-    resp = requests.get(url, headers=headers, timeout=30)
+    resp = requests.get(url, headers=headers, timeout=timeout_s)
     try:
         body = resp.json()
     except Exception:  # noqa: BLE001

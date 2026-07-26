@@ -1,4 +1,5 @@
 """Adaptateur Teams post-réunion — Microsoft Graph (A3, ADR-001 D8).
+from connector_service.http_defaults import DEFAULT_HTTP_TIMEOUT_S
 
 Teams notifie (change notification chiffrée) la création d'un `callRecording` (ou
 `callTranscript`). On traduit la ressource en occurrence + artefact ; le contenu se
@@ -13,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from connector_service.contract import ExternalMeetingOccurrence, RemoteArtifact
+from connector_service.http_defaults import DEFAULT_HTTP_TIMEOUT_S
 
 PROVIDER = "teams"
 
@@ -82,10 +84,11 @@ class TeamsRecordingAdapter:
         return "|".join((PROVIDER, rec.organizer_id, rec.tenant_meeting_id, rec.recording_id))
 
 
-def _requests_json(method: str, url: str, *, headers: dict, json_body: dict | None) -> tuple[int, dict]:
+def _requests_json(method: str, url: str, *, headers: dict, json_body: dict | None,
+                   timeout_s: float = DEFAULT_HTTP_TIMEOUT_S) -> tuple[int, dict]:
     import requests  # dép TranscrIA
 
-    resp = requests.request(method, url, headers=headers, json=json_body, timeout=30)
+    resp = requests.request(method, url, headers=headers, json=json_body, timeout=timeout_s)
     try:
         body = resp.json()
     except Exception:  # noqa: BLE001
