@@ -12,6 +12,7 @@ manuel. Le déchiffrement Teams est prouvé par round-trip (chiffrer comme Graph
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 
@@ -84,12 +85,26 @@ def decrypt_teams_content(encrypted: dict, private_key_pem: bytes) -> bytes:
     private_key = serialization.load_pem_private_key(private_key_pem, password=None)
     if not isinstance(private_key, rsa.RSAPrivateKey):
         raise TeamsDecryptError("clé privée du certificat Teams non-RSA")
-    data_key = private_key.decrypt(
-        base64.b64decode(encrypted["dataKey"]),
-        apad.OAEP(mgf=apad.MGF1(algorithm=hashes.SHA1()), algorithm=hashes.SHA1(), label=None),
-    )
 
-    ciphertext = base64.b64decode(encrypted["data"])
+    # Le certificat étant PUBLIC, un attaquant peut forger dataKey+HMAC : toute entrée
+    # dégénérée doit lever TeamsDecryptError (jamais IndexError/KeyError/ValueError bruts).
+    if not isinstance(encrypted, dict) or "dataKey" not in encrypted or "data" not in encrypted:
+        raise TeamsDecryptError("notification Teams incomplète (dataKey/data manquant)")
+    try:
+        enc_key = base64.b64decode(encrypted["dataKey"])
+        ciphertext = base64.b64decode(encrypted["data"])
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise TeamsDecryptError("base64 invalide dans la notification Teams") from exc
+    try:
+        data_key = private_key.decrypt(
+            enc_key,
+            apad.OAEP(mgf=apad.MGF1(algorithm=hashes.SHA1()), algorithm=hashes.SHA1(),
+                      label=None))
+    except ValueError as exc:
+        raise TeamsDecryptError("déchiffrement RSA de dataKey échoué") from exc
+    if len(data_key) not in (16, 24, 32):
+        raise TeamsDecryptError("taille de clé AES invalide")
+
     expected_sig = base64.b64encode(
         hmac.new(data_key, ciphertext, hashlib.sha256).digest()
     ).decode("ascii")
@@ -99,7 +114,9 @@ def decrypt_teams_content(encrypted: dict, private_key_pem: bytes) -> bytes:
     cipher = Cipher(algorithms.AES(data_key), modes.CBC(data_key[:16]))
     decryptor = cipher.decryptor()
     padded = decryptor.update(ciphertext) + decryptor.finalize()
+    if not padded:
+        raise TeamsDecryptError("contenu chiffré Teams vide")
     pad_len = padded[-1]
-    if pad_len < 1 or pad_len > 16:
+    if pad_len < 1 or pad_len > 16 or pad_len > len(padded):
         raise TeamsDecryptError("padding PKCS7 invalide")
     return padded[:-pad_len]

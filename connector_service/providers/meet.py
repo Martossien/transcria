@@ -122,6 +122,7 @@ class MeetApiClient:
         headers = {"Authorization": f"Bearer {token}"}
         recordings: list[dict] = []
         page_token = ""
+        seen_tokens: set[str] = set()
         while True:
             url = f"{base}?pageToken={page_token}" if page_token else base
             status, body = self._get(url, headers=headers)
@@ -133,6 +134,9 @@ class MeetApiClient:
             page_token = str(body.get("nextPageToken") or "")
             if not page_token:
                 return recordings, token
+            if page_token in seen_tokens:       # garde-fou : token répété = pagination cassée
+                raise MeetRecordingError("pagination Meet en boucle (nextPageToken répété)")
+            seen_tokens.add(page_token)
 
 
 class MeetArtifactProvider:

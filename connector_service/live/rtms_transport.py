@@ -59,9 +59,15 @@ def _extract_media_url(resp: dict) -> str:
 
 
 async def _recv_until(conn: WsLike, expected_type: int) -> dict:
-    """Lit en répondant aux keepalive jusqu'à obtenir le type de message attendu."""
+    """Lit en répondant aux keepalive jusqu'à obtenir le type de message attendu. Une
+    fermeture pendant la négociation (chemin d'échec NOMINAL : signature refusée, stream
+    expiré) est convertie en `RtmsError` clair — sinon `StopAsyncIteration` traverse le
+    générateur async et devient un `RuntimeError` obscur (PEP 479)."""
     while True:
-        msg = await conn.recv_json()
+        try:
+            msg = await conn.recv_json()
+        except StopAsyncIteration:
+            raise RtmsError("connexion fermée pendant le handshake RTMS") from None
         ka = keepalive_response(msg)
         if ka is not None:
             await conn.send_json(ka)
@@ -131,8 +137,15 @@ def rtms_media_source(signaling: WsLike, connect_media: ConnectMedia, *, client_
                           [ExternalMeetingOccurrence], AsyncIterator[dict]]:
     """`media_messages` prêt pour `RtmsMediaFrameSource` : handshake puis flux de messages
     média. Connexions INJECTÉES → testable ; l'ouverture réelle est thin (gate manuel)."""
+    consumed = {"done": False}
+
     def _factory(_occurrence: ExternalMeetingOccurrence) -> AsyncIterator[dict]:
         async def _open() -> AsyncIterator[dict]:
+            # Le signaling est consommé + fermé au 1er flux : refuser un 2e usage (retry /
+            # nouvelle occurrence) plutôt que de re-handshaker un socket fermé (erreur obscure).
+            if consumed["done"]:
+                raise RtmsError("source RTMS déjà consommée — rouvrir le signaling")
+            consumed["done"] = True
             media = await rtms_handshake(
                 signaling, connect_media, client_id=client_id, client_secret=client_secret,
                 meeting_uuid=meeting_uuid, rtms_stream_id=rtms_stream_id, sequence=sequence)
@@ -162,10 +175,12 @@ class _WebsocketsWs:
 
     async def recv_json(self) -> dict:
         import json
+
+        import websockets
         try:
             raw = await self._conn.recv()
-        except Exception as exc:  # ConnectionClosed → fin de flux
-            raise StopAsyncIteration from exc
+        except websockets.exceptions.ConnectionClosed as exc:  # SEULE la fermeture = fin
+            raise StopAsyncIteration from exc                  # (une vraie erreur doit remonter)
         return dict(json.loads(raw))
 
     async def close(self) -> None:

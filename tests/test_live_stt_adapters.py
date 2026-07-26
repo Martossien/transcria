@@ -71,6 +71,19 @@ def test_kyutai_marker_finalise_le_mot_en_attente():
                    {"committed": [], "partial": [], "final": True}]
 
 
+def test_kyutai_steps_pause_repetes_pas_de_final_vide():
+    """Régression R1 : une pause AVANT tout mot, ou des Steps de pause répétés après un
+    final, ne doivent PAS émettre de segments final_live vides (Steps à ~12,5 Hz)."""
+    acc = KyutaiAccumulator()
+    assert acc.feed({"type": "Step", "prs": [0.9]}) == []          # pause avant tout mot → rien
+    acc.feed({"type": "Word", "text": "ok", "start_time": 0.0})
+    acc.feed({"type": "EndWord", "stop_time": 0.4})
+    assert acc.feed({"type": "Step", "prs": [0.9]}) == [
+        {"committed": [], "partial": [], "final": True}]           # 1 tour avec contenu → 1 final
+    assert acc.feed({"type": "Step", "prs": [0.9]}) == []          # tour déjà clos → plus de final
+    assert acc.feed({"type": "Marker"}) == []                      # rien à finaliser
+
+
 def test_kyutai_bout_en_bout_provenances():
     raw = [{"type": "Ready"},
            {"type": "Word", "text": "hi", "start_time": 0.0}, {"type": "EndWord", "stop_time": 0.5},
@@ -88,21 +101,39 @@ def test_kyutai_bout_en_bout_provenances():
 # --------------------------------------------------------------------------- #
 #  WhisperLiveKit
 # --------------------------------------------------------------------------- #
-def test_wlk_parser_lignes_et_buffer():
+def test_wlk_parser_ligne_ouverte_puis_fermeture():
     parser = WhisperLiveKitParser()
+    # 1 seule ligne = OUVERTE (peut encore grandir) → committed en provisional (final=False),
+    # PAS finalisée ; le tampon = partial.
     out = parser.feed({"status": "active_transcription",
                        "lines": [{"speaker": 0, "text": "bonjour le", "start": 0.0, "end": 1.0}],
                        "buffer_transcription": "monde"})
     assert out == [
         {"committed": [{"text": "bonjour", "start": 0.0, "end": 1.0},
-                       {"text": "le", "start": 0.0, "end": 1.0}], "partial": [], "final": True},
+                       {"text": "le", "start": 0.0, "end": 1.0}], "partial": [], "final": False},
         {"committed": [], "partial": [{"text": "monde", "start": 0.0, "end": 0.0}], "final": False}]
-    # la même ligne re-renvoyée (cumulative) n'est PAS ré-émise ; seule la nouvelle l'est.
+    # une 2e ligne apparaît → la 1re se FERME (final=True) ; la 2e s'ouvre (committed delta).
     out2 = parser.feed({"status": "active_transcription",
                         "lines": [{"text": "bonjour le", "start": 0.0, "end": 1.0},
                                   {"text": "tout va bien", "start": 1.0, "end": 2.0}],
                         "buffer_transcription": ""})
-    assert len(out2) == 1 and [w["text"] for w in out2[0]["committed"]] == ["tout", "va", "bien"]
+    assert out2[0] == {"committed": [], "partial": [], "final": True}
+    assert [w["text"] for w in out2[1]["committed"]] == ["tout", "va", "bien"]
+    assert out2[1]["final"] is False
+
+
+def test_wlk_parser_derniere_ligne_qui_grandit_jamais_perdue():
+    """Régression B3 : à 1 locuteur, `lines` reste de longueur 1 et son texte grandit —
+    l'ancien parser ne ré-émettait plus rien après le 1er message (perte quasi totale)."""
+    parser = WhisperLiveKitParser()
+    parser.feed({"status": "active_transcription",
+                 "lines": [{"text": "bonjour", "start": 0.0, "end": 1.0}], "buffer_transcription": ""})
+    out2 = parser.feed({"status": "active_transcription",
+                        "lines": [{"text": "bonjour le monde", "start": 0.0, "end": 2.0}],
+                        "buffer_transcription": ""})
+    assert [w["text"] for w in out2[0]["committed"]] == ["le", "monde"]   # le DELTA est émis
+    # ready_to_stop ferme la dernière ligne ouverte → final.
+    assert parser.feed({"type": "ready_to_stop"}) == [{"committed": [], "partial": [], "final": True}]
 
 
 def test_wlk_ignore_config_et_ready_to_stop():
@@ -119,10 +150,12 @@ def test_wlk_bout_en_bout_provenances():
            {"status": "active_transcription",
             "lines": [{"text": "bonjour le", "start": 0.0, "end": 1.0},
                       {"text": "tout va bien", "start": 1.0, "end": 2.0}],
-            "buffer_transcription": ""}]
+            "buffer_transcription": ""},
+           {"type": "ready_to_stop"}]                 # ferme la dernière ligne ouverte
     transcriber = StreamingTranscriber(wlk_open_stream(_connect(raw)), uses_local_agreement=False)
     col = _Collector()
     finals = _run(transcriber, col)
     assert [s.text for s in finals] == ["bonjour le", "tout va bien"]
     assert col.partial == ["monde"]
+    assert col.provisional == ["bonjour le", "tout va bien"]   # lignes en provisional avant final
     assert finals[0].provenance == "final_live"

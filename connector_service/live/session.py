@@ -80,6 +80,7 @@ class LiveSession:
         finals: list[Segment] = []
         agree = LocalAgreement() if self._t.uses_local_agreement else None
         turn: list[Word] = []                          # accumulateur du tour (path natif)
+        turn_start = 0                                 # début du tour courant (path LA)
         async for hyp in self._t.stream(provider.stream_audio(occurrence)):
             if agree is not None:
                 # Fenêtre glissante : l'hypothèse cumulative complète est dans `partial`.
@@ -91,12 +92,17 @@ class LiveSession:
                 if tail and self._on_partial:
                     self._on_partial(_segment(tail, PARTIAL))
                 if hyp.is_final:
-                    finalized = agree.committed + agree.finalize()
-                    seg = _segment(finalized, FINAL_LIVE)
-                    finals.append(seg)
-                    if self._on_final:
-                        self._on_final(seg)
-                    agree = LocalAgreement()          # nouveau tour
+                    # On NE recrée PAS LocalAgreement : l'hypothèse serveur reste cumulative
+                    # (hypothesis[n:] rejouerait tout le début). Un curseur borne le tour.
+                    before = agree.committed           # copie AVANT finalize
+                    rest = agree.finalize()            # promeut la queue restante
+                    turn_words = before[turn_start:] + rest
+                    turn_start = len(before) + len(rest)
+                    if turn_words:                     # jamais de final vide
+                        seg = _segment(turn_words, FINAL_LIVE)
+                        finals.append(seg)
+                        if self._on_final:
+                            self._on_final(seg)
             else:
                 # Streaming natif : committed = stables (provisional), partial = tail instable.
                 if hyp.committed:
@@ -107,10 +113,11 @@ class LiveSession:
                     self._on_partial(_segment(hyp.partial, PARTIAL))
                 if hyp.is_final:
                     words = turn + list(hyp.partial)   # la queue instable est finalisée
-                    seg = _segment(words, FINAL_LIVE)
-                    finals.append(seg)
-                    if self._on_final:
-                        self._on_final(seg)
+                    if words:                          # jamais de final vide
+                        seg = _segment(words, FINAL_LIVE)
+                        finals.append(seg)
+                        if self._on_final:
+                            self._on_final(seg)
                     turn = []                          # nouveau tour
         return finals
 

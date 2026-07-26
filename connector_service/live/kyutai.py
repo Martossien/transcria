@@ -47,14 +47,25 @@ class KyutaiAccumulator:
     def __init__(self, pause_threshold: float = PAUSE_THRESHOLD) -> None:
         self._threshold = pause_threshold
         self._pending: tuple[str, float] | None = None      # mot en attente de son EndWord
+        self._turn_has_words = False                        # le tour courant a-t-il du contenu ?
 
     def _flush_pending(self, end: float | None) -> list[dict]:
         if self._pending is None:
             return []
         text, start = self._pending
         self._pending = None
+        self._turn_has_words = True
         return [{"committed": [_word(text, start, end if end is not None else start)],
                  "partial": [], "final": False}]
+
+    def _finalize_turn(self) -> list[dict]:
+        """Clôt le tour : vide d'abord le mot en attente, puis émet le final SEULEMENT si le
+        tour a du contenu (sinon les Steps de pause répétés inonderaient de finals vides)."""
+        out = self._flush_pending(None)
+        if self._turn_has_words:
+            out.append({"committed": [], "partial": [], "final": True})
+            self._turn_has_words = False
+        return out
 
     def feed(self, event: object) -> list[dict]:
         if not isinstance(event, dict):
@@ -70,12 +81,10 @@ class KyutaiAccumulator:
         if etype == "Step":
             prs = event.get("prs") or []
             if prs and float(prs[0]) >= self._threshold:
-                return [{"committed": [], "partial": [], "final": True}]   # pause = fin de tour
+                return self._finalize_turn()                # pause sémantique = fin de tour
             return []
         if etype == "Marker":
-            out = self._flush_pending(None)                 # fin de flux : clore + finaliser
-            out.append({"committed": [], "partial": [], "final": True})
-            return out
+            return self._finalize_turn()                    # fin de flux : clore + finaliser
         return []                                           # Ready / inconnu
 
 

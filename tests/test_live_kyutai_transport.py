@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import struct
 
+import pytest
+
 from connector_service.contract import AudioFrame
 from connector_service.live.kyutai_transport import (
     kyutai_connect,
@@ -75,6 +77,48 @@ def test_pump_audio_resample_si_pas_24k():
                            resample=resample, silence_samples=0))
     assert seen["rate"] == 16000                                # resample appelé pour 16k
     assert ws.sent[0]["pcm"] == [0.5, 0.5]                      # sortie du resampler
+
+
+class BlockingWs:
+    """`recv` BLOQUE jusqu'à `close()` — simule un serveur qui n'émet plus (le vrai piège :
+    sans le correctif, la boucle recv gèle à jamais si le pump meurt)."""
+
+    def __init__(self):
+        self._closed = asyncio.Event()
+        self.closed = False
+
+    async def send(self, data):
+        pass
+
+    async def recv(self):
+        await self._closed.wait()
+        raise StopAsyncIteration
+
+    async def close(self):
+        self.closed = True
+        self._closed.set()
+
+
+def test_pump_exception_ferme_le_socket_et_remonte():
+    """Régression B2 : le provider (frames) lève SANS casser le socket → recv gèlerait. Le
+    correctif ferme le socket (débloque recv) et RE-PROPAGE l'exception du pump."""
+    async def boom_frames():
+        raise RuntimeError("provider mort")
+        yield  # pragma: no cover
+
+    ws = BlockingWs()
+
+    async def open_ws():
+        return ws
+
+    connect = kyutai_connect(open_ws, encode=lambda d: d, decode=lambda x: x, silence_samples=0)
+
+    async def _run():
+        return [e async for e in connect(boom_frames())]
+
+    with pytest.raises(RuntimeError, match="provider mort"):
+        asyncio.run(_run())
+    assert ws.closed                                              # socket fermé → recv débloqué
 
 
 def test_kyutai_connect_boucle_recv_decode():

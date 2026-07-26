@@ -69,6 +69,7 @@ def test_wlk_connect_bout_en_bout_lines_et_buffer():
          "lines": [{"text": "bonjour le", "start": 0.0, "end": 1.0},
                    {"text": "tout va bien", "start": 1.0, "end": 2.0}],
          "buffer_transcription": ""},
+        {"type": "ready_to_stop"},                    # ferme la dernière ligne ouverte
     ]
     ws = FakeWs(incoming=msgs)
 

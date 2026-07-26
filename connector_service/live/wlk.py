@@ -41,21 +41,45 @@ class WhisperLiveKitParser:
     que les nouvelles ; le `buffer_transcription` courant devient la queue `partial`."""
 
     def __init__(self) -> None:
-        self._emitted = 0                       # lignes déjà transformées en segments
+        self._final_count = 0                   # lignes CLOSES déjà finalisées (final émis)
+        self._open_emitted = 0                  # mots de la ligne OUVERTE déjà émis (committed)
 
     def feed(self, msg: object) -> list[dict]:
         if not isinstance(msg, dict):
             return []
+        if msg.get("type") == "ready_to_stop":
+            # fin de flux : la dernière ligne ouverte se ferme → final.
+            if self._open_emitted > 0:
+                self._open_emitted = 0
+                self._final_count += 1
+                return [{"committed": [], "partial": [], "final": True}]
+            return []
         if msg.get("status") != "active_transcription":
-            return []                           # config / ready_to_stop / autre : rien
-        lines = msg.get("lines")
-        lines = lines if isinstance(lines, list) else []
+            return []                           # config / autre : rien
+        raw = msg.get("lines")
+        lines = raw if isinstance(raw, list) else []
         out: list[dict] = []
-        for line in lines[self._emitted:]:
-            words = _line_words(line)
-            if words:
+        # Lignes CLOSES = toutes SAUF la dernière (qui peut encore grandir). On finalise
+        # celles pas encore émises ; la 1re peut être l'ex-ligne ouverte (émettre son delta).
+        for idx in range(self._final_count, max(len(lines) - 1, 0)):
+            words = _line_words(lines[idx])
+            if idx == self._final_count and self._open_emitted > 0:
+                delta = words[self._open_emitted:]
+                if delta:
+                    out.append({"committed": delta, "partial": [], "final": False})
+                out.append({"committed": [], "partial": [], "final": True})
+                self._open_emitted = 0
+            elif words:
                 out.append({"committed": words, "partial": [], "final": True})
-        self._emitted = len(lines)
+        self._final_count = max(self._final_count, max(len(lines) - 1, 0))
+        # Ligne OUVERTE (dernière) : n'émettre que le DELTA de mots committés (provisional).
+        if lines:
+            open_words = _line_words(lines[-1])
+            delta = open_words[self._open_emitted:]
+            if delta:
+                out.append({"committed": delta, "partial": [], "final": False})
+                self._open_emitted = len(open_words)
+        # Queue encore instable (tampon) → partial.
         buffer = str(msg.get("buffer_transcription") or "").strip()
         if buffer:
             out.append({"committed": [], "partial": _text_words(buffer), "final": False})

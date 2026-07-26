@@ -29,6 +29,13 @@ def test_parse_bridge_message_b64_et_bytes():
     assert parse_bridge_message("nope") is None
 
 
+def test_parse_bridge_message_corrompu_retourne_none():
+    """Régression B8 : l'acquéreur est EXTERNE — un message corrompu ne tue pas la session."""
+    assert parse_bridge_message({"participant_id": "u", "pcm": "AAA"}) is None      # b64 cassé
+    assert parse_bridge_message(
+        {"participant_id": "u", "pcm": "AAAA", "sample_rate_hz": "seize"}) is None   # champ non-int
+
+
 def _source(messages):
     async def _open(_occurrence):
         for m in messages:

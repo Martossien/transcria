@@ -6,6 +6,7 @@ avant de dériver Zoom-web/Teams/Meet (mêmes étapes, autres sélecteurs). NON 
 """
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +18,12 @@ class JitsiDriver:
     l'URL du pont), rejoint la salle, et suit la présence pour détecter la fin. Le durcissement
     (aloneness fine, reconnexion, sélecteurs multilingues) se règle au gate."""
 
-    def __init__(self, bridge_url: str, *, headless: bool = True,
-                 alone_poll_s: float = 5.0, max_duration_s: float = 4 * 3600) -> None:
+    def __init__(self, bridge_url: str, *, headless: bool = True, alone_poll_s: float = 5.0,
+                 alone_confirmations: int = 3, max_duration_s: float = 4 * 3600) -> None:
         self._bridge_url = bridge_url
         self._headless = headless
         self._alone_poll_s = alone_poll_s
+        self._alone_confirmations = alone_confirmations   # polls consécutifs avant de conclure « seul »
         self._max_duration_s = max_duration_s
         self._pw: Any = None
         self._browser: Any = None
@@ -44,8 +46,10 @@ class JitsiDriver:
 
     async def request_join(self, display_name: str) -> None:
         page = self._page
-        # Renseigne le nom d'affichage si l'écran d'accueil le demande, puis rejoint.
+        # Attend le rendu (React) du prejoin avant les count() instantanés (toléré absent).
         name_box = page.get_by_placeholder("Enter your name")
+        with contextlib.suppress(Exception):
+            await name_box.first.wait_for(state="visible", timeout=15000)
         if await name_box.count():
             await name_box.first.fill(display_name)
         join = page.get_by_role("button", name="Join")
@@ -64,14 +68,23 @@ class JitsiDriver:
     async def run_until_ended(self) -> str:
         import asyncio
         waited = 0.0
+        alone_streak = 0
         while waited < self._max_duration_s:
             await asyncio.sleep(self._alone_poll_s)
             waited += self._alone_poll_s
-            # Présence : nombre de participants distants (0 = seul → on quitte).
-            count = await self._page.evaluate(
-                "document.querySelectorAll('.filmstrip .videocontainer').length")
-            if isinstance(count, int) and count <= 1:
-                return "left_alone"
+            try:
+                count = await self._page.evaluate(
+                    "document.querySelectorAll('.filmstrip .videocontainer').length")
+            except Exception:  # noqa: BLE001 — page fermée/crashée
+                return "error"
+            # count==0 = sélecteur probablement obsolète (même pas notre tuile) → on n'agit
+            # PAS dessus ; seul un « uniquement nous » (==1) répété conclut « seul ».
+            if isinstance(count, int) and count == 1:
+                alone_streak += 1
+                if alone_streak >= self._alone_confirmations:
+                    return "left_alone"
+            else:
+                alone_streak = 0
         return "max_duration"
 
     async def leave(self) -> None:
@@ -80,7 +93,9 @@ class JitsiDriver:
             await hangup.first.click()
 
     async def close(self) -> None:
-        if self._browser is not None:
-            await self._browser.close()
-        if self._pw is not None:
-            await self._pw.stop()
+        try:
+            if self._browser is not None:
+                await self._browser.close()
+        finally:
+            if self._pw is not None:            # stop() garanti même si close() a levé
+                await self._pw.stop()

@@ -172,34 +172,38 @@ def meet_media_demux_source(space: str, token: str, http_post: Callable[..., dic
             media_entries = MediaEntriesRegistry()
             participants = ParticipantsRegistry()
             pc = RTCPeerConnection()
-            for _ in range(AUDIO_STREAM_COUNT):
-                pc.addTransceiver("audio", direction="recvonly")
-            for _ in range(video_stream_count):
-                pc.addTransceiver("video", direction="recvonly")
-            channels = {name: pc.createDataChannel(name, ordered=True) for name in DATA_CHANNELS}
+            try:
+                for _ in range(AUDIO_STREAM_COUNT):
+                    pc.addTransceiver("audio", direction="recvonly")
+                for _ in range(video_stream_count):
+                    pc.addTransceiver("video", direction="recvonly")
+                channels = {n: pc.createDataChannel(n, ordered=True) for n in DATA_CHANNELS}
 
-            @channels["media-entries"].on("message")
-            def _on_media_entries(raw: Any) -> None:
-                import json
-                media_entries.apply(json.loads(raw))
+                @channels["media-entries"].on("message")
+                def _on_media_entries(raw: Any) -> None:
+                    import json
+                    media_entries.apply(json.loads(raw))
 
-            @channels["participants"].on("message")
-            def _on_participants(raw: Any) -> None:
-                import json
-                participants.apply(json.loads(raw))
+                @channels["participants"].on("message")
+                def _on_participants(raw: Any) -> None:
+                    import json
+                    participants.apply(json.loads(raw))
 
-            offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            url, body, headers = connect_active_conference_request(
-                space, pc.localDescription.sdp, token)
-            answer_sdp = parse_connect_response(http_post(url, body, headers))
-            await pc.setRemoteDescription(RTCSessionDescription(sdp=answer_sdp, type="answer"))
+                offer = await pc.createOffer()
+                await pc.setLocalDescription(offer)
+                url, body, headers = connect_active_conference_request(
+                    space, pc.localDescription.sdp, token)
+                answer_sdp = parse_connect_response(http_post(url, body, headers))
+                await pc.setRemoteDescription(
+                    RTCSessionDescription(sdp=answer_sdp, type="answer"))
 
-            # NOTE gate : brancher ici pc.on("track") → recv() → extraire les CSRC RTP →
-            # meet_frame_from_rtp(csrcs, pcm, media_entries, participants) → yield.
-            # aiortc n'expose pas les CSRC nativement : hook RTP requis (cf. avertissement module).
-            return
-            yield  # pragma: no cover  (générateur : la vraie boucle média est câblée au gate)
+                # NOTE gate : brancher ici pc.on("track") → recv() → extraire les CSRC RTP →
+                # meet_frame_from_rtp(csrcs, pcm, media_entries, participants) → yield.
+                # aiortc n'expose pas les CSRC nativement : hook RTP requis (cf. module).
+                return
+                yield  # pragma: no cover  (la vraie boucle média est câblée au gate)
+            finally:
+                await pc.close()          # jamais de fuite de pile WebRTC (nominal ou erreur)
 
         return _open()
     return _factory

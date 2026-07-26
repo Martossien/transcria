@@ -71,24 +71,15 @@ def kyutai_connect(open_ws: Callable[[], Awaitable[WsBytes]], *, encode: Encode,
     """`connect(frames)` pour `kyutai_open_stream` : ouvre le WS, pousse l'audio (silence
     avant/après + Marker), et yield les événements décodés. Socket/codec INJECTÉS → testable ;
     l'implémentation réelle (websockets + msgpack) est fournie par `kyutai_ws_connect`."""
-    import asyncio
+    from connector_service.live._ws_drive import drive_recv
 
     def _factory(frames: AsyncIterator[AudioFrame]) -> AsyncIterator[dict]:
         async def _open() -> AsyncIterator[dict]:
             ws = await open_ws()
-            pump = asyncio.ensure_future(pump_audio(
-                ws, frames, encode=encode, resample=resample, silence_samples=silence_samples))
-            try:
-                while True:
-                    try:
-                        raw = await ws.recv()
-                    except StopAsyncIteration:
-                        return
-                    yield decode(raw)
-            finally:
-                pump.cancel()
-                await ws.close()
-
+            pump = pump_audio(ws, frames, encode=encode, resample=resample,
+                              silence_samples=silence_samples)
+            async for event in drive_recv(ws, pump, decode):
+                yield event
         return _open()
     return _factory
 
@@ -104,9 +95,10 @@ class _WebsocketsBytes:
         await self._conn.send(data)
 
     async def recv(self) -> bytes:
+        import websockets
         try:
             return bytes(await self._conn.recv())
-        except Exception as exc:  # ConnectionClosed → fin
+        except websockets.exceptions.ConnectionClosed as exc:  # SEULE la fermeture = fin
             raise StopAsyncIteration from exc
 
     async def close(self) -> None:

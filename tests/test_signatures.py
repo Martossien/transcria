@@ -87,6 +87,28 @@ def test_teams_signature_falsifiee_rejetee():
         decrypt_teams_content(encrypted, priv_pem)
 
 
+def test_teams_dechiffrement_entrees_degenerees_levent_teams_error():
+    """Régression B3 : le certificat est PUBLIC → un attaquant peut forger dataKey+HMAC.
+    Toute entrée dégénérée doit lever TeamsDecryptError, jamais IndexError/KeyError/ValueError."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding as apad
+
+    key, priv_pem = _rsa_keypair()
+    # champs manquants
+    with pytest.raises(TeamsDecryptError):
+        decrypt_teams_content({}, priv_pem)
+    # base64 invalide (padding cassé)
+    with pytest.raises(TeamsDecryptError, match="base64"):
+        decrypt_teams_content({"dataKey": "AAA", "data": "AAAA"}, priv_pem)
+    # dataKey déchiffrée de mauvaise taille (5 octets ≠ 16/24/32)
+    bad = key.public_key().encrypt(
+        b"short", apad.OAEP(mgf=apad.MGF1(hashes.SHA1()), algorithm=hashes.SHA1(), label=None))
+    enc = {"dataKey": base64.b64encode(bad).decode(),
+           "data": base64.b64encode(b"x" * 16).decode(), "dataSignature": ""}
+    with pytest.raises(TeamsDecryptError, match="taille"):
+        decrypt_teams_content(enc, priv_pem)
+
+
 def test_teams_signature_sur_chaine_base64_rejetee():
     """Verrou de régression : le HMAC signé sur la CHAÎNE base64 (mauvaise convention,
     le bug corrigé) doit être REJETÉ — Graph signe les octets chiffrés décodés."""

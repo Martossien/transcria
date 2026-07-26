@@ -73,6 +73,14 @@ def test_meet_client_statut_http_erreur_leve():
         MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
 
 
+def test_meet_client_pagination_boucle_detectee():
+    """Régression B2 : un nextPageToken répété à l'infini doit lever, pas boucler sans fin."""
+    def http_get(url, *, headers):
+        return 200, {"recordings": [], "nextPageToken": "SAME"}
+    with pytest.raises(MeetRecordingError, match="boucle"):
+        MeetApiClient(_FakeOAuth(), http_get=http_get).list_recordings("conf-abc")
+
+
 def test_meet_provider_finalise_seulement():
     def http_get(url, *, headers):
         return 200, RECORDINGS

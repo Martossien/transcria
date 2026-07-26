@@ -94,6 +94,37 @@ def test_handshake_refuse_leve():
         asyncio.run(rtms_handshake(signaling, connect_media, **PARAMS))
 
 
+def test_handshake_fermeture_donne_rtms_error():
+    """Régression B1 : fermeture pendant la négo (chemin d'échec NOMINAL) → RtmsError clair,
+    pas un StopAsyncIteration/Runtimeup obscur (PEP 479)."""
+    signaling = FakeWs([])                              # recv → StopAsyncIteration immédiat
+
+    async def connect_media(_url):
+        return FakeWs()
+
+    with pytest.raises(RtmsError, match="fermée"):
+        asyncio.run(rtms_handshake(signaling, connect_media, **PARAMS))
+
+
+def test_media_source_refuse_double_usage():
+    """Régression B5 : la source consomme + ferme le signaling ; un 2e usage doit lever
+    (au lieu de re-handshaker un socket fermé avec une erreur obscure)."""
+    signaling = FakeWs([_sig_resp()])
+    media = FakeWs([{"msg_type": 4, "status_code": 0}])
+
+    async def connect_media(_url):
+        return media
+
+    source = rtms_media_source(signaling, connect_media, **PARAMS)
+
+    async def _drain():
+        return [m async for m in source(OCC)]
+
+    asyncio.run(_drain())                               # 1er usage OK
+    with pytest.raises(RtmsError, match="déjà consommée"):
+        asyncio.run(_drain())                           # 2e usage refusé
+
+
 def test_keepalive_forever_repond_puis_termine():
     conn = FakeWs([{"msg_type": 12, "timestamp": 1}, {"msg_type": 14}])  # puis épuisé
     asyncio.run(keepalive_forever(conn))

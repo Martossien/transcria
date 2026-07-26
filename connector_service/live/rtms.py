@@ -18,6 +18,7 @@ La variante « simplifiée » de la doc (base64 direct sous `content`) est FAUSS
 from __future__ import annotations
 
 import base64
+import binascii
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timezone
 
@@ -112,12 +113,17 @@ def parse_audio_frame(msg: object, *, sequence_number: int,
     content = msg.get("content")
     if not isinstance(content, dict) or not content.get("data"):
         return None
+    try:                                    # base64/timestamp corrompus → paquet ignoré, pas de crash
+        payload = base64.b64decode(content["data"])
+        media_ts = int(content.get("timestamp") or 0)
+    except (binascii.Error, ValueError, TypeError):
+        return None
     return RawFrame(
         participant_id=str(content.get("user_id", "")),
         participant_name=str(content.get("user_name") or ""),
-        payload=base64.b64decode(content["data"]),
+        payload=payload,
         sequence_number=sequence_number,
-        media_timestamp_ms=int(content.get("timestamp") or 0),
+        media_timestamp_ms=media_ts,
         wall_clock_timestamp=wall_clock_timestamp,
         sample_rate_hz=16000,
         channels=1,

@@ -79,6 +79,18 @@ def test_parse_audio_frame_rejette_non_audio():
                              wall_clock_timestamp="t") is None
 
 
+def test_parse_audio_frame_donnees_corrompues_retourne_none():
+    """Régression B8 : un paquet malformé ne doit PAS tuer la session (contrat « None »)."""
+    # base64 mal formé
+    assert parse_audio_frame({"msg_type": DATA_AUDIO, "content": {"user_id": 1, "data": "AAA"}},
+                             sequence_number=0, wall_clock_timestamp="t") is None
+    # timestamp non entier
+    good = base64.b64encode(b"\x00\x00").decode("ascii")
+    assert parse_audio_frame(
+        {"msg_type": DATA_AUDIO, "content": {"user_id": 1, "data": good, "timestamp": "nan"}},
+        sequence_number=0, wall_clock_timestamp="t") is None
+
+
 def _source(messages):
     async def _open(_occurrence):
         for m in messages:

@@ -7,9 +7,13 @@ réunion, fins par silence prolongé / éjection / durée max) — sans copier d
 """
 from __future__ import annotations
 
+import contextlib
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
+
+_log = logging.getLogger(__name__)
 
 
 class BotState(str, Enum):
@@ -51,6 +55,7 @@ class BotSession:
         self.state = BotState.JOINING
 
     async def run(self, meeting_url: str) -> BotOutcome:
+        admitted_flag = False
         try:
             await self._driver.open(meeting_url)
             self.state = BotState.WAITING_ADMISSION
@@ -59,12 +64,18 @@ class BotSession:
             if not admitted:
                 return BotOutcome(admitted=False, reason="admission_timeout")
 
+            admitted_flag = True
             self.state = BotState.ACTIVE
             reason = await self._driver.run_until_ended()
 
             self.state = BotState.LEAVING
             await self._driver.leave()
             return BotOutcome(admitted=True, reason=reason)
+        except Exception:                            # le cycle de vie ne crashe pas l'appelant
+            _log.exception("échec du cycle de vie du bot (%s)", meeting_url)
+            with contextlib.suppress(Exception):
+                await self._driver.leave()
+            return BotOutcome(admitted=admitted_flag, reason="error")
         finally:
             self.state = BotState.DONE
             await self._driver.close()

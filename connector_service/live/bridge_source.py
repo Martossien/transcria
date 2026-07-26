@@ -16,6 +16,7 @@ La séquence est synthétisée par participant ; le wall-clock = heure d'arrivé
 from __future__ import annotations
 
 import base64
+import binascii
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timezone
 
@@ -35,16 +36,23 @@ def parse_bridge_message(msg: object) -> tuple[str, bytes, int, int, str, int] |
     pcm = msg.get("pcm")
     if pcm is None:
         return None
-    payload = base64.b64decode(pcm) if isinstance(pcm, str) else bytes(pcm)
+    # L'acquéreur est EXTERNE (sidecar/bot) : un message corrompu ne doit pas tuer la session.
+    try:
+        payload = base64.b64decode(pcm) if isinstance(pcm, str) else bytes(pcm)
+        rate = int(msg.get("sample_rate_hz") or 16000)
+        channels = int(msg.get("channels") or 1)
+        media_ts = int(msg.get("media_timestamp_ms") or 0)
+    except (binascii.Error, ValueError, TypeError):
+        return None
     if not payload:
         return None
     return (
         str(msg.get("participant_id") or ""),
         payload,
-        int(msg.get("sample_rate_hz") or 16000),
-        int(msg.get("channels") or 1),
+        rate,
+        channels,
         str(msg.get("participant_name") or ""),
-        int(msg.get("media_timestamp_ms") or 0),
+        media_ts,
     )
 
 

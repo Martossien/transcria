@@ -55,14 +55,12 @@ def test_non_admis_ne_capture_pas_et_ferme():
     assert names[-1] == "close"                                      # nettoyage garanti
 
 
-def test_close_appele_meme_sur_erreur():
+def test_erreur_driver_devient_outcome_error_et_ferme():
     class BoomDriver(FakeDriver):
         async def run_until_ended(self):
             raise RuntimeError("navigateur mort")
 
     driver = BoomDriver(admitted=True)
-    try:
-        asyncio.run(BotSession(driver).run("https://x"))
-    except RuntimeError:
-        pass
-    assert ("close",) in driver.calls                                # finally → close
+    outcome = asyncio.run(BotSession(driver).run("https://x"))       # ne crashe PAS l'appelant
+    assert outcome.reason == "error" and outcome.admitted is True    # admis puis erreur
+    assert ("close",) in driver.calls                                # nettoyage garanti

@@ -68,6 +68,22 @@ def test_moteur_fenetre_glissante_local_agreement():
     assert finals[0].provenance == "final_live"
 
 
+def test_local_agreement_multi_tours_pas_de_doublon():
+    """Régression B1 : l'hypothèse serveur reste CUMULATIVE d'un tour à l'autre. Après un
+    final, on ne doit PAS rejouer le début (l'ancien code recréait LocalAgreement, donc
+    hypothesis[0:] re-livrait tout → provisional/final dupliqués dès le 2e tour)."""
+    hyps = [
+        Hypothesis(partial=_w("a", "b"), is_final=False),
+        Hypothesis(partial=_w("a", "b"), is_final=True),            # tour 1 = "a b"
+        Hypothesis(partial=_w("a", "b", "c", "d"), is_final=False),
+        Hypothesis(partial=_w("a", "b", "c", "d"), is_final=True),  # tour 2 = "c d", PAS "a b c d"
+    ]
+    col = _Collector()
+    finals = _run(_Transcriber(hyps, local_agreement=True), col)
+    assert [s.text for s in finals] == ["a b", "c d"]              # aucun mot du tour 1 rejoué
+    assert col.provisional == ["a b", "c d"]                       # "a b" confirmé une seule fois
+
+
 def test_moteur_streaming_natif():
     # Kyutai-like : mots DÉJÀ committés (→ provisional) + queue instable (→ partial),
     # puis fin de tour (→ final_live). Les 3 provenances sont produites sur le path natif.

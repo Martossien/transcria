@@ -42,14 +42,17 @@
         const { value: frame, done } = await reader.read();
         if (done) return;
         try {
-          const buf = new Float32Array(frame.numberOfFrames * frame.numberOfChannels);
+          // AudioData est f32-PLANAIRE : le plan 0 = canal 0 (gauche), numberOfFrames
+          // échantillons. On force le MONO (suffisant pour le STT) — lire channels*frames
+          // et annoncer stéréo corromprait le PCM (interprété interleaved en aval).
+          const buf = new Float32Array(frame.numberOfFrames);
           frame.copyTo(buf, { planeIndex: 0 });
           if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
               participant_id: participantId,
               pcm: floatToPcm16Base64(buf),
               sample_rate_hz: frame.sampleRate || TARGET_RATE,
-              channels: frame.numberOfChannels || 1,
+              channels: 1,
             }));
           }
         } finally {
@@ -73,4 +76,6 @@
     return pc;
   };
   window.RTCPeerConnection.prototype = NativeRTCPeerConnection.prototype;
+  // Préserve les méthodes statiques (generateCertificate…) que certains clients appellent.
+  Object.setPrototypeOf(window.RTCPeerConnection, NativeRTCPeerConnection);
 })();

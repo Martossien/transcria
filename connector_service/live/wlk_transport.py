@@ -12,7 +12,6 @@ plus simple.
 """
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
@@ -41,21 +40,13 @@ def wlk_connect(open_ws: Callable[[], Awaitable[WsMixed]], *, decode: Decode
     """`connect(frames)` pour `wlk_open_stream` : pousse l'audio et yield les messages JSON
     décodés. Socket/décodeur INJECTÉS → testable ; l'implémentation réelle (websockets) est
     fournie par `wlk_ws_connect`."""
+    from connector_service.live._ws_drive import drive_recv
+
     def _factory(frames: AsyncIterator[AudioFrame]) -> AsyncIterator[dict]:
         async def _open() -> AsyncIterator[dict]:
             ws = await open_ws()
-            pump = asyncio.ensure_future(pump_pcm(ws, frames))
-            try:
-                while True:
-                    try:
-                        raw = await ws.recv()
-                    except StopAsyncIteration:
-                        return
-                    yield decode(raw)
-            finally:
-                pump.cancel()
-                await ws.close()
-
+            async for event in drive_recv(ws, pump_pcm(ws, frames), decode):
+                yield event
         return _open()
     return _factory
 
@@ -68,9 +59,10 @@ class _WebsocketsMixed:
         await self._conn.send(data)
 
     async def recv(self) -> bytes:
+        import websockets
         try:
             raw = await self._conn.recv()
-        except Exception as exc:  # ConnectionClosed → fin
+        except websockets.exceptions.ConnectionClosed as exc:  # SEULE la fermeture = fin
             raise StopAsyncIteration from exc
         return raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
 
