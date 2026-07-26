@@ -128,8 +128,16 @@ def facade_transcriptions():
                          f"({int(duration_s)} s > {max_duration_s} s). "
                          f"Utilisez POST /v1/audio/ingest (asynchrone) pour un enregistrement complet.",
             }), 413
-        transcriber = create_transcriber(cfg, backend=backend)
-        segments = transcriber.transcribe(Path(tmp.name), language=language)
+        # Nœud de calcul configuré → l'inférence part LÀ-BAS (VRAM et GPU du bon nœud) ;
+        # sinon inférence locale, comportement historique inchangé.
+        inference_url = (facade_cfg.get("inference_url") or "").strip()
+        if inference_url:
+            segments = _remote_transcribe(inference_url, Path(tmp.name), language, backend,
+                                          float(facade_cfg.get("inference_timeout_s", 300)))
+            transcriber = None
+        else:
+            transcriber = create_transcriber(cfg, backend=backend)
+            segments = transcriber.transcribe(Path(tmp.name), language=language)
     except Exception:  # noqa: BLE001 — moteur indispo/échec → 503 propre, pas un 500 opaque
         logger.exception("[façade] Transcription échouée (backend=%s)", backend)
         return jsonify({"error": "Moteur STT indisponible ou transcription échouée"}), 503
@@ -147,8 +155,35 @@ def facade_transcriptions():
     if response_format == "json":
         return jsonify(facade_format.simple_json(segments))
     if response_format == "srt":
-        return Response(transcriber.segments_to_srt(segments), mimetype="application/x-subrip")
+        # En délégation, aucun objet transcriber local : le rendu SRT est pur (segments dict).
+        srt = (transcriber.segments_to_srt(segments) if transcriber is not None
+               else facade_format.segments_to_srt(segments))
+        return Response(srt, mimetype="application/x-subrip")
     return Response(facade_format.full_text(segments), mimetype="text/plain; charset=utf-8")
+
+
+def _remote_transcribe(inference_url: str, audio_path: Path, language: str,
+                       backend: str | None, timeout_s: float) -> list[dict]:
+    """Délègue la transcription au NŒUD DE CALCUL (`POST /infer/transcribe`).
+
+    Sans ça, la façade charge le modèle DANS LE PROCESS WEB : la VRAM de la frontale reste
+    occupée au détriment de la file, et une frontale `role=web` sans GPU ne peut pas
+    répondre du tout. Configuré par `live.facade.inference_url` — absent = comportement
+    historique (inférence locale), donc aucune régression pour l'existant.
+    """
+    import requests
+
+    with audio_path.open("rb") as handle:
+        resp = requests.post(
+            f"{inference_url.rstrip('/')}/infer/transcribe",
+            files={"file": (audio_path.name, handle)},
+            data={"language": language, **({"backend": backend} if backend else {})},
+            timeout=timeout_s,
+        )
+    resp.raise_for_status()
+    payload = resp.json() or {}
+    return [seg for seg in (payload.get("segments") or []) if isinstance(seg, dict)]
+
 
 
 def _create_and_queue_job(cfg: dict, file, title: str, *,

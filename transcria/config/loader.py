@@ -139,6 +139,12 @@ _DEFAULT_CONFIG = {
         # (404). Rend TranscrIA feedable par les connecteurs de réunion et le micro.
         "facade": {
             "enabled": False,
+            # Nœud de calcul qui exécute le STT de la façade (ex. http://127.0.0.1:9000).
+            # VIDE = inférence DANS LE PROCESS WEB (historique) : le modèle y reste résident
+            # et occupe la VRAM de la frontale, et un rôle `web` sans GPU ne peut pas
+            # répondre. À renseigner dès qu'un service d'inférence est déployé.
+            "inference_url": "",
+            "inference_timeout_s": 300,
             # Plafonds de l'endpoint STT SYNCHRONE (/v1/audio/transcriptions) : il
             # occupe un worker gunicorn sync le temps de l'inférence, donc réservé
             # aux extraits COURTS (dictée, fenêtre live). Au-delà → 413 + renvoi vers

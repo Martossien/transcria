@@ -61,3 +61,34 @@ def verbose_json(segments: list[dict], language: str) -> dict:
         "text": full_text(segments),
         "segments": out_segments,
     }
+
+
+def _srt_time(seconds: object) -> str:
+    """Horodatage SRT ``HH:MM:SS,mmm``."""
+    value = float(seconds) if isinstance(seconds, (int, float)) else 0.0
+    total_ms = max(int(round(value * 1000)), 0)
+    ms = total_ms % 1000
+    total_s = total_ms // 1000
+    return f"{total_s // 3600:02d}:{(total_s % 3600) // 60:02d}:{total_s % 60:02d},{ms:03d}"
+
+
+def segments_to_srt(segments: list[dict]) -> str:
+    """Rendu SRT PUR depuis des segments dict.
+
+    `BaseTranscriber.segments_to_srt` exige un objet transcriber : indisponible quand la
+    façade DÉLÈGUE l'inférence au nœud de calcul (elle ne reçoit alors que des segments).
+    Même sortie, sans dépendance à un moteur.
+    """
+    lines: list[str] = []
+    index = 0
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        index += 1
+        speaker = (seg.get("speaker") or "").strip()
+        lines.append(str(index))
+        lines.append(f"{_srt_time(seg.get('start'))} --> {_srt_time(seg.get('end'))}")
+        lines.append(f"{speaker}: {text}" if speaker else text)
+        lines.append("")
+    return "\n".join(lines)

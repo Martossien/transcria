@@ -19,6 +19,7 @@ from inference_service.routes.capabilities import capabilities_bp
 from inference_service.routes.diarize import diarize_bp
 from inference_service.routes.engines import engines_bp
 from inference_service.routes.health import health_bp
+from inference_service.routes.transcribe import transcribe_bp
 from inference_service.routes.voice_embed import voice_embed_bp
 from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
 from transcria.config import load_config
@@ -93,6 +94,9 @@ def create_app(
     app.register_blueprint(engines_bp)
     app.register_blueprint(voice_embed_bp)
     app.register_blueprint(diarize_bp)
+    # STT sur le NŒUD DE CALCUL : évite l'inférence (et la VRAM résidente)
+    # dans le process web, et rend la façade utilisable en déploiement split.
+    app.register_blueprint(transcribe_bp)
 
     _register_error_handlers(app)
     logger.info("TranscrIA Inference Service initialisé (voice-embed, diarize)")
