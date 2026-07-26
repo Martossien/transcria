@@ -25,14 +25,25 @@ LiveKitFrameSource = DemuxFrameSource
 
 
 def livekit_access_token(api_key: str, api_secret: str, room: str, *,
-                         identity: str = DEFAULT_IDENTITY, name: str = "") -> str:
-    """Jeton d'accès LiveKit (`room_join` + `can_subscribe`) pour le bot transcripteur.
+                         identity: str = DEFAULT_IDENTITY, name: str = "",
+                         hidden: bool = True) -> str:
+    """Jeton d'accès LiveKit du bot transcripteur (`room_join` + `can_subscribe`).
+
+    `hidden=True` par défaut : le bot n'apparaît PAS dans la liste des participants de la
+    visio. Deux raisons — il ne pollue pas l'affichage des utilisateurs, et surtout il ne
+    fait pas croire aux autres bots qu'il reste quelqu'un dans la salle (le comptage de
+    présence exclut justement les participants cachés). `can_publish` reste absent : ce bot
+    est un AUDITEUR, il n'émet rien.
     Dépend de `livekit-api` (importé paresseusement) ; confirmé au gate manuel."""
     # `livekit.api` est un paquet-espace de noms (livekit-api) : l'analyse statique
     # ne le résout pas, mais l'import fonctionne à l'exécution (vérifié).
     from livekit import api  # type: ignore[attr-defined]  # dép opt-in
 
-    grants = api.VideoGrants(room_join=True, room=room, can_subscribe=True)
+    # `can_publish=False` : refus AU NIVEAU DU SERVEUR. Le bot n'émet rien ; même un
+    # bug de code ne pourrait pas diffuser d'audio dans la réunion.
+    grants = api.VideoGrants(room_join=True, room=room, can_subscribe=True,
+                             can_publish=False, can_publish_data=False,
+                             hidden=hidden)
     token = api.AccessToken(api_key, api_secret).with_identity(identity).with_grants(grants)
     if name:
         token = token.with_name(name)

@@ -13,12 +13,15 @@ Deux morceaux, séparés exprès :
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live._demux import DemuxedFrame
 from connector_service.net_proxy import clear_proxy_env_if_bypassed
+
+logger = logging.getLogger(__name__)
 
 _STOP = object()
 
@@ -71,14 +74,35 @@ class AudioFanIn:
 
 
 def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 16000,
-                         target_channels: int = 1) -> Callable[
+                         target_channels: int = 1, max_reconnects: int = 3,
+                         reconnect_delay_s: float = 2.0) -> Callable[
                              [ExternalMeetingOccurrence], AsyncIterator[DemuxedFrame]]:
     """Source démuxée LiveKit réelle (dep opt-in `livekit`). Rejoint la room, s'abonne aux
     pistes MICRO, force 16 kHz/mono à la création de l'`AudioStream`, et yield un
-    `DemuxedFrame` par frame. NON testé en CI → confirmé au gate manuel."""
+    `DemuxedFrame` par frame. NON testé en CI → confirmé au gate manuel.
+
+    RECONNEXION : une coupure franche (serveur redémarré, réseau interrompu) fermait la
+    session sans reprise — une réunion d'une heure était perdue sur un incident de quelques
+    secondes. On retente `max_reconnects` fois. Les compteurs de séquence et l'horloge média
+    vivent en AMONT (`DemuxFrameSource`) : ils survivent donc à la reconnexion, et la
+    transcription reprend sans trou d'attribution."""
     def _factory(occurrence: ExternalMeetingOccurrence) -> AsyncIterator[DemuxedFrame]:
         async def _open() -> AsyncIterator[DemuxedFrame]:
             from livekit import rtc  # dép opt-in
+
+            attempts = 0
+            while True:
+                async for frame in _one_connection(rtc):
+                    yield frame
+                # `_one_connection` ne rend la main que sur DÉCONNEXION.
+                if attempts >= max_reconnects:
+                    return
+                attempts += 1
+                logger.warning("LiveKit déconnecté — reconnexion %d/%d dans %.1fs",
+                               attempts, max_reconnects, reconnect_delay_s)
+                await asyncio.sleep(reconnect_delay_s)
+
+        async def _one_connection(rtc: Any) -> AsyncIterator[DemuxedFrame]:
 
             # Le client LiveKit honore `http_proxy` mais IGNORE `no_proxy` : derrière un
             # proxy d'entreprise, même une connexion à 127.0.0.1 part au proxy et se fait
@@ -87,6 +111,7 @@ def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 1
 
             room = rtc.Room()
             fan = AudioFanIn()
+            piped: set[str] = set()          # pistes déjà branchées (rattrapage ⟂ évènement)
 
             def _to_frame(event: Any, participant: Any, publication: Any) -> DemuxedFrame:
                 frame = event.frame
@@ -103,6 +128,10 @@ def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 1
             def _on_track(track: Any, publication: Any, participant: Any) -> None:
                 if track.kind != rtc.TrackKind.KIND_AUDIO:
                     return
+                track_id = str(getattr(track, "sid", "") or id(track))
+                if track_id in piped:
+                    return
+                piped.add(track_id)
                 # micro (ou source inconnue) — on écarte le partage d'écran/agents.
                 if publication.source not in (rtc.TrackSource.SOURCE_MICROPHONE,
                                               rtc.TrackSource.SOURCE_UNKNOWN):
@@ -120,6 +149,17 @@ def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 1
                 fan.stop()
 
             await room.connect(url, token)
+
+            # RATTRAPAGE : le bot arrive presque toujours APRÈS les participants (dispatch à
+            # la demande). Ne réagir qu'à `track_subscribed` supposerait que l'évènement est
+            # rejoué pour les pistes préexistantes — ce n'est garanti par aucun contrat. On
+            # parcourt donc explicitement les participants déjà là. `piped` évite le doublon
+            # si l'évènement arrive malgré tout.
+            for participant in list(room.remote_participants.values()):
+                for publication in list(getattr(participant, "track_publications", {}).values()):
+                    track = getattr(publication, "track", None)
+                    if track is not None:
+                        _on_track(track, publication, participant)
             try:
                 async for frame in fan.frames():
                     yield frame
