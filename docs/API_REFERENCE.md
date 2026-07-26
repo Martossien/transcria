@@ -226,10 +226,16 @@ _Portail TranscrIA (app principale) : 130 routes, 92 sans docstring._
 | `/models` | GET | — | Inventaire des modèles servis et leur état (loaded/unloaded, device…). | `inference_service.routes.health` |
 | `/ready` | GET | — | Prêt à servir : les moteurs existent et peuvent charger/servent déjà. | `inference_service.routes.health` |
 
+### Blueprint `transcribe`
+
+| Route | Méthodes | Auth | Description | Module |
+|---|---|---|---|---|
+| `/infer/transcribe` | POST | — | Transcrit un audio sur le nœud de calcul (référence fichier ou upload multipart). | `inference_service.routes.transcribe` |
+
 ### Blueprint `voice_embed`
 
 | Route | Méthodes | Auth | Description | Module |
 |---|---|---|---|---|
 | `/infer/voice-embed` | POST | — | _(docstring manquante)_ | `inference_service.routes.voice_embed` |
 
-_Service d'inférence (nœud de ressources) : 7 routes, 4 sans docstring._
+_Service d'inférence (nœud de ressources) : 8 routes, 4 sans docstring._

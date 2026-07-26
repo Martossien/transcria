@@ -207,6 +207,8 @@ deferred:
 - kroko.segment_max_len_s
 - kroko.tail_padding_s
 - kroko.variant
+- live.facade.inference_timeout_s
+- live.facade.inference_url
 - live.facade.max_sync_audio_mb
 - live.facade.max_sync_duration_s
 - moss.collapse_repetition_loops
