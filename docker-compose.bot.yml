@@ -1,0 +1,46 @@
+# Bot de réunion — UN CONTENEUR PAR RÉUNION, éphémère.
+#
+# Ce n'est volontairement PAS un service qui tourne en permanence : le bot vit le temps
+# d'une réunion puis meurt. On l'invoque donc à la demande, avec l'URL en argument :
+#
+#   docker compose -f docker-compose.bot.yml run --rm bot https://jitsi.exemple/ma-salle
+#
+# Plusieurs réunions en parallèle = plusieurs invocations : chaque conteneur est isolé et
+# alloue son propre port de pont interne, il n'y a rien à coordonner.
+#
+# Construction de l'image :
+#   docker compose -f docker-compose.bot.yml build
+#
+# Réglages : par variables d'environnement (fichier .env à côté de ce fichier, ou export).
+#   TRANSCRIA_URL      URL de TranscrIA pour la transcription (sinon capture seule)
+#   TRANSCRIA_TOKEN    jeton d'API TranscrIA (tia_…)
+#   BOT_LANGUAGE       langue de transcription (ex. fr)
+#   BOT_DISPLAY_NAME   nom affiché du bot dans la réunion
+#   BOT_MAX_DURATION_S durée maximale de présence (défaut 4 h)
+#   BOT_ALONE_TIMEOUT_S durée seul en réunion avant de repartir (défaut 30 s)
+#   BOT_INSECURE       =1 pour accepter un certificat auto-signé (instance interne)
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: transcria-bot:latest
+    # Chromium sature les 64 Mo de /dev/shm par défaut et plante de façon erratique sur les
+    # pages lourdes : cette valeur n'est pas un confort, c'est une condition de stabilité.
+    shm_size: 1gb
+    environment:
+      TRANSCRIA_URL: ${TRANSCRIA_URL:-}
+      TRANSCRIA_TOKEN: ${TRANSCRIA_TOKEN:-}
+      BOT_LANGUAGE: ${BOT_LANGUAGE:-fr}
+      BOT_DISPLAY_NAME: ${BOT_DISPLAY_NAME:-TranscrIA}
+      BOT_MAX_DURATION_S: ${BOT_MAX_DURATION_S:-14400}
+      BOT_ALONE_TIMEOUT_S: ${BOT_ALONE_TIMEOUT_S:-30}
+      BOT_ADMISSION_TIMEOUT_S: ${BOT_ADMISSION_TIMEOUT_S:-120}
+      BOT_INSECURE: ${BOT_INSECURE:-}
+      BOT_LOG_LEVEL: ${BOT_LOG_LEVEL:-INFO}
+    # Le bot n'expose AUCUN port : il ne fait que des connexions sortantes (c'est tout
+    # l'intérêt de cette voie — elle traverse un pare-feu sans ouverture entrante).
+    # Le pont PCM vit à l'intérieur du conteneur, sur la boucle locale.
+    network_mode: ${BOT_NETWORK_MODE:-bridge}
+    restart: "no"          # une réunion = une exécution ; l'orchestrateur décide des reprises

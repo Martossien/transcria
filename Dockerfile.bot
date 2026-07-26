@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1
+#
+# Image BOT DE RÉUNION — navigateur headless qui rejoint une visio et capte l'audio.
+# Cf. docs/TEMPS_REEL_REUNIONS.md (voie de secours SORTANTE : aucun port entrant requis).
+#
+# POURQUOI UNE IMAGE À PART, et pas dans l'image applicative :
+#   - le bot tire un NAVIGATEUR complet (Chromium + ses bibliothèques système) dont le
+#     portail n'a aucun besoin — l'image par défaut reste inchangée ;
+#   - il est ÉPHÉMÈRE et jetable : un conteneur par réunion, détruit à la fin. Cela borne les
+#     fuites de mémoire du navigateur et simplifie le nettoyage ;
+#   - il n'a besoin NI de GPU, NI de la base de données : il parle à TranscrIA en HTTP.
+#     Il peut donc tourner sur une machine banale, y compris derrière un proxy.
+#
+# BASE = image Playwright OFFICIELLE : elle embarque Chromium ET la liste exacte des
+# bibliothèques système dont il dépend, maintenue par l'éditeur. Installer le navigateur
+# soi-même oblige à suivre cette liste à chaque version (et casse dès qu'un dépôt système
+# est indisponible ou périmé — rencontré au premier build).
+#
+# ISOLATION : seul `connector_service/` est copié. Le cœur applicatif n'est pas embarqué —
+# cohérent avec le contrat d'architecture (le connecteur ne dépend jamais du cœur en Python).
+#
+# Build :
+#   docker build -f Dockerfile.bot -t transcria-bot:latest .
+# Lancement (une réunion) :
+#   docker run --rm --shm-size=1g \
+#     -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
+#     transcria-bot:latest https://jitsi.exemple/ma-salle
+#
+# ⚠ `--shm-size=1g` : Chromium utilise /dev/shm intensivement ; les 64 Mo par défaut de
+#   Docker le font planter de façon erratique sur les pages lourdes.
+
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/python:v1.55.0-noble
+FROM ${PLAYWRIGHT_IMAGE}
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+WORKDIR /app
+
+# Dépendances Python du bot UNIQUEMENT (pas le cœur applicatif) : le bot parle HTTP.
+#  - playwright : l'image de base fournit les NAVIGATEURS (/ms-playwright), pas le paquet
+#    Python. La version est FIGÉE sur celle de l'image : un client désaligné avec les
+#    navigateurs installés refuse de démarrer (« executable doesn't exist »).
+#  - websockets : pont PCM entre la page et le processus ;
+#  - requests   : appels à la façade TranscrIA.
+ARG PLAYWRIGHT_VERSION=1.55.0
+RUN pip install --no-cache-dir "playwright==${PLAYWRIGHT_VERSION}" \
+        "websockets>=12,<14" "requests>=2.31"
+
+# Code du bot. Copié APRÈS les dépendances : une modification de code ne réinstalle rien,
+# le build reste rapide.
+COPY connector_service/ /app/connector_service/
+
+# Utilisateur non privilégié fourni par l'image de base : un navigateur qui rejoint des
+# réunions publiques exécute du JavaScript tiers — il n'a aucune raison de tourner en root.
+USER pwuser
+
+ENTRYPOINT ["python", "-m", "connector_service.bot"]
