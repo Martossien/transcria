@@ -175,7 +175,8 @@ async def main() -> int:
     parser.add_argument("--seconds", type=float, default=45.0,
                         help="durée max de la session (défaut 45 s)")
     parser.add_argument("--show", action="store_true", help="fenêtre visible (sinon headless)")
-    parser.add_argument("--port", type=int, default=8791, help="port du pont PCM local")
+    parser.add_argument("--port", type=int, default=0,
+                        help="port du pont PCM (0 = libre, permet plusieurs bots)")
     parser.add_argument("--name", default="TranscrIA-bot", help="nom affiché du bot")
     parser.add_argument("--insecure", action="store_true",
                         help="accepte un certificat auto-signé (instance auto-hébergée)")
