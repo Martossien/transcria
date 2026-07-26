@@ -25,7 +25,8 @@ _log = logging.getLogger(__name__)
 
 async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrence,
                           driver: BrowserDriver, transcriber: Any, *,
-                          provider_name: str = "bot", bridge_host: str = "127.0.0.1",
+                          provider_name: str = "bot", display_name: str = "TranscrIA",
+                          bridge_host: str = "127.0.0.1",
                           bridge_port: int = 8791) -> tuple[BotOutcome, list]:
     """Déroule une réunion via bot : le payload JS pousse le PCM sur le pont, une `LiveSession`
     le transcrit pendant que l'orchestrateur pilote le navigateur. Retourne (issue, segments)."""
@@ -51,7 +52,7 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
 
     transcribe_task = asyncio.ensure_future(_transcribe())
     try:
-        outcome = await BotSession(driver).run(meeting_url)   # pilote le navigateur
+        outcome = await BotSession(driver, display_name=display_name).run(meeting_url)
         if not connected.done():
             connected.cancel()                       # jamais admis → débloque le transcripteur
         results = await asyncio.gather(transcribe_task, return_exceptions=True)
