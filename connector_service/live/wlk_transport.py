@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
 from connector_service.contract import AudioFrame
+from connector_service.live._ws_drive import drive_recv
 
 Decode = Callable[[bytes], dict]           # json.loads
 
@@ -40,8 +41,6 @@ def wlk_connect(open_ws: Callable[[], Awaitable[WsMixed]], *, decode: Decode
     """`connect(frames)` pour `wlk_open_stream` : pousse l'audio et yield les messages JSON
     décodés. Socket/décodeur INJECTÉS → testable ; l'implémentation réelle (websockets) est
     fournie par `wlk_ws_connect`."""
-    from connector_service.live._ws_drive import drive_recv
-
     def _factory(frames: AsyncIterator[AudioFrame]) -> AsyncIterator[dict]:
         async def _open() -> AsyncIterator[dict]:
             ws = await open_ws()

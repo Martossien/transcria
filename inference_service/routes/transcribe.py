@@ -68,6 +68,7 @@ def _transcribe(audio_path: Path, language: str | None, backend: str | None) -> 
 
 @transcribe_bp.route("/infer/transcribe", methods=["POST"])
 def transcribe():
+    """Transcrit un audio sur le nœud de calcul (référence fichier ou upload multipart)."""
     content_type = request.content_type or ""
     if content_type.startswith("multipart/form-data"):
         return jsonify(_handle_upload()), 200

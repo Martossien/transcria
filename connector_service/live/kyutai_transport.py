@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
 from connector_service.contract import AudioFrame
+from connector_service.live._ws_drive import drive_recv
 from connector_service.live.kyutai import audio_message, marker_message
 
 SILENCE_SAMPLES = 24000            # ~1 s de silence @24 kHz (quirk 2.6B : avant ET après)
@@ -71,8 +72,6 @@ def kyutai_connect(open_ws: Callable[[], Awaitable[WsBytes]], *, encode: Encode,
     """`connect(frames)` pour `kyutai_open_stream` : ouvre le WS, pousse l'audio (silence
     avant/après + Marker), et yield les événements décodés. Socket/codec INJECTÉS → testable ;
     l'implémentation réelle (websockets + msgpack) est fournie par `kyutai_ws_connect`."""
-    from connector_service.live._ws_drive import drive_recv
-
     def _factory(frames: AsyncIterator[AudioFrame]) -> AsyncIterator[dict]:
         async def _open() -> AsyncIterator[dict]:
             ws = await open_ws()
