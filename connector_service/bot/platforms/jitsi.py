@@ -14,6 +14,23 @@ from connector_service.bot.browser import CHROMIUM_ARGS
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 
+# Le bot est un AUDITEUR : il ne doit RIEN émettre. Sans ça, le périphérique média factice
+# du navigateur (indispensable pour rejoindre) diffuse sa tonalité de test dans la réunion —
+# les participants entendent un bip. Jitsi lit ces réglages dans le fragment de l'URL.
+# ⚠ NE PAS ajouter `config.startSilent` : il coupe aussi la RÉCEPTION audio, or c'est
+# précisément ce qu'on vient capturer.
+_SILENT_JOIN_CONFIG = (
+    "config.startWithAudioMuted=true"
+    "&config.startWithVideoMuted=true"
+)
+
+
+def _muted_url(meeting_url: str) -> str:
+    """Ajoute la config « micro et caméra coupés » au fragment de l'URL de réunion."""
+    if "#" in meeting_url:
+        return f"{meeting_url}&{_SILENT_JOIN_CONFIG}"
+    return f"{meeting_url}#{_SILENT_JOIN_CONFIG}"
+
 
 class JitsiDriver:
     """`BrowserDriver` Jitsi. Lance Chromium (Playwright), injecte le payload de capture (avec
@@ -48,7 +65,7 @@ class JitsiDriver:
         await self._page.add_init_script(
             f"window.__TRANSCRIA_BRIDGE_URL__ = {self._bridge_url!r};")
         await self._page.add_init_script(path=str(_CAPTURE_JS))
-        await self._page.goto(meeting_url)
+        await self._page.goto(_muted_url(meeting_url))
 
     async def request_join(self, display_name: str) -> None:
         page = self._page

@@ -76,15 +76,20 @@
     })();
   }
 
-  // Toutes les pistes audio reçues ne sont pas des locuteurs. Sur Jitsi on voit aussi :
-  //  - `mixedmslabel` : le MIXAGE de toute la salle → le capter transcrirait tout en DOUBLE ;
-  //  - `remote-audio-N` : emplacements RÉCEPTEURS pré-alloués, sans locuteur associé.
-  // Les vraies pistes portent l'identifiant du participant (`<endpoint>-audio-0-1`).
-  const PLACEHOLDER_STREAM = /^remote-(audio|video)-\d+$/;
-  function isNotSpeaker(id) {
+  // On écarte UNIQUEMENT le flux MIXÉ de la salle (le capter transcrirait tout en double).
+  // ⚠️ Ne PAS écarter les pistes `remote-audio-N` : ce sont des transceivers pré-alloués sur
+  // lesquels Jitsi MAPPE les vraies sources — c'est par elles que la voix arrive réellement
+  // (vérifié par getStats : l'énergie audio est sur `remote-audio-1`). Les écarter revenait à
+  // ne capturer que du silence.
+  const MIXED_MARKERS = ["mixedmslabel", "mixedlabelaudio"];
+  function isMixedStream(id) {
     const s = String(id);
-    return s.indexOf("mixedmslabel") !== -1 || PLACEHOLDER_STREAM.test(s);
+    return MIXED_MARKERS.some((m) => s.indexOf(m) !== -1);
   }
+
+  // Une même piste peut être signalée plusieurs fois (renégociations) : on ne la branche
+  // qu'une seule fois, sinon l'audio serait dupliqué.
+  const piped = new Set();
 
   // Interception WebRTC : chaque piste audio reçue est routée vers pipeTrack.
   const NativeRTCPeerConnection = window.RTCPeerConnection;
@@ -93,9 +98,13 @@
     pc.addEventListener("track", (event) => {
       if (event.track && event.track.kind === "audio") {
         // Attribution fine (endpoint id / DOM) affinée au gate ; par défaut = id de piste.
-        const pid = (event.streams[0] && event.streams[0].id) || event.track.id;
-        if (isNotSpeaker(pid)) return;      // mixage global / emplacement vide
-        pipeTrack(event.track, pid);
+        const streamId = (event.streams[0] && event.streams[0].id) || "";
+        const trackId = event.track.id;
+        if (isMixedStream(streamId) || isMixedStream(trackId)) return;  // mixage global
+        if (piped.has(trackId)) return;                                  // déjà branchée
+        piped.add(trackId);
+        // Identifiant : on préfère le flux (porte l'endpoint) ; sinon la piste.
+        pipeTrack(event.track, streamId || trackId);
       }
     });
     return pc;
