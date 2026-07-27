@@ -37,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from connector_service.bot.zoom_sdk import parse_zoom_invite  # noqa: E402
+from connector_service.bot.zoom_sdk import exit_immediately, parse_zoom_invite  # noqa: E402
 from connector_service.contract import ExternalMeetingOccurrence  # noqa: E402
 from connector_service.live._demux import DemuxFrameSource  # noqa: E402
 from connector_service.live.facade_client import facade_transcriber  # noqa: E402
@@ -70,7 +70,9 @@ class _FrameCounter:
         self.peak = 0
 
     def observe(self, frame) -> None:
-        label = frame.participant_name or frame.participant_id
+        # `AudioFrame` (contrat) porte le nom sous `participant_display_name` — pas
+        # `participant_name`, qui est le champ de `RawFrame`, en amont de la conversion.
+        label = frame.participant_display_name or frame.participant_id or "?"
         self.frames_by_speaker[label] += 1
         count = len(frame.payload) // 2
         if not count:
@@ -195,4 +197,6 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    # Même raison que pour le bot : le SDK segfaute à la finalisation de l'interpréteur,
+    # ce qui ferait passer un gate RÉUSSI pour un échec.
+    exit_immediately(asyncio.run(main()))

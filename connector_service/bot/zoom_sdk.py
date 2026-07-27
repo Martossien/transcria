@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import os
 import sys
@@ -169,6 +170,31 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
     return EXIT_OK
 
 
+def exit_immediately(code: int) -> None:
+    """Termine le processus SANS finalisation de l'interpréteur.
+
+    POURQUOI CE DÉTOUR : le SDK Zoom plante par segfault dans ses destructeurs statiques, à la
+    sortie de l'interpréteur — APRÈS que tout le travail utile est fait, session fermée et
+    `CleanUPSDK()` appelé (observé en réunion réelle : capture complète et réussie, puis code
+    de sortie 139). Rien côté Python ne peut l'empêcher, la faute étant dans du code natif que
+    nous ne contrôlons pas.
+
+    Le laisser se produire coûterait cher : les codes de retour sont le CONTRAT avec
+    l'orchestration (0 = la réunion a eu lieu, 2 = anomalie rejouable). Une réunion
+    parfaitement transcrite ressemblerait à une panne, et serait rejouée pour rien.
+
+    `os._exit` est acceptable ICI et seulement ici : le processus est un conteneur jetable
+    dédié à UNE réunion, il n'a rien à finaliser. Les tampons sont vidés explicitement, car
+    `os._exit` ne le fait pas.
+    """
+    import os
+
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            stream.flush()
+    os._exit(code)
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=os.environ.get("BOT_LOG_LEVEL", "INFO"),
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -201,4 +227,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `exit_immediately` plutôt que `sys.exit` : cf. sa docstring — le SDK plante à la
+    # finalisation de l'interpréteur, ce qui masquerait un succès derrière un code 139.
+    exit_immediately(main())

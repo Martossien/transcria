@@ -364,6 +364,13 @@ def zoom_sdk_demux_source(
                             pass
                     frames.put_nowait(frame)
 
+                # --- Rejoindre la session AUDIO, en restant muet --------------------- #
+                # `isAudioOff` à l'entrée ne veut pas dire « entrer micro coupé » : le SDK ne
+                # rejoint alors PAS la session audio du tout, et l'abonnement à l'audio brut
+                # est refusé (`SDKERR_NOT_JOIN_AUDIO` — constaté en réunion réelle). Il faut
+                # donc rejoindre l'audio explicitement, puis se couper.
+                _join_audio_muted(zoom, meeting)
+
                 # --- Droit d'enregistrement : CONDITION de l'audio brut -------------- #
                 # Zoom ne délivre l'audio brut qu'à un participant qui a le droit
                 # d'enregistrer. Sans lui, `subscribe()` réussit et AUCUNE frame n'arrive :
@@ -403,14 +410,18 @@ def zoom_sdk_demux_source(
                     watcher.cancel()
 
             finally:
+                # ORDRE IMPORTANT : nettoyer le SDK PENDANT que la pompe GLib tourne encore.
+                # `Leave`, `StopRawRecording` et `CleanUPSDK` produisent des évènements que le
+                # SDK doit pouvoir traiter ; couper la pompe d'abord les laisse en suspens et
+                # le processus meurt par segfault en fin d'exécution (constaté).
+                await _cleanup(zoom, meeting, retained, dropped, pump=pump,
+                               started_raw_recording=started_raw_recording)
                 stop.set()
                 pump_task.cancel()
                 try:
                     await pump_task
                 except asyncio.CancelledError:
                     pass
-                _cleanup(zoom, meeting, retained, dropped,
-                         started_raw_recording=started_raw_recording)
 
         return _open()
     return _factory
@@ -468,6 +479,35 @@ def _snapshot_participants(controller: Any) -> list[Participant]:
         participants.append(Participant(
             int(node_id), info.GetUserName() or "", is_bot=bool(info.IsMySelf())))
     return participants
+
+
+def _join_audio_muted(zoom: Any, meeting: Any) -> None:
+    """Rejoint la session audio (indispensable) et coupe immédiatement le micro.
+
+    POURQUOI CE N'EST PAS REDONDANT AVEC `isAudioOff` : ce drapeau d'entrée empêche le SDK de
+    rejoindre l'audio, il ne le fait pas rejoindre en muet. Sans `JoinVoip()`, Zoom refuse
+    l'abonnement à l'audio brut avec `SDKERR_NOT_JOIN_AUDIO`.
+
+    Le micro est coupé DANS LA FOULÉE. Le risque d'émettre est de toute façon nul dans le
+    conteneur — la source audio par défaut y est un puits nul, donc du silence — mais on ne
+    s'en remet pas à cette propriété de l'environnement : un bot qui souffle dans une réunion
+    est exactement le défaut rencontré sur Jitsi.
+    """
+    audio = meeting.GetMeetingAudioController()
+    err = audio.JoinVoip()
+    if err != zoom.SDKError.SDKERR_SUCCESS:
+        raise ZoomSdkError(
+            f"impossible de rejoindre la session audio ({err}) — sans elle, Zoom refuse "
+            f"l'abonnement à l'audio brut.")
+
+    participants = meeting.GetMeetingParticipantsController()
+    myself = participants.GetMySelfUser()
+    if myself is not None:
+        muted = audio.MuteAudio(myself.GetUserID())
+        logger.info("Zoom SDK : session audio rejointe, micro coupé (%s)", muted)
+    else:  # pragma: no cover — le SDK n'a pas encore publié notre fiche
+        logger.warning("Zoom SDK : session audio rejointe, mais identité du bot indisponible "
+                       "— micro non explicitement coupé")
 
 
 async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Retained,
@@ -534,18 +574,28 @@ async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Re
     logger.info("Zoom SDK : %s", outcome["message"])
 
 
-def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
-             started_raw_recording: bool = False) -> None:
+async def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
+                   pump: GLibPump, started_raw_recording: bool = False) -> None:
     """Quitte la réunion et libère le SDK, sans jamais masquer l'erreur d'origine.
 
-    L'ordre importe : quitter la réunion, PUIS `CleanUPSDK`, PUIS relâcher les objets retenus.
-    Relâcher AVANT que le SDK ait fini laisserait ses pointeurs bruts sur de la mémoire
-    libérée — le même piège que celui documenté en tête de module, mais à l'arrêt.
+    L'ordre importe : arrêter la capture, quitter la réunion, PUIS `CleanUPSDK`, PUIS relâcher
+    les objets retenus. Relâcher AVANT que le SDK ait fini laisserait ses pointeurs bruts sur
+    de la mémoire libérée — le piège documenté en tête de module, mais à l'arrêt.
+
+    Entre chaque étape, on POMPE : ces appels sont asynchrones côté SDK et ne s'achèvent que
+    si ses évènements sont distribués. Sans cela, le processus meurt par segfault en fin
+    d'exécution — observé en réunion réelle, et invisible autrement puisque le travail utile
+    était déjà terminé.
 
     Le service de réunion est passé EXPLICITEMENT plutôt que déduit des objets retenus :
     reconnaître « celui qui a une méthode Leave » marcherait aujourd'hui et casserait au
     premier objet du SDK qui expose le même nom pour autre chose.
     """
+    async def _settle(rounds: int = 20) -> None:
+        for _ in range(rounds):
+            pump.drain_once()
+            await asyncio.sleep(0.01)
+
     if dropped:
         logger.warning("Zoom SDK : %d frame(s) audio écartée(s) au total", dropped)
     if started_raw_recording and meeting is not None:
@@ -555,13 +605,16 @@ def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
             meeting.GetMeetingRecordingController().StopRawRecording()
         except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
             logger.debug("StopRawRecording a échoué (sans conséquence) : %r", exc)
+        await _settle()
     if meeting is not None:
         try:
             meeting.Leave(zoom.LeaveMeetingCmd.LEAVE_MEETING)
         except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
             logger.debug("Leave a échoué (sans conséquence) : %r", exc)
+        await _settle()
     try:
         zoom.CleanUPSDK()
     except Exception as exc:  # noqa: BLE001
         logger.warning("CleanUPSDK a échoué : %r", exc)
+    await _settle()
     retained.objects.clear()
