@@ -766,13 +766,64 @@ Déjà codée (`connector_service/signatures.py` pour le déchiffrement, receveu
 les notifications Graph — entrant, donc, mais pour un flux POST-réunion, ce qu'une DSI
 accepte plus volontiers qu'une exposition permanente.
 
+### La voie 3 en détail — ce qu'elle exige RÉELLEMENT (vérifié 2026-07-27)
+
+**Ce qui n'est plus un obstacle.** Les API Teams de Graph **ne sont plus facturées** depuis le
+25 août 2025 : *« no longer metered, and no billing configuration is required »*
+([doc Microsoft](https://learn.microsoft.com/en-us/graph/teams-licenses)). Plus d'abonnement
+Azure, plus de coût à la minute. C'était l'inquiétude principale, elle tombe.
+
+**Deux verrous qu'on aurait découverts trop tard.**
+
+1. Un nouveau réglage de locataire, **« Transcript API access »** (centre d'administration
+   Teams → politique de réunion) : **désactivé par défaut**, et **appliqué à partir du
+   29 juillet 2026**. Désactivé, l'API répond `403 — « Graph API access to transcripts is
+   disabled for this tenant »`.
+2. Le réglage voisin **« Include speaker attribution » est AUSSI désactivé par défaut** : sans
+   lui, les transcriptions reviennent **sans les noms des locuteurs**, c'est-à-dire sans ce
+   qui fait l'intérêt du produit.
+
+**Un point de conception à corriger dans notre cible.** L'API *transcriptions* rend le texte
+**produit par Teams**, pas de l'audio. Or notre valeur est notre propre chaîne (STT,
+diarisation, LLM). C'est donc l'API **enregistrements** qui nous intéresse —
+`GET /users/{id}/onlineMeetings/{id}/recordings/{id}/content` rend le MP4, que nous
+transcrivons nous-mêmes. Cela déplace la cible, et rend au passage le verrou nº 1 moins
+critique (il porte sur les transcriptions).
+
+**Ce que l'admin du client doit faire** — nettement plus que les deux champs de Zoom :
+
+1. enregistrer une application Entra ID + consentement administrateur ;
+2. créer une **politique d'accès applicatif** en PowerShell (`New-CsApplicationAccessPolicy`)
+   et l'accorder aux utilisateurs concernés ;
+3. activer « Transcript API access » et « Include speaker attribution » ;
+4. exposer un **point d'entrée HTTPS public** pour les notifications de changement ;
+5. et la réunion doit être **effectivement enregistrée**.
+
+### Peut-on l'éprouver sans locataire d'entreprise ? (vérifié 2026-07-27)
+
+| Piste | Verdict |
+|---|---|
+| **Sandbox E5 développeur (gratuit)** | **Fermé** depuis 2025 : réservé aux abonnés Visual Studio Pro/Enterprise ou aux membres du programme partenaire |
+| **Teams Free / Teams Essentials** | **Insuffisant** — pas d'enregistrement ni de transcription de réunion |
+| **Microsoft 365 Business Basic** ⭐ | **Suffisant** — enregistrement et transcription inclus dès ce palier. ~7 $/utilisateur/mois (hausse de juillet 2026), **premier mois gratuit** |
+
+Un seul utilisateur suffit pour éprouver : l'organisateur. L'application, elle, travaille en
+permissions applicatives et ne consomme pas de licence.
+
+⚠ L'essai gratuit **bascule automatiquement en payant** à l'échéance — à résilier si l'on ne
+poursuit pas.
+
 ### Décision proposée
 
 | Voie | Verdict |
 |---|---|
 | SDK média temps réel | **Abandonnée** — Azure + IP publique par instance ; Wine n'y change rien |
 | Bot navigateur | **Repoussée** — ~4 700 lignes, captcha, politiques d'organisation, et Microsoft resserre |
-| **Graph post-réunion** | **À éprouver en premier** — officielle, sans bot, sans captcha |
+| **Graph post-réunion (enregistrements)** | **Éprouvable pour ~7 $** — ne rien écrire avant d'avoir le locataire |
+
+La règle qui s'applique ici est celle apprise sur Teams RTM : **ne pas écrire un connecteur
+qu'on ne peut pas exécuter**. Du code jamais éprouvé donne une fausse impression de
+couverture, et c'est précisément ce que la page d'administration signale désormais.
 
 Et si le temps réel Teams devient une exigence client : prévoir un **compte Microsoft dédié
 au bot** (ce que font les deux références), en assumant la fragilité — pas en la découvrant.
