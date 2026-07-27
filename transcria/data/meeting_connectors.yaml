@@ -1,0 +1,175 @@
+# Catalogue des CONNECTEURS DE RÉUNION — donnée, pas code.
+#
+# POURQUOI UN FICHIER DE DONNÉES : le cœur applicatif n'a pas le droit d'importer
+# `connector_service` (contrat d'imports « Le cœur n'importe pas le service connecteur
+# async »). La page d'administration ne peut donc pas interroger les connecteurs pour savoir
+# ce qu'ils exigent — elle lit ce catalogue. Même motif que `meeting_types.yaml`.
+#
+# LE CHAMP `status` EST LE PLUS IMPORTANT. Il dit ce qui a été VÉRIFIÉ, pas ce qui est écrit :
+#   validated     éprouvé en conditions réelles (réunion ou serveur réel), date à l'appui
+#   implemented   le code existe et passe la CI, mais n'a JAMAIS été exécuté en vrai
+#   planned       rien d'exploitable
+# Un connecteur `implemented` affiché comme prêt tromperait l'exploitant : la distinction est
+# le cœur de l'honnêteté de cette page.
+
+schema_version: 1
+
+connectors:
+  - id: zoom-sdk
+    name: Zoom
+    path: bot                     # bot = capture live par participant ; webhook = post-réunion
+    status: validated
+    verified_on: "2026-07-27"
+    summary: >-
+      Bot natif (Meeting SDK). L'audio arrive par participant avec le nom du locuteur.
+      Aucun port entrant à ouvrir.
+    doc: docs/BOT_REUNION.md#6-bot-zoom-sdk-natif
+    requires:
+      - key: ZOOM_CLIENT_ID
+        label: Client ID
+        secret: false
+      - key: ZOOM_CLIENT_SECRET
+        label: Client Secret
+        secret: true
+    testable: true                # un vrai appel d'authentification est possible
+    steps:
+      - Se connecter à marketplace.zoom.us avec un compte ADMIN de l'organisation.
+      - Volet en bas à gauche → Developer → Build an app → General app → Create.
+      - Basic Info → relever Client ID et Client Secret (jeu « Development »).
+      - Features → Embed → activer Meeting SDK.
+      - Ne PAS publier l'app : elle reste interne à l'organisation.
+      - >-
+        Portail Zoom → Settings → Recording & Transcript → activer « Record to computer
+        files », puis cocher « Internal meeting participants » sous « Who can request host
+        permission to record? » (et « Auto approve » pour éviter un clic à chaque réunion).
+    notes:
+      - >-
+        Portée : toutes les réunions de l'organisation, quel qu'en soit l'hôte. Aucune revue
+        Zoom n'est nécessaire tant qu'on ne rejoint pas les réunions d'AUTRES organisations.
+
+  - id: jitsi
+    name: Jitsi
+    path: bot
+    status: validated
+    verified_on: "2026-07-26"
+    summary: >-
+      Bot navigateur (Chromium headless) qui capte l'audio dans la page. Fonctionne sur une
+      instance publique comme auto-hébergée.
+    doc: docs/BOT_REUNION.md
+    requires: []                  # une URL de salle suffit, aucun identifiant
+    testable: false               # rien à tester hors d'une salle réelle
+    steps:
+      - Aucune inscription ni identifiant : fournir l'URL de la salle au lancement.
+    notes:
+      - >-
+        L'identité des locuteurs est résolue à l'arrivée de leur piste et n'est pas
+        rafraîchie ensuite (contrairement au bot Zoom).
+
+  - id: visio
+    name: Visio (La Suite numérique)
+    path: native
+    status: validated
+    verified_on: "2026-07-26"
+    summary: >-
+      Transport natif LiveKit : le bot rejoint la salle comme participant caché et reçoit
+      l'audio démultiplexé par participant. Voie OFFICIELLE, sans navigateur.
+    doc: docs/TEMPS_REEL_REUNIONS.md
+    requires:
+      - key: LIVEKIT_URL
+        label: URL du serveur LiveKit
+        secret: false
+      - key: LIVEKIT_API_KEY
+        label: Clé d'API
+        secret: false
+      - key: LIVEKIT_API_SECRET
+        label: Secret d'API
+        secret: true
+    testable: false
+    steps:
+      - Obtenir l'URL du serveur LiveKit et un couple clé/secret auprès de l'exploitant.
+    notes:
+      - >-
+        Le client LiveKit honore `http_proxy` mais IGNORE `no_proxy` : derrière un proxy
+        d'entreprise, la connexion est rétablie par `connector_service/net_proxy.py`.
+
+  - id: zoom-rtms
+    name: Zoom RTMS
+    path: webhook
+    status: implemented
+    summary: >-
+      Flux média temps réel officiel de Zoom, sans bot dans la réunion. Alternative au bot
+      quand l'organisation préfère qu'aucun participant ne s'ajoute.
+    doc: docs/TEMPS_REEL_REUNIONS.md#7-bis
+    requires:
+      - key: ZOOM_RTMS_CLIENT_ID
+        label: Client ID de l'app RTMS
+        secret: false
+      - key: ZOOM_RTMS_CLIENT_SECRET
+        label: Client Secret
+        secret: true
+      - key: ZOOM_WEBHOOK_SECRET_TOKEN
+        label: Jeton secret du webhook
+        secret: true
+    testable: false
+    steps:
+      - Activer RTMS sur le compte Zoom (crédits Developer Pack requis).
+      - Déclarer un point d'entrée HTTPS PUBLIC pour recevoir `meeting.rtms_started`.
+    notes:
+      - >-
+        ⚠ EXIGE UNE OUVERTURE DE PARE-FEU. Zoom pousse l'évènement de démarrage vers un point
+        d'entrée HTTPS joignable depuis Internet ; seuls les flux média sont ensuite sortants.
+        C'est la différence majeure avec le bot, qui n'exige aucun port entrant.
+      - Jamais exécuté contre un vrai flux RTMS.
+
+  - id: teams
+    name: Microsoft Teams
+    path: webhook
+    status: implemented
+    summary: >-
+      Notifications Microsoft Graph chiffrées (post-réunion) et transport temps réel RTM.
+      Microsoft déconseille l'approche bot pour le temps réel.
+    doc: docs/TEMPS_REEL_REUNIONS.md
+    requires:
+      - key: TEAMS_TENANT_ID
+        label: Identifiant de locataire
+        secret: false
+      - key: TEAMS_CLIENT_ID
+        label: Client ID de l'app Azure
+        secret: false
+      - key: TEAMS_CLIENT_SECRET
+        label: Client Secret
+        secret: true
+      - key: TEAMS_CLIENT_STATE
+        label: Jeton de validation des notifications
+        secret: true
+    testable: false
+    steps:
+      - Enregistrer une application dans Entra ID (Azure AD) avec les permissions Graph.
+      - Fournir un certificat pour le déchiffrement des notifications.
+      - Déclarer un point d'entrée HTTPS public pour les notifications Graph.
+    notes:
+      - Le déchiffrement des notifications est prouvé par test, mais jamais contre un vrai événement.
+      - Les API Graph concernées sont facturées à l'usage.
+
+  - id: meet
+    name: Google Meet
+    path: webhook
+    status: implemented
+    summary: >-
+      Meet REST API v2 + Drive pour le post-réunion ; Meet Media API (WebRTC) pour le temps
+      réel, encore en Developer Preview côté Google.
+    doc: docs/TEMPS_REEL_REUNIONS.md
+    requires:
+      - key: MEET_CLIENT_ID
+        label: Client ID OAuth Google
+        secret: false
+      - key: MEET_CLIENT_SECRET
+        label: Client Secret
+        secret: true
+    testable: false
+    steps:
+      - Créer un projet Google Cloud et activer les API Meet et Drive.
+      - Créer des identifiants OAuth et obtenir le consentement de l'organisation.
+    notes:
+      - La Meet Media API est en Developer Preview : son accès doit être demandé à Google.
+      - Jamais exécuté contre une vraie conférence.

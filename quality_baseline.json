@@ -166,7 +166,7 @@
   "transcria.voice.routes": 10,
   "transcria.voice.store": 5,
   "transcria.web": 11,
-  "transcria.web.admin_routes": 18,
+  "transcria.web.admin_routes": 19,
   "transcria.web.downloads_api": 12,
   "transcria.web.editor_routes": 13,
   "transcria.web.facade_api": 18,

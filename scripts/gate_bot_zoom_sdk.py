@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import struct
 import sys
@@ -105,6 +106,13 @@ class _Tee:
 
 
 async def main() -> int:
+    # Journalisation à INFO : sans elle, seuls les AVERTISSEMENTS s'affichent, et l'on ne
+    # voit ni les changements de phase, ni l'obtention du droit d'enregistrement, ni une
+    # reconnexion en cours de réunion. Un gate qui n'expose pas ce qu'il fait pendant qu'il
+    # le fait oblige à attendre la fin pour comprendre — constaté à ses dépens.
+    logging.basicConfig(level=os.environ.get("GATE_LOG_LEVEL", "INFO"),
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
     parser = argparse.ArgumentParser(description="Gate du bot Zoom (Meeting SDK natif)")
     parser.add_argument("--meeting", required=True,
                         help="numéro de réunion ou lien d'invitation")

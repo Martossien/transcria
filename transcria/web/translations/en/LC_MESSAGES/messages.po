@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-21 17:16+0000\n"
+"POT-Creation-Date: 2026-07-27 17:40+0000\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,51 +18,51 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: transcria/app_services.py:374
+#: transcria/app_services.py:383
 msgid "Accès refusé"
 msgstr "Access denied"
 
-#: transcria/app_services.py:374
+#: transcria/app_services.py:383
 msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 msgstr "You do not have the required permissions to access this page."
 
-#: transcria/app_services.py:375
+#: transcria/app_services.py:384
 msgid "Page introuvable"
 msgstr "Page not found"
 
-#: transcria/app_services.py:375
+#: transcria/app_services.py:384
 msgid "La page demandée n'existe pas ou a été déplacée."
 msgstr "The requested page does not exist or has been moved."
 
-#: transcria/app_services.py:376
+#: transcria/app_services.py:385
 msgid "Action non autorisée"
 msgstr "Action not allowed"
 
-#: transcria/app_services.py:376
+#: transcria/app_services.py:385
 msgid "Cette action n'est pas permise sur cette page."
 msgstr "This action is not permitted on this page."
 
-#: transcria/app_services.py:377
+#: transcria/app_services.py:386
 msgid "Fichier trop volumineux"
 msgstr "File too large"
 
-#: transcria/app_services.py:377
+#: transcria/app_services.py:386
 msgid "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 msgstr "The file exceeds the maximum allowed size (see security.max_upload_size_mb). Compress it or raise the limit."
 
-#: transcria/app_services.py:379
+#: transcria/app_services.py:388
 msgid "Trop de tentatives"
 msgstr "Too many attempts"
 
-#: transcria/app_services.py:379
+#: transcria/app_services.py:388
 msgid "Vous avez fait trop de tentatives. Patientez quelques minutes."
 msgstr "You have made too many attempts. Please wait a few minutes."
 
-#: transcria/app_services.py:380
+#: transcria/app_services.py:389
 msgid "Erreur interne"
 msgstr "Internal error"
 
-#: transcria/app_services.py:380
+#: transcria/app_services.py:389
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "An unexpected error occurred. Try again or contact an administrator."
 
@@ -510,7 +510,7 @@ msgstr "Regenerate the summary"
 msgid "Renseignez d'abord la forme validée."
 msgstr "Enter the validated form first."
 
-#: transcria/i18n/js_catalog.py:86 transcria/i18n/js_catalog.py:185
+#: transcria/i18n/js_catalog.py:86 transcria/i18n/js_catalog.py:186
 #: transcria/web/templates/group_form.html:56
 #: transcria/web/templates/meeting_types.html:96
 #: transcria/web/templates/wizard/_step_summary.html:89
@@ -863,413 +863,421 @@ msgid "Marquer comme traité"
 msgstr "Mark as done"
 
 #: transcria/i18n/js_catalog.py:169
+msgid "Micro inaccessible : autorisez le microphone puis réessayez."
+msgstr "Microphone unavailable: allow microphone access and try again."
+
+#: transcria/i18n/js_catalog.py:170
 #, python-format
 msgid "Modifier « %(name)s »"
 msgstr "Edit \"%(name)s\""
 
-#: transcria/i18n/js_catalog.py:170
+#: transcria/i18n/js_catalog.py:171
 msgid "Modifié depuis la dernière version"
 msgstr "Modified since the last version"
 
-#: transcria/i18n/js_catalog.py:171 transcria/web/templates/queue.html:158
+#: transcria/i18n/js_catalog.py:172 transcria/web/templates/queue.html:158
 msgid "Monter"
 msgstr "Move up"
 
-#: transcria/i18n/js_catalog.py:172
+#: transcria/i18n/js_catalog.py:173
 msgid "Nombre"
 msgstr "Number"
 
-#: transcria/i18n/js_catalog.py:173
+#: transcria/i18n/js_catalog.py:174
 msgid "Nouveau locuteur…"
 msgstr "New speaker…"
 
-#: transcria/i18n/js_catalog.py:174
+#: transcria/i18n/js_catalog.py:175
 msgid "Partage impossible."
 msgstr "Sharing failed."
 
-#: transcria/i18n/js_catalog.py:175
+#: transcria/i18n/js_catalog.py:176
 #, python-format
 msgid "Partager au groupe %(g)s"
 msgstr "Share with group %(g)s"
 
-#: transcria/i18n/js_catalog.py:176
+#: transcria/i18n/js_catalog.py:177
 msgid "Partager à tous"
 msgstr "Share with everyone"
 
-#: transcria/i18n/js_catalog.py:177
+#: transcria/i18n/js_catalog.py:178
 msgid "Partagé à tous"
 msgstr "Shared with everyone"
 
-#: transcria/i18n/js_catalog.py:178
+#: transcria/i18n/js_catalog.py:179
 msgid "Participants & locuteurs"
 msgstr "Participants & speakers"
 
-#: transcria/i18n/js_catalog.py:179 transcria/notifications/job_facts.py:76
+#: transcria/i18n/js_catalog.py:180 transcria/notifications/job_facts.py:76
 #: transcria/web/templates/job_result.html:20
 #: transcria/web/templates/job_result.html:37
 #: transcria/web/templates/job_result.html:150
 msgid "Points à vérifier"
 msgstr "Points to review"
 
-#: transcria/i18n/js_catalog.py:180
+#: transcria/i18n/js_catalog.py:181
 msgid "Privé"
 msgstr "Private"
 
-#: transcria/i18n/js_catalog.py:181
+#: transcria/i18n/js_catalog.py:182
 msgid "Raccourcis :"
 msgstr "Shortcuts:"
 
-#: transcria/i18n/js_catalog.py:182
+#: transcria/i18n/js_catalog.py:183
 msgid "Reculer ce segment ET tous les suivants de 500 ms"
 msgstr "Move this segment AND all following ones back by 500 ms"
 
-#: transcria/i18n/js_catalog.py:183
+#: transcria/i18n/js_catalog.py:184
 msgid "Rendre privé"
 msgstr "Make private"
 
-#: transcria/i18n/js_catalog.py:184
+#: transcria/i18n/js_catalog.py:185
 #, python-format
 msgid "Repère %(n)s — %(t)s"
 msgstr "Marker %(n)s — %(t)s"
 
-#: transcria/i18n/js_catalog.py:186
+#: transcria/i18n/js_catalog.py:187
 msgid "S / E — caler le début / la fin sur la lecture"
 msgstr "S / E — snap the start / end to playback"
 
-#: transcria/i18n/js_catalog.py:187
+#: transcria/i18n/js_catalog.py:188
 msgid "S/E : caler début/fin sur la lecture"
 msgstr "S/E: snap start/end to playback"
 
-#: transcria/i18n/js_catalog.py:188
+#: transcria/i18n/js_catalog.py:189
 #, python-format
 msgid "Supprimer %(n)s segments ?"
 msgstr "Delete %(n)s segments?"
 
-#: transcria/i18n/js_catalog.py:189
+#: transcria/i18n/js_catalog.py:190
 msgid "Supprimer ce segment"
 msgstr "Delete this segment"
 
-#: transcria/i18n/js_catalog.py:190
+#: transcria/i18n/js_catalog.py:191
 #, python-format
 msgid "Supprimer le segment #%(n)s et son texte ?"
 msgstr "Delete segment #%(n)s and its text?"
 
-#: transcria/i18n/js_catalog.py:191
+#: transcria/i18n/js_catalog.py:192
 #, python-format
 msgid "Supprimer le type « %(name)s » ? Les traitements passés le conservent."
 msgstr "Delete type \"%(name)s\"? Past jobs keep it."
 
-#: transcria/i18n/js_catalog.py:192
+#: transcria/i18n/js_catalog.py:193
 msgid "Synthèse (en section autonome)"
 msgstr "Summary (as a standalone section)"
 
-#: transcria/i18n/js_catalog.py:193
+#: transcria/i18n/js_catalog.py:194
 msgid "Tab / Maj+Tab — segment suivant / précédent"
 msgstr "Tab / Shift+Tab — next / previous segment"
 
-#: transcria/i18n/js_catalog.py:194
+#: transcria/i18n/js_catalog.py:195
 msgid "Texte"
 msgstr "Text"
 
-#: transcria/i18n/js_catalog.py:195
+#: transcria/i18n/js_catalog.py:196
 msgid "Texte long"
 msgstr "Long text"
 
-#: transcria/i18n/js_catalog.py:196
+#: transcria/i18n/js_catalog.py:197
 msgid "Toujours présent"
 msgstr "Always present"
 
-#: transcria/i18n/js_catalog.py:197
+#: transcria/i18n/js_catalog.py:198
 #: transcria/web/templates/meeting_types.html:163
 msgid "TranscrIA · Réunion d'exemple · Page 1/4"
 msgstr "TranscrIA · Sample meeting · Page 1/4"
 
-#: transcria/i18n/js_catalog.py:198 transcria/web/templates/job_result.html:146
+#: transcria/i18n/js_catalog.py:199 transcria/web/templates/job_result.html:146
 msgid "Transcription"
 msgstr "Transcript"
 
-#: transcria/i18n/js_catalog.py:199
+#: transcria/i18n/js_catalog.py:200
 #, python-format
 msgid "Type « %(name)s » importé (privé, à relire) : ouvrez-le, vérifiez, enregistrez pour l'activer."
 msgstr "Type \"%(name)s\" imported (private, to review): open it, check it, save to activate it."
 
-#: transcria/i18n/js_catalog.py:200
+#: transcria/i18n/js_catalog.py:201
 msgid "Télécharger un exemple Word"
 msgstr "Download a Word sample"
 
-#: transcria/i18n/js_catalog.py:201
+#: transcria/i18n/js_catalog.py:202
 #, python-format
 msgid "Un brouillon du <strong>%(when)s</strong> (%(n)s segments) a été trouvé."
 msgstr "A draft from <strong>%(when)s</strong> (%(n)s segments) was found."
 
-#: transcria/i18n/js_catalog.py:202
+#: transcria/i18n/js_catalog.py:203
 msgid "Un traitement est en cours sur ce dossier — l'éditeur est en lecture seule et rouvrira en écriture à la fin."
 msgstr "A job is running on this file — the editor is read-only and will reopen in write mode at the end."
 
-#: transcria/i18n/js_catalog.py:203
+#: transcria/i18n/js_catalog.py:204
 msgid "Voix retenue"
 msgstr "Voice selected"
 
-#: transcria/i18n/js_catalog.py:204
+#: transcria/i18n/js_catalog.py:205
 msgid "aucune modification"
 msgstr "no changes"
 
-#: transcria/i18n/js_catalog.py:205
+#: transcria/i18n/js_catalog.py:206
 #, python-format
 msgid "brouillon enregistré à %(t)s"
 msgstr "draft saved at %(t)s"
 
-#: transcria/i18n/js_catalog.py:206
+#: transcria/i18n/js_catalog.py:207
 msgid "brouillon non enregistré — nouvelle tentative"
 msgstr "draft not saved — retrying"
 
-#: transcria/i18n/js_catalog.py:207
+#: transcria/i18n/js_catalog.py:208
 msgid "brouillon repris — pensez à enregistrer une version"
 msgstr "draft resumed — remember to save a version"
 
-#: transcria/i18n/js_catalog.py:208
+#: transcria/i18n/js_catalog.py:209
 msgid "brouillon suspendu (édition ailleurs)"
 msgstr "draft suspended (edited elsewhere)"
 
-#: transcria/i18n/js_catalog.py:209
+#: transcria/i18n/js_catalog.py:210
 msgid "chevauche"
 msgstr "overlaps"
 
-#: transcria/i18n/js_catalog.py:210
+#: transcria/i18n/js_catalog.py:211
 msgid "enregistrement de la version…"
 msgstr "saving version…"
 
-#: transcria/i18n/js_catalog.py:211
+#: transcria/i18n/js_catalog.py:212
 msgid "enregistrement impossible"
 msgstr "save failed"
 
-#: transcria/i18n/js_catalog.py:212
+#: transcria/i18n/js_catalog.py:213
 #, python-format
 msgid "ex. %(name)s — mon équipe"
 msgstr "e.g. %(name)s — my team"
 
-#: transcria/i18n/js_catalog.py:213
+#: transcria/i18n/js_catalog.py:214
 msgid "modifications non enregistrées"
 msgstr "unsaved changes"
 
-#: transcria/i18n/js_catalog.py:214
+#: transcria/i18n/js_catalog.py:215
 msgid "préparation de la forme d'onde…"
 msgstr "preparing the waveform…"
 
-#: transcria/i18n/js_catalog.py:215
+#: transcria/i18n/js_catalog.py:216
 #, python-format
 msgid "relu : %(pct)s %%"
 msgstr "reviewed: %(pct)s %%"
 
-#: transcria/i18n/js_catalog.py:216
+#: transcria/i18n/js_catalog.py:217
 msgid "suivants +500 ms ⇥"
 msgstr "following +500 ms ⇥"
 
-#: transcria/i18n/js_catalog.py:217
+#: transcria/i18n/js_catalog.py:218
 #, python-format
 msgid "version v%(v)s enregistrée — documents à jour au téléchargement"
 msgstr "version v%(v)s saved — documents up to date on download"
 
-#: transcria/i18n/js_catalog.py:219
+#: transcria/i18n/js_catalog.py:220
 msgid "Vos corrections sont dans le verbatim. La synthèse (résumé, décisions) n'est pas encore à jour :"
 msgstr "Your corrections are in the transcript. The synthesis (summary, decisions) is not updated yet:"
 
-#: transcria/i18n/js_catalog.py:220
+#: transcria/i18n/js_catalog.py:221
 msgid "DOCX rapide (synthèse inchangée)"
 msgstr "Quick DOCX (synthesis unchanged)"
 
-#: transcria/i18n/js_catalog.py:221
+#: transcria/i18n/js_catalog.py:222
 msgid "Mettre à jour la synthèse (LLM, quelques minutes)"
 msgstr "Update the synthesis (LLM, a few minutes)"
 
-#: transcria/i18n/js_catalog.py:222
+#: transcria/i18n/js_catalog.py:223
 msgid "Mise à jour en cours…"
 msgstr "Updating…"
 
-#: transcria/i18n/js_catalog.py:223
+#: transcria/i18n/js_catalog.py:224
 msgid "Mise à jour de la synthèse impossible"
 msgstr "Synthesis update failed"
 
-#: transcria/i18n/js_catalog.py:224
+#: transcria/i18n/js_catalog.py:225
 msgid "Synthèse mise à jour (versionnée — restaurable depuis le chat d'affinage)."
 msgstr "Synthesis updated (versioned — restorable from the refine chat)."
 
-#: transcria/i18n/js_catalog.py:225
+#: transcria/i18n/js_catalog.py:226
 msgid "Télécharger le DOCX à jour"
 msgstr "Download the updated DOCX"
 
-#: transcria/i18n/js_catalog.py:226
+#: transcria/i18n/js_catalog.py:227
 msgid "Voir le détail dans le chat"
 msgstr "See the details in the chat"
 
-#: transcria/i18n/js_catalog.py:227
+#: transcria/i18n/js_catalog.py:228
+msgid "Votre navigateur ne permet pas l'enregistrement audio."
+msgstr "Your browser does not support audio recording."
+
+#: transcria/i18n/js_catalog.py:229
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "To note (e.g. budget amounts explicitly cited)"
 
-#: transcria/i18n/js_catalog.py:228
+#: transcria/i18n/js_catalog.py:230
 msgid "À valider"
 msgstr "To validate"
 
-#: transcria/i18n/js_catalog.py:229
+#: transcria/i18n/js_catalog.py:231
 #, python-format
 msgid "À vérifier %(done)s/%(total)s"
 msgstr "To review %(done)s/%(total)s"
 
-#: transcria/i18n/js_catalog.py:230
+#: transcria/i18n/js_catalog.py:232
 msgid "Écouter ce segment"
 msgstr "Listen to this segment"
 
-#: transcria/i18n/js_catalog.py:231
+#: transcria/i18n/js_catalog.py:233
 msgid "⇤ suivants −500 ms"
 msgstr "⇤ following −500 ms"
 
-#: transcria/i18n/js_catalog.py:232
+#: transcria/i18n/js_catalog.py:234
 msgid "✂ — couper au curseur · ⧉ — fusionner avec le précédent"
 msgstr "✂ — cut at cursor · ⧉ — merge with the previous one"
 
-#: transcria/i18n/js_catalog.py:234
+#: transcria/i18n/js_catalog.py:236
 msgid "Proposition"
 msgstr "Proposal"
 
-#: transcria/i18n/js_catalog.py:235
+#: transcria/i18n/js_catalog.py:237
 msgid "Appliquer cette proposition"
 msgstr "Apply this proposal"
 
-#: transcria/i18n/js_catalog.py:236
+#: transcria/i18n/js_catalog.py:238
 msgid "Version"
 msgstr "Version"
 
-#: transcria/i18n/js_catalog.py:237
+#: transcria/i18n/js_catalog.py:239
 #, python-brace-format
 msgid "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 msgstr "Refinement applied (version v{v}) — the documents above are regenerated on every download and include your changes."
 
-#: transcria/i18n/js_catalog.py:238
+#: transcria/i18n/js_catalog.py:240
 msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
 msgstr "Describe the change to apply, or click \"Apply this proposal\" under an assistant reply."
 
-#: transcria/i18n/js_catalog.py:239
+#: transcria/i18n/js_catalog.py:241
 msgid "Écrivez d'abord votre demande."
 msgstr "Write your request first."
 
-#: transcria/i18n/js_catalog.py:240
+#: transcria/i18n/js_catalog.py:242
 msgid "Appliquer aux documents :"
 msgstr "Apply to the documents:"
 
-#: transcria/i18n/js_catalog.py:241
+#: transcria/i18n/js_catalog.py:243
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "A restorable version will be created (you can revert)."
 
-#: transcria/i18n/js_catalog.py:242 transcria/notifications/mailer.py:258
+#: transcria/i18n/js_catalog.py:244 transcria/notifications/mailer.py:258
 #: transcria/notifications/mailer.py:306 transcria/queue/routes.py:37
 msgid "Erreur"
 msgstr "Error"
 
-#: transcria/i18n/js_catalog.py:243
+#: transcria/i18n/js_catalog.py:245
 msgid "Erreur réseau — réessayez."
 msgstr "Network error — please retry."
 
-#: transcria/i18n/js_catalog.py:244
+#: transcria/i18n/js_catalog.py:246
 msgid "Options invalides"
 msgstr "Invalid options"
 
-#: transcria/i18n/js_catalog.py:245
+#: transcria/i18n/js_catalog.py:247
 #, python-brace-format
 msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
 msgstr "Restore version v{v}? The documents will return to this state."
 
-#: transcria/i18n/js_catalog.py:246
+#: transcria/i18n/js_catalog.py:248
 msgid "Restauration impossible"
 msgstr "Restore failed"
 
-#: transcria/i18n/js_catalog.py:248
+#: transcria/i18n/js_catalog.py:250
 msgid "Impossible de modifier l'agenda."
 msgstr "Cannot change the schedule."
 
-#: transcria/i18n/js_catalog.py:249
+#: transcria/i18n/js_catalog.py:251
 msgid "Modification impossible."
 msgstr "Change not possible."
 
-#: transcria/i18n/js_catalog.py:250
+#: transcria/i18n/js_catalog.py:252
 msgid "Sélectionne au moins un jour."
 msgstr "Select at least one day."
 
-#: transcria/i18n/js_catalog.py:251
+#: transcria/i18n/js_catalog.py:253
 msgid "Supprimer ce créneau ?"
 msgstr "Delete this slot?"
 
-#: transcria/i18n/js_catalog.py:253
+#: transcria/i18n/js_catalog.py:255
 msgid "Action impossible sur ce job."
 msgstr "Action not possible on this job."
 
-#: transcria/i18n/js_catalog.py:254
+#: transcria/i18n/js_catalog.py:256
 msgid "Annuler ce job ?"
 msgstr "Cancel this job?"
 
-#: transcria/i18n/js_catalog.py:255
+#: transcria/i18n/js_catalog.py:257
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "Priority must be between 1 and 100."
 
-#: transcria/i18n/js_catalog.py:256
+#: transcria/i18n/js_catalog.py:258
 msgid "Supprimer tous les jobs de test ?"
 msgstr "Delete all test jobs?"
 
-#: transcria/i18n/js_catalog.py:257
+#: transcria/i18n/js_catalog.py:259
 msgid "Les jobs en cours seront ignorés."
 msgstr "Running jobs will be skipped."
 
-#: transcria/i18n/js_catalog.py:258
+#: transcria/i18n/js_catalog.py:260
 msgid "Nettoyage impossible."
 msgstr "Cleanup failed."
 
-#: transcria/i18n/js_catalog.py:259
+#: transcria/i18n/js_catalog.py:261
 msgid "job(s) de test supprimé(s)."
 msgstr "test job(s) deleted."
 
-#: transcria/i18n/js_catalog.py:261
+#: transcria/i18n/js_catalog.py:263
 msgid "tout local"
 msgstr "all local"
 
-#: transcria/i18n/js_catalog.py:262
+#: transcria/i18n/js_catalog.py:264
 msgid "Aucune ressource distante configurée (tout intégré)."
 msgstr "No remote resource configured (all integrated)."
 
-#: transcria/i18n/js_catalog.py:263
+#: transcria/i18n/js_catalog.py:265
 msgid "injoignable"
 msgstr "unreachable"
 
-#: transcria/i18n/js_catalog.py:264
+#: transcria/i18n/js_catalog.py:266
 #, python-brace-format
 msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}."
 msgstr "Resource node unreachable — remote transcriptions are queued. Required: {reqs}."
 
-#: transcria/i18n/js_catalog.py:265
+#: transcria/i18n/js_catalog.py:267
 msgid "distant"
 msgstr "remote"
 
-#: transcria/i18n/js_catalog.py:266
+#: transcria/i18n/js_catalog.py:268
 msgid "GPU :"
 msgstr "GPU:"
 
-#: transcria/i18n/js_catalog.py:267
+#: transcria/i18n/js_catalog.py:269
 #, python-brace-format
 msgid "GPU {i} — libre {free} / {total} Mo"
 msgstr "GPU {i} — free {free} / {total} MB"
 
-#: transcria/i18n/js_catalog.py:268
+#: transcria/i18n/js_catalog.py:270
 msgid "Aucun moteur déclaré."
 msgstr "No engine declared."
 
-#: transcria/i18n/js_catalog.py:269
+#: transcria/i18n/js_catalog.py:271
 msgid "erreur"
 msgstr "error"
 
-#: transcria/i18n/js_catalog.py:270
+#: transcria/i18n/js_catalog.py:272
 #, python-brace-format
 msgid "Statut indisponible ({e})."
 msgstr "Status unavailable ({e})."
 
-#: transcria/i18n/js_catalog.py:272
+#: transcria/i18n/js_catalog.py:274
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
 #: transcria/web/templates/dashboard_status.html:28
@@ -1277,7 +1285,7 @@ msgstr "Status unavailable ({e})."
 msgid "Go"
 msgstr "GB"
 
-#: transcria/i18n/js_catalog.py:273
+#: transcria/i18n/js_catalog.py:275
 msgid "téléchargement…"
 msgstr "downloading…"
 
@@ -1580,52 +1588,52 @@ msgstr "Restore started. The service will stop, restore, then restart — sign b
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:308
+#: transcria/web/admin_routes.py:329
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:313
+#: transcria/web/admin_routes.py:334
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:316
+#: transcria/web/admin_routes.py:337
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:330
+#: transcria/web/admin_routes.py:351
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:339
+#: transcria/web/admin_routes.py:360
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:342
+#: transcria/web/admin_routes.py:363
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:344
+#: transcria/web/admin_routes.py:365
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:367
+#: transcria/web/admin_routes.py:388
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:401
+#: transcria/web/admin_routes.py:422
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:406
+#: transcria/web/admin_routes.py:427
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:412
+#: transcria/web/admin_routes.py:433
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -1655,591 +1663,615 @@ msgid "Moteur dédié à la transcription rapide de la phase résumé — vide =
 msgstr "Engine dedicated to the summary phase quick transcription — empty = same engine as the pipeline. kroko = pure CPU (zero VRAM); qwen3asr/nemotron/voxtralrt require the audio.cpp/parakeet.cpp served runtime (see docs/EXTERNAL_STT_RUNTIMES.md)."
 
 #: transcria/web/config_form.py:43
+msgid "Backend STT live (temps réel)"
+msgstr "Live STT backend (real-time)"
+
+#: transcria/web/config_form.py:46
+msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
+msgstr "Real-time chain (low latency) — empty = no live. Requires a model DESIGNED for streaming (nemotron-streaming, voxtralrt); never a batch model (see docs/TEMPS_REEL_REUNIONS.md)."
+
+#: transcria/web/config_form.py:49
 msgid "Backend diarisation"
 msgstr "Diarization backend"
 
-#: transcria/web/config_form.py:45
+#: transcria/web/config_form.py:51
 msgid "Détection des locuteurs (pyannote recommandé)."
 msgstr "Speaker detection (pyannote recommended)."
 
-#: transcria/web/config_form.py:49
+#: transcria/web/config_form.py:55
+msgid "Temps réel & connecteurs"
+msgstr "Real-time & connectors"
+
+#: transcria/web/config_form.py:56
+msgid "Façade STT et ingestion des réunions (opt-in, désactivé par défaut)."
+msgstr "Meeting STT facade and ingestion (opt-in, disabled by default)."
+
+#: transcria/web/config_form.py:58
+msgid "Façade STT temps réel"
+msgstr "Real-time STT facade"
+
+#: transcria/web/config_form.py:59
+msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
+msgstr "Exposes POST /v1/audio/transcriptions (OpenAI-audio transcription) and POST /v1/audio/ingest (upload a meeting recording → job). Disabled = endpoints absent. Authenticated by a personal API token (see docs/TEMPS_REEL_REUNIONS.md)."
+
+#: transcria/web/config_form.py:66
 msgid "LLM d'arbitrage"
 msgstr "Arbitration LLM"
 
-#: transcria/web/config_form.py:50
+#: transcria/web/config_form.py:67
 msgid "Résumé et correction par la LLM locale OpenAI-compatible."
 msgstr "Summary and correction by the local OpenAI-compatible LLM."
 
-#: transcria/web/config_form.py:52
+#: transcria/web/config_form.py:69
 msgid "Activer la correction LLM"
 msgstr "Enable LLM correction"
 
-#: transcria/web/config_form.py:53
+#: transcria/web/config_form.py:70
 msgid "Désactiver pour produire un SRT brut sans correction."
 msgstr "Disable to produce a raw SRT without correction."
 
-#: transcria/web/config_form.py:54
+#: transcria/web/config_form.py:71
 msgid "Modèle de résumé"
 msgstr "Summary model"
 
-#: transcria/web/config_form.py:55
+#: transcria/web/config_form.py:72
 msgid "Identifiant opencode, ex. local/arbitrage."
 msgstr "Identifier"
 
-#: transcria/web/config_form.py:56
+#: transcria/web/config_form.py:73
 msgid "Modèle de correction"
 msgstr "Correction model"
 
-#: transcria/web/config_form.py:57
+#: transcria/web/config_form.py:74
 msgid "Identifiant opencode du modèle de correction du SRT."
 msgstr "Identifier"
 
-#: transcria/web/config_form.py:58
+#: transcria/web/config_form.py:75
 msgid "Port du serveur LLM"
 msgstr "LLM server port"
 
-#: transcria/web/config_form.py:59
+#: transcria/web/config_form.py:76
 msgid "Port du backend OpenAI-compatible (llama-server par défaut : 8080)."
 msgstr "Port of the OpenAI-compatible backend (llama-server default: 8080)."
 
-#: transcria/web/config_form.py:60
+#: transcria/web/config_form.py:77
 msgid "Alias modèle rapporté par le serveur"
 msgstr "Model alias reported by the server"
 
-#: transcria/web/config_form.py:61
+#: transcria/web/config_form.py:78
 msgid "Doit correspondre à l'alias servi (cf. scripts/check_arbitrage_llm.sh)."
 msgstr "Must match the served alias (see scripts/check_arbitrage_llm.sh)."
 
-#: transcria/web/config_form.py:65
+#: transcria/web/config_form.py:82
 msgid "File & exécution"
 msgstr "Queue & execution"
 
-#: transcria/web/config_form.py:66
+#: transcria/web/config_form.py:83
 msgid "File GPU persistante et parallélisme des jobs."
 msgstr "Persistent GPU queue and job parallelism."
 
-#: transcria/web/config_form.py:68
+#: transcria/web/config_form.py:85
 msgid "File persistante activée"
 msgstr "Persistent queue enabled"
 
-#: transcria/web/config_form.py:69
+#: transcria/web/config_form.py:86
 msgid "Mise en file des traitements (recommandé)."
 msgstr "Queue processing jobs (recommended)."
 
-#: transcria/web/config_form.py:70 transcria/web/templates/schedule.html:160
+#: transcria/web/config_form.py:87 transcria/web/templates/schedule.html:160
 msgid "Jobs simultanés max"
 msgstr "Max concurrent jobs"
 
-#: transcria/web/config_form.py:71
+#: transcria/web/config_form.py:88
 msgid "Concurrence par défaut (1 = comportement historique)."
 msgstr "Default concurrency (1 = legacy behavior)."
 
-#: transcria/web/config_form.py:72
+#: transcria/web/config_form.py:89
 #: transcria/web/templates/dashboard_status.html:84
 msgid "Stockage des fichiers de jobs"
 msgstr "Job file storage"
 
-#: transcria/web/config_form.py:74
+#: transcria/web/config_form.py:91
 msgid "fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la frontale (role=web) et le worker (role=scheduler) sont sur deux machines sans filesystem commun (cf. docs/STOCKAGE_PARTAGE_JOBS.md)."
 msgstr "fs (default): local disk — sufficient in all-in-one or with a shared jobs_dir (NFS). pg: files replicated via PostgreSQL — REQUIRED when the front-end (role=web) and the worker (role=scheduler) run on two machines without a shared filesystem (see docs/STOCKAGE_PARTAGE_JOBS.md)."
 
-#: transcria/web/config_form.py:81
+#: transcria/web/config_form.py:98
 msgid "Ressources GPU"
 msgstr "GPU resources"
 
-#: transcria/web/config_form.py:82
+#: transcria/web/config_form.py:99
 msgid "Récupération de la VRAM quand un job est bloqué faute de mémoire GPU."
 msgstr "Reclaiming VRAM when a job is stuck for lack of GPU memory."
 
-#: transcria/web/config_form.py:84
+#: transcria/web/config_form.py:101
 msgid "Politique de préemption VRAM"
 msgstr "VRAM preemption policy"
 
-#: transcria/web/config_form.py:86
+#: transcria/web/config_form.py:103
 msgid "own-only (recommandé) : n'arrête que NOS process gérés inactifs (LLM d'arbitrage), jamais un process tiers. aggressive : préempte aussi les serveurs d'inférence tiers, uniquement dans la fenêtre calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."
 msgstr "own-only (recommended): only stops OUR idle managed processes (arbitration LLM), never a third-party process. aggressive: also preempts third-party inference servers, only within the “force_gpu” calendar window — reserve for a GPU dedicated to TranscrIA."
 
-#: transcria/web/config_form.py:90
+#: transcria/web/config_form.py:107
 msgid "VRAM libre minimale (Mo)"
 msgstr "Minimum free VRAM (MB)"
 
-#: transcria/web/config_form.py:91
+#: transcria/web/config_form.py:108
 msgid "Marge libre exigée en plus du besoin d'une phase avant de l'allouer."
 msgstr "Free margin required on top of a phase's need before allocating it."
 
-#: transcria/web/config_form.py:95
+#: transcria/web/config_form.py:112
 msgid "Sécurité & upload"
 msgstr "Security & upload"
 
-#: transcria/web/config_form.py:96
+#: transcria/web/config_form.py:113
 msgid "Limites d'upload et suppression des jobs."
 msgstr "Upload limits and job deletion."
 
-#: transcria/web/config_form.py:98
+#: transcria/web/config_form.py:115
 msgid "Taille max d'upload (Mo)"
 msgstr "Max upload size (MB)"
 
-#: transcria/web/config_form.py:99
+#: transcria/web/config_form.py:116
 msgid "Taille maximale d'un fichier déposé."
 msgstr "Maximum size of an uploaded file."
 
-#: transcria/web/config_form.py:100
+#: transcria/web/config_form.py:117
 msgid "Extensions autorisées"
 msgstr "Allowed extensions"
 
-#: transcria/web/config_form.py:101
+#: transcria/web/config_form.py:118
 msgid "Liste séparée par des virgules, ex. mp3, wav, mp4, m4a."
 msgstr "Comma-separated list, e.g. mp3, wav, mp4, m4a."
 
-#: transcria/web/config_form.py:102
+#: transcria/web/config_form.py:119
 msgid "Autoriser la suppression de jobs"
 msgstr "Allow job deletion"
 
-#: transcria/web/config_form.py:103
+#: transcria/web/config_form.py:120
 msgid "Permet aux admins de supprimer un job et ses fichiers."
 msgstr "Lets admins delete a job and its files."
 
-#: transcria/web/config_form.py:107
+#: transcria/web/config_form.py:124
 msgid "Durcissement HTTP(S)"
 msgstr "HTTP(S) hardening"
 
-#: transcria/web/config_form.py:108
+#: transcria/web/config_form.py:125
 msgid "Sécurité du transport. Tout est opt-in (défaut = HTTP, dev/tout-en-un). Le proxy TLS et le cookie sécurisé exigent un redémarrage du service."
 msgstr "Transport security. Everything is opt-in (default = HTTP, dev/all-in-one). The TLS proxy and the secure cookie require a service restart."
 
-#: transcria/web/config_form.py:111
+#: transcria/web/config_form.py:128
 msgid "Derrière un proxy TLS (HTTPS)"
 msgstr "Behind a TLS proxy (HTTPS)"
 
-#: transcria/web/config_form.py:112
+#: transcria/web/config_form.py:129
 msgid "À activer si un reverse-proxy (nginx, Caddy…) termine le HTTPS devant TranscrIA : l'app reconnaît alors HTTPS (via X-Forwarded-Proto), marque le cookie de session Secure et peut émettre le HSTS. L'adresse cliente n'est JAMAIS lue depuis X-Forwarded-For (anti-usurpation). Redémarrage requis."
 msgstr "Enable when a reverse proxy (nginx, Caddy…) terminates HTTPS in front of TranscrIA: the app then recognizes HTTPS (via X-Forwarded-Proto), marks the session cookie Secure and can emit HSTS. The client address is NEVER read from X-Forwarded-For (anti-spoofing). Restart required."
 
-#: transcria/web/config_form.py:116
+#: transcria/web/config_form.py:133
 msgid "Cookie de session « Secure »"
 msgstr "Session cookie “Secure”"
 
-#: transcria/web/config_form.py:117
+#: transcria/web/config_form.py:134
 msgid "Marque le cookie de session Secure (envoyé seulement en HTTPS). Implicite si « Derrière un proxy TLS » est activé. Redémarrage requis."
 msgstr "Marks the session cookie Secure (sent only over HTTPS). Implied when “Behind a TLS proxy” is enabled. Restart required."
 
-#: transcria/web/config_form.py:119
+#: transcria/web/config_form.py:136
 msgid "HSTS (forcer HTTPS côté navigateur)"
 msgstr "HSTS (enforce HTTPS in the browser)"
 
-#: transcria/web/config_form.py:120
+#: transcria/web/config_form.py:137
 msgid "Émet l'en-tête Strict-Transport-Security, uniquement sur une réponse servie en HTTPS réel (nécessite « Derrière un proxy TLS »). Anti-rétrogradation HTTP."
 msgstr "Emits the Strict-Transport-Security header, only on a response actually served over HTTPS (requires “Behind a TLS proxy”). Anti-downgrade to HTTP."
 
-#: transcria/web/config_form.py:122
+#: transcria/web/config_form.py:139
 msgid "Contrôle d'origine (anti-CSRF renforcé)"
 msgstr "Origin check (hardened anti-CSRF)"
 
-#: transcria/web/config_form.py:124
+#: transcria/web/config_form.py:141
 msgid "Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les requêtes sans en-tête Origin."
 msgstr "Rejects a form submission coming from another site (cross Origin header), on top of SameSite. Affects neither the token API nor requests without an Origin header."
 
-#: transcria/web/config_form.py:127
+#: transcria/web/config_form.py:144
 msgid "Jetons CSRF (protection forte)"
 msgstr "CSRF tokens (strong protection)"
 
-#: transcria/web/config_form.py:128
+#: transcria/web/config_form.py:145
 msgid "Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie (injecté automatiquement dans les formulaires et les appels de l'interface). Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée."
 msgstr "Requires an anti-CSRF token on every state-changing request authenticated by cookie (injected automatically into forms and UI calls). Strongest defense; the Bearer token API (scripts) stays exempt."
 
-#: transcria/web/config_form.py:131
+#: transcria/web/config_form.py:148
 msgid "Content-Security-Policy (CSP)"
 msgstr "Content-Security-Policy (CSP)"
 
-#: transcria/web/config_form.py:133
+#: transcria/web/config_form.py:150
 msgid "Politique de sécurité du contenu. off : désactivée. report-only : le navigateur SIGNALE les violations sans rien bloquer (à déployer d'abord, pour observer). enforce : appliquée. Verrouille cadres, objets, base, formulaires et origines des ressources."
 msgstr "Content security policy. off: disabled. report-only: the browser REPORTS violations without blocking anything (deploy this first, to observe). enforce: applied. Locks down frames, objects, base, forms and resource origins."
 
-#: transcria/web/config_form.py:140
+#: transcria/web/config_form.py:157
 msgid "Notifications email"
 msgstr "Email notifications"
 
-#: transcria/web/config_form.py:141
+#: transcria/web/config_form.py:158
 msgid "Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."
 msgstr "End-of-processing email (SMTP). Requires an address in the user profile."
 
-#: transcria/web/config_form.py:143
+#: transcria/web/config_form.py:160
 msgid "Activer les emails"
 msgstr "Enable emails"
 
-#: transcria/web/config_form.py:144
+#: transcria/web/config_form.py:161
 msgid "Envoie un email au propriétaire à la fin (succès/échec)."
 msgstr "Sends an email to the owner at the end (success/failure)."
 
-#: transcria/web/config_form.py:145
+#: transcria/web/config_form.py:162
 msgid "Serveur SMTP"
 msgstr "SMTP server"
 
-#: transcria/web/config_form.py:146
+#: transcria/web/config_form.py:163
 msgid "Port SMTP"
 msgstr "SMTP port"
 
-#: transcria/web/config_form.py:147
+#: transcria/web/config_form.py:164
 msgid "Ex. 587 (STARTTLS) ou 465 (SSL)."
 msgstr "E.g. 587 (STARTTLS) or 465 (SSL)."
 
-#: transcria/web/config_form.py:148
+#: transcria/web/config_form.py:165
 msgid "STARTTLS"
 msgstr "STARTTLS"
 
-#: transcria/web/config_form.py:149
+#: transcria/web/config_form.py:166
 msgid "SSL/SMTPS"
 msgstr "SSL/SMTPS"
 
-#: transcria/web/config_form.py:150
+#: transcria/web/config_form.py:167
 msgid "Adresse expéditeur"
 msgstr "Sender address"
 
-#: transcria/web/config_form.py:151
+#: transcria/web/config_form.py:168
 msgid "URL de base du portail"
 msgstr "Portal base URL"
 
-#: transcria/web/config_form.py:152
+#: transcria/web/config_form.py:169
 msgid "Utilisée dans les liens des emails, ex. http://localhost:7870."
 msgstr "Used in email links, e.g. http://localhost:7870."
 
-#: transcria/web/config_form.py:156 transcria/web/templates/base.html:59
+#: transcria/web/config_form.py:173 transcria/web/templates/base.html:59
 #: transcria/web/templates/voices.html:2 transcria/web/templates/voices.html:6
 msgid "Voix enregistrées"
 msgstr "Enrolled voices"
 
-#: transcria/web/config_form.py:157
+#: transcria/web/config_form.py:174
 msgid "Référentiel de voix connues (consentement requis)."
 msgstr "Repository of known voices (consent required)."
 
-#: transcria/web/config_form.py:159
+#: transcria/web/config_form.py:176
 msgid "Activer les voix enregistrées"
 msgstr "Enable enrolled voices"
 
-#: transcria/web/config_form.py:160
+#: transcria/web/config_form.py:177
 msgid "Répertoire de stockage"
 msgstr "Storage directory"
 
-#: transcria/web/config_form.py:161
+#: transcria/web/config_form.py:178
 msgid "Stockage local protégé des voix et consentements."
 msgstr "Protected local storage of voices and consents."
 
-#: transcria/web/config_form.py:165
+#: transcria/web/config_form.py:182
 msgid "Identité d'entreprise (SSO)"
 msgstr "Enterprise identity (SSO)"
 
-#: transcria/web/config_form.py:166
+#: transcria/web/config_form.py:183
 msgid "Connexion via un fournisseur OIDC (Keycloak, Entra ID, Authentik…). Redémarrage du service requis après changement. Compte local de secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."
 msgstr "Sign-in through an OIDC provider (Keycloak, Entra ID, Authentik…). Service restart required after changes. Break-glass local account: /login?local=1 (see docs/GESTION_IDENTITE.md)."
 
-#: transcria/web/config_form.py:170
+#: transcria/web/config_form.py:187
 msgid "Backend d'identité"
 msgstr "Identity backend"
 
-#: transcria/web/config_form.py:172
+#: transcria/web/config_form.py:189
 msgid "local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. proxy : identité fournie par un proxy d'authentification frontal (Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory en direct. Renseignez les champs correspondants avant d'activer."
 msgstr "local (default): accounts managed by this portal. oidc: enterprise SSO. proxy: identity from a front authentication proxy (Authelia, oauth2-proxy…). ldap: LDAP / Active Directory directory directly. Fill in the matching fields before enabling."
 
-#: transcria/web/config_form.py:176
+#: transcria/web/config_form.py:193
 msgid "Émetteur (issuer)"
 msgstr "Issuer"
 
-#: transcria/web/config_form.py:177
+#: transcria/web/config_form.py:194
 msgid "URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise (la découverte /.well-known est automatique)."
 msgstr "OIDC issuer URL, e.g. https://sso.example.com/realms/company (/.well-known discovery is automatic)."
 
-#: transcria/web/config_form.py:179
+#: transcria/web/config_form.py:196
 msgid "Identifiant client"
 msgstr "Identifier"
 
-#: transcria/web/config_form.py:180
+#: transcria/web/config_form.py:197
 msgid "Secret client"
 msgstr "Client secret"
 
-#: transcria/web/config_form.py:182
+#: transcria/web/config_form.py:199
 msgid "Laissez vide si le secret est fourni par variable d'environnement."
 msgstr "Leave empty if the secret comes from an environment variable."
 
-#: transcria/web/config_form.py:183
+#: transcria/web/config_form.py:200
 msgid "Variable d'environnement du secret"
 msgstr "Secret environment variable"
 
-#: transcria/web/config_form.py:184
+#: transcria/web/config_form.py:201
 msgid "Nom d'une variable d'environnement contenant le secret — prioritaire sur le champ précédent, évite le secret en clair dans config.yaml."
 msgstr "Name of an environment variable holding the secret — takes precedence over the previous field and keeps the secret out of config.yaml."
 
-#: transcria/web/config_form.py:186
+#: transcria/web/config_form.py:203
 msgid "Libellé du bouton SSO"
 msgstr "Label"
 
-#: transcria/web/config_form.py:187
+#: transcria/web/config_form.py:204
 msgid "Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». Vide = libellé par défaut."
 msgstr "Button text on the sign-in page, e.g. “Corporate sign-in”. Empty = default label."
 
-#: transcria/web/config_form.py:189
+#: transcria/web/config_form.py:206
 msgid "Adresses de confiance du proxy"
 msgstr "Proxy trusted addresses"
 
-#: transcria/web/config_form.py:190
+#: transcria/web/config_form.py:207
 msgid "Backend proxy uniquement : adresses IP ou réseaux CIDR du proxy frontal, ex. 127.0.0.1, 10.0.0.0/24. Les en-têtes d'identité ne sont crus QUE depuis ces adresses (adresse socket réelle, jamais X-Forwarded-For)."
 msgstr "Proxy backend only: IP addresses or CIDR networks of the front proxy, e.g. 127.0.0.1, 10.0.0.0/24. Identity headers are ONLY trusted from these addresses (real socket address, never X-Forwarded-For)."
 
-#: transcria/web/config_form.py:194
+#: transcria/web/config_form.py:211
 msgid "En-tête utilisateur du proxy"
 msgstr "Proxy user header"
 
-#: transcria/web/config_form.py:195
+#: transcria/web/config_form.py:212
 msgid "Nom de l'en-tête portant l'identifiant (convention : Remote-User)."
 msgstr "Name of the header carrying the username (convention: Remote-User)."
 
-#: transcria/web/config_form.py:196
+#: transcria/web/config_form.py:213
 msgid "En-tête groupes du proxy"
 msgstr "Proxy groups header"
 
-#: transcria/web/config_form.py:197
+#: transcria/web/config_form.py:214
 msgid "Nom de l'en-tête portant les groupes, séparés par des virgules (convention : Remote-Groups)."
 msgstr "Name of the header carrying the groups, comma-separated (convention: Remote-Groups)."
 
-#: transcria/web/config_form.py:199
+#: transcria/web/config_form.py:216
 msgid "Connexion automatique via le proxy"
 msgstr "Automatic sign-in through the proxy"
 
-#: transcria/web/config_form.py:200
+#: transcria/web/config_form.py:217
 msgid "Activée : /login connecte directement depuis les en-têtes. Désactivée : la page affiche un bouton de connexion."
 msgstr "Enabled: /login signs in directly from the headers. Disabled: the sign-in page shows a button."
 
-#: transcria/web/config_form.py:202
+#: transcria/web/config_form.py:219
 msgid "Contrôleurs LDAP/AD"
 msgstr "LDAP/AD controllers"
 
-#: transcria/web/config_form.py:203
+#: transcria/web/config_form.py:220
 msgid "Backend ldap : un ou plusieurs contrôleurs, ex. ldaps://dc1.corp, ldaps://dc2.corp (essayés dans l'ordre pour la haute disponibilité). LDAPS (ldaps://) fortement recommandé."
 msgstr "ldap backend: one or more controllers, e.g. ldaps://dc1.corp, ldaps://dc2.corp (tried in order for high availability). LDAPS (ldaps://) strongly recommended."
 
-#: transcria/web/config_form.py:206
+#: transcria/web/config_form.py:223
 msgid "LDAPS (TLS)"
 msgstr "LDAPS (TLS)"
 
-#: transcria/web/config_form.py:207
+#: transcria/web/config_form.py:224
 msgid "Chiffre la liaison à l'annuaire. À désactiver seulement avec auth.ldap.allow_plaintext en connaissance de cause (mot de passe en clair)."
 msgstr "Encrypts the link to the directory. Disable only with auth.ldap.allow_plaintext knowingly (password in clear)."
 
-#: transcria/web/config_form.py:209
+#: transcria/web/config_form.py:226
 msgid "Mode de connexion LDAP"
 msgstr "LDAP connection mode"
 
-#: transcria/web/config_form.py:211
+#: transcria/web/config_form.py:228
 msgid "service (recommandé AD) : un compte de service recherche l'utilisateur puis on valide son mot de passe. direct : bind direct via un gabarit de DN."
 msgstr "service (recommended for AD): a service account searches for the user then their password is validated. direct: direct bind via a DN template."
 
-#: transcria/web/config_form.py:213
+#: transcria/web/config_form.py:230
 msgid "DN du compte de service"
 msgstr "Service account DN"
 
-#: transcria/web/config_form.py:214
+#: transcria/web/config_form.py:231
 msgid "Mode service : compte de lecture de l'annuaire, ex. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 msgstr "Service mode: directory read account, e.g. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 
-#: transcria/web/config_form.py:216
+#: transcria/web/config_form.py:233
 msgid "Mot de passe du compte de service"
 msgstr "Service account password"
 
-#: transcria/web/config_form.py:218
+#: transcria/web/config_form.py:235
 msgid "Laissez vide si fourni par variable d'environnement."
 msgstr "Leave empty if provided by an environment variable."
 
-#: transcria/web/config_form.py:219
+#: transcria/web/config_form.py:236
 msgid "Variable d'environnement du mot de passe de service"
 msgstr "Service password environment variable"
 
-#: transcria/web/config_form.py:221
+#: transcria/web/config_form.py:238
 msgid "Nom d'une variable d'environnement portant le mot de passe — prioritaire, évite le secret en clair dans config.yaml."
 msgstr "Name of an environment variable holding the password — takes precedence, keeps the secret out of config.yaml."
 
-#: transcria/web/config_form.py:223
+#: transcria/web/config_form.py:240
 msgid "Base de recherche (base DN)"
 msgstr "Search base (base DN)"
 
-#: transcria/web/config_form.py:224
+#: transcria/web/config_form.py:241
 msgid "Racine de recherche des comptes, ex. DC=corp,DC=example."
 msgstr "Root for account search, e.g. DC=corp,DC=example."
 
-#: transcria/web/config_form.py:225
+#: transcria/web/config_form.py:242
 msgid "Filtre de recherche utilisateur"
 msgstr "User search filter"
 
-#: transcria/web/config_form.py:226
+#: transcria/web/config_form.py:243
 #, python-brace-format
 msgid "Doit contenir {username} (échappé automatiquement). AD : (&(objectClass=user)(sAMAccountName={username}))."
 msgstr "Must contain {username} (escaped automatically). AD: (&(objectClass=user)(sAMAccountName={username}))."
 
-#: transcria/web/config_form.py:228
+#: transcria/web/config_form.py:245
 msgid "Résoudre les groupes imbriqués (AD)"
 msgstr "Resolve nested groups (AD)"
 
-#: transcria/web/config_form.py:230
+#: transcria/web/config_form.py:247
 msgid "Suit l'appartenance transitive des groupes (règle en chaîne AD). Plus complet mais plus coûteux — laisser désactivé si non nécessaire."
 msgstr "Follows transitive group membership (AD matching rule in chain). More complete but more costly — leave disabled if not needed."
 
-#: transcria/web/config_form.py:232
+#: transcria/web/config_form.py:249
 msgid "Claim des groupes"
 msgstr "Groups claim"
 
-#: transcria/web/config_form.py:233
+#: transcria/web/config_form.py:250
 msgid "Nom du claim OIDC portant les groupes (généralement « groups »). Ignoré en LDAP (memberOf) et proxy (en-tête des groupes)."
 msgstr "Name of the OIDC claim carrying the groups (usually “groups”). Ignored in LDAP (memberOf) and proxy (groups header)."
 
-#: transcria/web/config_form.py:235
+#: transcria/web/config_form.py:252
 msgid "Règles groupe → rôle"
 msgstr "Group → role rules"
 
-#: transcria/web/config_form.py:236
+#: transcria/web/config_form.py:253
 msgid "Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : transcria-admins = admin"
 msgstr "One rule per line: “group = role” (roles: admin, manager, operator, viewer). First matching group wins, strict equality. E.g.: transcria-admins = admin"
 
-#: transcria/web/config_form.py:239
+#: transcria/web/config_form.py:256
 msgid "Rôle par défaut (aucun groupe reconnu)"
 msgstr "Default role (no recognized group)"
 
-#: transcria/web/config_form.py:241
+#: transcria/web/config_form.py:258
 msgid "deny (recommandé) : connexion refusée sans groupe reconnu. viewer : accès en lecture seule."
 msgstr "deny (recommended): sign-in refused without a recognized group. viewer: read-only access."
 
-#: transcria/web/config_form.py:246
+#: transcria/web/config_form.py:263
 msgid "Serveur & compte admin"
 msgstr "Server & admin account"
 
-#: transcria/web/config_form.py:247
+#: transcria/web/config_form.py:264
 msgid "Écoute du portail et mot de passe du premier administrateur."
 msgstr "Portal binding and password of the first administrator."
 
-#: transcria/web/config_form.py:249
+#: transcria/web/config_form.py:266
 msgid "Hôte d'écoute"
 msgstr "Listen host"
 
-#: transcria/web/config_form.py:250
+#: transcria/web/config_form.py:267
 msgid "Port d'écoute"
 msgstr "Listen port"
 
-#: transcria/web/config_form.py:251
+#: transcria/web/config_form.py:268
 msgid "Mot de passe admin initial"
 msgstr "Initial admin password"
 
-#: transcria/web/config_form.py:253
+#: transcria/web/config_form.py:270
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Change the default value before any real use."
 
-#: transcria/web/pages_routes.py:135
+#: transcria/web/pages_routes.py:134
 msgid "Son exploitable"
 msgstr "Usable audio"
 
-#: transcria/web/pages_routes.py:136
+#: transcria/web/pages_routes.py:135
 msgid "À surveiller"
 msgstr "Needs attention"
 
-#: transcria/web/pages_routes.py:137
+#: transcria/web/pages_routes.py:136
 msgid "Son difficile"
 msgstr "Difficult audio"
 
-#: transcria/web/pages_routes.py:145
+#: transcria/web/pages_routes.py:144
 msgid "volume très faible"
 msgstr "very low volume"
 
-#: transcria/web/pages_routes.py:146
+#: transcria/web/pages_routes.py:145
 msgid "volume faible"
 msgstr "low volume"
 
-#: transcria/web/pages_routes.py:147
+#: transcria/web/pages_routes.py:146
 msgid "bruit de fond présent"
 msgstr "background noise present"
 
-#: transcria/web/pages_routes.py:148
+#: transcria/web/pages_routes.py:147
 msgid "voix peu détaillée"
 msgstr "low voice detail"
 
-#: transcria/web/pages_routes.py:149
+#: transcria/web/pages_routes.py:148
 msgid "saturation détectée"
 msgstr "clipping detected"
 
-#: transcria/web/pages_routes.py:150
+#: transcria/web/pages_routes.py:149
 msgid "vérification renforcée utile"
 msgstr "closer review advisable"
 
-#: transcria/web/pages_routes.py:151
+#: transcria/web/pages_routes.py:150
 msgid "intelligibilité réduite"
 msgstr "reduced intelligibility"
 
-#: transcria/web/pages_routes.py:152
+#: transcria/web/pages_routes.py:151
 msgid "qualité perceptive faible"
 msgstr "low perceptual quality"
 
-#: transcria/web/pages_routes.py:153
+#: transcria/web/pages_routes.py:152
 msgid "distorsion présente"
 msgstr "distortion present"
 
-#: transcria/web/pages_routes.py:154
+#: transcria/web/pages_routes.py:153
 msgid "qualité globale faible"
 msgstr "low overall quality"
 
-#: transcria/web/pages_routes.py:155
+#: transcria/web/pages_routes.py:154
 msgid "réverbération marquée"
 msgstr "strong reverberation"
 
-#: transcria/web/pages_routes.py:156
+#: transcria/web/pages_routes.py:155
 msgid "clarté faible"
 msgstr "low clarity"
 
-#: transcria/web/pages_routes.py:157
+#: transcria/web/pages_routes.py:156
 msgid "bande téléphonique (codec)"
 msgstr "telephone band (codec)"
 
-#: transcria/web/pages_routes.py:158
+#: transcria/web/pages_routes.py:157
 msgid "voix superposées"
 msgstr "overlapping voices"
 
-#: transcria/web/pages_routes.py:159
+#: transcria/web/pages_routes.py:158
 msgid "parole peu nette"
 msgstr "unclear speech"
 
-#: transcria/web/pages_routes.py:164
+#: transcria/web/pages_routes.py:163
 msgid "Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable."
 msgstr "The volume is very low. The transcription will likely be unreliable — careful proofreading is essential."
 
-#: transcria/web/pages_routes.py:167
+#: transcria/web/pages_routes.py:166
 msgid "Les caractéristiques audio ne montrent pas de risque majeur."
 msgstr "The audio characteristics show no major risk."
 
-#: transcria/web/pages_routes.py:168
+#: transcria/web/pages_routes.py:167
 msgid "La transcription reste possible, mais certains passages pourront demander une vérification."
 msgstr "Transcription is still possible, but some passages may require verification."
 
-#: transcria/web/pages_routes.py:169
+#: transcria/web/pages_routes.py:168
 msgid "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages."
 msgstr "The file is usable, with a higher risk on certain words or passages."
 
-#: transcria/web/pages_routes.py:170
+#: transcria/web/pages_routes.py:169
 msgid "Diagnostic audio disponible."
 msgstr "Audio diagnostic available."
 
-#: transcria/web/pages_routes.py:221
+#: transcria/web/pages_routes.py:220
 #, python-format
 msgid "Bruit de fond dominant — un débruitage peut aider (BAK %(bak)s < SIG %(sig)s)."
 msgstr "Dominant background noise — denoising may help (BAK %(bak)s < SIG %(sig)s)."
 
-#: transcria/web/pages_routes.py:226
+#: transcria/web/pages_routes.py:225
 #, python-format
 msgid "Parole elle-même dégradée — vérification renforcée conseillée (SIG %(sig)s < BAK %(bak)s)."
 msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(bak)s)."
 
-#: transcria/web/pages_routes.py:229
+#: transcria/web/pages_routes.py:228
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Telephone-type bandwidth detected (codec)."
 
-#: transcria/web/pages_routes.py:499
+#: transcria/web/pages_routes.py:498
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:742
+#: transcria/web/pages_routes.py:743
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -2391,7 +2423,7 @@ msgid "Remplacer par"
 msgstr "Replace with"
 
 #: transcria/web/templates/account_tokens.html:2
-#: transcria/web/templates/base.html:112
+#: transcria/web/templates/base.html:114
 msgid "Jetons d'API"
 msgstr "API tokens"
 
@@ -2486,11 +2518,12 @@ msgstr "No tokens yet."
 
 #: transcria/web/templates/admin_config.html:2
 #: transcria/web/templates/admin_config.html:5
-#: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:66
+#: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:68
 msgid "Configuration"
 msgstr "Configuration"
 
 #: transcria/web/templates/admin_config.html:6
+#: transcria/web/templates/admin_connectors.html:6
 #: transcria/web/templates/admin_maintenance.html:6
 #: transcria/web/templates/admin_models.html:6
 #: transcria/web/templates/central_lexicon_detail.html:9
@@ -2609,9 +2642,92 @@ msgstr "Free editing of the whole configuration. Parameter reference: <code>docs
 msgid "Sauvegarder le YAML"
 msgstr "Save the YAML"
 
+#: transcria/web/templates/admin_connectors.html:2
+#: transcria/web/templates/admin_connectors.html:5
+#: transcria/web/templates/base.html:66
+#, fuzzy
+msgid "Connecteurs de réunion"
+msgstr "Meeting types"
+
+#: transcria/web/templates/admin_connectors.html:10
+msgid ""
+"Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque\n"
+"  plateforme. Les identifiants se placent dans la configuration des bots ou du service\n"
+"  connecteur, jamais ici."
+msgstr "This page is READ-ONLY: it describes what each platform requires and where it stands. Credentials belong in the bot or connector service configuration, never here."
+
+#: transcria/web/templates/admin_connectors.html:27
+#, fuzzy
+msgid "Éprouvé"
+msgstr "Private"
+
+#: transcria/web/templates/admin_connectors.html:29
+msgid "Jamais exécuté en réel"
+msgstr "Never run for real"
+
+#: transcria/web/templates/admin_connectors.html:31
+#, fuzzy
+msgid "À venir"
+msgstr "to monitor"
+
+#: transcria/web/templates/admin_connectors.html:39
+#, fuzzy
+msgid "Bot participant"
+msgstr "participant"
+
+#: transcria/web/templates/admin_connectors.html:41
+msgid "Transport natif"
+msgstr "Native transport"
+
+#: transcria/web/templates/admin_connectors.html:43
+msgid "Webhook plateforme"
+msgstr "Platform webhook"
+
+#: transcria/web/templates/admin_connectors.html:47
+msgid "Ouverture de pare-feu requise"
+msgstr "Firewall opening required"
+
+#: transcria/web/templates/admin_connectors.html:51
+msgid "Sortant uniquement"
+msgstr "Outbound only"
+
+#: transcria/web/templates/admin_connectors.html:58
+msgid ""
+"Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie\n"
+"          plateforme. À éprouver avant tout usage sérieux."
+msgstr "The code exists and passes the tests, but has never been run against the real platform. To be proven before any serious use."
+
+#: transcria/web/templates/admin_connectors.html:67
+msgid "Tous les renseignements sont fournis"
+msgstr "All details provided"
+
+#: transcria/web/templates/admin_connectors.html:72
+#, fuzzy
+msgid "Manque :"
+msgstr "Disk:"
+
+#: transcria/web/templates/admin_connectors.html:81
+msgid "Secret : ne jamais commiter"
+msgstr "Secret: never commit"
+
+#: transcria/web/templates/admin_connectors.html:88
+#, fuzzy
+msgid "Aucun identifiant nécessaire"
+msgstr "Identifier"
+
+#: transcria/web/templates/admin_connectors.html:94
+#, fuzzy
+msgid "Marche à suivre"
+msgstr "Archive"
+
+#: transcria/web/templates/admin_connectors.html:109
+#, fuzzy
+msgid "Documentation"
+msgstr "Administration"
+
 #: transcria/web/templates/admin_hardware.html:2
 #: transcria/web/templates/admin_hardware.html:5
-#: transcria/web/templates/base.html:72
+#: transcria/web/templates/base.html:74
 msgid "Préconisations matériel"
 msgstr "Hardware recommendations"
 
@@ -2673,7 +2789,7 @@ msgstr "No recommendation: no served STT backend is configured (see the served e
 
 #: transcria/web/templates/admin_maintenance.html:2
 #: transcria/web/templates/admin_maintenance.html:5
-#: transcria/web/templates/base.html:68
+#: transcria/web/templates/base.html:70
 msgid "Maintenance"
 msgstr "Maintenance"
 
@@ -2810,7 +2926,7 @@ msgstr "No archive yet. Run a first backup above."
 
 #: transcria/web/templates/admin_models.html:2
 #: transcria/web/templates/admin_models.html:5
-#: transcria/web/templates/base.html:70
+#: transcria/web/templates/base.html:72
 msgid "Modèles"
 msgstr "Models"
 
@@ -2929,13 +3045,13 @@ msgstr "Job"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:120
+#: transcria/web/templates/job_wizard.html:121
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
 msgstr "Group"
 
-#: transcria/web/templates/audit.html:35 transcria/web/templates/base.html:76
+#: transcria/web/templates/audit.html:35 transcria/web/templates/base.html:78
 #: transcria/web/templates/central_lexicon_detail.html:103
 msgid "Audit"
 msgstr "Audit"
@@ -2949,7 +3065,7 @@ msgstr "Glossary"
 msgid "Voix"
 msgstr "Voice"
 
-#: transcria/web/templates/audit.html:38 transcria/web/templates/base.html:82
+#: transcria/web/templates/audit.html:38 transcria/web/templates/base.html:84
 msgid "Système"
 msgstr "System"
 
@@ -3016,41 +3132,41 @@ msgstr "Groups"
 msgid "Lexiques"
 msgstr "Glossaries"
 
-#: transcria/web/templates/base.html:79 transcria/web/templates/queue.html:31
+#: transcria/web/templates/base.html:81 transcria/web/templates/queue.html:31
 #: transcria/web/templates/schedule.html:2
 #: transcria/web/templates/schedule.html:11
 msgid "Planification"
 msgstr "Scheduling"
 
-#: transcria/web/templates/base.html:90
+#: transcria/web/templates/base.html:92
 msgid "Langue de l'interface"
 msgstr "Interface language"
 
-#: transcria/web/templates/base.html:107
+#: transcria/web/templates/base.html:109
 msgid "Rôle :"
 msgstr "Role:"
 
-#: transcria/web/templates/base.html:110 transcria/web/templates/login.html:41
+#: transcria/web/templates/base.html:112 transcria/web/templates/login.html:41
 #: transcria/web/templates/user_form.html:32
 msgid "Mot de passe"
 msgstr "Password"
 
-#: transcria/web/templates/base.html:116
+#: transcria/web/templates/base.html:118
 msgid "Déconnexion"
 msgstr "Log out"
 
-#: transcria/web/templates/base.html:138
+#: transcria/web/templates/base.html:140
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 msgstr "You are still using the <strong>default password</strong>. <a href=\"/account/password\" class=\"alert-link\">Change it now</a> to secure your account."
 
-#: transcria/web/templates/base.html:147
+#: transcria/web/templates/base.html:149
 #, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> job waiting for VRAM."
 msgstr[1] "<strong>%(count)s</strong> jobs waiting for VRAM."
 
-#: transcria/web/templates/base.html:148
+#: transcria/web/templates/base.html:150
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "GPU memory is insufficient; these jobs will resume automatically as soon as it is freed. Free up VRAM (stop an LLM, finish another job) to speed up the resumption."
 
@@ -3190,7 +3306,7 @@ msgstr "Add an entry"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:91
-#: transcria/web/templates/job_wizard.html:129
+#: transcria/web/templates/job_wizard.html:130
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Add"
@@ -3680,31 +3796,31 @@ msgstr "Your inputs (context, participants, glossary) are kept — you can resta
 msgid "Relancer le traitement"
 msgstr "Restart processing"
 
-#: transcria/web/templates/job_wizard.html:102
+#: transcria/web/templates/job_wizard.html:103
 msgid "Ajouter au lexique central"
 msgstr "Add to central glossary"
 
-#: transcria/web/templates/job_wizard.html:103
+#: transcria/web/templates/job_wizard.html:104
 msgid "Fermer"
 msgstr "Close"
 
-#: transcria/web/templates/job_wizard.html:106
+#: transcria/web/templates/job_wizard.html:107
 msgid "Forme :"
 msgstr "Form:"
 
-#: transcria/web/templates/job_wizard.html:108
+#: transcria/web/templates/job_wizard.html:109
 msgid "Lexique existant"
 msgstr "Existing glossary"
 
-#: transcria/web/templates/job_wizard.html:113
+#: transcria/web/templates/job_wizard.html:114
 msgid "— Nouveau lexique… —"
 msgstr "— New glossary… —"
 
-#: transcria/web/templates/job_wizard.html:117
+#: transcria/web/templates/job_wizard.html:118
 msgid "Nom du nouveau lexique"
 msgstr "New glossary name"
 
-#: transcria/web/templates/job_wizard.html:118
+#: transcria/web/templates/job_wizard.html:119
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "E.g.: Cheese-making vocabulary"
 
@@ -3967,7 +4083,7 @@ msgstr "Scheduler"
 
 #: transcria/web/templates/queue.html:69
 #: transcria/web/templates/schedule.html:96
-#: transcria/web/templates/wizard/_step_file.html:51
+#: transcria/web/templates/wizard/_step_file.html:80
 msgid "indisponible"
 msgstr "unavailable"
 
@@ -4936,40 +5052,64 @@ msgstr "Drop the meeting audio or video file."
 msgid "Téléverser"
 msgstr "Upload"
 
+#: transcria/web/templates/wizard/_step_file.html:29
+msgid "Ou enregistrez directement depuis votre micro :"
+msgstr "Or record directly from your microphone:"
+
 #: transcria/web/templates/wizard/_step_file.html:31
+msgid "Enregistrer au micro"
+msgstr "Record from microphone"
+
+#: transcria/web/templates/wizard/_step_file.html:35
+msgid "Enregistrement…"
+msgstr "Recording…"
+
+#: transcria/web/templates/wizard/_step_file.html:38
+msgid "Arrêter"
+msgstr "Stop"
+
+#: transcria/web/templates/wizard/_step_file.html:45
+msgid "Utiliser cet enregistrement"
+msgstr "Use this recording"
+
+#: transcria/web/templates/wizard/_step_file.html:48
+msgid "Recommencer"
+msgstr "Start over"
+
+#: transcria/web/templates/wizard/_step_file.html:60
 msgid "<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées."
 msgstr "<strong>Processing profile</strong> — choose your deliverable level. The <strong>recommended</strong> profile (the most complete possible on this installation) is pre-selected. Left = faster and fewer steps to validate; right = richer deliverable. Steps not needed for your profile are hidden."
 
-#: transcria/web/templates/wizard/_step_file.html:35
+#: transcria/web/templates/wizard/_step_file.html:64
 msgid "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
 msgstr "Upload your file first — the profile choice will then become available."
 
-#: transcria/web/templates/wizard/_step_file.html:41
+#: transcria/web/templates/wizard/_step_file.html:70
 msgid "Profil de traitement"
 msgstr "Processing profile"
 
-#: transcria/web/templates/wizard/_step_file.html:47
+#: transcria/web/templates/wizard/_step_file.html:76
 msgid "Téléversez d'abord le fichier audio"
 msgstr "Upload the audio file first"
 
-#: transcria/web/templates/wizard/_step_file.html:51
+#: transcria/web/templates/wizard/_step_file.html:80
 #, python-format
 msgid "niveau %(n)s"
 msgstr "level %(n)s"
 
-#: transcria/web/templates/wizard/_step_file.html:57
+#: transcria/web/templates/wizard/_step_file.html:86
 msgid "Rapide"
 msgstr "Fast"
 
-#: transcria/web/templates/wizard/_step_file.html:58
+#: transcria/web/templates/wizard/_step_file.html:87
 msgid "Complet"
 msgstr "Complete"
 
-#: transcria/web/templates/wizard/_step_file.html:62
+#: transcria/web/templates/wizard/_step_file.html:91
 msgid "Sélectionnez un profil…"
 msgstr "Select a profile…"
 
-#: transcria/web/templates/wizard/_step_file.html:66
+#: transcria/web/templates/wizard/_step_file.html:95
 #: transcria/web/templates/wizard/_step_launch.html:13
 msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
 msgstr "No profile can be launched with the current configuration (arbitration LLM not configured or quality mode disabled). See the configuration."
@@ -5334,48 +5474,6 @@ msgstr "The last summary could not be generated: the arbitration LLM produced no
 #: transcria/web/templates/wizard/_step_summary.html:101
 msgid "Générer le résumé"
 msgstr "Generate summary"
-
-msgid "Backend STT live (temps réel)"
-msgstr "Live STT backend (real-time)"
-
-msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
-msgstr "Real-time chain (low latency) — empty = no live. Requires a model DESIGNED for streaming (nemotron-streaming, voxtralrt); never a batch model (see docs/TEMPS_REEL_REUNIONS.md)."
-
-msgid "Temps réel & connecteurs"
-msgstr "Real-time & connectors"
-
-msgid "Façade STT et ingestion des réunions (opt-in, désactivé par défaut)."
-msgstr "Meeting STT facade and ingestion (opt-in, disabled by default)."
-
-msgid "Façade STT temps réel"
-msgstr "Real-time STT facade"
-
-msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
-msgstr "Exposes POST /v1/audio/transcriptions (OpenAI-audio transcription) and POST /v1/audio/ingest (upload a meeting recording → job). Disabled = endpoints absent. Authenticated by a personal API token (see docs/TEMPS_REEL_REUNIONS.md)."
-
-msgid "Arrêter"
-msgstr "Stop"
-
-msgid "Ou enregistrez directement depuis votre micro :"
-msgstr "Or record directly from your microphone:"
-
-msgid "Enregistrer au micro"
-msgstr "Record from microphone"
-
-msgid "Micro inaccessible : autorisez le microphone puis réessayez."
-msgstr "Microphone unavailable: allow microphone access and try again."
-
-msgid "Recommencer"
-msgstr "Start over"
-
-msgid "Enregistrement…"
-msgstr "Recording…"
-
-msgid "Utiliser cet enregistrement"
-msgstr "Use this recording"
-
-msgid "Votre navigateur ne permet pas l'enregistrement audio."
-msgstr "Your browser does not support audio recording."
 
 #~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 #~ msgstr "Refinement applied (version v%(v)s) — the documents above are regenerated on every download and include your changes."

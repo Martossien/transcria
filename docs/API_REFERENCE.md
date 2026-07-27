@@ -138,6 +138,7 @@
 |---|---|---|---|---|
 | `/` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/admin/config` | GET,POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
+| `/admin/connecteurs` | GET | connexion + Permission.MANAGE_CONFIG | État des connecteurs de réunion et marche à suivre pour les activer. | `transcria.web.admin_routes` |
 | `/admin/hardware` | GET,POST | connexion + Permission.MANAGE_CONFIG | Préconisations matériel (lot conseiller) : scan GPU vs config courante. | `transcria.web.admin_routes` |
 | `/admin/maintenance` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -196,7 +197,7 @@
 | `/v1/audio/ingest` | POST | — | Dépôt d'un enregistrement post-réunion → job TranscrIA (pipeline complet). | `transcria.web.facade_api` |
 | `/v1/audio/transcriptions` | POST | — | Transcription STT sans état, compatible OpenAI Audio Transcriptions. | `transcria.web.facade_api` |
 
-_Portail TranscrIA (app principale) : 130 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 131 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

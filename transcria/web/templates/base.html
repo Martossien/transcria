@@ -62,6 +62,8 @@
               <li><hr class="dropdown-divider"></li>
               {% endif %}
               {% if Permission.MANAGE_CONFIG in user_permissions %}
+              <li><a class="dropdown-item {% if path.startswith('/admin/connecteurs') %}active{% endif %}" href="/admin/connecteurs">
+                <i class="bi bi-camera-video me-2"></i>{{ _('Connecteurs de réunion') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/config') %}active{% endif %}" href="/admin/config">
                 <i class="bi bi-sliders me-2"></i>{{ _('Configuration') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/maintenance') %}active{% endif %}" href="/admin/maintenance">

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Connecteurs de réunion') }} — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-camera-video me-2"></i>{{ _('Connecteurs de réunion') }}</h1>
+  <a href="/" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
+</div>
+
+<div class="alert alert-secondary small">
+  {{ _("Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque
+  plateforme. Les identifiants se placent dans la configuration des bots ou du service
+  connecteur, jamais ici.") }}
+</div>
+
+<div class="row g-3">
+  {% for vue in vues %}
+  {% set c = vue.connector %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h2 class="h5 mb-0">{{ c.name }}</h2>
+          {# L'état affiché reflète ce qui a été VÉRIFIÉ, pas ce qui est écrit : un
+             connecteur jamais exécuté ne doit jamais passer pour prêt. #}
+          {% if c.status == 'validated' %}
+            <span class="badge bg-success">{{ _('Éprouvé') }} — {{ c.verified_on }}</span>
+          {% elif c.status == 'implemented' %}
+            <span class="badge bg-warning text-dark">{{ _('Jamais exécuté en réel') }}</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ _('À venir') }}</span>
+          {% endif %}
+        </div>
+
+        <p class="text-muted small mb-2">{{ c.summary }}</p>
+
+        <div class="small mb-2">
+          {% if c.path == 'bot' %}
+            <i class="bi bi-robot me-1"></i>{{ _('Bot participant') }}
+          {% elif c.path == 'native' %}
+            <i class="bi bi-plug me-1"></i>{{ _('Transport natif') }}
+          {% else %}
+            <i class="bi bi-broadcast me-1"></i>{{ _('Webhook plateforme') }}
+          {% endif %}
+          {% if c.needs_inbound_port %}
+            <span class="badge bg-danger-subtle text-danger-emphasis ms-1">
+              <i class="bi bi-shield-exclamation"></i> {{ _('Ouverture de pare-feu requise') }}
+            </span>
+          {% else %}
+            <span class="badge bg-success-subtle text-success-emphasis ms-1">
+              {{ _('Sortant uniquement') }}
+            </span>
+          {% endif %}
+        </div>
+
+        {% if c.status == 'implemented' %}
+        <div class="alert alert-warning py-2 small mb-2">
+          {{ _("Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie
+          plateforme. À éprouver avant tout usage sérieux.") }}
+        </div>
+        {% endif %}
+
+        {# État de configuration : ce qui manque est nommé en clair, par son libellé. #}
+        {% if c.requires %}
+          {% if vue.configured %}
+            <div class="small text-success mb-2">
+              <i class="bi bi-check-circle"></i> {{ _('Tous les renseignements sont fournis') }}
+            </div>
+          {% else %}
+            <div class="small text-danger mb-2">
+              <i class="bi bi-exclamation-circle"></i>
+              {{ _('Manque :') }} {{ vue.missing|join(', ') }}
+            </div>
+          {% endif %}
+          <ul class="list-unstyled small mb-2">
+            {% for champ in c.requires %}
+            <li>
+              <code>{{ champ.key }}</code>
+              <span class="text-muted">— {{ champ.label }}</span>
+              {% if champ.secret %}
+                <i class="bi bi-key text-warning" title="{{ _('Secret : ne jamais commiter') }}"></i>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="small text-success mb-2">
+            <i class="bi bi-check-circle"></i> {{ _('Aucun identifiant nécessaire') }}
+          </div>
+        {% endif %}
+
+        {% if c.steps %}
+        <details class="mb-2">
+          <summary class="small fw-semibold">{{ _('Marche à suivre') }}</summary>
+          <ol class="small mt-2 mb-0">
+            {% for etape in c.steps %}<li>{{ etape }}</li>{% endfor %}
+          </ol>
+        </details>
+        {% endif %}
+
+        {% if c.notes %}
+        <ul class="small text-muted mb-2 ps-3">
+          {% for note in c.notes %}<li>{{ note }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if c.doc %}
+        <a class="small" href="https://github.com/Martossien/transcria/blob/main/{{ c.doc }}"
+           target="_blank" rel="noopener">{{ _('Documentation') }} <i class="bi bi-box-arrow-up-right"></i></a>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
