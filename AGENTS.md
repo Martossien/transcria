@@ -135,6 +135,9 @@ transcria/
   config.example.yaml       # Template de configuration
   requirements.txt          # Dépendances runtime
   requirements-dev.txt      # Dépendances dev (pytest, pytest-cov)
+  requirements-connectors.txt # Dépendances OPT-IN des connecteurs (boto3, cryptography, PyJWT, livekit, aiortc,
+                            #   playwright…) — JAMAIS installées par défaut : l'image applicative reste inchangée,
+                            #   les imports concernés sont paresseux.
   transcria.service         # Unité systemd (adapter les chemins avant installation)
   start.sh / stop.sh / status.sh
   transcria/
@@ -387,10 +390,12 @@ transcria/
     engine.py / diarize_engine.py # moteurs in-process (CAS A/B/C, idle-offload)
     capabilities.py         # build_capabilities() (pur)
     routes/                 # health, capabilities, engines (/engines/ensure), voice_embed, diarize
-  connector_service/        # Service ASYNC des connecteurs de réunion (aiohttp) — cf. docs/TEMPS_REEL_REUNIONS.md, docs/BOT_REUNION.md
+  connector_service/        # Service des connecteurs de réunion — récepteurs Flask (comme inference_service) + cœurs de capture ASYNC
+                            # cf. docs/TEMPS_REEL_REUNIONS.md, docs/BOT_REUNION.md, docs/adr/ADR-001
                             # ⚠ CONTRAT D'IMPORTS : le cœur `transcria/` n'importe JAMAIS ce paquet (lint-imports). Ce qui doit
                             #   remonter jusqu'à l'UI passe par de la DONNÉE — cf. transcria/data/meeting_connectors.yaml.
-    app.py / service.py     # application aiohttp + boucle de service
+    app.py / service.py     # app Flask multi-plateforme pilotée par config (opt-in : plateforme inactive = aucune route)
+                            #   + boucle de service async (`python -m connector_service`)
     receivers.py            # points d'entrée webhook (Zoom, Teams, Visio) — ⚠ Teams : répondre 202 AVANT toute validation
     signatures.py           # signatures entrantes (Zoom webhook) + JWT Meeting SDK (HS256, stdlib)
     providers/              # récupération POST-réunion par plateforme (zoom, teams, meet, visio)

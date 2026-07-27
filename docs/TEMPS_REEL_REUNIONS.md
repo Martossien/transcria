@@ -621,6 +621,17 @@ sur Docker, et lui en donner n'est pas anodin (surface d'attaque, droits du dém
 n'étaient documentées NULLE PART ; elles le sont désormais (`CONFIG_REFERENCE.md`,
 `config.example.yaml`). La fonctionnalité était jusque-là inatteignable sans lire le code.
 
+✅ Fait également : la page **`/admin/connecteurs`** (`transcria/data/meeting_connectors.yaml` +
+`transcria/web/connector_catalog.py`). Elle porte, pour les six plateformes, la procédure exacte,
+ce qu'il faut renseigner, l'exigence réseau — et surtout le STATUT RÉEL : `validated` (éprouvé en
+conditions réelles, date à l'appui) ou `implemented` (le code passe la CI mais n'a jamais été
+exécuté en vrai). Cette distinction est le cœur de son honnêteté : afficher Teams ou Meet comme
+prêts tromperait l'exploitant.
+
+C'est une page de LECTURE — elle ne modifie rien, précisément parce que L4 n'est pas tranché.
+Elle ne dispense donc ni de L1 ni de L2, mais elle rend la marche à suivre trouvable sans lire le
+code, ce qui était le vrai blocage.
+
 ## 7-bis. Zoom — comment un CLIENT met cela en service (étude, 2026-07-27)
 
 Question posée : *« si le moteur fonctionne, comment font les utilisateurs ? Aller sur le

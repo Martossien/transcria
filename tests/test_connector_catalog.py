@@ -205,3 +205,45 @@ def test_connecteur_sans_exigence_est_configure_d_office():
     """Jitsi ne demande aucun identifiant : le présenter comme « à configurer » serait faux."""
     jitsi = {c.id: c for c in load_catalog()}["jitsi"]
     assert describe_configuration(jitsi, {}).configured
+
+
+# --------------------------------------------------------------------------- #
+#  La page elle-même
+# --------------------------------------------------------------------------- #
+class TestPageAdministration:
+    """La page n'était couverte par AUCUN test : une faute de gabarit ne se serait vue qu'en
+    la chargeant dans un navigateur — c'est-à-dire, en pratique, chez l'exploitant."""
+
+    def test_la_page_se_rend(self, admin_client):
+        reponse = admin_client.get("/admin/connecteurs")
+        assert reponse.status_code == 200
+
+    def test_chaque_plateforme_est_nommee(self, admin_client):
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        for nom in ("Zoom", "Jitsi", "Visio", "Microsoft Teams", "Google Meet"):
+            assert nom in page
+
+    def test_toutes_les_voies_ont_un_libelle(self, admin_client):
+        """Le gabarit a une branche par voie. Une voie ajoutée au catalogue sans branche
+        correspondante retomberait silencieusement sur « Webhook plateforme » — et Meet, qui
+        n'exige aucun port entrant, serait présenté comme en exigeant un."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        for libelle in ("Bot participant", "Transport natif", "File interrogée",
+                        "Webhook plateforme"):
+            assert libelle in page, f"voie sans libellé dans la page : {libelle}"
+
+    def test_l_exigence_de_pare_feu_est_affichee_des_deux_cotes(self, admin_client):
+        """C'est souvent ce qui décide de ce qu'une DSI acceptera : les deux mentions doivent
+        apparaître, sans quoi l'absence d'exigence passerait pour un oubli."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert "pare-feu" in page
+        assert "Sortant uniquement" in page
+
+    def test_un_connecteur_jamais_execute_porte_son_avertissement(self, admin_client):
+        """Le point d'honnêteté de la page : présenter Teams ou Meet comme prêts tromperait
+        l'exploitant."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert "jamais été exécuté" in page
+
+    def test_la_page_exige_des_droits_d_administration(self, viewer_client):
+        assert viewer_client.get("/admin/connecteurs").status_code in (302, 403)
