@@ -49,7 +49,9 @@ from connector_service.live.zoom_sdk_state import (
     Participant,
     ParticipantRegistry,
     RecordingPermission,
+    ReminderAction,
     ZoomSdkPhase,
+    decide_reminder,
     describe_auth_result,
     describe_failed_admission,
     describe_privilege_outcome,
@@ -159,6 +161,7 @@ def zoom_sdk_demux_source(
     admission_timeout_s: float = 300.0,
     auth_timeout_s: float = 60.0,
     recording_permission_timeout_s: float = 120.0,
+    accept_reminders: bool = True,
     max_queued_frames: int = 2000,
     web_domain: str = "https://zoom.us",
     on_phase: Callable[[ZoomSdkPhase], None] | None = None,
@@ -265,6 +268,40 @@ def zoom_sdk_demux_source(
 
                 meeting.SetEvent(retained.keep(zoom.MeetingServiceEventCallbacks(
                     onMeetingStatusChangedCallback=_on_status)))
+
+                # --- Avertissements bloquants de Zoom -------------------------------- #
+                # Zoom impose au participant des rappels à acquitter, dont celui de
+                # l'ENREGISTREMENT que beaucoup de comptes d'entreprise activent. Ils sont
+                # BLOQUANTS : sans réponse, le bot semble entré mais ne capte rien, et rien
+                # n'explique pourquoi. On journalise CE QU'ON ACQUITTE — acquitter au nom d'un
+                # humain absent mérite une trace.
+                def _on_reminder(content: Any, handler: Any) -> None:
+                    title = str(getattr(content, "GetTitle", lambda: "")() or "")
+                    blocking = bool(getattr(content, "IsBlocking", lambda: True)())
+                    action = decide_reminder(is_blocking=blocking, accept=accept_reminders)
+                    logger.warning("Zoom SDK : avertissement « %s » (bloquant=%s) → %s",
+                                   title or "sans titre", blocking, action.value)
+                    if handler is None:
+                        return
+                    method = {ReminderAction.ACCEPT: "Accept",
+                              ReminderAction.DECLINE: "Decline",
+                              ReminderAction.IGNORE: "Ignore"}[action]
+                    with contextlib.suppress(Exception):   # un rappel non traité ne doit
+                        getattr(handler, method)()         # pas tuer la session
+
+                # Enregistré AVANT `Join()` : l'avertissement d'enregistrement s'affiche
+                # pendant l'entrée, donc s'abonner après serait trop tard. Le contrôleur peut
+                # ne pas être disponible à ce stade selon la version du SDK — on n'en fait pas
+                # une erreur fatale, mais on le signale : sans lui, un compte qui impose
+                # l'avertissement bloquerait le bot sans explication.
+                reminder_ctrl = meeting.GetMeetingReminderController()
+                if reminder_ctrl is None:
+                    logger.warning("Zoom SDK : contrôleur d'avertissements indisponible — un "
+                                   "avertissement bloquant ne pourrait pas être acquitté")
+                else:
+                    reminder_ctrl.SetEvent(retained.keep(
+                        zoom.MeetingReminderEventCallbacks(
+                            onReminderNotifyCallback=_on_reminder)))
 
                 # --- Registre des participants -------------------------------------- #
                 participants_ctrl = meeting.GetMeetingParticipantsController()
@@ -633,11 +670,18 @@ def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
     if dropped:
         logger.warning("Zoom SDK : %d frame(s) audio écartée(s) au total", dropped)
     if started_raw_recording and meeting is not None:
+        # Se DÉSABONNER avant d'arrêter : tant que le délégué reste abonné, le SDK conserve
+        # un pointeur vers un objet Python que l'on s'apprête à relâcher — le piège documenté
+        # en tête de module, appliqué à l'arrêt.
+        try:
+            zoom.GetAudioRawdataHelper().unSubscribe()
+        except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
+            logger.debug("unSubscribe a échoué (sans conséquence) : %r", exc)
         # Arrêter la capture AVANT de quitter : Zoom signale l'enregistrement aux
         # participants, et le laisser courir donnerait un indicateur mensonger.
         try:
             meeting.GetMeetingRecordingController().StopRawRecording()
-        except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
+        except Exception as exc:  # noqa: BLE001
             logger.debug("StopRawRecording a échoué (sans conséquence) : %r", exc)
         _settle()
     if meeting is not None:

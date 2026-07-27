@@ -12,7 +12,9 @@ from connector_service.live.zoom_sdk_state import (
     Participant,
     ParticipantRegistry,
     RecordingPermission,
+    ReminderAction,
     ZoomSdkPhase,
+    decide_reminder,
     describe_auth_result,
     describe_failed_admission,
     describe_privilege_outcome,
@@ -332,3 +334,28 @@ def test_phase_inattendue_reste_lisible():
     message = describe_failed_admission(ZoomSdkPhase.RECONNECTING,
                                         timeout_s=10, reason="reconnecting")
     assert "reconnecting" in message
+
+
+# --------------------------------------------------------------------------- #
+#  Avertissements bloquants de Zoom
+# --------------------------------------------------------------------------- #
+# Zoom impose au participant des avertissements à acquitter — « cette réunion est
+# enregistrée » en tête, que beaucoup de comptes d'entreprise activent. Ils sont BLOQUANTS :
+# un bot qui ne répond pas semble entré mais ne capte rien, sans qu'aucune erreur l'explique.
+
+def test_avertissement_acquitte_par_defaut():
+    """L'hôte a admis ce bot en sachant ce qu'il fait : acquitter est le comportement utile."""
+    assert decide_reminder(is_blocking=True) is ReminderAction.ACCEPT
+    assert decide_reminder(is_blocking=False) is ReminderAction.ACCEPT
+
+
+def test_refus_explicite_plutot_qu_un_blocage_muet():
+    """Si l'exploitation choisit de ne jamais consentir automatiquement, un avertissement
+    BLOQUANT doit être refusé franchement : un départ se diagnostique, un blocage non."""
+    assert decide_reminder(is_blocking=True, accept=False) is ReminderAction.DECLINE
+
+
+def test_avertissement_non_bloquant_peut_etre_ignore():
+    """Sans consentement automatique et sans blocage, l'ignorer suffit — inutile de quitter
+    une réunion pour un avertissement qui n'empêche rien."""
+    assert decide_reminder(is_blocking=False, accept=False) is ReminderAction.IGNORE

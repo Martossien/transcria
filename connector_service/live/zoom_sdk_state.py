@@ -147,6 +147,34 @@ def exit_reason(phase: ZoomSdkPhase, *, was_active: bool) -> str:
     return phase.value
 
 
+class ReminderAction(str, Enum):
+    """Conduite face à un « rappel » Zoom (avertissement affiché au participant)."""
+
+    ACCEPT = "accept"      # acquitter et poursuivre
+    IGNORE = "ignore"      # laisser sans réponse (possible seulement si non bloquant)
+    DECLINE = "decline"    # refuser — sur un rappel bloquant, cela fait sortir de la réunion
+
+
+def decide_reminder(*, is_blocking: bool, accept: bool = True) -> ReminderAction:
+    """Que faire d'un rappel Zoom — décision PURE, donc testable.
+
+    Zoom impose au participant des avertissements à acquitter : « cette réunion est
+    enregistrée », consentement à un traitement par IA, conditions d'un compte. Le plus
+    important est celui de l'ENREGISTREMENT, que beaucoup de comptes d'entreprise activent —
+    et il est BLOQUANT : sans acquittement, le participant reste coincé. Un bot qui l'ignore
+    donne l'impression d'être entré puis de ne rien capter, sans erreur pour l'expliquer.
+
+    Acquitter est le défaut, et c'est cohérent : l'hôte a admis ce bot en sachant ce qu'il
+    fait. Mais la décision reste PARAMÉTRABLE, parce qu'acquitter un avertissement au nom
+    d'un humain absent n'est pas anodin — une exploitation peut vouloir ne jamais consentir
+    automatiquement. Dans ce cas on refuse explicitement plutôt que de rester coincé : un
+    départ franc se diagnostique, un blocage muet non.
+    """
+    if accept:
+        return ReminderAction.ACCEPT
+    return ReminderAction.DECLINE if is_blocking else ReminderAction.IGNORE
+
+
 def describe_failed_admission(phase: ZoomSdkPhase, *, timeout_s: float, reason: str) -> str:
     """Message d'échec d'entrée en réunion — DIRE POURQUOI, pas seulement que ça a échoué.
 
