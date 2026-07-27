@@ -937,9 +937,22 @@ surtout, ce qui reste — un module écrit n'est pas un connecteur qui marche.
 | `graph_validation.py` | identité de l'émetteur des notifications (`appid` v1 / `azp` v2) | tests |
 | `meet_events.py` | abonnements Workspace Events, lecture des messages Pub/Sub (CloudEvents binaire) | tests |
 | `subscription_renewal.py` | **brique COMMUNE** de renouvellement — Graph et Workspace partagent la même règle, deux politiques | tests |
+| `subscription_keeper.py` | l'ordonnanceur qui l'APPLIQUE : plusieurs abonnements, échecs encaissés, délais respectés | tests, **sans asyncio ni horloge réelle** |
 | `oauth_tokens.py` | demandes de jeton Graph et Google, échéances, décision de rafraîchissement | tests |
 | `jwt_crypto.py` | signature RS256 de l'assertion Google, vérification des `validationTokens` Graph | tests, **avec paire de clés engendrée sur place** |
 | `pubsub_pull.py` | interrogation et acquittement Pub/Sub en REST, et **quoi acquitter** | tests, formes relevées sur la référence REST |
+
+#### Trois pièges que l'ordonnanceur existe pour éviter
+
+Ils n'ont rien de théorique — ce sont les trois façons dont une boucle de renouvellement échoue
+en production, et aucune ne se voit avant que les évènements ne cessent d'arriver :
+
+1. **L'échec d'un abonnement arrête les autres.** Le plus banal des bugs de boucle et le plus
+   coûteux : un locataire en panne fait expirer les abonnements de tous les autres.
+2. **La temporisation n'est pas respectée**, et la boucle martèle un service déjà en difficulté
+   jusqu'à se faire limiter — au moment précis où l'échéance approche.
+3. **Deux opérations trop rapprochées sur le même abonnement.** Graph interdit explicitement
+   d'enchaîner `/reauthorize` et `PATCH` en moins de dix minutes.
 
 #### Deux choix explicites dans la couche Pub/Sub
 
