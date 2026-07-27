@@ -48,7 +48,8 @@ def test_frame_peak_et_wav():
 
 
 def test_buffer_ferme_le_tour_sur_une_pause():
-    buf = SpeakerBuffer(RATE, min_window_s=0.1, max_window_s=10, silence_to_close_s=0.1)
+    buf = SpeakerBuffer(RATE, min_window_s=0.1, max_window_s=10, silence_to_close_s=0.1,
+                        min_voiced_s=0.02)
     assert buf.add(VOICE) is None                    # trop court encore
     for _ in range(4):
         buf.add(VOICE)
@@ -61,13 +62,15 @@ def test_buffer_ferme_le_tour_sur_une_pause():
 
 
 def test_buffer_borne_la_duree_maximale():
-    buf = SpeakerBuffer(RATE, min_window_s=0.1, max_window_s=0.1, silence_to_close_s=99)
+    buf = SpeakerBuffer(RATE, min_window_s=0.1, max_window_s=0.1, silence_to_close_s=99,
+                        min_voiced_s=0.02)
     got = [buf.add(VOICE) for _ in range(6)]
     assert any(w is not None for w in got)           # fermé par la durée max, sans pause
 
 
 def test_buffer_jette_les_fenetres_muettes():
-    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=0.04, silence_to_close_s=0.02)
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=0.04, silence_to_close_s=0.02,
+                        min_voiced_s=0.02)
     for _ in range(6):
         buf.add(SILENCE)
     assert buf.flush() is None                       # que du silence → rien à transcrire
@@ -84,7 +87,7 @@ class _Provider:
 
 
 def _run(frames, transcribe):
-    transcriber = FacadeTranscriber(transcribe, min_window_s=0.05, max_window_s=0.1,
+    transcriber = FacadeTranscriber(transcribe, min_window_s=0.05, max_window_s=0.1, min_voiced_s=0.02,
                                     silence_to_close_s=0.04)
     session = LiveSession(transcriber)
     return asyncio.run(session.run(_Provider(frames), OCC))
@@ -137,3 +140,85 @@ def test_une_fenetre_en_echec_n_arrete_pas_la_reunion():
 
     finals = _run(frames, transcribe)                         # ne lève pas
     assert finals == [] and calls["n"] >= 1
+
+
+# --------------------------------------------------------------------------- #
+#  Quantité minimale de parole — protection contre les hallucinations du moteur
+# --------------------------------------------------------------------------- #
+# Ces tests verrouillent une règle établie par MESURE sur l'installation réelle : un moteur
+# de type Whisper à qui l'on soumet du silence n'échoue pas, il INVENTE. Douze secondes de
+# silence numérique pur ont produit une phrase française complète et entièrement fausse, et
+# des segments de ce genre polluaient les transcriptions de réunion Zoom.
+
+def test_fenetre_sans_aucune_parole_est_jetee():
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=0.1, silence_to_close_s=99)
+    fenetres = [buf.add(SILENCE) for _ in range(20)]
+    assert all(f is None for f in fenetres), "du silence ne doit JAMAIS partir au moteur"
+
+
+def test_fenetre_avec_trop_peu_de_parole_est_jetee():
+    """Le cas qui polluait les réunions : un claquement de clavier ou une respiration
+    ouvrait une fenêtre presque vide, aussitôt transformée en texte imaginaire."""
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=0.5,
+                        silence_to_close_s=99, min_voiced_s=0.35)
+    buf.add(VOICE)                                   # 20 ms de son : très en deçà du seuil
+    fenetres = [buf.add(SILENCE) for _ in range(40)]  # jusqu'au plafond de durée
+    assert all(f is None for f in fenetres)
+
+
+def test_fenetre_avec_assez_de_parole_est_transmise():
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=5.0,
+                        silence_to_close_s=0.1, min_voiced_s=0.1)
+    for _ in range(10):                              # 200 ms de parole : au-dessus du seuil
+        buf.add(VOICE)
+    fenetre = None
+    for _ in range(10):
+        fenetre = buf.add(SILENCE)
+        if fenetre:
+            break
+    assert fenetre is not None and len(fenetre) > 0
+
+
+def test_la_parole_se_cumule_sur_des_bribes_separees():
+    """Une interjection hachée (« oui… d'accord ») doit compter comme de la parole : le seuil
+    porte sur le CUMUL, pas sur une salve continue."""
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=5.0,
+                        silence_to_close_s=99, min_voiced_s=0.1)
+    for _ in range(6):                               # 6 × (20 ms parlés + 20 ms silence)
+        buf.add(VOICE)
+        buf.add(SILENCE)
+    assert buf.voiced_s >= 0.1
+    assert buf.flush() is not None
+
+
+def test_flush_final_respecte_le_seuil():
+    """Le vidage de fin de réunion ne doit pas contourner la règle : c'est justement là qu'un
+    reliquat de silence traînait."""
+    buf = SpeakerBuffer(RATE, min_voiced_s=0.35)
+    for _ in range(50):
+        buf.add(SILENCE)
+    assert buf.flush() is None
+
+
+def test_le_compteur_de_parole_se_remet_a_zero_apres_une_fenetre():
+    """Sans remise à zéro, la parole d'une fenêtre validerait les suivantes — et le silence
+    qui suit un vrai tour repartirait au moteur."""
+    buf = SpeakerBuffer(RATE, min_window_s=0.02, max_window_s=5.0,
+                        silence_to_close_s=99, min_voiced_s=0.1)
+    for _ in range(10):
+        buf.add(VOICE)
+    assert buf.flush() is not None
+    assert buf.voiced_s == 0.0
+    for _ in range(50):
+        buf.add(SILENCE)
+    assert buf.flush() is None
+
+
+def test_le_seuil_de_production_ecarte_une_frame_isolee():
+    """Verrou sur le DÉFAUT, pas sur une valeur de test : c'est lui qui protège en réunion."""
+    from connector_service.live.facade_stt import MIN_VOICED_S
+
+    buf = SpeakerBuffer(RATE)                        # aucun réglage : valeurs de production
+    buf.add(VOICE)
+    assert buf.voiced_s < MIN_VOICED_S
+    assert buf.flush() is None

@@ -33,6 +33,11 @@ SILENCE_PEAK = 500          # en deçà : la frame est considérée SILENCIEUSE 
 MIN_WINDOW_S = 1.5          # ne pas transcrire des bribes plus courtes
 MAX_WINDOW_S = 12.0         # borne haute : garantit un rendu régulier même sans pause
 SILENCE_TO_CLOSE_S = 0.6    # pause qui clôt un tour de parole
+# Parole cumulée EXIGÉE pour soumettre une fenêtre au moteur. En deçà, la fenêtre est jetée :
+# un moteur de type Whisper n'échoue pas sur du silence, il INVENTE du texte (mesuré : 12 s de
+# silence pur → une phrase française complète et fausse). 0,35 s laisse passer les
+# interjections courtes (« oui », « d'accord ») tout en écartant clics et respirations.
+MIN_VOICED_S = 0.35
 
 
 def frame_peak(payload: bytes) -> int:
@@ -58,48 +63,79 @@ class SpeakerBuffer:
     """Tampon d'UN locuteur : accumule le PCM et décide quand la fenêtre est prête.
 
     Deux déclencheurs : une PAUSE suffisante après de la parole (fin de tour naturelle), ou
-    la durée maximale (locuteur ininterrompu). Les fenêtres purement silencieuses sont
-    jetées — inutile d'occuper le moteur STT avec du vide.
+    la durée maximale (locuteur ininterrompu).
+
+    ⚠ POURQUOI UNE QUANTITÉ MINIMALE DE PAROLE, et pas un simple « il y a eu du son » :
+    un moteur STT de type Whisper à qui l'on soumet du silence n'échoue pas — il **invente**.
+    Mesuré sur cette installation : 12 secondes de silence NUMÉRIQUE PUR ont produit une
+    phrase française complète et parfaitement fausse. Avec l'ancienne règle (« une seule
+    frame au-dessus du seuil suffit »), un claquement de clavier ou une respiration ouvrait
+    une fenêtre de 12 s presque vide, aussitôt transformée en texte imaginaire. C'est ce qui
+    polluait les transcriptions de réunion réelle.
+
+    On exige donc une DURÉE CUMULÉE de parole, pas un booléen. Vérifié par ailleurs : dès
+    qu'une fenêtre contient de la vraie parole, l'entourer de silence ne la dégrade pas —
+    le problème est bien l'absence de parole, pas la présence de silence.
     """
 
     def __init__(self, sample_rate_hz: int, *, min_window_s: float = MIN_WINDOW_S,
                  max_window_s: float = MAX_WINDOW_S,
                  silence_to_close_s: float = SILENCE_TO_CLOSE_S,
-                 silence_peak: int = SILENCE_PEAK) -> None:
+                 silence_peak: int = SILENCE_PEAK,
+                 min_voiced_s: float = MIN_VOICED_S) -> None:
         self._rate = max(int(sample_rate_hz), 1)
         self._min = min_window_s
         self._max = max_window_s
         self._silence_close = silence_to_close_s
         self._silence_peak = silence_peak
+        self._min_voiced = min_voiced_s
         self._pcm = bytearray()
         self._silence_s = 0.0
-        self._voiced = False
+        self._voiced_s = 0.0
 
     @property
     def duration_s(self) -> float:
         return len(self._pcm) / 2 / self._rate
+
+    @property
+    def voiced_s(self) -> float:
+        """Durée cumulée des frames au-dessus du seuil de silence."""
+        return self._voiced_s
 
     def add(self, payload: bytes) -> bytes | None:
         """Ajoute une frame. Retourne la fenêtre à transcrire si elle est prête, sinon None."""
         self._pcm.extend(payload)
         frame_s = len(payload) / 2 / self._rate
         if frame_peak(payload) > self._silence_peak:
-            self._voiced = True
+            self._voiced_s += frame_s
             self._silence_s = 0.0
         else:
             self._silence_s += frame_s
+        # La fermeture sur pause n'a de sens qu'après de la parole ; le plafond de durée
+        # s'applique inconditionnellement, sans quoi un flux continu de silence ferait
+        # croître le tampon sans fin.
         ready = (self.duration_s >= self._max
-                 or (self._voiced and self.duration_s >= self._min
+                 or (self._voiced_s > 0 and self.duration_s >= self._min
                      and self._silence_s >= self._silence_close))
         return self.flush() if ready else None
 
     def flush(self) -> bytes | None:
-        """Vide le tampon et rend la fenêtre — None si elle ne contient aucune parole."""
-        pcm, voiced = bytes(self._pcm), self._voiced
+        """Vide le tampon et rend la fenêtre — None si elle ne contient pas ASSEZ de parole.
+
+        Rendre `None` jette l'audio : c'est voulu. Une fenêtre sans parole exploitable n'a
+        rien à donner, et la soumettre au moteur produirait du texte inventé (cf. la
+        docstring de la classe) — pire qu'un silence, car indétectable en aval.
+        """
+        pcm, voiced_s = bytes(self._pcm), self._voiced_s
         self._pcm = bytearray()
         self._silence_s = 0.0
-        self._voiced = False
-        return pcm if (voiced and pcm) else None
+        self._voiced_s = 0.0
+        if not pcm or voiced_s < self._min_voiced:
+            if pcm and voiced_s > 0:
+                logger.debug("fenêtre écartée : %.2f s de parole (< %.2f s requis)",
+                             voiced_s, self._min_voiced)
+            return None
+        return pcm
 
 
 # transcrire(wav_bytes) -> texte. Injecté : la façade réelle en prod, un faux en CI.
