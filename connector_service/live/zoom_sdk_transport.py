@@ -46,10 +46,13 @@ from connector_service.live.glib_loop import GLibPump
 from connector_service.live.zoom_sdk_state import (
     Participant,
     ParticipantRegistry,
+    RecordingPermission,
     ZoomSdkPhase,
     describe_auth_result,
+    describe_privilege_outcome,
     exit_reason,
     interpret_meeting_status,
+    interpret_raw_recording_readiness,
 )
 from connector_service.signatures import ROLE_PARTICIPANT, zoom_meeting_sdk_signature
 
@@ -152,6 +155,7 @@ def zoom_sdk_demux_source(
     join_token: str = "",
     admission_timeout_s: float = 300.0,
     auth_timeout_s: float = 60.0,
+    recording_permission_timeout_s: float = 120.0,
     max_queued_frames: int = 2000,
     web_domain: str = "https://zoom.us",
     on_phase: Callable[[ZoomSdkPhase], None] | None = None,
@@ -161,6 +165,10 @@ def zoom_sdk_demux_source(
     `admission_timeout_s` vaut 5 min par défaut : une salle d'attente exige une action de
     l'hôte, et abandonner au bout de quelques secondes rendrait le bot inutilisable en
     pratique.
+
+    `recording_permission_timeout_s` couvre le même genre d'attente : sur un compte GRATUIT,
+    l'hôte doit accepter À LA MAIN une fenêtre « Autoriser l'enregistrement » — le jeton
+    d'enregistrement local, qui automatise cela, ne fonctionne pas sur ce type de compte.
 
     `max_queued_frames` borne la file entre les rappels du SDK et la boucle asyncio. Sans
     borne, un moteur STT qui ralentit ferait croître la mémoire pendant toute la réunion ;
@@ -210,6 +218,7 @@ def zoom_sdk_demux_source(
             pump = GLibPump()
             pump_task = asyncio.ensure_future(pump.run(stop))
             meeting: Any = None          # nécessaire au nettoyage même si l'entrée échoue
+            started_raw_recording = False
 
             try:
                 # --- Authentification ------------------------------------------------ #
@@ -355,6 +364,23 @@ def zoom_sdk_demux_source(
                             pass
                     frames.put_nowait(frame)
 
+                # --- Droit d'enregistrement : CONDITION de l'audio brut -------------- #
+                # Zoom ne délivre l'audio brut qu'à un participant qui a le droit
+                # d'enregistrer. Sans lui, `subscribe()` réussit et AUCUNE frame n'arrive :
+                # panne muette. On vérifie donc, on demande si besoin, et on échoue avec un
+                # message qui dit quoi faire.
+                recording = meeting.GetMeetingRecordingController()
+                await _ensure_raw_recording_allowed(
+                    zoom, recording, retained, loop,
+                    timeout_s=recording_permission_timeout_s)
+
+                err = recording.StartRawRecording()
+                if err != zoom.SDKError.SDKERR_SUCCESS:
+                    raise ZoomSdkError(
+                        f"StartRawRecording refusé : {err}. L'audio brut ne circule pas tant "
+                        f"que l'enregistrement brut n'est pas démarré.")
+                started_raw_recording = True
+
                 helper = retained.keep(zoom.GetAudioRawdataHelper())
                 err = helper.subscribe(
                     retained.keep(zoom.ZoomSDKAudioRawDataDelegateCallbacks(
@@ -383,7 +409,8 @@ def zoom_sdk_demux_source(
                     await pump_task
                 except asyncio.CancelledError:
                     pass
-                _cleanup(zoom, meeting, retained, dropped)
+                _cleanup(zoom, meeting, retained, dropped,
+                         started_raw_recording=started_raw_recording)
 
         return _open()
     return _factory
@@ -443,7 +470,72 @@ def _snapshot_participants(controller: Any) -> list[Participant]:
     return participants
 
 
-def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int) -> None:
+async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Retained,
+                                        loop: asyncio.AbstractEventLoop, *,
+                                        timeout_s: float) -> None:
+    """Obtient le droit d'enregistrer, sans lequel Zoom ne délivre aucun audio brut.
+
+    Trois cas, tous rencontrables en exploitation :
+    - le bot est hôte/co-hôte, ou le droit lui a déjà été donné → rien à faire ;
+    - le droit peut être DEMANDÉ → on le demande, et l'hôte voit une fenêtre à accepter.
+      C'est le cas courant sur un compte GRATUIT, où le jeton d'enregistrement local ne
+      fonctionne pas : la seule voie est l'accord manuel de l'hôte, en séance ;
+    - ni l'un ni l'autre → on échoue tout de suite, plutôt que de capter le vide.
+    """
+    readiness = interpret_raw_recording_readiness(
+        getattr(recording.CanStartRawRecording(), "name", ""),
+        can_request=(recording.IsSupportRequestLocalRecordingPrivilege()
+                     == zoom.SDKError.SDKERR_SUCCESS))
+
+    if readiness is RecordingPermission.GRANTED:
+        logger.info("Zoom SDK : droit d'enregistrement déjà acquis")
+        return
+    if readiness is RecordingPermission.UNAVAILABLE:
+        raise ZoomSdkError(
+            "le bot n'a pas le droit d'enregistrer et ne peut pas le demander. Sans ce droit, "
+            "Zoom ne délivre AUCUN audio brut. Remèdes : faire du bot un co-hôte, ou activer "
+            "l'enregistrement local sur le compte de l'hôte.")
+
+    outcome: dict[str, Any] = {}
+    answered = asyncio.Event()
+
+    def _on_status(status: Any) -> None:
+        outcome["granted"], outcome["message"] = describe_privilege_outcome(
+            getattr(status, "name", str(status)))
+        loop.call_soon_threadsafe(answered.set)
+
+    def _on_privilege_changed(can_record: bool) -> None:
+        # L'hôte peut aussi accorder le droit SPONTANÉMENT, sans passer par notre demande.
+        if can_record and not answered.is_set():
+            outcome["granted"], outcome["message"] = True, (
+                "l'hôte a accordé l'enregistrement")
+            loop.call_soon_threadsafe(answered.set)
+
+    recording.SetEvent(retained.keep(zoom.MeetingRecordingCtrlEventCallbacks(
+        onLocalRecordingPrivilegeRequestStatusCallback=_on_status,
+        onRecordPrivilegeChangedCallback=_on_privilege_changed)))
+
+    err = recording.RequestLocalRecordingPrivilege()
+    if err != zoom.SDKError.SDKERR_SUCCESS:
+        raise ZoomSdkError(f"demande d'autorisation d'enregistrement refusée : {err}")
+
+    logger.warning(
+        "Zoom SDK : EN ATTENTE DE L'HÔTE — une fenêtre « Autoriser l'enregistrement » "
+        "s'affiche dans la réunion ; elle doit être acceptée (%.0f s).", timeout_s)
+    try:
+        await asyncio.wait_for(answered.wait(), timeout=timeout_s)
+    except asyncio.TimeoutError as exc:
+        raise ZoomSdkError(
+            f"l'hôte n'a pas répondu en {timeout_s:.0f} s à la demande d'autorisation "
+            f"d'enregistrement — sans elle, aucun audio brut ne circule.") from exc
+
+    if not outcome.get("granted"):
+        raise ZoomSdkError(str(outcome.get("message") or "autorisation d'enregistrement refusée"))
+    logger.info("Zoom SDK : %s", outcome["message"])
+
+
+def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
+             started_raw_recording: bool = False) -> None:
     """Quitte la réunion et libère le SDK, sans jamais masquer l'erreur d'origine.
 
     L'ordre importe : quitter la réunion, PUIS `CleanUPSDK`, PUIS relâcher les objets retenus.
@@ -456,6 +548,13 @@ def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int) -> None
     """
     if dropped:
         logger.warning("Zoom SDK : %d frame(s) audio écartée(s) au total", dropped)
+    if started_raw_recording and meeting is not None:
+        # Arrêter la capture AVANT de quitter : Zoom signale l'enregistrement aux
+        # participants, et le laisser courir donnerait un indicateur mensonger.
+        try:
+            meeting.GetMeetingRecordingController().StopRawRecording()
+        except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
+            logger.debug("StopRawRecording a échoué (sans conséquence) : %r", exc)
     if meeting is not None:
         try:
             meeting.Leave(zoom.LeaveMeetingCmd.LEAVE_MEETING)

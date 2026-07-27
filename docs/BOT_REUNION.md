@@ -143,10 +143,18 @@ plateformes appliquent une suppression de bruit qui l'efface. Utilisez de la **v
 
 ### 6.1 Ce qu'il faut obtenir de Zoom
 
-Créez une app de type **« Meeting SDK »** sur [marketplace.zoom.us](https://marketplace.zoom.us),
-puis relevez son **Client ID** et son **Client Secret**.
+Le type d'app « Meeting SDK » **n'existe plus** comme choix séparé sur le Marketplace. La
+marche à suivre aujourd'hui :
 
-Le point qui décide de tout est **sur quel compte** l'app est créée :
+1. créer une **General App** sur [marketplace.zoom.us](https://marketplace.zoom.us) ;
+2. onglet **Embed** → activer **Meeting SDK** ;
+3. relever **Client ID** et **Client Secret** — ils tiennent lieu de SDK Key et SDK Secret.
+
+**Un compte Zoom GRATUIT (Basic) suffit** pour créer l'app, signer le JWT, rejoindre la
+réunion **et capter l'audio brut**. L'ancienne licence « raw data » a été supprimée. Deux
+réserves, détaillées en 6.2.
+
+Le point qui décide du reste est **sur quel compte** l'app est créée :
 
 | Réunion à rejoindre | Ce qu'il faut | Revue de l'app par Zoom |
 |---|---|---|
@@ -158,7 +166,30 @@ impose une revue de l'app — **aucun code ne dispense de cette démarche** (dur
 2026). L'alternative sans revue est que l'**hôte** active RTMS, déjà pris en charge par
 TranscrIA (`connector_service/live/rtms_transport.py`).
 
-### 6.2 Installation et lancement
+### 6.2 Le droit d'enregistrer — la condition à ne pas manquer
+
+Zoom ne délivre l'audio brut **qu'à un participant qui a le droit d'enregistrer**. Sans lui,
+l'abonnement réussit et aucune frame n'arrive : panne parfaitement muette. Le bot vérifie donc
+ce droit, le **demande** si nécessaire, et échoue avec un message explicite plutôt que de
+capter le vide.
+
+Quatre façons de l'avoir, par ordre de confort :
+
+| Voie | Fonctionne sur un compte gratuit ? |
+|---|---|
+| Le bot est **hôte ou co-hôte** | ✅ |
+| L'hôte accorde « Autoriser l'enregistrement » **en séance** | ✅ (une fenêtre s'affiche, à accepter) |
+| L'hôte l'accorde d'avance dans la liste des participants | ✅ |
+| **Jeton d'enregistrement local** (automatique, via API) | ❌ **payant uniquement** |
+
+Conséquence pratique sur un compte gratuit : **à chaque réunion, l'hôte doit accepter la
+fenêtre d'autorisation**. Le bot attend jusqu'à `recording_permission_timeout_s` (120 s par
+défaut) et le journalise en clair. Passer le bot **co-hôte** évite ce geste.
+
+Autre limite du plan Basic, sans rapport avec le SDK : les réunions y sont **plafonnées à
+40 minutes**.
+
+### 6.3 Installation et lancement
 
 ```bash
 docker build -f Dockerfile.zoom-sdk -t transcria-zoom-sdk:latest .
@@ -176,7 +207,7 @@ Le **Client Secret se lit uniquement dans l'environnement** : il n'existe volont
 aucune option de ligne de commande pour lui, qui le rendrait lisible dans la liste des
 processus de la machine.
 
-### 6.3 Points d'exploitation propres à ce bot
+### 6.4 Points d'exploitation propres à ce bot
 
 - **Une instance SDK par processus** (`SDKERR_OTHER_SDK_INSTANCE_RUNNING`) : une réunion = un
   conteneur. C'est une contrainte de la bibliothèque, pas un choix.
@@ -186,7 +217,7 @@ processus de la machine.
   à le lancer hors conteneur.
 - **Débit audio** : 32 kHz par défaut, 48 kHz possible. Le SDK n'offre pas 16 kHz.
 
-### 6.4 Vérifier
+### 6.5 Vérifier
 
 ```bash
 docker run --rm -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \

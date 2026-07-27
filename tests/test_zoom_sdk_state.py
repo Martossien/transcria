@@ -11,10 +11,13 @@ import pytest
 from connector_service.live.zoom_sdk_state import (
     Participant,
     ParticipantRegistry,
+    RecordingPermission,
     ZoomSdkPhase,
     describe_auth_result,
+    describe_privilege_outcome,
     exit_reason,
     interpret_meeting_status,
+    interpret_raw_recording_readiness,
 )
 
 
@@ -232,3 +235,64 @@ def test_rattrapage_conserve_l_identite_du_bot_absente_de_l_instantane():
     registry.replace_all([Participant(1, "TranscrIA"), Participant(2, "Alice")])
     assert registry.is_self(1)
     assert [p.name for p in registry.others()] == ["Alice"]
+
+
+# --------------------------------------------------------------------------- #
+#  Droit d'enregistrement — condition d'accès à l'audio brut
+# --------------------------------------------------------------------------- #
+def test_droit_deja_acquis():
+    """Hôte, co-hôte, ou droit déjà accordé : rien à demander."""
+    assert interpret_raw_recording_readiness("SDKERR_SUCCESS", can_request=False) \
+        is RecordingPermission.GRANTED
+
+
+def test_droit_absent_mais_demandable():
+    """Cas COURANT sur un compte gratuit : le jeton d'enregistrement local n'y fonctionne
+    pas, donc la seule voie est la demande à l'hôte en séance."""
+    assert interpret_raw_recording_readiness("SDKERR_NO_PERMISSION", can_request=True) \
+        is RecordingPermission.MUST_ASK
+
+
+def test_droit_absent_et_non_demandable():
+    """Insister n'aurait aucun sens : mieux vaut échouer avec un remède à proposer."""
+    assert interpret_raw_recording_readiness("SDKERR_NO_PERMISSION", can_request=False) \
+        is RecordingPermission.UNAVAILABLE
+
+
+@pytest.mark.parametrize("code", ["SDKERR_WRONG_USAGE", "SDKERR_NO_IMPL", ""])
+def test_autre_erreur_est_bloquante(code):
+    """Un code qui n'est ni « autorisé » ni « pas la permission » ne se rattrape pas en
+    demandant : sans cette prudence, le bot boucle sur une demande sans objet."""
+    assert interpret_raw_recording_readiness(code, can_request=True) \
+        is RecordingPermission.UNAVAILABLE
+
+
+def test_hote_accorde():
+    granted, message = describe_privilege_outcome("RequestLocalRecording_Granted")
+    assert granted and "autoris" in message.lower()
+
+
+@pytest.mark.parametrize("status", [
+    "RequestLocalRecording_Denied",
+    "RequestLocalRecording_Timeout",
+])
+def test_refus_et_absence_de_reponse_sont_distingues(status):
+    """Les deux bloquent, mais le message doit dire LEQUEL : « refusé » et « pas répondu »
+    n'appellent pas la même action de l'exploitant."""
+    granted, message = describe_privilege_outcome(status)
+    assert not granted
+    assert message and "enregistrement" in message.lower()
+
+
+def test_messages_de_refus_et_de_silence_different():
+    _, refuse = describe_privilege_outcome("RequestLocalRecording_Denied")
+    _, silence = describe_privilege_outcome("RequestLocalRecording_Timeout")
+    assert refuse != silence
+
+
+def test_statut_inconnu_ne_passe_pas_pour_un_accord():
+    """Prudence : un statut inattendu ne doit JAMAIS être lu comme une autorisation, sinon
+    le bot capterait le vide en croyant avoir le droit."""
+    granted, message = describe_privilege_outcome("RequestLocalRecording_Demain")
+    assert not granted
+    assert "RequestLocalRecording_Demain" in message

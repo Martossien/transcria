@@ -141,6 +141,52 @@ def exit_reason(phase: ZoomSdkPhase, *, was_active: bool) -> str:
     return phase.value
 
 
+# --------------------------------------------------------------------------- #
+#  Permission d'enregistrement local — condition d'accès à l'audio brut
+# --------------------------------------------------------------------------- #
+# Zoom ne délivre l'audio brut qu'à un participant qui a l'un de ces droits : hôte, co-hôte,
+# « autoriser l'enregistrement local », ou un jeton d'enregistrement local. L'ancienne licence
+# « raw data » n'existe plus (confirmé par Zoom) : le compte de l'hôte peut donc être GRATUIT.
+# En revanche le JETON d'enregistrement local, lui, ne fonctionne PAS sur un compte gratuit —
+# sur ce type de compte, l'hôte doit accorder la permission À LA MAIN, en séance.
+class RecordingPermission(str, Enum):
+    """Où en est le bot vis-à-vis du droit de capter l'audio brut."""
+
+    GRANTED = "granted"            # déjà autorisé (hôte, co-hôte, ou droit accordé)
+    MUST_ASK = "must_ask"          # pas autorisé, mais on peut le DEMANDER à l'hôte
+    UNAVAILABLE = "unavailable"    # ni autorisé ni demandable — inutile d'insister
+
+
+def interpret_raw_recording_readiness(can_start_code: str, *, can_request: bool) -> RecordingPermission:
+    """Traduit `CanStartRawRecording()` (+ `IsSupportRequestLocalRecordingPrivilege()`).
+
+    Distinction qui compte : sans elle, un bot dépourvu du droit s'abonne « avec succès » et
+    ne reçoit JAMAIS de frame — panne muette, la pire à diagnostiquer en réunion.
+    """
+    if can_start_code == "SDKERR_SUCCESS":
+        return RecordingPermission.GRANTED
+    if can_start_code == "SDKERR_NO_PERMISSION" and can_request:
+        return RecordingPermission.MUST_ASK
+    return RecordingPermission.UNAVAILABLE
+
+
+def describe_privilege_outcome(status_name: str) -> tuple[bool, str]:
+    """Réponse de l'hôte à la demande de droit → (accordé ?, message exploitable)."""
+    outcomes = {
+        "RequestLocalRecording_Granted": (
+            True, "l'hôte a autorisé l'enregistrement — capture de l'audio brut possible"),
+        "RequestLocalRecording_Denied": (
+            False, "l'hôte a REFUSÉ l'autorisation d'enregistrement : sans elle, Zoom ne "
+                   "délivre aucun audio brut"),
+        "RequestLocalRecording_Timeout": (
+            False, "l'hôte n'a pas répondu à la demande d'autorisation d'enregistrement "
+                   "(fenêtre « Autoriser l'enregistrement » à accepter dans la réunion)"),
+    }
+    return outcomes.get(
+        status_name,
+        (False, f"réponse inconnue à la demande d'enregistrement : {status_name}"))
+
+
 @dataclass(frozen=True)
 class Participant:
     """Participant tel que le bot le connaît."""

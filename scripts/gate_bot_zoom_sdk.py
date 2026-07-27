@@ -135,6 +135,9 @@ async def main() -> int:
     print(f"→ réunion : {meeting_number}  | code : {'oui' if passcode else 'non'}")
     print(f"→ nom affiché : {args.name}  | débit : {args.sampling_rate_hz} Hz")
     print("→ le bot entre MICRO ET CAMÉRA COUPÉS : aucun son ne doit être émis dans la réunion.")
+    print("→ ⚠ ACCEPTEZ la fenêtre « Autoriser l'enregistrement » qui s'affichera côté hôte :")
+    print("   sans ce droit, Zoom ne délivre AUCUN audio brut (sur un compte gratuit, c'est")
+    print("   la seule voie — le jeton d'enregistrement local y est indisponible).")
 
     source = DemuxFrameSource(zoom_sdk_demux_source(
         client_id, client_secret, meeting_number,
