@@ -702,6 +702,81 @@ Le point de nommage est le seul écart, et il est peu coûteux : un défaut de l
 - **La politique d'usage des bots doit être relue avant commercialisation** : elle porte sur
   le consentement et l'information des participants, pas seulement sur la technique.
 
+## 7-ter. Teams — les trois voies vérifiées une à une (étude, 2026-07-27)
+
+Étude menée avec la méthode apprise sur Zoom : vérifier AVANT d'écrire, et regarder ce que
+font les projets de référence plutôt que supposer. Point de départ : *« le SDK a des
+composants Windows, on verra en v2 — mais Wine dans un Docker, c'est idiot ? »*
+
+### Voie 1 — SDK média temps réel (`Microsoft.Skype.Bots.Media`) : hors de portée
+
+Wine ne s'attaque pas au bon verrou. La contrainte n'est pas « quel OS » mais **où et
+comment héberger** ([doc Microsoft](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/calls-and-meetings/requirements-considerations-application-hosted-media-bots)) :
+
+> *« Production application-hosted media bots must be deployed on a Windows Server guest OS
+> **in Azure**. »*
+
+S'y ajoutent une **IP publique PAR INSTANCE** (instance-level public IP), un **port public
+entrant** mappé par instance, et des certificats SSL valides. Même un Wine parfait laisserait
+donc : hébergement Azure imposé, IP publique, ports entrants. Voie fermée pour un produit
+auto-hébergé.
+
+### Voie 2 — Bot navigateur : possible, mais 10 à 20 fois plus coûteux qu'on ne l'imagine
+
+Les DEUX projets de référence procèdent ainsi. Leur volume de code est le premier
+avertissement :
+
+| | Pilote | Payload | Total |
+|---|---|---|---|
+| attendee (Teams) | 689 l | 3 995 l | **~4 700 l** |
+| vexa (Teams) | — | — | **~2 800 l** |
+| **notre pilote Jitsi** | 200 l | partagé | **~200 l** |
+
+Et surtout, ce que leur code révèle **indépendamment l'un de l'autre** :
+
+- `UiBlockedByCaptchaException` — Teams oppose un **« Verify you're a real person »**,
+  exactement comme Zoom ;
+- `UiTeamsBlockingUsException` — un état dédié à « Teams nous bloque » ;
+- *« Due to org policy, you need to sign in or use Teams on the web to join this meeting »* —
+  l'organisation peut EXIGER une connexion ;
+- redirections « light experience » à contourner ;
+- côté vexa : un état `blocked` documenté « Bot-detection block (reCAPTCHA / blank block
+  page) », et un état **`needs_human_help`**.
+
+Leur parade commune : **se connecter avec un VRAI compte Microsoft**. attendee le dit
+explicitement — *« If a login is available, but we aren't using it, we should login and retry
+and see if the captcha goes away »*. L'entrée anonyme n'est donc pas fiable.
+
+### ⚠ Microsoft resserre activement — construire ici, c'est bâtir sur du sable
+
+- l'admin peut **désactiver entièrement** l'entrée anonyme ;
+- il peut restreindre le passage du hall à « People in my org » ;
+- **à partir de mai 2026, les bots tiers externes seront ÉTIQUETÉS comme bots dans le hall**
+  au lieu d'apparaître comme des participants ordinaires
+  ([doc Microsoft](https://learn.microsoft.com/en-us/microsoftteams/anonymous-users-in-meetings)).
+
+Autrement dit, Microsoft outille les administrateurs pour reconnaître et bloquer exactement
+ce type de bot. Une intégration bâtie dessus se dégradera à mesure que les organisations
+activeront ces réglages.
+
+### Voie 3 — Graph post-réunion : la seule voie officielle et stable
+
+Déjà codée (`connector_service/signatures.py` pour le déchiffrement, receveurs dans
+`connector_service/app.py`), **jamais éprouvée**. Coût : un point d'entrée HTTPS public pour
+les notifications Graph — entrant, donc, mais pour un flux POST-réunion, ce qu'une DSI
+accepte plus volontiers qu'une exposition permanente.
+
+### Décision proposée
+
+| Voie | Verdict |
+|---|---|
+| SDK média temps réel | **Abandonnée** — Azure + IP publique par instance ; Wine n'y change rien |
+| Bot navigateur | **Repoussée** — ~4 700 lignes, captcha, politiques d'organisation, et Microsoft resserre |
+| **Graph post-réunion** | **À éprouver en premier** — officielle, sans bot, sans captcha |
+
+Et si le temps réel Teams devient une exigence client : prévoir un **compte Microsoft dédié
+au bot** (ce que font les deux références), en assumant la fragilité — pas en la découvrant.
+
 ## 8. Briques à réutiliser
 
 ### Interne (TranscrIA)
