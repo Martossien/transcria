@@ -875,7 +875,7 @@ accepter par une DSI** — plus encore que Teams, qui impose une URL publique.
 |---|---|
 | `providers/meet.py` — `conferenceRecords` → Drive | **écrit** (164 l), jamais exécuté |
 | `live/meet_media*.py` — Media API temps réel (WebRTC) | **écrit**, jamais exécuté ; ⚠ plafonné aux **3 locuteurs les plus forts** et admission HUMAINE |
-| **Abonnement Workspace Events + Pub/Sub (pull)** | **manquant** — c'est la pièce qui déclenche tout |
+| **Abonnement Workspace Events + Pub/Sub (pull)** | partie PURE **écrite et testée** (`meet_events.py`, `subscription_renewal.py`, `oauth_tokens.py`, `jwt_crypto.py`) ; il reste les APPELS réseau — cf. §7-quinquies |
 | Téléchargement Drive | manquant |
 
 Autrement dit, nous savons déjà lire un enregistrement une fois qu'on en connaît la
@@ -924,6 +924,46 @@ temps réel, que nous ne visons pas ici.
 pouvoir l'exécuter. La partie à écrire maintenant est celle qui se vérifie SANS abonnement —
 construction de l'abonnement Events, lecture des évènements, correspondance
 `conferenceRecord` → occurrence.
+
+## 7-quinquies. Briques codées SANS compte (2026-07-27) — état exact
+
+Teams et Meet exigent des abonnements payants que nous n'avons pas encore. Plutôt qu'attendre,
+tout ce qui se vérifie sans compte a été écrit et testé. Le tableau dit ce qui EXISTE et,
+surtout, ce qui reste — un module écrit n'est pas un connecteur qui marche.
+
+| Module | Rôle | Vérifié par |
+|---|---|---|
+| `teams_graph.py` | abonnements Graph : construction, durées, lecture des notifications, cycle de vie | tests, formes relevées sur la doc |
+| `graph_validation.py` | identité de l'émetteur des notifications (`appid` v1 / `azp` v2) | tests |
+| `meet_events.py` | abonnements Workspace Events, lecture des messages Pub/Sub (CloudEvents binaire) | tests |
+| `subscription_renewal.py` | **brique COMMUNE** de renouvellement — Graph et Workspace partagent la même règle, deux politiques | tests |
+| `oauth_tokens.py` | demandes de jeton Graph et Google, échéances, décision de rafraîchissement | tests |
+| `jwt_crypto.py` | signature RS256 de l'assertion Google, vérification des `validationTokens` Graph | tests, **avec paire de clés engendrée sur place** |
+| `pubsub_pull.py` | interrogation et acquittement Pub/Sub en REST, et **quoi acquitter** | tests, formes relevées sur la référence REST |
+
+#### Deux choix explicites dans la couche Pub/Sub
+
+1. **API REST plutôt que `google-cloud-pubsub`.** La bibliothèque officielle apporte gRPC et
+   son arbre de dépendances pour un « streaming pull » dimensionné pour des milliers de
+   messages par seconde. Nous en attendons quelques-uns par réunion : une interrogation
+   périodique en REST suffit, se teste sans mock de gRPC, et n'ajoute **aucune dépendance**.
+2. **Un message ILLISIBLE est acquitté, un traitement ÉCHOUÉ ne l'est pas.** Les deux cas se
+   ressemblent et appellent l'inverse l'un de l'autre : un message illisible ne le deviendra
+   jamais et bloquerait la file par redélivrances sans fin, alors qu'un téléchargement raté
+   peut réussir au prochain essai — l'acquitter perdrait l'enregistrement pour de bon.
+
+Ce qui manque encore, et qui exige un compte :
+
+- **les appels réseau eux-mêmes** : créer l'abonnement, exécuter l'interrogation Pub/Sub,
+  télécharger le média ;
+- **le branchement sur l'ingestion** : de l'évènement à un job TranscrIA ;
+- **toute validation réelle.** Rien de la liste ci-dessus n'a jamais vu une vraie plateforme.
+
+Le découpage n'est pas gratuit : il place la totalité des RÈGLES (durées, revendications,
+formes, algorithmes acceptés) du côté testable, et ne laisse au réseau que le transport. C'est
+ce qui a permis de corriger trois erreurs — durée maximale d'abonnement, réponse 202 sur
+`clientState` invalide, dépassement du calcul de temporisation — avant qu'elles ne coûtent une
+session de débogage contre un service distant.
 
 ## 8. Briques à réutiliser
 

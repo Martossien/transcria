@@ -20,7 +20,7 @@
   "transcria/web/templates/_central_lexicon_entry_fields.html": 31,
   "transcria/web/templates/account_tokens.html": 75,
   "transcria/web/templates/admin_config.html": 197,
-  "transcria/web/templates/admin_connectors.html": 117,
+  "transcria/web/templates/admin_connectors.html": 119,
   "transcria/web/templates/admin_hardware.html": 55,
   "transcria/web/templates/admin_maintenance.html": 137,
   "transcria/web/templates/admin_models.html": 97,
