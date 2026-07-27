@@ -387,6 +387,30 @@ transcria/
     engine.py / diarize_engine.py # moteurs in-process (CAS A/B/C, idle-offload)
     capabilities.py         # build_capabilities() (pur)
     routes/                 # health, capabilities, engines (/engines/ensure), voice_embed, diarize
+  connector_service/        # Service ASYNC des connecteurs de réunion (aiohttp) — cf. docs/TEMPS_REEL_REUNIONS.md, docs/BOT_REUNION.md
+                            # ⚠ CONTRAT D'IMPORTS : le cœur `transcria/` n'importe JAMAIS ce paquet (lint-imports). Ce qui doit
+                            #   remonter jusqu'à l'UI passe par de la DONNÉE — cf. transcria/data/meeting_connectors.yaml.
+    app.py / service.py     # application aiohttp + boucle de service
+    receivers.py            # points d'entrée webhook (Zoom, Teams, Visio) — ⚠ Teams : répondre 202 AVANT toute validation
+    signatures.py           # signatures entrantes (Zoom webhook) + JWT Meeting SDK (HS256, stdlib)
+    providers/              # récupération POST-réunion par plateforme (zoom, teams, meet, visio)
+    fetchers.py / ingest.py / reconciler.py / bridge.py  # téléchargement → job TranscrIA
+    contract.py / transports.py  # interfaces des plateformes et des transports (segrégation ADR-001)
+    oauth.py / http_defaults.py / net_proxy.py  # jetons plateformes, réglages HTTP, proxy d'entreprise
+                            #   ⚠ net_proxy.py existe parce que le client LiveKit honore `http_proxy` mais IGNORE `no_proxy`
+    health.py / fakes.py    # sonde de santé ; doublures utilisées par les tests
+    live/                   # capture TEMPS RÉEL : transports (livekit, rtms, meet_media, teams_rtm, zoom_sdk),
+                            #   façade STT (facade_stt.py), démultiplexage par locuteur
+    bot/                    # bot participant : navigateur headless (Jitsi/Meet) + zoom_sdk.py (SDK natif)
+    # --- Briques cloud PURES (aucun réseau ici : c'est ce qui les rend testables sans compte) ---
+    teams_graph.py          # abonnements Microsoft Graph : construction, durées (max 4320 min), notifications, cycle de vie
+    graph_validation.py     # identité de l'émetteur des notifications (`appid` v1 / `azp` v2)
+    meet_events.py          # abonnements Google Workspace Events + lecture CloudEvents (binaire)
+    pubsub_pull.py          # Pub/Sub en mode PULL (REST) — aucun port entrant ; décide QUOI acquitter
+    subscription_renewal.py # règle COMMUNE de renouvellement Teams/Meet (deux politiques)
+    subscription_keeper.py  # ordonnanceur qui l'applique (plusieurs abonnements, échecs, délais) — `plan()` pur et synchrone
+    jwt_crypto.py           # RS256 : VÉRIFIE les `validationTokens` Graph (liste blanche d'algorithmes). Ne signe rien —
+                            #   la signature des assertions Google est le travail d'oauth.py, qui la délègue à `google-auth`
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
     prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription ; summary porte {{TYPES_REUNION}}/{{INDICES_TYPES}}/{{CHAMPS_EXTRACTION_TYPE}} substitués à l'exécution

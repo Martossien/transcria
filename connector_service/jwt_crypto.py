@@ -1,13 +1,13 @@
-"""Signature et vérification RS256 — la moitié cryptographique de nos deux connecteurs cloud.
+"""Vérification RS256 des jetons Microsoft Graph — la pièce que rien d'autre ne couvrait.
 
-Deux besoins symétriques, que `oauth_tokens.py` et `graph_validation.py` laissaient ouverts :
+Les `validationTokens` d'une notification Graph sont des JWT signés par la plateforme
+d'identité Microsoft, et la documentation demande de les vérifier TOUS.
+`graph_validation.check_claims` examine les revendications d'un jeton *déjà* vérifié ; il
+manquait la vérification elle-même.
 
-- **Google** : l'assertion d'un compte de service doit être SIGNÉE en RS256 avec la clé privée
-  du fichier JSON. `oauth_tokens.google_assertion_claims` en produit les revendications ; il
-  manquait de quoi les signer.
-- **Microsoft** : les `validationTokens` d'une notification Graph doivent être VÉRIFIÉS contre
-  les clés publiques de la plateforme d'identité. `graph_validation.check_claims` examine les
-  revendications d'un jeton *déjà* vérifié ; il manquait la vérification elle-même.
+CE MODULE NE SIGNE RIEN. La signature des assertions Google est le travail de
+`connector_service/oauth.py`, qui la délègue à `google-auth` — dépendance déjà déclarée. Une
+première version de ce module la réimplémentait : c'était refaire, moins bien, ce qui existait.
 
 POURQUOI PyJWT ET NON DU CODE MAISON. `signatures.py` calcule bien un JWT HS256 à la main pour
 Zoom, et c'est sans danger : **signer** n'offre aucune prise à un attaquant. **Vérifier**, si.
@@ -21,15 +21,12 @@ ce module vérifiable en CI, avec une paire de clés engendrée sur place.
 """
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from typing import Any
 
 import jwt
 from jwt import InvalidTokenError
 
-# Seul algorithme accepté, à la signature comme à la vérification. Google impose RS256 pour les
-# assertions de compte de service, et Microsoft signe ses `validationTokens` en RS256.
+# Seul algorithme accepté. Microsoft signe ses `validationTokens` en RS256.
 RS256 = "RS256"
 ALLOWED_ALGORITHMS = (RS256,)
 
@@ -39,76 +36,11 @@ CLOCK_SKEW_SECONDS = 300
 
 
 class SigningKeyError(ValueError):
-    """Clé de signature ou de vérification inutilisable."""
+    """Clé de vérification inutilisable."""
 
 
 class VerificationError(ValueError):
     """Jeton refusé. Le message dit POURQUOI : sans lui, le diagnostic est une devinette."""
-
-
-@dataclass(frozen=True)
-class ServiceAccountKey:
-    """Ce qu'un fichier de clé de compte de service Google apporte d'utile."""
-
-    client_email: str
-    private_key: str
-    private_key_id: str = ""
-    token_uri: str = ""
-
-
-def load_service_account(raw: Any) -> ServiceAccountKey:
-    """Fichier JSON de compte de service → clé exploitable. PURE, donc testée.
-
-    Les contrôles ne sont pas de la coquetterie : le fichier téléchargé depuis la console
-    Google ressemble beaucoup à d'AUTRES fichiers d'identifiants (client OAuth « installé »,
-    par exemple), et les confondre produit une erreur d'authentification opaque, très loin de
-    sa cause. On refuse donc ici, en nommant ce qui manque.
-    """
-    if isinstance(raw, (str, bytes, bytearray)):
-        try:
-            raw = json.loads(raw)
-        except (ValueError, TypeError) as exc:
-            raise SigningKeyError("clé de compte de service illisible (JSON attendu)") from exc
-    if not isinstance(raw, dict):
-        raise SigningKeyError("clé de compte de service inexploitable")
-
-    type_declare = str(raw.get("type") or "")
-    if type_declare and type_declare != "service_account":
-        raise SigningKeyError(
-            f"ce fichier est de type « {type_declare} » et non « service_account » — "
-            f"un identifiant OAuth client ne convient pas ici")
-
-    email = str(raw.get("client_email") or "")
-    private_key = str(raw.get("private_key") or "")
-    if not email:
-        raise SigningKeyError("« client_email » absent de la clé de compte de service")
-    if not private_key:
-        raise SigningKeyError("« private_key » absente de la clé de compte de service")
-    if "PRIVATE KEY" not in private_key:
-        raise SigningKeyError("« private_key » ne ressemble pas à une clé PEM")
-
-    return ServiceAccountKey(
-        client_email=email,
-        private_key=private_key,
-        private_key_id=str(raw.get("private_key_id") or ""),
-        token_uri=str(raw.get("token_uri") or ""),
-    )
-
-
-def sign_assertion(claims: dict[str, Any], key: ServiceAccountKey) -> str:
-    """Revendications + clé privée → assertion JWT signée en RS256.
-
-    L'identifiant de clé voyage dans l'en-tête (`kid`) quand il est connu : Google s'en sert
-    pour retrouver la bonne clé publique après une rotation, et son absence transformerait une
-    rotation banale en panne d'authentification.
-    """
-    if not claims:
-        raise SigningKeyError("aucune revendication à signer")
-    headers = {"kid": key.private_key_id} if key.private_key_id else None
-    try:
-        return jwt.encode(claims, key.private_key, algorithm=RS256, headers=headers)
-    except Exception as exc:  # noqa: BLE001 — clé malformée : on veut une erreur nommée
-        raise SigningKeyError(f"signature impossible : {exc}") from exc
 
 
 def select_signing_key(jwks: Any, key_id: str) -> Any:

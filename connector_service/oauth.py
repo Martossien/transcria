@@ -1,6 +1,6 @@
 """Acquisition de jetons OAuth par plateforme (A2/A3/A4).
 
-Chaque fournisseur met en cache le jeton jusqu'à ~1 min avant expiration. Le POST
+Chaque fournisseur met en cache le jeton jusqu'à `TOKEN_REFRESH_MARGIN_S` avant expiration. Le POST
 HTTP est INJECTABLE (`http_post`) : la CI teste la logique avec un faux, sans réseau ;
 l'implémentation réelle (requests) est le défaut paresseux.
 
@@ -18,6 +18,11 @@ from connector_service.http_defaults import DEFAULT_HTTP_TIMEOUT_S
 
 # http_post(url, *, data, headers) -> (status, json_dict)
 HttpPost = Callable[..., "tuple[int, dict]"]
+
+# Marge de renouvellement anticipé. Une minute suffisait tant que les jetons ne servaient qu'à
+# de petits appels ; ils servent désormais à TÉLÉCHARGER des enregistrements de réunion, qui
+# durent bien plus longtemps. Un jeton qui expire à mi-course fait échouer l'ingestion.
+TOKEN_REFRESH_MARGIN_S = 300.0
 
 
 def _requests_post(url: str, *, data: dict, headers: dict,
@@ -64,7 +69,8 @@ class ZoomOAuth:
         if status != 200 or not token:
             raise OAuthError(f"échec OAuth Zoom (status={status})")
         self._cached = token
-        self._expires_at = self._now() + float(body.get("expires_in", 3600)) - 60
+        self._expires_at = (self._now() + float(body.get("expires_in", 3600))
+                            - TOKEN_REFRESH_MARGIN_S)
         return token
 
 
@@ -100,7 +106,8 @@ class MicrosoftOAuth:
         if status != 200 or not token:
             raise OAuthError(f"échec OAuth Microsoft (status={status})")
         self._cached = token
-        self._expires_at = self._now() + float(body.get("expires_in", 3600)) - 60
+        self._expires_at = (self._now() + float(body.get("expires_in", 3600))
+                            - TOKEN_REFRESH_MARGIN_S)
         return token
 
 

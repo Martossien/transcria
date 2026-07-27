@@ -9,7 +9,7 @@ POURQUOI L'API REST ET NON `google-cloud-pubsub`. La bibliothèque officielle ap
 tout son arbre de dépendances pour offrir un « streaming pull » dimensionné pour des milliers
 de messages par seconde. Nous en attendons quelques-uns par réunion : une interrogation
 périodique en REST suffit, se teste sans mock de gRPC, et n'ajoute aucune dépendance —
-`oauth_tokens.py` fournit déjà le jeton.
+`oauth.GoogleOAuth` fournit déjà le jeton (lui passer `PUBSUB_SCOPE` en plus de ses portées).
 
 ⚠ `message.data` est encodé en BASE64 par l'API REST. `meet_events.parse_pubsub_message` sait
 déjà lire cette forme ; c'est ce qui permet de brancher les deux modules sans adaptateur.

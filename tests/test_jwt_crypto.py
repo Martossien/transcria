@@ -1,12 +1,16 @@
-"""Signature et vérification RS256 — testées avec une paire de clés engendrée sur place.
+"""Vérification RS256 des `validationTokens` Graph — paire de clés engendrée sur place.
 
-Aucun compte, aucun réseau : la clé est fabriquée ici, le JWKS aussi. C'est précisément ce que
-permet d'avoir séparé la cryptographie des appels réseau.
+Aucun compte, aucun réseau : la clé est fabriquée ici, le JWKS aussi, et les jetons à vérifier
+sont signés localement. C'est ce que permet d'avoir séparé la cryptographie des appels réseau.
 
 Deux tests comptent plus que les autres : `test_un_jeton_alg_none_est_refuse` et
 `test_un_jeton_HS256_signe_avec_la_cle_PUBLIQUE_est_refuse`. Ce sont les deux attaques
 classiques contre une vérification JWT, et elles réussissent silencieusement quand la liste
 blanche d'algorithmes manque. Elles doivent rester vraies après toute mise à jour de PyJWT.
+
+⚠ La SIGNATURE des assertions Google n'est pas testée ici : elle est le travail de
+`connector_service/oauth.py`, qui la délègue à `google-auth`. Le `jwt.encode` ci-dessous ne sert
+qu'à fabriquer de quoi vérifier.
 """
 from __future__ import annotations
 
@@ -15,8 +19,8 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timezone
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -24,19 +28,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from connector_service.graph_validation import GRAPH_CHANGE_TRACKING_APP_ID, check_claims
 from connector_service.jwt_crypto import (
     ALLOWED_ALGORITHMS,
-    ServiceAccountKey,
     SigningKeyError,
     VerificationError,
-    load_service_account,
     select_signing_key,
-    sign_assertion,
     unverified_key_id,
     verify_token,
-)
-from connector_service.oauth_tokens import (
-    GOOGLE_TOKEN_URL,
-    google_assertion_claims,
-    google_token_request,
 )
 
 AUDIENCE = "https://oauth2.googleapis.com/token"
@@ -62,10 +58,14 @@ def paire():
 
 
 @pytest.fixture
-def cle(paire):
+def signe(paire):
+    """Fabrique un jeton signé localement — de quoi VÉRIFIER, seul objet de ce module."""
     _, pem_prive, _ = paire
-    return ServiceAccountKey(client_email="sa@projet.iam.gserviceaccount.com",
-                             private_key=pem_prive, private_key_id=KID)
+
+    def _signe(claims: dict, *, kid: str | None = KID) -> str:
+        return jwt.encode(claims, pem_prive, algorithm="RS256",
+                          headers={"kid": kid} if kid else None)
+    return _signe
 
 
 @pytest.fixture
@@ -92,88 +92,6 @@ def _revendications(**overrides) -> dict:
 
 def _segment(donnee: dict) -> str:
     return base64.urlsafe_b64encode(json.dumps(donnee).encode()).decode().rstrip("=")
-
-
-# --------------------------------------------------------------------------- #
-#  Lecture de la clé de compte de service
-# --------------------------------------------------------------------------- #
-def _fichier(pem: str, **overrides) -> dict:
-    base = {"type": "service_account", "client_email": "sa@projet.iam.gserviceaccount.com",
-            "private_key": pem, "private_key_id": KID,
-            "token_uri": "https://oauth2.googleapis.com/token"}
-    base.update(overrides)
-    return base
-
-
-def test_fichier_de_compte_de_service_lu(paire):
-    _, pem, _ = paire
-    lue = load_service_account(_fichier(pem))
-    assert lue.client_email.endswith(".iam.gserviceaccount.com")
-    assert lue.private_key_id == KID
-
-
-def test_fichier_json_brut_accepte(paire):
-    _, pem, _ = paire
-    assert load_service_account(json.dumps(_fichier(pem))).private_key == pem
-
-
-def test_identifiant_OAuth_client_refuse_explicitement(paire):
-    """Le piège le plus fréquent : la console Google propose plusieurs fichiers d'apparence
-    proche. Les confondre produit sinon une erreur d'authentification très loin de sa cause."""
-    _, pem, _ = paire
-    with pytest.raises(SigningKeyError, match="service_account"):
-        load_service_account(_fichier(pem, type="authorized_user"))
-
-
-@pytest.mark.parametrize("manquant", ["client_email", "private_key"])
-def test_champ_indispensable_manquant_refuse(paire, manquant):
-    _, pem, _ = paire
-    with pytest.raises(SigningKeyError, match=manquant):
-        load_service_account(_fichier(pem, **{manquant: ""}))
-
-
-def test_cle_qui_n_est_pas_du_PEM_refusee():
-    with pytest.raises(SigningKeyError, match="PEM"):
-        load_service_account(_fichier("ceci-n-est-pas-une-clé"))
-
-
-@pytest.mark.parametrize("charge", [None, 42, "pas du json", []])
-def test_fichiers_inexploitables_refuses(charge):
-    with pytest.raises(SigningKeyError):
-        load_service_account(charge)
-
-
-# --------------------------------------------------------------------------- #
-#  Signature
-# --------------------------------------------------------------------------- #
-def test_assertion_signee_puis_verifiee(paire, cle, jwks):
-    """L'aller-retour complet : c'est lui qui prouve que l'assertion Google sera acceptable."""
-    jeton = sign_assertion(_revendications(), cle)
-    publique = select_signing_key(jwks, unverified_key_id(jeton))
-    assert verify_token(jeton, publique, audiences={AUDIENCE})["iss"] == cle.client_email
-
-
-def test_l_identifiant_de_cle_voyage_dans_l_en_tete(cle):
-    """Google s'en sert pour retrouver la bonne clé après une rotation : son absence
-    transformerait une rotation banale en panne d'authentification."""
-    assert unverified_key_id(sign_assertion(_revendications(), cle)) == KID
-
-
-def test_sans_identifiant_de_cle_aucun_kid_n_est_invente(paire):
-    _, pem, _ = paire
-    sans_kid = ServiceAccountKey(client_email="sa@x.iam.gserviceaccount.com", private_key=pem)
-    assert unverified_key_id(sign_assertion(_revendications(), sans_kid)) == ""
-
-
-def test_revendications_vides_refusees(cle):
-    with pytest.raises(SigningKeyError, match="revendication"):
-        sign_assertion({}, cle)
-
-
-def test_cle_privee_invalide_donne_une_erreur_nommee():
-    fausse = ServiceAccountKey(client_email="sa@x", private_key="-----BEGIN PRIVATE KEY-----\nx\n")
-    with pytest.raises(SigningKeyError, match="signature impossible"):
-        sign_assertion(_revendications(), fausse)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,107 +168,92 @@ def test_la_liste_blanche_ne_contient_que_RS256():
 # --------------------------------------------------------------------------- #
 #  Vérification — règles ordinaires
 # --------------------------------------------------------------------------- #
-def test_signature_falsifiee_refusee(cle, jwks):
-    jeton = sign_assertion(_revendications(), cle)
+def test_signature_falsifiee_refusee(signe, jwks):
+    jeton = signe(_revendications())
     corps, _, _ = jeton.rpartition(".")
     with pytest.raises(VerificationError):
         verify_token(f"{corps}.signature-bidon", select_signing_key(jwks, KID),
                      audiences={AUDIENCE})
 
 
-def test_jeton_expire_refuse(cle, jwks):
-    jeton = sign_assertion(_revendications(exp=int(time.time()) - 3600), cle)
+def test_jeton_expire_refuse(signe, jwks):
+    jeton = signe(_revendications(exp=int(time.time()) - 3600))
     with pytest.raises(VerificationError):
         verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE})
 
 
-def test_jeton_sans_echeance_refuse(cle, jwks):
+def test_jeton_sans_echeance_refuse(signe, jwks):
     """Un jeton sans `exp` serait valable éternellement : le voler une fois suffirait."""
     revendications = _revendications()
     del revendications["exp"]
-    jeton = sign_assertion(revendications, cle)
+    jeton = signe(revendications)
     with pytest.raises(VerificationError):
         verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE})
 
 
-def test_audience_etrangere_refusee(cle, jwks):
+def test_audience_etrangere_refusee(signe, jwks):
     """Un jeton parfaitement authentique mais destiné à une AUTRE application n'est pas le
     nôtre — c'est ce que la documentation de Graph souligne."""
-    jeton = sign_assertion(_revendications(aud="https://autre-application"), cle)
+    jeton = signe(_revendications(aud="https://autre-application"))
     with pytest.raises(VerificationError):
         verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE})
 
 
-def test_plusieurs_audiences_acceptees(cle, jwks):
+def test_plusieurs_audiences_acceptees(signe, jwks):
     """Un locataire peut légitimement recevoir des jetons pour plusieurs applications."""
-    jeton = sign_assertion(_revendications(), cle)
+    jeton = signe(_revendications())
     claims = verify_token(jeton, select_signing_key(jwks, KID),
                           audiences={"autre", AUDIENCE})
     assert claims["aud"] == AUDIENCE
 
 
-def test_aucune_audience_attendue_est_une_ERREUR(cle, jwks):
+def test_aucune_audience_attendue_est_une_ERREUR(signe, jwks):
     """Vérifier « sans audience » reviendrait à accepter le jeton de n'importe qui : on refuse
     la configuration plutôt que de la subir."""
-    jeton = sign_assertion(_revendications(), cle)
+    jeton = signe(_revendications())
     with pytest.raises(VerificationError, match="audience"):
         verify_token(jeton, select_signing_key(jwks, KID), audiences=set())
 
 
-def test_emetteur_inattendu_refuse(cle, jwks):
-    jeton = sign_assertion(_revendications(), cle)
+def test_emetteur_inattendu_refuse(signe, jwks):
+    jeton = signe(_revendications())
     with pytest.raises(VerificationError):
         verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE},
                      issuer="https://sts.windows.net/autre-locataire/")
 
 
-def test_derive_d_horloge_toleree(cle, jwks):
+def test_derive_d_horloge_toleree(signe, jwks):
     """Sans tolérance, quelques secondes d'écart avec Microsoft feraient rejeter des
     notifications parfaitement authentiques — panne intermittente et incompréhensible."""
-    jeton = sign_assertion(_revendications(exp=int(time.time()) - 30), cle)
+    jeton = signe(_revendications(exp=int(time.time()) - 30))
     assert verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE})
 
 
-def test_derive_excessive_non_toleree(cle, jwks):
-    jeton = sign_assertion(_revendications(exp=int(time.time()) - 30), cle)
+def test_derive_excessive_non_toleree(signe, jwks):
+    jeton = signe(_revendications(exp=int(time.time()) - 30))
     with pytest.raises(VerificationError):
         verify_token(jeton, select_signing_key(jwks, KID), audiences={AUDIENCE}, leeway=5)
 
 
 # --------------------------------------------------------------------------- #
-#  Jonction avec les modules qui attendaient cette brique
+#  Jonction avec `graph_validation`
 # --------------------------------------------------------------------------- #
-def test_l_assertion_Google_complete_se_signe_et_se_relit(cle, jwks):
-    """La boucle enfin fermée côté Google : `oauth_tokens` produit les revendications, ce
-    module les signe, et l'échange n'attend plus que le réseau."""
-    revendications = google_assertion_claims(
-        service_account_email=cle.client_email,
-        scopes=("https://www.googleapis.com/auth/meetings.space.readonly",),
-        now=datetime.now(timezone.utc),
-        subject="organisateur@client.fr")
-    jeton = sign_assertion(revendications, cle)
-
-    relues = verify_token(jeton, select_signing_key(jwks, KID), audiences={GOOGLE_TOKEN_URL})
-    assert relues["sub"] == "organisateur@client.fr"
-    assert google_token_request(jeton)[1]["assertion"] == jeton
-
-
-def test_un_validationToken_verifie_passe_ensuite_l_examen_des_revendications(cle, jwks):
+def test_un_validationToken_verifie_passe_ensuite_l_examen_des_revendications(signe, jwks):
     """Et côté Microsoft : la cryptographie ici, l'identité de l'émetteur là-bas. La
     séparation permet de tester chaque moitié sans l'autre."""
-    jeton = sign_assertion(_revendications(aud="notre-app", ver="2.0",
+    jeton = signe(_revendications(aud="notre-app", ver="2.0",
                                            azp=GRAPH_CHANGE_TRACKING_APP_ID,
-                                           tid="loc-1"), cle)
+                                           tid="loc-1"))
     claims = verify_token(jeton, select_signing_key(jwks, KID), audiences={"notre-app"})
     assert check_claims(claims, expected_audiences={"notre-app"},
                         expected_tenant_id="loc-1").valid
 
 
-def test_un_validationToken_d_un_autre_emetteur_est_rejete_APRES_verification(cle, jwks):
+def test_un_validationToken_d_un_autre_emetteur_est_rejete_APRES_verification(signe, jwks):
     """Point souligné en gras par la documentation : une signature valide ne prouve QUE
     l'authenticité Microsoft, pas que l'émetteur soit le service de notifications."""
-    jeton = sign_assertion(_revendications(aud="notre-app", ver="2.0",
-                                           azp="une-autre-application"), cle)
+    jeton = signe(_revendications(aud="notre-app", ver="2.0",
+                                           azp="une-autre-application"))
     claims = verify_token(jeton, select_signing_key(jwks, KID), audiences={"notre-app"})
     verdict = check_claims(claims, expected_audiences={"notre-app"})
     assert not verdict.valid and "notifications" in verdict.reason

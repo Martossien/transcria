@@ -875,7 +875,7 @@ accepter par une DSI** — plus encore que Teams, qui impose une URL publique.
 |---|---|
 | `providers/meet.py` — `conferenceRecords` → Drive | **écrit** (164 l), jamais exécuté |
 | `live/meet_media*.py` — Media API temps réel (WebRTC) | **écrit**, jamais exécuté ; ⚠ plafonné aux **3 locuteurs les plus forts** et admission HUMAINE |
-| **Abonnement Workspace Events + Pub/Sub (pull)** | partie PURE **écrite et testée** (`meet_events.py`, `subscription_renewal.py`, `oauth_tokens.py`, `jwt_crypto.py`) ; il reste les APPELS réseau — cf. §7-quinquies |
+| **Abonnement Workspace Events + Pub/Sub (pull)** | partie PURE **écrite et testée** (`meet_events.py`, `pubsub_pull.py`, `subscription_renewal.py`, `subscription_keeper.py`) ; il reste les APPELS réseau — cf. §7-quinquies |
 | Téléchargement Drive | manquant |
 
 Autrement dit, nous savons déjà lire un enregistrement une fois qu'on en connaît la
@@ -938,9 +938,27 @@ surtout, ce qui reste — un module écrit n'est pas un connecteur qui marche.
 | `meet_events.py` | abonnements Workspace Events, lecture des messages Pub/Sub (CloudEvents binaire) | tests |
 | `subscription_renewal.py` | **brique COMMUNE** de renouvellement — Graph et Workspace partagent la même règle, deux politiques | tests |
 | `subscription_keeper.py` | l'ordonnanceur qui l'APPLIQUE : plusieurs abonnements, échecs encaissés, délais respectés | tests, **sans asyncio ni horloge réelle** |
-| `oauth_tokens.py` | demandes de jeton Graph et Google, échéances, décision de rafraîchissement | tests |
-| `jwt_crypto.py` | signature RS256 de l'assertion Google, vérification des `validationTokens` Graph | tests, **avec paire de clés engendrée sur place** |
+| `oauth.py` (existant) | jetons Zoom / Graph / Google — **déjà là** : la marge de renouvellement y est passée à 5 min, un jeton qui expire pendant un téléchargement faisant échouer l'ingestion | tests |
+| `jwt_crypto.py` | **vérification** RS256 des `validationTokens` Graph (liste blanche d'algorithmes) | tests, **avec paire de clés engendrée sur place** |
 | `pubsub_pull.py` | interrogation et acquittement Pub/Sub en REST, et **quoi acquitter** | tests, formes relevées sur la référence REST |
+
+#### ⚠ Une erreur commise et corrigée : un module OAuth écrit en double
+
+Un `oauth_tokens.py` a été écrit — demandes de jeton Graph et Google, échéances,
+rafraîchissement — avant qu'un contrôle de la structure du paquet ne révèle que **`oauth.py`
+faisait déjà tout cela**, était utilisé par les providers réels et couvert par des tests. La
+moitié « signature de l'assertion Google » de `jwt_crypto.py` réinventait de surcroît ce que
+`google-auth`, dépendance déjà déclarée, fait pour nous.
+
+Le module en double a été supprimé et `jwt_crypto.py` réduit à ce que rien ne couvrait : la
+VÉRIFICATION des jetons Microsoft. Seule amélioration retenue au passage — la marge de
+renouvellement d'`oauth.py`, portée d'une à cinq minutes : elle datait d'un temps où les jetons
+ne servaient qu'à de petits appels, alors qu'ils servent maintenant à télécharger des
+enregistrements.
+
+Leçon de méthode : **inventorier le paquet AVANT d'écrire**, pas après. Le trou d'AGENTS.md —
+`connector_service/` n'y figurait pas du tout — n'excuse rien, mais il l'a rendu facile ; il est
+désormais comblé, et la structure y est vérifiée par un contrôle exécutable dans les deux sens.
 
 #### Trois pièges que l'ordonnanceur existe pour éviter
 
