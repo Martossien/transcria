@@ -828,6 +828,72 @@ couverture, et c'est précisément ce que la page d'administration signale déso
 Et si le temps réel Teams devient une exigence client : prévoir un **compte Microsoft dédié
 au bot** (ce que font les deux références), en assumant la fragilité — pas en la découvrant.
 
+## 7-quater. Google Meet — étude (2026-07-27), même méthode que Teams
+
+### ⭐ La trouvaille : Meet n'exige AUCUN port entrant
+
+Google ne pousse pas vers un webhook : l'**API Google Workspace Events** publie dans un
+**sujet Pub/Sub**, et Pub/Sub accepte les abonnements en mode **PULL**. La documentation le
+dit sans détour :
+
+> *« Pull subscriptions are useful for scenarios where the subscriber **cannot be exposed to
+> a public endpoint (e.g., behind a firewall)** »* — et plus loin : *« An application server
+> that is either a cloud or on-premises system can subscribe to the Pub/Sub topic in order to
+> receive the message **through the firewall** »*
+> ([documentation Google](https://developers.google.com/workspace/chat/quickstart/pub-sub))
+
+C'est structurant pour un produit auto-hébergé, et cela renverse le classement :
+
+| | Zoom (bot SDK) | Zoom RTMS | **Teams (Graph)** | **Meet (Pub/Sub)** |
+|---|---|---|---|---|
+| **Port entrant** | aucun | ⚠ webhook public | ⚠ webhook public | **aucun (pull)** |
+| Bot dans la réunion | oui | non | non | non |
+| Coût du test | **gratuit** | — | ~7 $/mois | ~14 $/mois (essai 14 j) |
+| État | ✅ **validé en réel** | jamais exécuté | jamais exécuté | jamais exécuté |
+
+Meet est donc, sur l'axe déploiement, **le connecteur post-réunion le plus facile à faire
+accepter par une DSI** — plus encore que Teams, qui impose une URL publique.
+
+### Prérequis vérifiés
+
+- **Édition** : la transcription et l'enregistrement Meet exigent **Business Standard** ou
+  au-dessus (Business Plus, Enterprise Standard/Plus, Education Plus). Le plan gratuit ne
+  suffit pas, comme chez Teams.
+- **Coût d'essai** : ~14 $/utilisateur/mois, **essai gratuit de 14 jours**. Un seul
+  utilisateur suffit (l'organisateur).
+- **Évènements disponibles** (API Workspace Events) :
+  `google.workspace.meet.recording.v2.fileGenerated`,
+  `google.workspace.meet.transcript.v2.fileGenerated`, plus conférence démarrée/terminée et
+  participant entré/sorti.
+- **Artefacts** : Meet dépose l'enregistrement dans le **Drive de l'organisateur** ; la
+  ressource `conferenceRecords/{cr}/recordings/{rec}` porte `driveDestination.file` et
+  `exportUri`.
+
+### Ce que nous avons déjà, et ce qui manque
+
+| Brique | État |
+|---|---|
+| `providers/meet.py` — `conferenceRecords` → Drive | **écrit** (164 l), jamais exécuté |
+| `live/meet_media*.py` — Media API temps réel (WebRTC) | **écrit**, jamais exécuté ; ⚠ plafonné aux **3 locuteurs les plus forts** et admission HUMAINE |
+| **Abonnement Workspace Events + Pub/Sub (pull)** | **manquant** — c'est la pièce qui déclenche tout |
+| Téléchargement Drive | manquant |
+
+Autrement dit, nous savons déjà lire un enregistrement une fois qu'on en connaît la
+référence ; nous ne savons pas encore **apprendre qu'il existe**. C'est exactement l'inverse
+de ce que l'on croirait en regardant le nombre de lignes écrites.
+
+### Décision proposée
+
+Meet post-réunion est **la prochaine cible la plus rentable** après Zoom : pas de bot, pas de
+port entrant, et la moitié du chemin déjà parcourue. Sa seule vraie contrainte est le coût
+d'essai (14 $ contre 7 $ pour Teams), et le plafond à 3 locuteurs ne concerne QUE la voie
+temps réel, que nous ne visons pas ici.
+
+⚠ Réserve de méthode, tirée de Teams RTM : ne rien ajouter à `providers/meet.py` avant de
+pouvoir l'exécuter. La partie à écrire maintenant est celle qui se vérifie SANS abonnement —
+construction de l'abonnement Events, lecture des évènements, correspondance
+`conferenceRecord` → occurrence.
+
 ## 8. Briques à réutiliser
 
 ### Interne (TranscrIA)
