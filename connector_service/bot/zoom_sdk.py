@@ -55,8 +55,10 @@ def parse_zoom_invite(value: str) -> tuple[str, str]:
     la main : « 578 629 7113 », ou le lien complet, dont le code est dans `?pwd=`. Exiger une
     forme précise ferait échouer l'entrée pour une raison sans rapport avec la réunion.
 
-    Le code porté par un lien est un code CHIFFRÉ propre à Zoom : il est transmis tel quel,
-    c'est ce que le SDK attend.
+    ⚠ Le code porté par un lien (`?pwd=…`) est une forme CHIFFRÉE propre au client Web. Le
+    SDK ne l'accepte PAS — vérifié par comparaison contrôlée sur une même réunion : avec le
+    code en clair le bot entre, avec celui du lien il reste indéfiniment en attente d'hôte.
+    Il est donc rendu ici, mais ne sert qu'en dernier recours (cf. `resolve_passcode`).
     """
     text = (value or "").strip()
     if not text:
@@ -123,25 +125,49 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def resolve_passcode(explicit: str | None, from_link: str, ambient: str) -> str:
-    """Code secret retenu — fonction PURE, donc testée.
+def looks_encrypted(passcode: str) -> bool:
+    """Ce code est-il la forme CHIFFRÉE que Zoom met dans les liens web ?
 
-    Priorité : option explicite > code PORTÉ PAR LE LIEN > code ambiant (configuration).
+    Un code saisissable par un humain est court (Zoom en limite la longueur) ; la forme
+    chiffrée est longue et comporte un point séparant sa charge d'un indice de version
+    (`tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1`). La distinction sert à AVERTIR, pas à refuser :
+    mieux vaut tenter et expliquer que bloquer sur une heuristique.
+    """
+    return len(passcode) > 12 and "." in passcode
 
-    Le point qui compte est le second : un code de configuration s'applique à toutes les
-    réunions, alors qu'un lien désigne UNE réunion précise. Laisser l'ambiant l'emporter
-    ferait échouer l'entrée dès qu'on rejoint une autre réunion que celle habituelle — avec
-    un message parlant d'un code erroné, sans dire lequel a été utilisé.
+
+def resolve_passcode(explicit: str | None, from_link: str, ambient: str) -> tuple[str, str]:
+    """(code retenu, avertissement) — fonction PURE, donc testée.
+
+    Priorité : option explicite > code de CONFIGURATION > code porté par le lien.
+
+    Cet ordre a été ÉTABLI PAR L'EXPÉRIENCE, après avoir été posé à l'envers. Le raisonnement
+    initial semblait bon — un lien désigne une réunion précise, une configuration les désigne
+    toutes — mais il ignorait un fait : le code d'un lien est CHIFFRÉ, et le SDK le refuse.
+    Comparaison contrôlée sur une même réunion : code en clair → le bot entre ; code du lien →
+    il reste indéfiniment en « attente de l'hôte », sans que rien ne désigne le code.
+
+    Le code du lien reste donc un dernier recours, assorti d'un avertissement : sans lui, la
+    panne est parfaitement muette — c'est exactement ce qui a fait perdre une session d'essais.
     """
     if explicit is not None:
-        return explicit
-    return from_link or ambient
+        return explicit, ""
+    if ambient:
+        return ambient, ""
+    if from_link and looks_encrypted(from_link):
+        return from_link, (
+            "le code secret vient du LIEN et paraît chiffré : le Meeting SDK ne sait pas "
+            "l'exploiter. Si l'entrée échoue en « attente de l'hôte », fournissez le code EN "
+            "CLAIR (ZOOM_PASSCODE dans la configuration, ou --passcode).")
+    return from_link, ""
 
 
 async def run(args: argparse.Namespace, client_secret: str) -> int:
     meeting_number, invite_passcode = parse_zoom_invite(args.meeting)
-    passcode = resolve_passcode(args.passcode, invite_passcode,
-                                os.environ.get("ZOOM_PASSCODE", ""))
+    passcode, avertissement = resolve_passcode(args.passcode, invite_passcode,
+                                               os.environ.get("ZOOM_PASSCODE", ""))
+    if avertissement:
+        logger.warning("Zoom : %s", avertissement)
 
     occurrence = ExternalMeetingOccurrence(
         provider="zoom", provider_account_id=os.environ.get("BOT_ACCOUNT", "zoom-sdk"),

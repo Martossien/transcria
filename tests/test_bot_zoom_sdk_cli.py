@@ -166,38 +166,62 @@ def test_panne_APRES_l_entree_est_rejouable(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-#  Priorité du code secret — un lien désigne UNE réunion, la config les désigne toutes
+#  Priorité du code secret — ordre ÉTABLI PAR L'EXPÉRIENCE
 # --------------------------------------------------------------------------- #
-def test_le_code_du_lien_prime_sur_celui_de_la_configuration():
-    """LE cas qui compte : un code de configuration vaut pour toutes les réunions, alors
-    qu'un lien en désigne une seule. Laisser l'ambiant l'emporter ferait échouer l'entrée
-    dans toute réunion autre que l'habituelle."""
+# Le raisonnement initial (« un lien désigne UNE réunion, la config les désigne toutes »)
+# semblait bon mais ignorait un fait : le code d'un lien est CHIFFRÉ et le SDK le refuse.
+# Comparaison contrôlée sur une même réunion : code en clair → le bot entre ; code du lien →
+# il reste indéfiniment en « attente de l'hôte », sans que rien ne désigne le code.
+
+def test_le_code_de_configuration_prime_sur_celui_du_lien():
+    """LE verrou de régression : préférer le code du lien a fait échouer une session
+    entière d'essais, avec une panne parfaitement muette."""
     from connector_service.bot.zoom_sdk import resolve_passcode
 
-    assert resolve_passcode(None, "du-lien", "de-la-config") == "du-lien"
+    code, _ = resolve_passcode(None, "chiffre-du-lien", "en-clair")
+    assert code == "en-clair"
 
 
 def test_l_option_explicite_prime_sur_tout():
     from connector_service.bot.zoom_sdk import resolve_passcode
 
-    assert resolve_passcode("explicite", "du-lien", "de-la-config") == "explicite"
-
-
-def test_la_configuration_sert_de_repli_quand_le_lien_n_a_pas_de_code():
-    from connector_service.bot.zoom_sdk import resolve_passcode
-
-    assert resolve_passcode(None, "", "de-la-config") == "de-la-config"
+    assert resolve_passcode("explicite", "du-lien", "de-la-config")[0] == "explicite"
 
 
 def test_option_explicitement_vide_respectee():
-    """`--passcode ''` doit signifier « pas de code », et non « retombe sur la config » :
-    sinon on ne pourrait pas rejoindre une réunion sans code depuis une machine configurée."""
+    """`--passcode ''` signifie « pas de code », pas « retombe sur la config » : sinon on ne
+    pourrait pas rejoindre une réunion sans code depuis une machine configurée."""
     from connector_service.bot.zoom_sdk import resolve_passcode
 
-    assert resolve_passcode("", "du-lien", "de-la-config") == ""
+    assert resolve_passcode("", "du-lien", "de-la-config")[0] == ""
+
+
+def test_le_lien_sert_de_dernier_recours_AVEC_avertissement():
+    """Sans rien d'autre, on tente le code du lien — mais on prévient, car l'échec serait
+    autrement indiscernable d'une réunion non démarrée."""
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    code, avertissement = resolve_passcode(None, "tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1", "")
+    assert code == "tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1"
+    assert "CLAIR" in avertissement
+
+
+def test_un_code_court_du_lien_ne_declenche_pas_d_avertissement():
+    """Tous les liens ne portent pas la forme chiffrée : avertir à tort userait le signal."""
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode(None, "abc123", "")[1] == ""
+
+
+def test_reconnaissance_de_la_forme_chiffree():
+    from connector_service.bot.zoom_sdk import looks_encrypted
+
+    assert looks_encrypted("tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1")
+    assert not looks_encrypted("8kzuW4")
+    assert not looks_encrypted("")
 
 
 def test_aucune_source_donne_une_chaine_vide():
     from connector_service.bot.zoom_sdk import resolve_passcode
 
-    assert resolve_passcode(None, "", "") == ""
+    assert resolve_passcode(None, "", "") == ("", "")
