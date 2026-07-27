@@ -101,3 +101,65 @@ def test_le_secret_ne_peut_pas_venir_de_la_ligne_de_commande(monkeypatch):
     assert "client_secret" not in options
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--client-secret", "x"])
+
+
+# --------------------------------------------------------------------------- #
+#  Contrat des codes de retour — il décide si l'orchestrateur rejoue
+# --------------------------------------------------------------------------- #
+def _args(**overrides):
+    from connector_service.bot.zoom_sdk import build_parser
+
+    parsed = build_parser().parse_args(["--meeting", "5786297113", "--client-id", "abc"])
+    for key, value in overrides.items():
+        setattr(parsed, key, value)
+    return parsed
+
+
+def _run_with_transport_failure(reached_active: bool, monkeypatch) -> int:
+    """Fait échouer le transport, après ou avant l'entrée en réunion."""
+    import asyncio
+
+    from connector_service.bot import zoom_sdk as cli
+    from connector_service.live import zoom_sdk_transport
+    from connector_service.live.zoom_sdk_state import ZoomSdkPhase
+
+    def fake_source(*_a, on_phase=None, **_k):
+        if reached_active and on_phase is not None:
+            on_phase(ZoomSdkPhase.ACTIVE)          # le bot EST entré…
+
+        def _factory(_occurrence):
+            async def _gen():
+                raise zoom_sdk_transport.ZoomSdkError("panne simulée")
+                yield  # pragma: no cover
+            return _gen()
+        return _factory
+
+    monkeypatch.setattr(cli, "zoom_sdk_demux_source", fake_source)
+    monkeypatch.setattr(cli, "build_transcriber", lambda *a, **k: _InertTranscriber())
+    return asyncio.run(cli.run(_args(), "secret"))
+
+
+class _InertTranscriber:
+    uses_local_agreement = False
+
+    async def stream(self, frames):
+        async for _ in frames:
+            pass
+        return
+        yield  # pragma: no cover
+
+
+def test_panne_AVANT_l_entree_n_est_pas_rejouable(monkeypatch):
+    """Identifiants refusés, réunion fermée, salle d'attente sans réponse : rejouer à
+    l'identique ne donnerait rien."""
+    from connector_service.bot.zoom_sdk import EXIT_NOT_ADMITTED
+
+    assert _run_with_transport_failure(False, monkeypatch) == EXIT_NOT_ADMITTED
+
+
+def test_panne_APRES_l_entree_est_rejouable(monkeypatch):
+    """Transport coupé ou droit retiré en séance : c'est une ANOMALIE, et la réunion mérite
+    qu'on retente. Les confondre faisait abandonner définitivement sur un incident passager."""
+    from connector_service.bot.zoom_sdk import EXIT_TECHNICAL
+
+    assert _run_with_transport_failure(True, monkeypatch) == EXIT_TECHNICAL

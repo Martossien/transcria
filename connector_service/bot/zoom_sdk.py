@@ -157,9 +157,16 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
     except asyncio.TimeoutError:
         logger.info("Durée maximale atteinte — sortie de réunion")
     except ZoomSdkError as exc:
-        # Échec d'entrée : le message porte déjà le diagnostic Zoom traduit.
+        # Le message porte déjà le diagnostic Zoom traduit. Reste à choisir le CODE, et la
+        # distinction n'est pas cosmétique : elle décide si l'orchestrateur rejoue ou non.
+        #   - échec AVANT d'entrer (identifiants, salle d'attente, réunion fermée) → rejouer
+        #     à l'identique ne donnerait rien : c'est « non admis » ;
+        #   - échec APRÈS être entré (transport coupé, droit retiré en séance) → c'est une
+        #     ANOMALIE, et la réunion mérite qu'on retente.
+        # Les confondre faisait abandonner définitivement une réunion sur un incident passager.
         logger.error("Zoom : %s", exc)
-        return EXIT_NOT_ADMITTED
+        return (EXIT_TECHNICAL if reached["phase"] is ZoomSdkPhase.ACTIVE
+                else EXIT_NOT_ADMITTED)
 
     logger.info("Réunion terminée | segments=%d", len(segments))
     for segment in segments:
