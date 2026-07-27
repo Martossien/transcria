@@ -51,6 +51,7 @@ from connector_service.live.zoom_sdk_state import (
     RecordingPermission,
     ZoomSdkPhase,
     describe_auth_result,
+    describe_failed_admission,
     describe_privilege_outcome,
     exit_reason,
     interpret_meeting_status,
@@ -313,6 +314,10 @@ def zoom_sdk_demux_source(
                 for name, value in fields.items():
                     if not name.startswith("_"):
                         setattr(without_login, name, value)
+                # ⚠ Le SDK journalise cette valeur en ENTIER : « Audio Raw Data Sampling Rate: 0 »
+                # signifie 32 kHz (l'énumération vaut 0 pour 32K et 1 pour 48K), pas « non
+                # réglé ». Vérifié — cela ressemble à un oubli dans les journaux, ça n'en est
+                # pas un.
                 without_login.eAudioRawdataSamplingRate = (
                     zoom.AudioRawdataSamplingRate.AudioRawdataSamplingRate_48K
                     if sampling_rate_hz == SAMPLING_RATE_48K
@@ -324,8 +329,9 @@ def zoom_sdk_demux_source(
 
                 await _await_admission(phase_changed, lambda: phase, admission_timeout_s)
                 if phase is not ZoomSdkPhase.ACTIVE:
-                    raise ZoomSdkError(
-                        f"entrée en réunion non aboutie : {exit_reason(phase, was_active=was_active)}")
+                    raise ZoomSdkError(describe_failed_admission(
+                        phase, timeout_s=admission_timeout_s,
+                        reason=exit_reason(phase, was_active=was_active)))
 
                 # RATTRAPAGE : le bot arrive après les participants déjà présents, et les
                 # événements d'arrivée ne sont PAS rejoués pour eux. Sans ce parcours, leurs

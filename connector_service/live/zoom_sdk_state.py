@@ -141,6 +141,32 @@ def exit_reason(phase: ZoomSdkPhase, *, was_active: bool) -> str:
     return phase.value
 
 
+def describe_failed_admission(phase: ZoomSdkPhase, *, timeout_s: float, reason: str) -> str:
+    """Message d'échec d'entrée en réunion — DIRE POURQUOI, pas seulement que ça a échoué.
+
+    La première version rendait « entrée en réunion non aboutie : connecting », ce qui
+    n'apprend rien : la phase atteinte est une donnée interne, pas un diagnostic. Or les
+    causes possibles appellent des gestes DIFFÉRENTS — ouvrir la réunion, admettre le bot,
+    corriger le code secret — et c'est ce geste qu'il faut nommer.
+    """
+    causes = {
+        ZoomSdkPhase.CONNECTING: (
+            f"la réunion n'a pas répondu en {timeout_s:.0f} s. Le plus souvent : elle n'est "
+            f"pas ouverte, ou le numéro est erroné."),
+        ZoomSdkPhase.WAITING_FOR_HOST: (
+            "l'hôte n'a pas encore démarré la réunion — le bot ne peut pas entrer avant lui."),
+        ZoomSdkPhase.IN_WAITING_ROOM: (
+            f"le bot est resté en SALLE D'ATTENTE {timeout_s:.0f} s sans être admis. "
+            f"L'hôte doit l'admettre, ou désactiver la salle d'attente (menu Sécurité)."),
+        ZoomSdkPhase.FAILED: (
+            "Zoom a refusé l'entrée : code secret incorrect, réunion verrouillée, ou "
+            "réunion réservée aux participants authentifiés."),
+        ZoomSdkPhase.ENDED: "la réunion s'est terminée avant que le bot puisse entrer.",
+    }
+    detail = causes.get(phase, f"phase inattendue à l'entrée : {phase.value}")
+    return f"entrée en réunion non aboutie ({reason}) — {detail}"
+
+
 # --------------------------------------------------------------------------- #
 #  Permission d'enregistrement local — condition d'accès à l'audio brut
 # --------------------------------------------------------------------------- #

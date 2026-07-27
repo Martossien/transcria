@@ -130,6 +130,11 @@ browser-automation** ; le live là où c'est propre (Visio natif, Zoom RTMS, Mee
 Media API officielle en recherche). **Vexa quitte la feuille de route principale** —
 repli expérimental du Meet-live seulement (extrait de code, pas la plateforme).
 
+**✅ VALIDÉ EN RÉUNION RÉELLE (2026-07-27), compte Zoom GRATUIT.** Le bot entre micro et
+caméra coupés, capte l'audio par participant (9879 frames, 4226 sonores) et le transcrit avec
+les **locuteurs nommés** — 29 segments attribués, code de sortie 0. Détail et défauts corrigés
+en §6.5 de `docs/BOT_REUNION.md`.
+
 **Correction apportée en cours de chantier (juillet 2026) — Zoom par bot.** Le pilote
 navigateur écrit pour Zoom (`bot/platforms/zoom_web.py`) est **inexploitable** : le client Web
 de Zoom oppose un reCAPTCHA à toute automatisation (vérifié au gate — le nom est saisi, le

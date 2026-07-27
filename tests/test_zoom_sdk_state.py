@@ -14,6 +14,7 @@ from connector_service.live.zoom_sdk_state import (
     RecordingPermission,
     ZoomSdkPhase,
     describe_auth_result,
+    describe_failed_admission,
     describe_privilege_outcome,
     exit_reason,
     interpret_meeting_status,
@@ -296,3 +297,34 @@ def test_statut_inconnu_ne_passe_pas_pour_un_accord():
     granted, message = describe_privilege_outcome("RequestLocalRecording_Demain")
     assert not granted
     assert "RequestLocalRecording_Demain" in message
+
+
+# --------------------------------------------------------------------------- #
+#  Message d'échec d'entrée — dire POURQUOI
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("phase, attendu", [
+    (ZoomSdkPhase.CONNECTING, "pas ouverte"),
+    (ZoomSdkPhase.WAITING_FOR_HOST, "démarré"),
+    (ZoomSdkPhase.IN_WAITING_ROOM, "SALLE D'ATTENTE"),
+    (ZoomSdkPhase.FAILED, "code secret"),
+    (ZoomSdkPhase.ENDED, "terminée"),
+])
+def test_chaque_echec_d_entree_nomme_son_remede(phase, attendu):
+    """La phase atteinte est une donnée INTERNE, pas un diagnostic. Les causes possibles
+    appellent des gestes différents — ouvrir la réunion, admettre le bot, corriger le code —
+    et c'est ce geste que le message doit nommer."""
+    message = describe_failed_admission(phase, timeout_s=300, reason="join_failed")
+    assert attendu in message
+    assert "join_failed" in message          # le motif machine reste présent pour l'aval
+
+
+def test_le_delai_apparait_dans_le_message():
+    message = describe_failed_admission(ZoomSdkPhase.IN_WAITING_ROOM,
+                                        timeout_s=45, reason="in_waiting_room")
+    assert "45" in message
+
+
+def test_phase_inattendue_reste_lisible():
+    message = describe_failed_admission(ZoomSdkPhase.RECONNECTING,
+                                        timeout_s=10, reason="reconnecting")
+    assert "reconnecting" in message

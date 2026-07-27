@@ -237,17 +237,73 @@ processus de la machine.
   à le lancer hors conteneur.
 - **Débit audio** : 32 kHz par défaut, 48 kHz possible. Le SDK n'offre pas 16 kHz.
 
-### 6.5 Vérifier
+### 6.5 État de validation (2026-07-27)
+
+Validé contre une **vraie réunion Zoom**, avec un compte **gratuit** :
+
+| Vérifié | Résultat |
+|---|---|
+| Authentification | `AUTHRET_SUCCESS` |
+| Entrée en réunion, micro et caméra coupés | oui, aucun son émis |
+| Audio par participant | 9879 frames, crête 32734/32767, 4226 sonores |
+| **Locuteurs nommés** | oui — « Martos Martossien », pas un identifiant de flux |
+| Transcription bout en bout | 29 segments attribués |
+| Code de sortie | `0` |
+
+Quatre défauts n'ont pu être trouvés QUE par cet essai réel, et sont corrigés :
+
+1. `isAudioOff` **ne fait pas entrer en muet**, il empêche de rejoindre la session audio —
+   d'où `SDKERR_NOT_JOIN_AUDIO` à l'abonnement. Il faut `JoinVoip()` puis se couper.
+2. Le SDK **segfaute à la fermeture** si sa boucle d'évènements est coupée avant le nettoyage,
+   puis une seconde fois dans ses destructeurs statiques — un succès sortait en code 139.
+3. Le droit d'enregistrement doit être **interrogé**, pas seulement attendu : l'hôte peut
+   l'accorder par des voies qui n'émettent aucun rappel.
+4. La façade STT **hallucinait sur les fenêtres silencieuses** (cf. 6.6).
+
+### 6.6 Qualité de transcription — ce qui a été mesuré
+
+Un moteur de type Whisper **n'échoue pas sur du silence : il invente**. Mesuré ici, 12 s de
+silence numérique pur ont produit une phrase française complète et entièrement fausse.
+
+Le tampon par locuteur exige donc désormais une **durée cumulée de parole** (0,35 s) avant de
+soumettre une fenêtre. Rejeu d'un flux réaliste à travers le vrai moteur :
+
+| | Fenêtres envoyées | Segments inventés |
+|---|---|---|
+| Avant | 5 | 2 |
+| Après | 3 | 0 |
+
+Vérifié aussi, pour ne pas corriger la mauvaise cause : le **débit n'y est pour rien** (16, 32
+et 48 kHz donnent un texte identique), et du silence AUTOUR d'une parole réelle ne la dégrade
+pas. C'est bien l'absence de parole qui fait halluciner.
+
+### 6.7 Vérifier
 
 ```bash
-docker run --rm -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
+docker run --rm --network host \
+  -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
   --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
-  -v "$PWD/scripts:/app/scripts:ro" transcria-zoom-sdk:latest \
-  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "578 629 7113" --seconds 60
+  -v "$PWD/scripts:/app/scripts:ro" -v /chemin/jeton.txt:/app/token.txt:ro \
+  transcria-zoom-sdk:latest \
+  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "578 629 7113" --passcode ●●●●●● \
+    --join-timeout-s 300 --seconds 120 \
+    --transcribe http://127.0.0.1:7870 --token-file /app/token.txt --language fr
 ```
 
 Le gate échoue explicitement si l'audio est capté mais **sans locuteur nommé** : ce serait
 perdre l'apport principal du SDK sans que rien ne le signale.
+
+Deux points appris en le faisant tourner :
+
+- `--join-timeout-s` (attente d'admission) et `--seconds` (durée de CAPTURE) sont **distincts**.
+  Les confondre faisait abandonner le bot pendant qu'il patientait légitimement en salle
+  d'attente.
+- `--network host` n'est utile qu'en **test local** : depuis un conteneur, le pont Docker peut
+  être filtré et `host.docker.internal` tomber sur un proxy. En exploitation, le bot joint
+  TranscrIA par le réseau comme n'importe quel client, sans réglage particulier.
+
+Pour éviter d'avoir à admettre le bot et à accepter l'autorisation à chaque essai : désactiver
+la salle d'attente (**Sécurité** dans la réunion) et passer le bot **co-hôte**.
 
 ---
 
