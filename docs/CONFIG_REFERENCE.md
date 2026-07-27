@@ -1476,6 +1476,29 @@ Distinct de la **langue des livrables** (compte-rendu, corrections), qui est un 
 
 ---
 
+## Section `live` — façade STT temps réel
+
+**Désactivée par défaut.** Ouvre `POST /v1/audio/transcriptions` et `POST /v1/audio/ingest`,
+compatibles avec le format OpenAI Audio. C'est l'entrée par laquelle les **bots de réunion**
+(Zoom, Jitsi — cf. `docs/BOT_REUNION.md`) envoient l'audio capté ; tout client sachant parler
+ce format peut également s'en servir.
+
+L'accès exige un **jeton d'API personnel** (`tia_…`), créé depuis *Mon compte → Jetons d'API*.
+Le réglage reste opt-in parce qu'il expose une surface d'API supplémentaire : ce doit être une
+décision, pas un effet de bord d'une mise à jour.
+
+| Clé | Type | Défaut | Description |
+|---|---|---|---|
+| `facade.enabled` | bool | `false` | Ouvre les routes `/v1/audio/*`. Fermées, elles répondent 404 |
+| `facade.inference_url` | str | *(vide)* | Déporte la transcription vers un `inference_service`. **Absent = transcription dans le processus web**, ce qui y immobilise la VRAM |
+| `facade.max_sync_audio_mb` | int | `25` | Taille maximale d'un envoi ; au-delà, refus explicite |
+| `facade.max_sync_duration_s` | int | `600` | Durée maximale d'un envoi synchrone |
+| `facade.inference_timeout_s` | int | `300` | Patience côté moteur avant d'abandonner une fenêtre |
+
+**Redémarrage requis :** oui (les routes sont montées au démarrage).
+
+---
+
 ## 6. Variables d'environnement
 
 | Variable | Description | Défaut si absente |

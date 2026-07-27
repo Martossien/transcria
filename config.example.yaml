@@ -992,3 +992,26 @@ inference:
 #     - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 0, gpu_mem: 0.10, port: 8022, health_mode: http_any }
 #     - { name: voxtralrt, script: scripts/launch_stt_voxtral.sh, gpu: 0, gpu_mem: 0.20, port: 8024 }  # Voxtral 4B (audio.cpp, /v1/models standard)
 #   # idle_timeout_s > 0 : arrêt automatique du moteur après N secondes d'inactivité (idle-stop). 0 = résident.
+
+# ---------------------------------------------------------------------------
+# live — façade STT temps réel (OPT-IN, désactivée par défaut)
+# ---------------------------------------------------------------------------
+# Ouvre `POST /v1/audio/transcriptions` et `POST /v1/audio/ingest`, compatibles avec le
+# format OpenAI Audio. C'est par là que les BOTS DE RÉUNION (Zoom, Jitsi — cf.
+# docs/BOT_REUNION.md) envoient l'audio capté, mais tout client sachant parler ce format
+# peut s'en servir.
+#
+# Laissée à `false` par défaut : elle expose une entrée d'API supplémentaire, ce qui doit
+# être un choix. L'accès exige de toute façon un jeton d'API personnel (`tia_…`), créé
+# depuis l'interface (Mon compte → Jetons d'API).
+#
+# live:
+#   facade:
+#     enabled: false            # ouvre les routes /v1/audio/*
+#     # Déporte la transcription vers un `inference_service` (souvent un autre hôte, doté
+#     # d'un GPU). Absent = transcription dans le processus web, ce qui y immobilise la
+#     # VRAM — à éviter dès que le portail sert aussi des pages.
+#     inference_url: http://127.0.0.1:8002
+#     max_sync_audio_mb: 25     # au-delà, l'envoi est refusé (protège la mémoire du portail)
+#     max_sync_duration_s: 600  # durée maximale d'un envoi synchrone
+#     inference_timeout_s: 300  # patience côté moteur avant d'abandonner une fenêtre
