@@ -210,3 +210,71 @@ def client_state_matches(notification: RecordingNotification, expected: str) -> 
     relève de la couche réseau — les deux se cumulent.
     """
     return bool(expected) and notification.client_state == expected
+
+
+# --------------------------------------------------------------------------- #
+#  Notifications de CYCLE DE VIE — sans elles, le flux s'arrête sans bruit
+# --------------------------------------------------------------------------- #
+# Trois valeurs possibles, et trois seulement (documentation Graph). Les ignorer casse le flux
+# de notifications : c'est le mode de panne le plus sournois, puisque tout paraît en place.
+LIFECYCLE_REAUTHORIZATION = "reauthorizationRequired"
+LIFECYCLE_SUBSCRIPTION_REMOVED = "subscriptionRemoved"
+LIFECYCLE_MISSED = "missed"
+
+
+@dataclass(frozen=True)
+class LifecycleAction:
+    """Ce qu'il faut FAIRE, et pourquoi — le nom de l'évènement seul n'aide personne."""
+
+    action: str          # "renew" | "recreate" | "resync" | "ignore"
+    reason: str
+
+
+# Conduites tirées de la documentation, pas devinées.
+_LIFECYCLE_ACTIONS = {
+    LIFECYCLE_REAUTHORIZATION: LifecycleAction(
+        "renew",
+        "jeton ou abonnement sur le point d'expirer : réautoriser. Un seul PATCH avec une "
+        "nouvelle expirationDateTime fait les deux — ⚠ ne JAMAIS enchaîner /reauthorize et "
+        "PATCH sur le même abonnement en moins de dix minutes, l'état devient incohérent"),
+    LIFECYCLE_SUBSCRIPTION_REMOVED: LifecycleAction(
+        "recreate",
+        "Graph a supprimé l'abonnement : en recréer un. Les notifications émises entre-temps "
+        "sont perdues et doivent être rattrapées autrement"),
+    LIFECYCLE_MISSED: LifecycleAction(
+        "resync",
+        "des notifications n'ont pas été délivrées (limitation de débit) : resynchroniser "
+        "la ressource pour retrouver ce qui manque"),
+}
+
+
+def parse_lifecycle_events(payload: Any) -> list[tuple[str, str]]:
+    """Charge utile de cycle de vie → [(subscriptionId, lifecycleEvent)]. PURE.
+
+    Un lot peut mêler PLUSIEURS évènements de natures différentes : la documentation le dit,
+    et n'en traiter qu'un laisserait les autres sans réponse.
+    """
+    if not isinstance(payload, dict):
+        return []
+    events = []
+    for raw in payload.get("value") or []:
+        if not isinstance(raw, dict):
+            continue
+        event = str(raw.get("lifecycleEvent") or "")
+        if event:
+            events.append((str(raw.get("subscriptionId") or ""), event))
+    return events
+
+
+def lifecycle_action(event: str) -> LifecycleAction:
+    """Conduite à tenir face à un évènement de cycle de vie.
+
+    Un évènement INCONNU n'est pas ignoré en silence : on le signale comme tel, car il
+    signifierait que Graph a introduit un cas que nous ne savons pas traiter — et le flux
+    s'arrêterait sans que rien ne l'explique.
+    """
+    known = _LIFECYCLE_ACTIONS.get(event)
+    if known is not None:
+        return known
+    return LifecycleAction("ignore", f"évènement de cycle de vie inconnu : {event!r} — "
+                                     f"à vérifier contre la documentation Graph")

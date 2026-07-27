@@ -11,7 +11,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from connector_service.teams_graph import (
+    LIFECYCLE_MISSED,
+    LIFECYCLE_REAUTHORIZATION,
     LIFECYCLE_REQUIRED_BEYOND,
+    LIFECYCLE_SUBSCRIPTION_REMOVED,
     MAX_SUBSCRIPTION_LIFETIME,
     PERMISSION_BY_RESOURCE,
     RECORDINGS_TENANT,
@@ -19,6 +22,8 @@ from connector_service.teams_graph import (
     GraphSubscriptionError,
     build_subscription_request,
     client_state_matches,
+    lifecycle_action,
+    parse_lifecycle_events,
     parse_notifications,
     renewal_deadline,
     transcript_access_disabled,
@@ -228,3 +233,50 @@ def test_message_evocateur_sans_le_code_ne_suffit_pas():
 @pytest.mark.parametrize("erreur", [None, {}, {"error": {}}, "texte"])
 def test_erreurs_degenerees_ne_levent_pas(erreur):
     assert not transcript_access_disabled(erreur)
+
+
+# --------------------------------------------------------------------------- #
+#  Cycle de vie — les ignorer arrête le flux sans bruit
+# --------------------------------------------------------------------------- #
+def test_les_trois_evenements_ont_une_conduite():
+    """Trois valeurs possibles, et trois seulement, d'après la documentation."""
+    for evenement, attendu in ((LIFECYCLE_REAUTHORIZATION, "renew"),
+                               (LIFECYCLE_SUBSCRIPTION_REMOVED, "recreate"),
+                               (LIFECYCLE_MISSED, "resync")):
+        assert lifecycle_action(evenement).action == attendu
+
+
+def test_la_conduite_de_reautorisation_rappelle_le_piege_des_dix_minutes():
+    """Enchaîner /reauthorize et PATCH sur le même abonnement en moins de dix minutes rend
+    son état incohérent — la documentation le signale en « Important »."""
+    assert "dix minutes" in lifecycle_action(LIFECYCLE_REAUTHORIZATION).reason
+
+
+def test_evenement_inconnu_signale_et_non_ignore_en_silence():
+    """S'il apparaît, c'est que Graph a introduit un cas que nous ne traitons pas — et le
+    flux s'arrêterait sans explication."""
+    conduite = lifecycle_action("quelqueChoseDeNouveau")
+    assert conduite.action == "ignore"
+    assert "inconnu" in conduite.reason
+
+
+def test_lecture_d_un_lot_de_cycle_de_vie():
+    charge = {"value": [
+        {"subscriptionId": "abc", "lifecycleEvent": LIFECYCLE_REAUTHORIZATION},
+        {"subscriptionId": "def", "lifecycleEvent": LIFECYCLE_SUBSCRIPTION_REMOVED},
+    ]}
+    assert parse_lifecycle_events(charge) == [("abc", LIFECYCLE_REAUTHORIZATION),
+                                              ("def", LIFECYCLE_SUBSCRIPTION_REMOVED)]
+
+
+def test_un_lot_peut_meler_des_natures_differentes():
+    """La documentation le dit explicitement : n'en traiter qu'un laisserait les autres sans
+    réponse."""
+    charge = {"value": [{"subscriptionId": "a", "lifecycleEvent": LIFECYCLE_MISSED},
+                        {"subscriptionId": "b", "lifecycleEvent": LIFECYCLE_REAUTHORIZATION}]}
+    assert len({e for _, e in parse_lifecycle_events(charge)}) == 2
+
+
+@pytest.mark.parametrize("charge", [None, {}, {"value": [{"subscriptionId": "x"}]}, "texte"])
+def test_lots_sans_evenement_exploitable(charge):
+    assert parse_lifecycle_events(charge) == []
