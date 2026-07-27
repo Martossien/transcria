@@ -882,6 +882,29 @@ Autrement dit, nous savons déjà lire un enregistrement une fois qu'on en conna
 référence ; nous ne savons pas encore **apprendre qu'il existe**. C'est exactement l'inverse
 de ce que l'on croirait en regardant le nombre de lignes écrites.
 
+### Projets de référence trouvés (recherche du 2026-07-27)
+
+| Projet | Langage | Licence | Apport |
+|---|---|---|---|
+| **Tutoriel officiel Google** « Observe meeting events with Python » | Python | doc | **La référence** : confirme le mode PULL et donne le code |
+| `googleworkspace/python-samples` | Python | **Apache-2.0** | démarrage rapide Meet seulement, pas d'évènements |
+| `gm-space-api` (cloné) | Python | **MIT** | utilise exactement le motif : `pubsub_v1.SubscriberClient`, `subscriber.subscribe`, `workspaceevents.googleapis.com/v1/subscriptions` — **réutilisable** |
+| `jido_connect/docs/…spike.md` (cloné) | Elixir | MIT | note d'étude, 178 l — deux pièges ci-dessous |
+
+Il n'existe PAS d'équivalent d'attendee pour cette voie : aucun projet mûr et éprouvé. La
+**documentation officielle est ici la source solide**, et le tutoriel Python en donne le
+squelette exact.
+
+### Deux pièges relevés dans la note d'étude, absents de la doc principale
+
+1. **Les évènements Meet ne portent PAS de données de ressource.** `payloadOptions` n'est
+   documenté que pour les évènements Chat : un évènement Meet est une simple RÉFÉRENCE. Il
+   faut donc toujours aller chercher l'enregistrement par l'API REST — ce que fait déjà
+   `providers/meet.py`, qui se trouve ainsi confirmé dans sa conception.
+2. **Les abonnements expirent, au maximum sept jours** sans données de ressource. Une boucle
+   de renouvellement est indispensable, exactement comme chez Teams — même besoin, deux
+   plateformes, donc une brique à concevoir en commun plutôt qu'en double.
+
 ### Décision proposée
 
 Meet post-réunion est **la prochaine cible la plus rentable** après Zoom : pas de bot, pas de
