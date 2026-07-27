@@ -70,12 +70,16 @@ def test_code_inconnu_traite_comme_definitif():
     assert "AUTHRET_QUELQUE_CHOSE_DE_NOUVEAU" in diagnosis.message
 
 
-def test_le_jwt_errone_est_bien_diagnostique():
-    """Verrou sur le code RÉELLEMENT observé en exécution (JWT signé avec un faux secret) :
-    c'est celui qu'un utilisateur rencontrera en premier s'il se trompe d'identifiants."""
-    diagnosis = describe_auth_result("AUTHRET_JWTTOKENWRONG")
-    assert not diagnosis.ok
-    assert "signature" in diagnosis.message.lower()
+def test_le_jwt_errone_nomme_D_ABORD_la_cause_probable():
+    """Zoom renvoie AUTHRET_JWTTOKENWRONG aussi bien pour un Client ID erroné que pour un
+    Client Secret erroné — vérifié en essayant les deux contre le vrai service. Le message
+    doit donc citer les identifiants AVANT l'horloge : mentionner d'abord une cause exacte
+    mais rare envoie chercher au mauvais endroit dans le cas courant."""
+    message = describe_auth_result("AUTHRET_JWTTOKENWRONG").message
+    assert not describe_auth_result("AUTHRET_JWTTOKENWRONG").ok
+    assert message.index("Client ID") < message.index("horloge"), (
+        "les identifiants doivent être cités avant l'horloge")
+    assert "Embed" in message, "la cause « Meeting SDK non activé » doit être citée"
 
 
 # --------------------------------------------------------------------------- #

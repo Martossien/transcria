@@ -48,9 +48,15 @@ _AUTH_DIAGNOSES: dict[str, AuthDiagnosis] = {
     "AUTHRET_KEYORSECRETWRONG": AuthDiagnosis(
         False, False, "Client ID ou Client Secret refusé par Zoom — vérifier qu'ils "
                       "proviennent bien d'une app de type « Meeting SDK »"),
+    # ⚠ Zoom renvoie CE code pour un Client ID erroné comme pour un Client Secret erroné —
+    # vérifié en essayant les deux. Le message est donc ordonné par probabilité RÉELLE :
+    # mentionner d'abord l'horloge (cause exacte mais rare) envoyait chercher au mauvais
+    # endroit dans le cas courant.
     "AUTHRET_JWTTOKENWRONG": AuthDiagnosis(
-        False, False, "signature JWT refusée — charge utile ou horloge incorrecte "
-                      "(exp doit valoir entre 30 min et 48 h après iat)"),
+        False, False, "signature JWT refusée par Zoom. Dans l'ordre des causes probables : "
+                      "Client ID ou Client Secret erroné ; app sans « Meeting SDK » activé "
+                      "(onglet Embed du Marketplace) ; enfin, horloge de la machine ou durée "
+                      "de validité hors bornes (30 min à 48 h)"),
     "AUTHRET_ACCOUNTNOTSUPPORT": AuthDiagnosis(
         False, False, "ce compte Zoom ne permet pas l'usage du Meeting SDK"),
     "AUTHRET_ACCOUNTNOTENABLESDK": AuthDiagnosis(
