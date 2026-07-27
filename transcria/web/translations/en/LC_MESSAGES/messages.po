@@ -2671,13 +2671,16 @@ msgid "À venir"
 msgstr "to monitor"
 
 #: transcria/web/templates/admin_connectors.html:39
-#, fuzzy
 msgid "Bot participant"
-msgstr "participant"
+msgstr "Participant bot"
 
 #: transcria/web/templates/admin_connectors.html:41
 msgid "Transport natif"
 msgstr "Native transport"
+
+#: transcria/web/templates/admin_connectors.html:42
+msgid "File interrogée"
+msgstr "Polled queue"
 
 #: transcria/web/templates/admin_connectors.html:43
 msgid "Webhook plateforme"

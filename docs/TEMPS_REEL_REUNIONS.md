@@ -904,6 +904,14 @@ squelette exact.
 2. **Les abonnements expirent, au maximum sept jours** sans données de ressource. Une boucle
    de renouvellement est indispensable, exactement comme chez Teams — même besoin, deux
    plateformes, donc une brique à concevoir en commun plutôt qu'en double.
+3. **Le sujet Pub/Sub doit autoriser un publicateur nommé**, sinon il ne reçoit jamais rien.
+   La documentation « Create a Google Workspace subscription » impose d'accorder le rôle
+   *Pub/Sub Publisher* à `meet-api-event-push@system.gserviceaccount.com` (chaque application
+   Workspace a le sien : `chat-api-push@…`, `drive-api-event-push@…`). **Sans ce droit,
+   l'abonnement est créé, l'API répond 200, et aucun message n'arrive jamais** — panne
+   silencieuse la plus coûteuse de cette voie, car rien ne la signale. Le même document
+   confirme par ailleurs que l'abonnement Pub/Sub créé est **`pull`-based** par défaut, ce qui
+   valide notre choix réseau.
 
 ### Décision proposée
 

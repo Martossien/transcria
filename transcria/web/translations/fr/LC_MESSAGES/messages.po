@@ -2682,6 +2682,10 @@ msgstr "participant"
 msgid "Transport natif"
 msgstr "Transport natif"
 
+#: transcria/web/templates/admin_connectors.html:42
+msgid "File interrogée"
+msgstr "File interrogée"
+
 #: transcria/web/templates/admin_connectors.html:43
 msgid "Webhook plateforme"
 msgstr "Webhook plateforme"

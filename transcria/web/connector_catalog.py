@@ -24,7 +24,15 @@ CATALOG_PATH = Path(__file__).resolve().parent.parent / "data" / "meeting_connec
 #   implemented  le code existe et passe la CI, mais n'a JAMAIS été exécuté en vrai
 #   planned      rien d'exploitable
 VALID_STATUSES = ("validated", "implemented", "planned")
-VALID_PATHS = ("bot", "native", "webhook")
+
+# Comment les évènements ou l'audio nous parviennent — ce qui décide de l'exigence RÉSEAU :
+#   bot      un participant rejoint la réunion (sortant seulement)
+#   native   transport natif de la plateforme (sortant seulement)
+#   webhook  la plateforme APPELLE une URL publique (ouverture de pare-feu)
+#   pull     la plateforme dépose dans une file que l'on interroge (sortant seulement)
+# `pull` n'est pas un détail d'implémentation : c'est la voie Google Meet, et son absence de
+# port entrant est précisément ce qui la rend acceptable là où un webhook est refusé.
+VALID_PATHS = ("bot", "native", "webhook", "pull")
 
 
 @dataclass(frozen=True)
@@ -62,8 +70,8 @@ class Connector:
         """Exige-t-il une ouverture de pare-feu ?
 
         Détail structurant en entreprise : un connecteur `webhook` reçoit un appel ENTRANT de
-        la plateforme, là où bots et transports natifs n'établissent que du sortant. C'est
-        souvent ce qui décide de ce qu'une DSI acceptera de déployer.
+        la plateforme, là où bots, transports natifs et files interrogées (`pull`) n'établissent
+        que du sortant. C'est souvent ce qui décide de ce qu'une DSI acceptera de déployer.
         """
         return self.path == "webhook"
 

@@ -69,6 +69,43 @@ def test_le_besoin_d_un_port_entrant_est_exposé():
     assert not par_id["visio"].needs_inbound_port
 
 
+def test_meet_n_exige_AUCUNE_ouverture_de_pare_feu():
+    """Le point le plus mal compris de Meet, et son principal atout : Google ne pousse pas
+    vers une URL publique, il publie dans une file Pub/Sub que le portail INTERROGE. Le
+    classer « webhook » ferait refuser à tort un connecteur déployable partout."""
+    meet = {c.id: c for c in load_catalog()}["meet"]
+    assert meet.path == "pull"
+    assert not meet.needs_inbound_port
+
+
+def test_meet_porte_la_delegation_et_le_publicateur_dans_sa_procedure():
+    """Les deux oublis qui produisent une panne MUETTE : sans délégation à l'échelle du
+    domaine, le compte de service ne voit aucun artefact ; sans le droit de publication
+    accordé à `meet-api-event-push`, l'abonnement est accepté et ne délivre jamais rien."""
+    etapes = " ".join({c.id: c for c in load_catalog()}["meet"].steps)
+    assert "délégation" in etapes.lower()
+    assert "meet-api-event-push@system.gserviceaccount.com" in etapes
+    assert "PULL" in etapes
+
+
+def test_teams_porte_la_politique_d_acces_applicatif():
+    """Sans `New-CsApplicationAccessPolicy`, l'application est authentifiée mais ne voit les
+    artefacts d'AUCUN organisateur — un 403 que rien dans le code ne peut corriger."""
+    etapes = " ".join({c.id: c for c in load_catalog()}["teams"].steps)
+    assert "New-CsApplicationAccessPolicy" in etapes
+    assert "OnlineMeetingRecording.Read.All" in etapes
+
+
+def test_teams_ne_reclame_plus_de_certificat_ni_de_facturation():
+    """Deux affirmations devenues FAUSSES : le certificat n'est utile qu'avec les données de
+    ressource (que nous n'activons pas), et ces API Graph ne sont plus facturées depuis le
+    25 août 2025. Les laisser écrites découragerait l'exploitant pour rien."""
+    teams = {c.id: c for c in load_catalog()}["teams"]
+    tout = " ".join(teams.steps + teams.notes).lower()
+    assert "fournir un certificat" not in tout
+    assert "facturées à l'usage" not in tout
+
+
 def test_les_secrets_sont_marques_comme_tels():
     """L'affichage doit pouvoir masquer ce qui doit l'être."""
     zoom = {c.id: c for c in load_catalog()}["zoom-sdk"]

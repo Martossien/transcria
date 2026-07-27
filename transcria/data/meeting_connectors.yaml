@@ -126,50 +126,103 @@ connectors:
     path: webhook
     status: implemented
     summary: >-
-      Notifications Microsoft Graph chiffrées (post-réunion) et transport temps réel RTM.
-      Microsoft déconseille l'approche bot pour le temps réel.
-    doc: docs/TEMPS_REEL_REUNIONS.md
+      Notifications Microsoft Graph : le portail est prévenu dès qu'un ENREGISTREMENT est
+      disponible, puis le télécharge et le traite avec notre propre chaîne. Aucun bot dans
+      la réunion.
+    doc: docs/TEMPS_REEL_REUNIONS.md#7-bis
     requires:
       - key: TEAMS_TENANT_ID
-        label: Identifiant de locataire
+        label: Identifiant de locataire (Entra ID)
         secret: false
       - key: TEAMS_CLIENT_ID
-        label: Client ID de l'app Azure
+        label: Client ID de l'application
         secret: false
       - key: TEAMS_CLIENT_SECRET
         label: Client Secret
         secret: true
       - key: TEAMS_CLIENT_STATE
-        label: Jeton de validation des notifications
+        label: Secret partagé des notifications (clientState)
         secret: true
+      - key: TEAMS_NOTIFICATION_URL
+        label: URL publique de réception des notifications
+        secret: false
     testable: false
     steps:
-      - Enregistrer une application dans Entra ID (Azure AD) avec les permissions Graph.
-      - Fournir un certificat pour le déchiffrement des notifications.
-      - Déclarer un point d'entrée HTTPS public pour les notifications Graph.
+      - Enregistrer une application dans Entra ID (Azure AD) et créer un Client Secret.
+      - >-
+        Accorder la permission APPLICATIVE « OnlineMeetingRecording.Read.All », puis le
+        consentement administrateur. (« OnlineMeetingTranscript.Read.All » n'est utile que
+        si l'on veut aussi la transcription produite par Teams — ce n'est pas notre cas.)
+      - >-
+        Créer une politique d'accès applicatif en PowerShell
+        (`New-CsApplicationAccessPolicy`) et l'accorder aux utilisateurs concernés : sans
+        elle, l'application ne voit les artefacts d'aucun organisateur.
+      - >-
+        Exposer DEUX points d'entrée HTTPS publics : l'un pour les notifications, l'autre
+        pour le cycle de vie. Graph exige le second dès qu'un abonnement dure plus d'une
+        heure, et refuse tout schéma autre que HTTPS.
+      - Vérifier que l'enregistrement de réunion est autorisé par la politique du locataire.
     notes:
-      - Le déchiffrement des notifications est prouvé par test, mais jamais contre un vrai événement.
-      - Les API Graph concernées sont facturées à l'usage.
+      - >-
+        Depuis le 25 août 2025, ces API Graph NE SONT PLUS FACTURÉES : aucun abonnement Azure
+        n'est nécessaire.
+      - >-
+        Le réglage « Transcript API access », imposé au 29 juillet 2026 et désactivé par
+        défaut, ne concerne QUE les transcriptions — les abonnements aux enregistrements n'en
+        dépendent pas.
+      - >-
+        Aucun certificat de chiffrement n'est requis : nous n'activons pas les données de
+        ressource, l'évènement ne portant qu'une référence que l'on résout ensuite.
 
   - id: meet
     name: Google Meet
-    path: webhook
+    path: pull
     status: implemented
     summary: >-
-      Meet REST API v2 + Drive pour le post-réunion ; Meet Media API (WebRTC) pour le temps
-      réel, encore en Developer Preview côté Google.
-    doc: docs/TEMPS_REEL_REUNIONS.md
+      Google Workspace Events publie dans une file Pub/Sub que le portail INTERROGE (pull) :
+      il apprend qu'un enregistrement existe, puis le récupère par l'API Meet et Drive.
+      Aucun bot, et surtout AUCUN port entrant.
+    doc: docs/TEMPS_REEL_REUNIONS.md#7-quater
     requires:
-      - key: MEET_CLIENT_ID
-        label: Client ID OAuth Google
+      - key: MEET_SERVICE_ACCOUNT_EMAIL
+        label: Adresse du compte de service
         secret: false
-      - key: MEET_CLIENT_SECRET
-        label: Client Secret
+      - key: MEET_SERVICE_ACCOUNT_KEY
+        label: Clé privée du compte de service (JSON)
         secret: true
+      - key: MEET_DELEGATED_USER
+        label: Utilisateur représenté (délégation)
+        secret: false
+      - key: MEET_PUBSUB_SUBSCRIPTION
+        label: Abonnement Pub/Sub à interroger
+        secret: false
     testable: false
     steps:
-      - Créer un projet Google Cloud et activer les API Meet et Drive.
-      - Créer des identifiants OAuth et obtenir le consentement de l'organisation.
+      - >-
+        Créer un projet Google Cloud, puis activer les API « Google Meet », « Google Workspace
+        Events », « Google Drive » et « Pub/Sub ».
+      - Créer un compte de service et générer sa clé privée JSON.
+      - >-
+        Dans la console d'administration Workspace, accorder la DÉLÉGATION À L'ÉCHELLE DU
+        DOMAINE au compte de service pour les portées Meet et Drive : sans elle, le compte
+        n'agit que pour lui-même et ne voit AUCUN artefact de réunion (symptôme : des 404 sur
+        des ressources qui existent).
+      - >-
+        Créer un sujet Pub/Sub, puis y autoriser le publicateur
+        `meet-api-event-push@system.gserviceaccount.com` — sans ce droit, l'abonnement est
+        accepté et ne délivre jamais rien.
+      - >-
+        Créer un abonnement Pub/Sub de type PULL (surtout pas « push ») : c'est lui qui évite
+        toute ouverture de pare-feu.
     notes:
-      - La Meet Media API est en Developer Preview : son accès doit être demandé à Google.
+      - >-
+        Voie la plus facile à faire accepter par une DSI : tout est SORTANT, à la différence de
+        Teams et de Zoom RTMS.
+      - >-
+        Les abonnements Workspace Events durent au maximum SEPT JOURS et doivent être
+        renouvelés ; le portail s'en charge (`connector_service/subscription_renewal.py`).
+      - >-
+        L'évènement ne porte qu'une RÉFÉRENCE (`conferenceRecords/…`) : le média est ensuite
+        récupéré par l'API. Ce n'est pas une limite de notre code mais du format Google.
+      - Un abonnement Google Workspace (payant) est requis ; un compte Gmail ne suffit pas.
       - Jamais exécuté contre une vraie conférence.
