@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -414,8 +415,8 @@ def zoom_sdk_demux_source(
                 # `Leave`, `StopRawRecording` et `CleanUPSDK` produisent des évènements que le
                 # SDK doit pouvoir traiter ; couper la pompe d'abord les laisse en suspens et
                 # le processus meurt par segfault en fin d'exécution (constaté).
-                await _cleanup(zoom, meeting, retained, dropped, pump=pump,
-                               started_raw_recording=started_raw_recording)
+                _cleanup(zoom, meeting, retained, dropped, pump=pump,
+                         started_raw_recording=started_raw_recording)
                 stop.set()
                 pump_task.cancel()
                 try:
@@ -574,8 +575,8 @@ async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Re
     logger.info("Zoom SDK : %s", outcome["message"])
 
 
-async def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
-                   pump: GLibPump, started_raw_recording: bool = False) -> None:
+def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *,
+             pump: GLibPump, started_raw_recording: bool = False) -> None:
     """Quitte la réunion et libère le SDK, sans jamais masquer l'erreur d'origine.
 
     L'ordre importe : arrêter la capture, quitter la réunion, PUIS `CleanUPSDK`, PUIS relâcher
@@ -591,10 +592,19 @@ async def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *
     reconnaître « celui qui a une méthode Leave » marcherait aujourd'hui et casserait au
     premier objet du SDK qui expose le même nom pour autre chose.
     """
-    async def _settle(rounds: int = 20) -> None:
+    def _settle(rounds: int = 20) -> None:
+        """Laisse le SDK finir, SANS `await`.
+
+        Le chemin le plus courant est l'ANNULATION (durée maximale atteinte, arrêt demandé) :
+        dans une tâche annulée, tout `await asyncio.sleep()` relève immédiatement
+        `CancelledError` et le nettoyage n'irait pas au bout — le processus mourait alors par
+        segfault, alors même que la réunion s'était bien passée (constaté).
+
+        Bloquer brièvement la boucle est ici sans conséquence : on est en train de tout fermer.
+        """
         for _ in range(rounds):
             pump.drain_once()
-            await asyncio.sleep(0.01)
+            time.sleep(0.01)
 
     if dropped:
         logger.warning("Zoom SDK : %d frame(s) audio écartée(s) au total", dropped)
@@ -605,16 +615,16 @@ async def _cleanup(zoom: Any, meeting: Any, retained: _Retained, dropped: int, *
             meeting.GetMeetingRecordingController().StopRawRecording()
         except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
             logger.debug("StopRawRecording a échoué (sans conséquence) : %r", exc)
-        await _settle()
+        _settle()
     if meeting is not None:
         try:
             meeting.Leave(zoom.LeaveMeetingCmd.LEAVE_MEETING)
         except Exception as exc:  # noqa: BLE001 — le nettoyage ne doit rien masquer
             logger.debug("Leave a échoué (sans conséquence) : %r", exc)
-        await _settle()
+        _settle()
     try:
         zoom.CleanUPSDK()
     except Exception as exc:  # noqa: BLE001
         logger.warning("CleanUPSDK a échoué : %r", exc)
-    await _settle()
+    _settle()
     retained.objects.clear()

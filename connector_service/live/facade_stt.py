@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import logging
 import struct
 import wave
 from collections.abc import AsyncIterator, Callable
@@ -25,6 +26,8 @@ from collections.abc import AsyncIterator, Callable
 from connector_service.contract import AudioFrame
 from connector_service.live.agreement import Word
 from connector_service.live.session import Hypothesis
+
+logger = logging.getLogger(__name__)
 
 SILENCE_PEAK = 500          # en deçà : la frame est considérée SILENCIEUSE (échelle s16)
 MIN_WINDOW_S = 1.5          # ne pas transcrire des bribes plus courtes
@@ -119,6 +122,9 @@ class FacadeTranscriber:
         # Une réunion animée peut déclencher plusieurs fenêtres simultanées : on borne la
         # charge du moteur STT sans jamais bloquer la capture.
         self._slots = asyncio.Semaphore(max_parallel)
+        # Compteur d'échecs : sert à journaliser sans inonder (les fenêtres se
+        # succèdent toutes les quelques secondes, par locuteur).
+        self._failures = 0
 
     async def _run_window(self, pcm: bytes, rate: int, speaker: str, name: str,
                           out: asyncio.Queue) -> None:
@@ -127,7 +133,16 @@ class FacadeTranscriber:
             try:
                 text = await asyncio.get_running_loop().run_in_executor(
                     None, self._transcribe, wav)
-            except Exception:  # noqa: BLE001 — une fenêtre perdue n'arrête pas la réunion
+            except Exception as exc:  # noqa: BLE001 — une fenêtre perdue n'arrête pas la réunion
+                # ...mais elle ne doit pas disparaître EN SILENCE. Sans cette trace, une
+                # façade injoignable produit une réunion sans le moindre texte et sans le
+                # moindre indice : c'est exactement ce qui s'est produit au premier essai
+                # avec transcription (aucun segment, aucune erreur, aucune requête reçue).
+                self._failures += 1
+                if self._failures <= 3 or self._failures % 25 == 0:
+                    logger.warning(
+                        "fenêtre de transcription PERDUE (%d au total) pour « %s » : %r",
+                        self._failures, name or speaker, exc)
                 return
             text = (text or "").strip()
             if not text:

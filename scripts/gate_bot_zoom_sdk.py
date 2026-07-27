@@ -110,7 +110,10 @@ async def main() -> int:
                         help="numéro de réunion ou lien d'invitation")
     parser.add_argument("--passcode", default=os.environ.get("ZOOM_PASSCODE", ""))
     parser.add_argument("--name", default="TranscrIA (gate)")
-    parser.add_argument("--seconds", type=float, default=60.0)
+    parser.add_argument("--seconds", type=float, default=60.0,
+                        help="durée de CAPTURE, une fois le bot admis")
+    parser.add_argument("--join-timeout-s", type=float, default=300.0,
+                        help="attente d'admission (salle d'attente) avant d'abandonner")
     parser.add_argument("--sampling-rate-hz", type=int, default=SAMPLING_RATE_32K)
     parser.add_argument("--transcribe", help="URL TranscrIA pour transcrire en direct")
     parser.add_argument("--token-file", help="fichier du jeton d'API TranscrIA")
@@ -145,6 +148,7 @@ async def main() -> int:
         client_id, client_secret, meeting_number,
         display_name=args.name, passcode=passcode,
         sampling_rate_hz=args.sampling_rate_hz,
+        admission_timeout_s=args.join_timeout_s,
         on_phase=phases.append))
     provider = LiveAudioProvider("zoom", source)
 
@@ -154,8 +158,12 @@ async def main() -> int:
 
     segments: list = []
     session = LiveSession(transcriber, on_final=segments.append)
+    # Le plafond global couvre l'ATTENTE D'ADMISSION *puis* la capture. Les confondre
+    # faisait abandonner le bot pendant qu'il patientait légitimement en salle d'attente,
+    # alors que `--seconds` est censé désigner la seule durée de capture.
     try:
-        await asyncio.wait_for(session.run(provider, occurrence), timeout=args.seconds)
+        await asyncio.wait_for(session.run(provider, occurrence),
+                               timeout=args.join_timeout_s + args.seconds)
     except asyncio.TimeoutError:
         pass                                              # durée du gate atteinte
     except ZoomSdkError as exc:
