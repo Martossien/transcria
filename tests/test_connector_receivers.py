@@ -93,8 +93,42 @@ def test_teams_notification_valide_202():
     assert r.status_code == 202
 
 
-def test_teams_client_state_invalide_401():
+def test_teams_client_state_invalide_ACCEPTE_puis_ignore(caplog):
+    """Ce test VÉRIFIAIT auparavant un 401 — comportement contraire à ce qu'exige Microsoft.
+
+    La documentation est explicite : répondre « 202 Accepted » immédiatement, MÊME quand la
+    validation échoue, car « accepting and responding to a change notification prevents
+    unnecessary delivery retries and HIDES VALIDATION RESULTS FROM POTENTIAL ATTACKERS ».
+    Un 401 renseignait donc un attaquant sur ce qui avait été détecté, et provoquait des
+    réémissions inutiles.
+
+    La notification est acceptée puis IGNORÉE, et l'ignorance est journalisée pour nous.
+    """
     payload = json.loads((FIX / "teams_recording_notification.json").read_text())
     payload["value"][0]["clientState"] = "MAUVAIS"
-    r = _teams_client().post("/webhooks/teams", json=payload)
-    assert r.status_code == 401
+    handler = _FakeHandler()
+    r = _teams_client(handler=handler).post("/webhooks/teams", json=payload)
+    assert r.status_code == 202
+    assert not handler.seen, "une notification non authentique ne doit PAS être ingérée"
+    assert "IGNORÉE" in caplog.text
+
+
+def test_teams_notification_authentique_ingeree():
+    """Contrepartie du test précédent : le 202 ne doit pas masquer une ingestion qui n'a pas
+    lieu — les deux cas rendent le même code, seul l'effet diffère."""
+    payload = json.loads((FIX / "teams_recording_notification.json").read_text())
+    payload["value"][0]["clientState"] = "cs-123"
+    handler = _FakeHandler()
+    r = _teams_client(handler=handler).post("/webhooks/teams", json=payload)
+    assert r.status_code == 202
+    assert handler.seen, "une notification authentique doit être ingérée"
+
+
+def test_cycle_de_vie_sans_clientState_accepte():
+    """Graph ne met pas de `clientState` dans les notifications de cycle de vie : les refuser
+    couperait le renouvellement, donc le flux entier — silencieusement."""
+    from connector_service.receivers import teams_notification_is_authentic
+
+    lifecycle = {"value": [{"subscriptionId": "abc",
+                            "lifecycleEvent": "reauthorizationRequired"}]}
+    assert teams_notification_is_authentic(lifecycle, "cs-123")

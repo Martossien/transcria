@@ -14,6 +14,7 @@ Teams), gère le défi de validation, puis délègue au handler d'ingestion asyn
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from flask import Flask, jsonify, request
 
@@ -21,6 +22,8 @@ from connector_service.providers.teams import TeamsNotificationError
 from connector_service.providers.visio import VisioTaskError
 from connector_service.providers.zoom import ZoomEventError
 from connector_service.signatures import verify_zoom_signature, zoom_url_validation
+
+logger = logging.getLogger(__name__)
 
 
 def _run_handler(handler, payload, parse_error):
@@ -59,6 +62,24 @@ def register_zoom_receiver(app: Flask, *, secret_token: str, handler) -> None:
         return _run_handler(handler, payload, ZoomEventError)
 
 
+def teams_notification_is_authentic(payload: dict, client_state: str) -> bool:
+    """Le `clientState` reçu correspond-il à celui posé à la création de l'abonnement ?
+
+    Fonction PURE, donc testée. Première barrière seulement : la vérification des
+    `validationTokens` signés par Microsoft (cf. `graph_validation`) s'y ajoute quand les
+    notifications riches sont activées.
+
+    Un lot dont AUCUN élément ne porte de `clientState` est accepté : Graph n'en met pas dans
+    les notifications de cycle de vie, et les refuser couperait le renouvellement.
+    """
+    if not client_state:
+        return True                       # aucun secret configuré : rien à comparer
+    states = {str((v or {}).get("clientState") or "")
+              for v in (payload.get("value") or []) if isinstance(v, dict)}
+    states.discard("")
+    return not states or states == {client_state}
+
+
 def register_teams_receiver(app: Flask, *, client_state: str, handler) -> None:
     @app.post("/webhooks/teams")
     def teams_webhook():
@@ -66,9 +87,20 @@ def register_teams_receiver(app: Flask, *, client_state: str, handler) -> None:
         token = request.args.get("validationToken")
         if token is not None:
             return token, 200, {"Content-Type": "text/plain"}
+
         payload = request.get_json(silent=True) or {}
-        # 2) Authenticité : clientState partagé (posé à la création de l'abonnement).
-        states = {str((v or {}).get("clientState") or "") for v in (payload.get("value") or [])}
-        if client_state and states and states != {client_state}:
-            return jsonify({"error": "clientState Teams invalide"}), 401
+
+        # 2) RÈGLE MICROSOFT, contre-intuitive mais explicite : répondre « 202 Accepted »
+        # immédiatement, MÊME quand la validation échoue — « accepting and responding to a
+        # change notification prevents unnecessary delivery retries and HIDES VALIDATION
+        # RESULTS FROM POTENTIAL ATTACKERS ».
+        #
+        # Renvoyer 401 comme le faisait la première version renseignait donc un attaquant sur
+        # ce qui avait été détecté, et provoquait des réémissions inutiles. On accepte, puis
+        # on ignore EN SILENCE côté client — en le journalisant pour nous.
+        if not teams_notification_is_authentic(payload, client_state):
+            logger.warning("notification Teams au clientState inattendu — acceptée puis "
+                           "IGNORÉE (répondre 401 renseignerait un attaquant)")
+            return jsonify({"accepted": True}), 202
+
         return _run_handler(handler, payload, TeamsNotificationError)
