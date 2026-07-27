@@ -90,7 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
                     "par participant.")
     parser.add_argument("--meeting", default=os.environ.get("ZOOM_MEETING"),
                         help="numéro de réunion ou lien d'invitation (ou ZOOM_MEETING)")
-    parser.add_argument("--passcode", default=os.environ.get("ZOOM_PASSCODE", ""),
+    # Défaut à None, PAS à la variable d'environnement : il faut pouvoir distinguer « code
+    # donné explicitement » de « code ambiant », les deux n'ayant pas la même priorité face à
+    # un lien (cf. `resolve_passcode`).
+    parser.add_argument("--passcode", default=None,
                         help="code secret, s'il n'est pas déjà dans le lien")
     parser.add_argument("--client-id", default=os.environ.get("ZOOM_CLIENT_ID"),
                         help="Client ID de l'app Meeting SDK (ou ZOOM_CLIENT_ID)")
@@ -120,9 +123,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def resolve_passcode(explicit: str | None, from_link: str, ambient: str) -> str:
+    """Code secret retenu — fonction PURE, donc testée.
+
+    Priorité : option explicite > code PORTÉ PAR LE LIEN > code ambiant (configuration).
+
+    Le point qui compte est le second : un code de configuration s'applique à toutes les
+    réunions, alors qu'un lien désigne UNE réunion précise. Laisser l'ambiant l'emporter
+    ferait échouer l'entrée dès qu'on rejoint une autre réunion que celle habituelle — avec
+    un message parlant d'un code erroné, sans dire lequel a été utilisé.
+    """
+    if explicit is not None:
+        return explicit
+    return from_link or ambient
+
+
 async def run(args: argparse.Namespace, client_secret: str) -> int:
     meeting_number, invite_passcode = parse_zoom_invite(args.meeting)
-    passcode = args.passcode or invite_passcode
+    passcode = resolve_passcode(args.passcode, invite_passcode,
+                                os.environ.get("ZOOM_PASSCODE", ""))
 
     occurrence = ExternalMeetingOccurrence(
         provider="zoom", provider_account_id=os.environ.get("BOT_ACCOUNT", "zoom-sdk"),

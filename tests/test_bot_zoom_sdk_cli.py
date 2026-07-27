@@ -163,3 +163,41 @@ def test_panne_APRES_l_entree_est_rejouable(monkeypatch):
     from connector_service.bot.zoom_sdk import EXIT_TECHNICAL
 
     assert _run_with_transport_failure(True, monkeypatch) == EXIT_TECHNICAL
+
+
+# --------------------------------------------------------------------------- #
+#  Priorité du code secret — un lien désigne UNE réunion, la config les désigne toutes
+# --------------------------------------------------------------------------- #
+def test_le_code_du_lien_prime_sur_celui_de_la_configuration():
+    """LE cas qui compte : un code de configuration vaut pour toutes les réunions, alors
+    qu'un lien en désigne une seule. Laisser l'ambiant l'emporter ferait échouer l'entrée
+    dans toute réunion autre que l'habituelle."""
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode(None, "du-lien", "de-la-config") == "du-lien"
+
+
+def test_l_option_explicite_prime_sur_tout():
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode("explicite", "du-lien", "de-la-config") == "explicite"
+
+
+def test_la_configuration_sert_de_repli_quand_le_lien_n_a_pas_de_code():
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode(None, "", "de-la-config") == "de-la-config"
+
+
+def test_option_explicitement_vide_respectee():
+    """`--passcode ''` doit signifier « pas de code », et non « retombe sur la config » :
+    sinon on ne pourrait pas rejoindre une réunion sans code depuis une machine configurée."""
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode("", "du-lien", "de-la-config") == ""
+
+
+def test_aucune_source_donne_une_chaine_vide():
+    from connector_service.bot.zoom_sdk import resolve_passcode
+
+    assert resolve_passcode(None, "", "") == ""

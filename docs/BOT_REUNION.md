@@ -21,6 +21,36 @@ apporte en prime ce que le navigateur ne pouvait pas donner : **les locuteurs so
 Les deux partagent l'aval (façade STT, session live, provenance) et **les mêmes codes de
 retour** : l'orchestration n'a pas à les distinguer.
 
+## 0. Au quotidien : une seule commande
+
+`scripts/bot.sh` masque entièrement Docker — il choisit l'image, construit ce qui manque,
+transmet les identifiants et décide du mode réseau :
+
+```bash
+./scripts/bot.sh zoom  "578 629 7113"
+./scripts/bot.sh zoom  "https://us05web.zoom.us/j/5786297113?pwd=…"   # le lien suffit
+./scripts/bot.sh jitsi https://jitsi.exemple/ma-salle
+```
+
+Les réglages vivent dans `~/.transcria-bot.env` (hors du dépôt) :
+
+```ini
+TRANSCRIA_URL=http://127.0.0.1:7870
+TRANSCRIA_TOKEN_FILE=/chemin/vers/jeton.txt
+BOT_LANGUAGE=fr
+ZOOM_CLIENT_ID=…
+ZOOM_CLIENT_SECRET=…
+```
+
+Deux comportements qui évitent des pièges classiques :
+
+- si `TRANSCRIA_URL` désigne **cette machine**, le script partage le réseau de l'hôte — sans
+  quoi le conteneur ne joindrait pas la façade et la transcription resterait vide ;
+- le code secret **porté par un lien prime** sur celui de la configuration : un code de
+  configuration vaut pour toutes les réunions, un lien n'en désigne qu'une.
+
+Le reste de ce document décrit ce qui se passe dessous, et n'est utile qu'en cas de problème.
+
 ---
 
 ## 1. Ce qu'il faut savoir avant
