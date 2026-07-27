@@ -35,6 +35,7 @@ RÉPARTITION DÉLIBÉRÉE, comme pour `livekit_transport` :
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
@@ -563,12 +564,29 @@ async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Re
     logger.warning(
         "Zoom SDK : EN ATTENTE DE L'HÔTE — une fenêtre « Autoriser l'enregistrement » "
         "s'affiche dans la réunion ; elle doit être acceptée (%.0f s).", timeout_s)
-    try:
-        await asyncio.wait_for(answered.wait(), timeout=timeout_s)
-    except asyncio.TimeoutError as exc:
-        raise ZoomSdkError(
-            f"l'hôte n'a pas répondu en {timeout_s:.0f} s à la demande d'autorisation "
-            f"d'enregistrement — sans elle, aucun audio brut ne circule.") from exc
+
+    # On n'attend PAS seulement le rappel. L'hôte peut accorder le droit par d'autres voies
+    # que la réponse à notre demande (nous passer co-hôte, cocher « autoriser
+    # l'enregistrement » dans la liste des participants, une auto-approbation de compte), et
+    # rien ne garantit qu'un rappel soit émis dans tous ces cas. On INTERROGE donc l'état en
+    # parallèle : `CanStartRawRecording()` est la question réellement pertinente — « ai-je le
+    # droit ? » — là où le rappel n'est qu'un des chemins pour y répondre.
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    while True:
+        if answered.is_set():
+            break
+        if getattr(recording.CanStartRawRecording(), "name", "") == "SDKERR_SUCCESS":
+            outcome.setdefault("granted", True)
+            outcome.setdefault("message", "droit d'enregistrement constaté (accordé par l'hôte)")
+            break
+        if asyncio.get_running_loop().time() >= deadline:
+            raise ZoomSdkError(
+                f"l'hôte n'a pas accordé l'autorisation d'enregistrement en {timeout_s:.0f} s. "
+                f"Une fenêtre « TranscrIA demande l'autorisation d'enregistrer » doit être "
+                f"ACCEPTÉE — lancer son propre enregistrement ne l'accorde pas. Alternative : "
+                f"passer le bot co-hôte.")
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(answered.wait(), timeout=1.0)
 
     if not outcome.get("granted"):
         raise ZoomSdkError(str(outcome.get("message") or "autorisation d'enregistrement refusée"))
