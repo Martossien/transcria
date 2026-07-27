@@ -43,10 +43,26 @@ PERMISSION_BY_RESOURCE = {
 # une longue durée pour s'épargner les renouvellements, et rien ne se crée.
 LIFECYCLE_REQUIRED_BEYOND = timedelta(hours=1)
 
-# Durée de vie maximale acceptée par Graph pour ces ressources. On renouvelle donc en continu ;
-# la marge évite qu'un abonnement expire entre deux tentatives.
-MAX_SUBSCRIPTION_LIFETIME = timedelta(hours=24)
-RENEWAL_MARGIN = timedelta(minutes=30)
+# Durée de vie maximale, RELEVÉE sur la table officielle de Graph : 4 320 minutes pour
+# `callRecording` comme pour `callTranscript`. Une première écriture avait supposé 24 h — la
+# validation aurait alors rejeté un abonnement de deux jours parfaitement légitime. C'est
+# exactement le genre de valeur qui ne se devine pas.
+MAX_SUBSCRIPTION_LIFETIME = timedelta(minutes=4320)     # trois jours
+
+# Marge de renouvellement. Elle n'est pas un excès de prudence : la latence de notification
+# d'un enregistrement peut atteindre 60 minutes (table officielle), et un abonnement expiré
+# ne se renouvelle PAS — il faut en recréer un.
+RENEWAL_MARGIN = timedelta(minutes=90)
+
+# Quotas relevés eux aussi, car ils décident de l'architecture : 1 abonnement par couple
+# application/utilisateur, 10 par utilisateur, et 10 000 par organisation — ce dernier étant
+# PARTAGÉ entre TOUTES les ressources Teams (discussions, messages, transcriptions…).
+MAX_SUBSCRIPTIONS_PER_APP_AND_USER = 1
+MAX_SUBSCRIPTIONS_PER_ORGANIZATION = 10_000
+
+# Latence attendue entre la fin de réunion et la notification (table officielle).
+NOTIFICATION_LATENCY_TYPICAL = timedelta(seconds=10)
+NOTIFICATION_LATENCY_MAX = timedelta(minutes=60)
 
 
 class GraphSubscriptionError(ValueError):
