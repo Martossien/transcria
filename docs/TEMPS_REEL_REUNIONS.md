@@ -621,6 +621,87 @@ sur Docker, et lui en donner n'est pas anodin (surface d'attaque, droits du dém
 n'étaient documentées NULLE PART ; elles le sont désormais (`CONFIG_REFERENCE.md`,
 `config.example.yaml`). La fonctionnalité était jusque-là inatteignable sans lire le code.
 
+## 7-bis. Zoom — comment un CLIENT met cela en service (étude, 2026-07-27)
+
+Question posée : *« si le moteur fonctionne, comment font les utilisateurs ? Aller sur le
+Marketplace créer une app est impossible. »* Étude des voies possibles, sur sources Zoom.
+
+### La réponse courte : ce n'est PAS par utilisateur
+
+Chez Zoom, « compte » désigne **l'organisation**, pas la personne. Un bot non publié
+*« can only join meetings within their development account »*
+([Zoom Technical Library](https://library.zoom.com/zoom-workplace/zoom-meetings/securing-zoom-meetings-explainer/using-automated-meeting-tools-in-a-secure-and-effective-manner)) —
+mais **toutes** les réunions de cette organisation, quel qu'en soit l'hôte.
+
+Donc : **l'admin Zoom du client crée UNE app, UNE fois.** Les salariés ne font rien. La revue
+Zoom n'est requise que pour joindre les réunions d'**autres** organisations
+([conditions de revue](https://developers.zoom.us/docs/distribute/sdk-feature-review-requirements/)).
+
+### Les trois voies, comparées
+
+| | **App interne / organisation** ⭐ | **App publiée au Marketplace** | **RTMS** |
+|---|---|---|---|
+| Qui agit | l'admin du client, une fois | l'éditeur, puis chaque client autorise | l'admin + l'hôte |
+| Revue Zoom | **non** | **oui** (+ jeton OBF) | non |
+| Portée | réunions de l'organisation | réunions **externes** aussi | réunions de l'organisation |
+| **Réseau entrant** | **AUCUN** — 100 % sortant | aucun | **⚠ point HTTPS PUBLIC obligatoire** |
+| Bot visible | oui | oui | pas de bot |
+| Convient à l'auto-hébergé | **oui** | mal (un Client ID partagé par tous les déploiements) | seulement si l'entrant est possible |
+
+### ⚠ RTMS impose une ouverture de pare-feu — vérifié
+
+Zoom **pousse** l'évènement `meeting.rtms_started` vers un point d'entrée que l'on doit
+*« expose publicly reachable HTTPS »*
+([documentation officielle](https://developers.zoom.us/blog/realtime-mediastreams-websockets/)).
+Les deux WebSockets (signalisation, média) sont ensuite **sortants**, mais le déclencheur,
+lui, est **entrant**.
+
+C'est structurant pour un produit auto-hébergé : RTMS exige une URL publique stable, un
+certificat valide et une entrée à travers le pare-feu du client — précisément ce que le bot
+évite. Le bot reste donc la voie la plus déployable en entreprise, et RTMS l'alternative
+quand l'organisation dispose déjà d'une exposition maîtrisée.
+
+*(Zoom recommande néanmoins RTMS pour la capture automatisée. Notre bot reste légitime dans
+le régime « même compte », mais ce n'est pas leur voie préférée — à savoir, pas à cacher.)*
+
+### Politique d'usage des bots — ce que Zoom exige
+
+Le régime « même compte » **ne dispense pas** de ces obligations :
+
+| Obligation Zoom | Où nous en sommes |
+|---|---|
+| Le bot apparaît dans la liste des participants | ✅ acquis |
+| Une notification d'enregistrement informe les participants | ✅ acquis (observé en essai réel) |
+| Une invite d'autorisation précise les données accédées | ✅ acquis (droit d'enregistrement) |
+| **Le nom doit désigner l'initiateur ET la fonction** — Zoom cite « *Steve Miller's notetaking app* » | ⚠ **à corriger** : nous affichons « TranscrIA » |
+| Revue Marketplace pour les réunions d'autres comptes | ✅ hors périmètre du modèle retenu |
+
+Le point de nommage est le seul écart, et il est peu coûteux : un défaut de la forme
+« Transcription — <organisateur> » plutôt que le seul nom du produit.
+
+### Procédure pour l'admin du client (à reprendre dans la doc utilisateur)
+
+1. [marketplace.zoom.us](https://marketplace.zoom.us) → se connecter **avec un compte admin de
+   l'organisation** (c'est ce compte qui détermine la portée) ;
+2. volet **en bas à gauche** → **Developer** → **Build an app** → **General app** → **Create** ;
+3. **Basic Info** → relever **Client ID** et **Client Secret** (jeu **Development**) ;
+4. **Features → Embed** → activer **Meeting SDK** ;
+5. **ne pas publier** l'app — elle reste interne ;
+6. portail Zoom → **Settings → Recording & Transcript** → activer **Record to computer files**,
+   puis, sous *« Who can request host permission to record? »*, cocher **Internal meeting
+   participants** et de préférence **Auto approve their permission requests** ;
+7. coller les deux valeurs dans la configuration de TranscrIA.
+
+### Points encore ouverts
+
+- **Un compte gratuit suffit techniquement** (vérifié en réunion réelle), mais le régime
+  « organisation » suppose un compte d'entreprise avec des utilisateurs rattachés : à
+  confirmer chez le premier client réel.
+- **Sans auto-approbation**, l'hôte doit accepter une fenêtre à chaque réunion — et à chaque
+  entrée en sous-salle. Passer le bot co-hôte l'évite.
+- **La politique d'usage des bots doit être relue avant commercialisation** : elle porte sur
+  le consentement et l'information des participants, pas seulement sur la technique.
+
 ## 8. Briques à réutiliser
 
 ### Interne (TranscrIA)
