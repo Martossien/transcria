@@ -45,6 +45,38 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+# --------------------------------------------------------------------------- #
+#  Nom affiché du bot — obligation de la politique d'usage des bots de Zoom
+# --------------------------------------------------------------------------- #
+DEFAULT_FUNCTION = "Transcription"
+DEFAULT_PRODUCT = "TranscrIA"
+
+
+def compose_display_name(*, explicit: str = "", initiator: str = "",
+                         function: str = DEFAULT_FUNCTION,
+                         product: str = DEFAULT_PRODUCT) -> str:
+    """Nom sous lequel le bot se présente aux participants — fonction PURE, donc testée.
+
+    Zoom l'EXIGE : un outil automatisé doit s'afficher « labeled with the name of the user
+    who initiated it and its function » (exemple donné par Zoom : « Steve Miller's notetaking
+    app »). Un nom de produit seul — « TranscrIA » — ne dit ni qui l'a mis là, ni ce qu'il
+    fait, et laisse les participants face à un inconnu qui enregistre.
+
+    Ce n'est pas de la cosmétique : la politique d'usage des bots porte sur l'INFORMATION des
+    participants, et c'est le seul de ses points que nous ne satisfaisions pas.
+
+    `explicit` l'emporte toujours : une organisation peut avoir ses propres règles de
+    nommage, et nous n'avons pas à les contredire.
+    """
+    if explicit:
+        return explicit
+    if initiator:
+        return f"{function} — {initiator}"
+    # Sans initiateur connu, on nomme au moins la FONCTION : « TranscrIA » seul
+    # n'apprend rien à qui découvre ce participant dans la liste.
+    return f"{product} — {function.lower()}"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="connector_service.bot",
@@ -55,8 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="URL de TranscrIA pour la transcription (ou TRANSCRIA_URL)")
     parser.add_argument("--token", default=os.environ.get("TRANSCRIA_TOKEN"),
                         help="jeton d'API TranscrIA (ou TRANSCRIA_TOKEN)")
-    parser.add_argument("--name", default=os.environ.get("BOT_DISPLAY_NAME", "TranscrIA"),
-                        help="nom affiché du bot dans la réunion")
+    parser.add_argument("--name", default=os.environ.get("BOT_DISPLAY_NAME", ""),
+                        help="nom affiché — à défaut, composé depuis --initiator")
+    parser.add_argument("--initiator", default=os.environ.get("BOT_INITIATOR", ""),
+                        help="personne à l'origine de la demande (Zoom exige que le nom "
+                             "affiché désigne l'initiateur et la fonction)")
     parser.add_argument("--language", default=os.environ.get("BOT_LANGUAGE") or None,
                         help="langue de transcription (ex. fr)")
     parser.add_argument("--max-duration-s", type=float,
@@ -115,7 +150,8 @@ async def run(args: argparse.Namespace) -> int:
     logger.info("Bot en route | réunion=%s durée_max=%.0fs", args.meeting_url,
                 args.max_duration_s)
     outcome, segments = await run_bot_session(
-        args.meeting_url, occurrence, driver, transcriber, display_name=args.name)
+        args.meeting_url, occurrence, driver, transcriber,
+        display_name=compose_display_name(explicit=args.name, initiator=args.initiator))
 
     logger.info("Réunion terminée | admis=%s motif=%s segments=%d",
                 outcome.admitted, outcome.reason, len(segments))

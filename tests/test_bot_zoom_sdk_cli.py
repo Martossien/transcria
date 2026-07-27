@@ -225,3 +225,48 @@ def test_aucune_source_donne_une_chaine_vide():
     from connector_service.bot.zoom_sdk import resolve_passcode
 
     assert resolve_passcode(None, "", "") == ("", "")
+
+
+# --------------------------------------------------------------------------- #
+#  Nom affiché — obligation de la politique d'usage des bots de Zoom
+# --------------------------------------------------------------------------- #
+# Zoom exige qu'un outil automatisé s'affiche « labeled with the name of the user who
+# initiated it and its function ». C'était le seul point de cette politique que nous ne
+# satisfaisions pas : « TranscrIA » ne dit ni qui a mis ce participant là, ni ce qu'il fait.
+
+def test_le_nom_designe_l_initiateur_ET_la_fonction():
+    from connector_service.bot.cli import compose_display_name
+
+    assert compose_display_name(initiator="Marc Dupont") == "Transcription — Marc Dupont"
+
+
+def test_sans_initiateur_la_fonction_est_quand_meme_nommee():
+    """Un nom de produit seul n'apprend rien à qui découvre ce participant dans la liste."""
+    from connector_service.bot.cli import compose_display_name
+
+    nom = compose_display_name()
+    assert "TranscrIA" in nom
+    assert "transcription" in nom.lower()
+
+
+def test_un_nom_impose_l_emporte_toujours():
+    """Une organisation peut avoir ses propres règles de nommage ; nous n'avons pas à les
+    contredire."""
+    from connector_service.bot.cli import compose_display_name
+
+    assert compose_display_name(explicit="Assistant RH", initiator="Marc") == "Assistant RH"
+
+
+def test_la_fonction_est_parametrable():
+    from connector_service.bot.cli import compose_display_name
+
+    assert compose_display_name(initiator="Marc", function="Compte rendu") \
+        == "Compte rendu — Marc"
+
+
+def test_le_nom_reste_court_pour_la_liste_des_participants():
+    """Zoom tronque les noms longs : un libellé qui déborde perdrait justement l'information
+    que cette obligation vise à donner."""
+    from connector_service.bot.cli import compose_display_name
+
+    assert len(compose_display_name(initiator="Jean-Baptiste de La Tour d'Auvergne")) < 64

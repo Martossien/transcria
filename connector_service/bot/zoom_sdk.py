@@ -32,6 +32,7 @@ from connector_service.bot.cli import (
     EXIT_OK,
     EXIT_TECHNICAL,
     build_transcriber,
+    compose_display_name,
 )
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live._demux import DemuxFrameSource
@@ -103,8 +104,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="URL de TranscrIA pour la transcription (ou TRANSCRIA_URL)")
     parser.add_argument("--token", default=os.environ.get("TRANSCRIA_TOKEN"),
                         help="jeton d'API TranscrIA (ou TRANSCRIA_TOKEN)")
-    parser.add_argument("--name", default=os.environ.get("BOT_DISPLAY_NAME", "TranscrIA"),
-                        help="nom affiché du bot dans la réunion")
+    parser.add_argument("--name", default=os.environ.get("BOT_DISPLAY_NAME", ""),
+                        help="nom affiché — à défaut, composé depuis --initiator")
+    parser.add_argument("--initiator", default=os.environ.get("BOT_INITIATOR", ""),
+                        help="personne à l'origine de la demande (Zoom exige que le nom "
+                             "affiché désigne l'initiateur et la fonction)")
     parser.add_argument("--language", default=os.environ.get("BOT_LANGUAGE") or None,
                         help="langue de transcription (ex. fr)")
     parser.add_argument("--sampling-rate-hz", type=int,
@@ -183,7 +187,9 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
 
     source = DemuxFrameSource(zoom_sdk_demux_source(
         args.client_id, client_secret, meeting_number,
-        display_name=args.name, passcode=passcode,
+        display_name=compose_display_name(explicit=args.name,
+                                          initiator=args.initiator),
+        passcode=passcode,
         sampling_rate_hz=args.sampling_rate_hz,
         zak=args.zak, on_behalf_token=args.on_behalf_token,
         admission_timeout_s=args.admission_timeout_s,
