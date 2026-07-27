@@ -324,6 +324,12 @@ la salle d'attente (**Sécurité** dans la réunion) et passer le bot **co-hôte
 **Bot Zoom (SDK natif)**
 
 - **Réunions externes** : exigent une revue de l'app par Zoom (cf. 6.1).
+- **Sous-salles** : le bot y entre quand l'hôte l'y affecte, et rétablit sa capture (Zoom
+  traite l'entrée en sous-salle comme une nouvelle entrée). Mais **le droit d'enregistrer
+  doit y être ré-accordé** — sur un compte gratuit, cela signifie une nouvelle fenêtre à
+  accepter. Passer le bot co-hôte évite ce geste.
+- **Canal de discussion et partage d'écran** : hors périmètre — le bot transcrit la parole,
+  il ne participe pas.
 - **Bindings en bêta** (`zoom-meeting-sdk`) : la version est figée dans l'image, une montée
   demande de revérifier l'API des rappels bruts.
 - **File audio bornée** : si le moteur STT ne suit pas durablement, les frames les plus

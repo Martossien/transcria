@@ -7,14 +7,18 @@ en CI, et ses fonctions pures y sont vérifiables.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import struct
 
 import pytest
 
 from connector_service.live.glib_loop import GLibPump
+from connector_service.live.zoom_sdk_state import ZoomSdkPhase
 from connector_service.live.zoom_sdk_transport import (
+    _ROOM_CHANGE_STATUSES,
     SAMPLING_RATE_32K,
     SAMPLING_RATE_48K,
+    _resume_after_room_change,
     audio_frame_to_demuxed,
     join_fields,
 )
@@ -228,3 +232,85 @@ def test_derniere_tranche_traitee_a_l_arret():
 
     asyncio.run(_main())
     assert glib.processed == 5
+
+
+# --------------------------------------------------------------------------- #
+#  Sous-salles : la capture doit être RÉTABLIE après un changement de salle
+# --------------------------------------------------------------------------- #
+# Zoom traite l'entrée en sous-salle comme une nouvelle entrée : ni l'abonnement à l'audio
+# brut ni le droit d'enregistrement n'y survivent. Sans reprise, une réunion qui se scinde
+# ferait taire un bot qui reste pourtant visible dans la liste des participants — la panne
+# la plus coûteuse à diagnostiquer, puisque rien n'a l'air cassé.
+
+@pytest.mark.parametrize("statut", [
+    "MEETING_STATUS_JOIN_BREAKOUT_ROOM",
+    "MEETING_STATUS_LEAVE_BREAKOUT_ROOM",
+])
+def test_les_changements_de_salle_sont_reconnus(statut):
+    assert statut in _ROOM_CHANGE_STATUSES
+
+
+@pytest.mark.parametrize("statut", [
+    "MEETING_STATUS_INMEETING",
+    "MEETING_STATUS_RECONNECTING",
+    "MEETING_STATUS_LOCKED",
+])
+def test_les_autres_statuts_ne_declenchent_pas_de_reprise(statut):
+    """Rétablir la capture sans raison couperait le flux pendant plusieurs secondes."""
+    assert statut not in _ROOM_CHANGE_STATUSES
+
+
+def _run_supervisor(phases, *, changes=1, establish_raises=False):
+    """Joue le superviseur sur `changes` changements de salle ; rend le nombre d'appels."""
+    calls = []
+
+    async def _main():
+        room_changed = asyncio.Event()
+        phase_changed = asyncio.Event()
+        state = {"phase": phases[0]}
+
+        async def establish():
+            calls.append(state["phase"])
+            if establish_raises:
+                raise RuntimeError("reprise impossible")
+
+        task = asyncio.ensure_future(_resume_after_room_change(
+            room_changed, phase_changed, lambda: state["phase"], establish,
+            admission_timeout_s=0.05))
+        for phase in phases:
+            state["phase"] = phase
+            room_changed.set()
+            phase_changed.set()
+            await asyncio.sleep(0.03)
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_main())
+    return calls
+
+
+def test_capture_retablie_au_retour_en_reunion():
+    assert _run_supervisor([ZoomSdkPhase.ACTIVE]) == [ZoomSdkPhase.ACTIVE]
+
+
+def test_pas_de_reprise_si_on_n_est_pas_revenu_en_reunion():
+    """Rétablir alors qu'on est encore en transition échouerait, et masquerait la vraie
+    situation derrière une erreur sans rapport."""
+    assert _run_supervisor([ZoomSdkPhase.CONNECTING]) == []
+
+
+def test_chaque_changement_de_salle_declenche_sa_reprise():
+    """Une réunion peut enchaîner salle principale → sous-salle → retour : chaque passage
+    doit rétablir la capture, pas seulement le premier."""
+    calls = _run_supervisor([ZoomSdkPhase.ACTIVE, ZoomSdkPhase.ACTIVE, ZoomSdkPhase.ACTIVE])
+    assert len(calls) == 3
+
+
+def test_une_reprise_ratee_n_interrompt_pas_la_session():
+    """La réunion peut revenir en salle principale et redevenir captable : abandonner au
+    premier échec perdrait tout ce qui suit."""
+    calls = _run_supervisor([ZoomSdkPhase.ACTIVE, ZoomSdkPhase.ACTIVE],
+                            establish_raises=True)
+    assert len(calls) == 2, "le superviseur doit survivre à un échec de reprise"

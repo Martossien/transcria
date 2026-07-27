@@ -10,6 +10,16 @@ Ce que ce transport apporte et que le navigateur ne pouvait pas donner :
 - la liste des participants est interrogeable, donc « le bot est-il seul ? » devient un fait
   et non une heuristique de page.
 
+Il tient aussi les situations qui font TAIRE un bot sans rien casser d'apparent — les plus
+coûteuses à diagnostiquer, puisque tout semble fonctionner :
+- **sous-salles** : le bot n'y est pas emporté d'office, il doit y entrer lui-même, et ni
+  l'abonnement audio ni le droit d'enregistrement n'y survivent — d'où une séquence de
+  capture REJOUABLE et un superviseur de changement de salle ;
+- **avertissements bloquants** (« cette réunion est enregistrée ») que beaucoup de comptes
+  d'entreprise imposent : sans acquittement, le bot reste coincé ;
+- **retrait du droit d'enregistrer** en séance : signalé haut et fort, sinon la transcription
+  s'arrêterait sans explication.
+
 RÉPARTITION DÉLIBÉRÉE, comme pour `livekit_transport` :
 - les fonctions PURES (`join_fields`, `audio_frame_to_demuxed`) et toute la décision
   (`zoom_sdk_state`) sont testées en CI, sans le SDK ;
@@ -194,6 +204,7 @@ def zoom_sdk_demux_source(
             dropped = 0
             stop = asyncio.Event()
             phase_changed = asyncio.Event()
+            room_changed = asyncio.Event()   # entrée/sortie de sous-salle
 
             def _set_phase(new_phase: ZoomSdkPhase) -> None:
                 nonlocal phase, was_active
@@ -263,11 +274,65 @@ def zoom_sdk_demux_source(
 
                 def _on_status(status: Any, _result: int) -> None:
                     name = getattr(status, "name", str(status))
+                    if name in _ROOM_CHANGE_STATUSES:
+                        # La capture ne survit pas au changement de salle : on ARME la
+                        # reprise ici, elle sera jouée dès le retour en réunion.
+                        loop.call_soon_threadsafe(room_changed.set)
                     loop.call_soon_threadsafe(
                         _set_phase, interpret_meeting_status(name, phase))
 
                 meeting.SetEvent(retained.keep(zoom.MeetingServiceEventCallbacks(
                     onMeetingStatusChangedCallback=_on_status)))
+
+                # --- Sollicitations audio de l'hôte et perte du droit ---------------- #
+                # Deux évènements qui, non traités, produisent une panne SILENCIEUSE :
+                #  - l'hôte demande au bot d'activer son audio : sans réponse, la boîte de
+                #    dialogue reste pendante côté SDK ;
+                #  - l'hôte RETIRE le droit d'enregistrer en cours de séance : l'audio brut
+                #    s'arrête net, et rien ne l'expliquerait dans les journaux.
+                def _on_host_requests_audio(handler: Any) -> None:
+                    # Accepter revient à rejoindre l'audio, ce que le bot fait déjà ; il RESTE
+                    # muet, `MuteAudio` ayant été appliqué à l'entrée. Refuser risquerait de
+                    # laisser l'hôte croire à une défaillance.
+                    logger.info("Zoom SDK : l'hôte demande l'activation de l'audio — accepté "
+                                "(le bot reste muet)")
+                    if handler is not None:
+                        with contextlib.suppress(Exception):
+                            handler.Accept()
+
+                audio_ctrl = meeting.GetMeetingAudioController()
+                if audio_ctrl is not None:
+                    audio_ctrl.SetEvent(retained.keep(zoom.MeetingAudioCtrlEventCallbacks(
+                        onHostRequestStartAudioCallback=_on_host_requests_audio)))
+
+                # --- Sous-salles ----------------------------------------------------- #
+                # Quand l'hôte scinde la réunion, le bot n'est PAS emporté automatiquement : il
+                # reçoit des droits de participant dans une sous-salle et doit y entrer
+                # lui-même. Sans cela il resterait dans une salle principale devenue vide, en
+                # semblant fonctionner — la panne la plus coûteuse à diagnostiquer.
+                def _on_bo_rights(attendee_helper: Any) -> None:
+                    name = ""
+                    with contextlib.suppress(Exception):
+                        name = str(attendee_helper.GetBoName() or "")
+                    err = attendee_helper.JoinBo()
+                    logger.warning("Zoom SDK : affecté à la sous-salle « %s » → JoinBo %s",
+                                   name or "sans nom", err)
+
+                def _on_invite_back_to_main(_name: str, handler: Any) -> None:
+                    # L'hôte rappelle tout le monde : suivre, sinon le bot reste seul dans une
+                    # sous-salle vidée.
+                    logger.warning("Zoom SDK : retour en salle principale demandé par l'hôte")
+                    if handler is not None:
+                        with contextlib.suppress(Exception):
+                            handler.ReturnToMainSession()
+
+                bo_ctrl = meeting.GetMeetingBOController()
+                if bo_ctrl is None:
+                    logger.info("Zoom SDK : sous-salles indisponibles sur cette réunion")
+                else:
+                    bo_ctrl.SetEvent(retained.keep(zoom.MeetingBOEventCallbacks(
+                        onHasAttendeeRightsNotificationCallback=_on_bo_rights,
+                        onHostInviteReturnToMainSessionCallback=_on_invite_back_to_main)))
 
                 # --- Avertissements bloquants de Zoom -------------------------------- #
                 # Zoom impose au participant des rappels à acquitter, dont celui de
@@ -409,42 +474,50 @@ def zoom_sdk_demux_source(
                             pass
                     frames.put_nowait(frame)
 
-                # --- Rejoindre la session AUDIO, en restant muet --------------------- #
-                # `isAudioOff` à l'entrée ne veut pas dire « entrer micro coupé » : le SDK ne
-                # rejoint alors PAS la session audio du tout, et l'abonnement à l'audio brut
-                # est refusé (`SDKERR_NOT_JOIN_AUDIO` — constaté en réunion réelle). Il faut
-                # donc rejoindre l'audio explicitement, puis se couper.
-                _join_audio_muted(zoom, meeting)
+                # --- Établissement de la capture — SÉQUENCE REJOUABLE ---------------- #
+                # Rejouable, et ce n'est pas de la précaution : entrer dans une SOUS-SALLE est
+                # traité par Zoom comme une nouvelle entrée. L'abonnement à l'audio brut et le
+                # droit d'enregistrement n'y survivent PAS. Une réunion qui se scinde ferait
+                # donc taire un bot qui semble pourtant toujours présent.
+                async def _establish_capture() -> None:
+                    nonlocal started_raw_recording
 
-                # --- Droit d'enregistrement : CONDITION de l'audio brut -------------- #
-                # Zoom ne délivre l'audio brut qu'à un participant qui a le droit
-                # d'enregistrer. Sans lui, `subscribe()` réussit et AUCUNE frame n'arrive :
-                # panne muette. On vérifie donc, on demande si besoin, et on échoue avec un
-                # message qui dit quoi faire.
-                recording = meeting.GetMeetingRecordingController()
-                await _ensure_raw_recording_allowed(
-                    zoom, recording, retained, loop,
-                    timeout_s=recording_permission_timeout_s)
+                    # `isAudioOff` à l'entrée ne veut pas dire « entrer micro coupé » : le SDK
+                    # ne rejoint alors PAS la session audio, et l'abonnement à l'audio brut est
+                    # refusé (`SDKERR_NOT_JOIN_AUDIO` — constaté en réunion réelle).
+                    _join_audio_muted(zoom, meeting)
 
-                err = recording.StartRawRecording()
-                if err != zoom.SDKError.SDKERR_SUCCESS:
-                    raise ZoomSdkError(
-                        f"StartRawRecording refusé : {err}. L'audio brut ne circule pas tant "
-                        f"que l'enregistrement brut n'est pas démarré.")
-                started_raw_recording = True
+                    # Zoom ne délivre l'audio brut qu'à un participant qui a le droit
+                    # d'enregistrer. Sans lui, `subscribe()` réussit et AUCUNE frame n'arrive.
+                    recording = meeting.GetMeetingRecordingController()
+                    await _ensure_raw_recording_allowed(
+                        zoom, recording, retained, loop,
+                        timeout_s=recording_permission_timeout_s)
 
-                helper = retained.keep(zoom.GetAudioRawdataHelper())
-                err = helper.subscribe(
-                    retained.keep(zoom.ZoomSDKAudioRawDataDelegateCallbacks(
-                        onOneWayAudioRawDataReceivedCallback=_on_one_way_audio)),
-                    False)                          # False = sans les interprètes
-                if err != zoom.SDKError.SDKERR_SUCCESS:
-                    raise ZoomSdkError(f"abonnement à l'audio brut refusé : {err}")
-                logger.info("Zoom SDK : audio brut par participant abonné")
+                    err = recording.StartRawRecording()
+                    if err != zoom.SDKError.SDKERR_SUCCESS:
+                        raise ZoomSdkError(
+                            f"StartRawRecording refusé : {err}. L'audio brut ne circule pas "
+                            f"tant que l'enregistrement brut n'est pas démarré.")
+                    started_raw_recording = True
+
+                    helper = retained.keep(zoom.GetAudioRawdataHelper())
+                    err = helper.subscribe(
+                        retained.keep(zoom.ZoomSDKAudioRawDataDelegateCallbacks(
+                            onOneWayAudioRawDataReceivedCallback=_on_one_way_audio)),
+                        False)                      # False = sans les interprètes
+                    if err != zoom.SDKError.SDKERR_SUCCESS:
+                        raise ZoomSdkError(f"abonnement à l'audio brut refusé : {err}")
+                    logger.info("Zoom SDK : audio brut par participant abonné")
+
+                await _establish_capture()
 
                 # --- Diffusion ------------------------------------------------------ #
                 watcher = asyncio.ensure_future(
                     _watch_end(phase_changed, lambda: phase, frames))
+                resumer = asyncio.ensure_future(_resume_after_room_change(
+                    room_changed, phase_changed, lambda: phase, _establish_capture,
+                    admission_timeout_s))
                 try:
                     while True:
                         frame = await frames.get()
@@ -453,6 +526,7 @@ def zoom_sdk_demux_source(
                         yield frame
                 finally:
                     watcher.cancel()
+                    resumer.cancel()
 
             finally:
                 # ORDRE IMPORTANT : nettoyer le SDK PENDANT que la pompe GLib tourne encore.
@@ -470,6 +544,41 @@ def zoom_sdk_demux_source(
 
         return _open()
     return _factory
+
+
+# Statuts qui signalent un CHANGEMENT DE SALLE. Zoom les traite comme une nouvelle entrée :
+# l'abonnement à l'audio brut et le droit d'enregistrement doivent être rétablis.
+_ROOM_CHANGE_STATUSES = frozenset({
+    "MEETING_STATUS_JOIN_BREAKOUT_ROOM",
+    "MEETING_STATUS_LEAVE_BREAKOUT_ROOM",
+})
+
+
+async def _resume_after_room_change(room_changed: asyncio.Event, phase_changed: asyncio.Event,
+                                    phase_of: Callable[[], ZoomSdkPhase],
+                                    establish: Callable[[], Any],
+                                    admission_timeout_s: float) -> None:
+    """Rétablit la capture après chaque passage en sous-salle (ou retour).
+
+    Le bot reste « présent » aux yeux de tous pendant ce temps : sans cette reprise, il
+    resterait visible dans la sous-salle et n'enregistrerait plus rien. Un échec de reprise
+    n'interrompt PAS la session — la réunion peut revenir en salle principale et redevenir
+    captable ; on le journalise et on attend le changement suivant.
+    """
+    while True:
+        await room_changed.wait()
+        room_changed.clear()
+        logger.warning("Zoom SDK : changement de salle — rétablissement de la capture")
+        await _await_admission(phase_changed, phase_of, admission_timeout_s)
+        if phase_of() is not ZoomSdkPhase.ACTIVE:
+            logger.warning("Zoom SDK : pas revenu en réunion après le changement de salle")
+            continue
+        try:
+            await establish()
+            logger.info("Zoom SDK : capture rétablie après le changement de salle")
+        except Exception as exc:  # noqa: BLE001 — une reprise ratée ne tue pas la réunion
+            logger.error("Zoom SDK : capture NON rétablie après le changement de salle : %s",
+                         exc)
 
 
 async def _await_admission(changed: asyncio.Event, phase_of: Callable[[], ZoomSdkPhase],
@@ -590,11 +699,17 @@ async def _ensure_raw_recording_allowed(zoom: Any, recording: Any, retained: _Re
         loop.call_soon_threadsafe(answered.set)
 
     def _on_privilege_changed(can_record: bool) -> None:
-        # L'hôte peut aussi accorder le droit SPONTANÉMENT, sans passer par notre demande.
+        # L'hôte peut accorder le droit SPONTANÉMENT, sans passer par notre demande.
         if can_record and not answered.is_set():
             outcome["granted"], outcome["message"] = True, (
                 "l'hôte a accordé l'enregistrement")
             loop.call_soon_threadsafe(answered.set)
+        elif not can_record:
+            # RETRAIT en cours de séance : l'audio brut s'arrête net. Sans cette trace, la
+            # transcription s'interromprait sans que rien ne l'explique — ce gestionnaire
+            # reste posé pour toute la réunion, pas seulement pendant l'attente.
+            logger.error("Zoom SDK : le droit d'enregistrer a été RETIRÉ en séance — l'audio "
+                         "brut s'arrête, la transcription sera incomplète.")
 
     recording.SetEvent(retained.keep(zoom.MeetingRecordingCtrlEventCallbacks(
         onLocalRecordingPrivilegeRequestStatusCallback=_on_status,
