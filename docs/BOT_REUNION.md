@@ -143,12 +143,20 @@ plateformes appliquent une suppression de bruit qui l'efface. Utilisez de la **v
 
 ### 6.1 Ce qu'il faut obtenir de Zoom
 
-Le type d'app « Meeting SDK » **n'existe plus** comme choix séparé sur le Marketplace. La
-marche à suivre aujourd'hui :
+Le type d'app « Meeting SDK » **n'existe plus** comme choix séparé sur le Marketplace.
+Parcours exact (libellés relevés sur la [documentation officielle](https://developers.zoom.us/docs/build-flow/quick-start-guide/)) :
 
-1. créer une **General App** sur [marketplace.zoom.us](https://marketplace.zoom.us) ;
-2. onglet **Embed** → activer **Meeting SDK** ;
-3. relever **Client ID** et **Client Secret** — ils tiennent lieu de SDK Key et SDK Secret.
+1. [marketplace.zoom.us](https://marketplace.zoom.us) → se connecter ;
+2. volet de navigation **en bas à gauche** → **Developer** (ce n'est PAS en haut à droite) ;
+3. page **Created apps** → bouton **Develop** → **Build an app** ;
+4. choisir **General app** → **Create** ;
+5. menu de gauche → **Basic Info** : l'encadré des identifiants donne **Client ID** et
+   **Client Secret**. ⚠️ Deux jeux coexistent, **Development** et **Production** : prendre
+   ceux de **Development** tant que l'app n'est pas publiée ;
+6. menu de gauche → **Features** → onglet **Embed** → activer **Meeting SDK**.
+
+Ces identifiants tiennent lieu de SDK Key et SDK Secret. L'app n'a pas besoin d'être publiée
+pour un usage sur son propre compte.
 
 **Un compte Zoom GRATUIT (Basic) suffit** pour créer l'app, signer le JWT, rejoindre la
 réunion **et capter l'audio brut**. L'ancienne licence « raw data » a été supprimée. Deux
@@ -173,18 +181,30 @@ l'abonnement réussit et aucune frame n'arrive : panne parfaitement muette. Le b
 ce droit, le **demande** si nécessaire, et échoue avec un message explicite plutôt que de
 capter le vide.
 
-Quatre façons de l'avoir, par ordre de confort :
+**Réglage préalable, sans lequel la demande du bot ne s'affichera jamais.** Attention, Zoom a
+RENOMMÉ ce réglage : il ne s'appelle plus « Local recording ». Dans le portail web →
+**Settings** → onglet **Recording & Transcript** :
+
+- activer **« Record to computer files »** (l'ancien « enregistrement local ») ;
+- section **« Who can request host permission to record? »** → cocher au moins
+  **Internal meeting participants**.
+
+Cette section propose aussi **« Auto approve their permission requests »**. Cochée, elle
+supprime le geste manuel de l'hôte — à confirmer au premier essai, mais c'est la voie la plus
+confortable sur un compte gratuit.
+
+Quatre façons d'obtenir le droit, par ordre de confort :
 
 | Voie | Fonctionne sur un compte gratuit ? |
 |---|---|
+| **« Auto approve their permission requests »** activé | ✅ (à confirmer en réunion réelle) |
 | Le bot est **hôte ou co-hôte** | ✅ |
-| L'hôte accorde « Autoriser l'enregistrement » **en séance** | ✅ (une fenêtre s'affiche, à accepter) |
-| L'hôte l'accorde d'avance dans la liste des participants | ✅ |
+| L'hôte accepte la demande **en séance** | ✅ (une fenêtre s'affiche) |
 | **Jeton d'enregistrement local** (automatique, via API) | ❌ **payant uniquement** |
 
-Conséquence pratique sur un compte gratuit : **à chaque réunion, l'hôte doit accepter la
-fenêtre d'autorisation**. Le bot attend jusqu'à `recording_permission_timeout_s` (120 s par
-défaut) et le journalise en clair. Passer le bot **co-hôte** évite ce geste.
+Sans auto-approbation ni statut de co-hôte, l'hôte doit accepter la fenêtre **à chaque
+réunion**. Le bot attend jusqu'à `recording_permission_timeout_s` (120 s par défaut) et le
+journalise en clair.
 
 Autre limite du plan Basic, sans rapport avec le SDK : les réunions y sont **plafonnées à
 40 minutes**.
