@@ -592,6 +592,35 @@ provisionnée à part, opt-in, idempotente — patron des runtimes STT existants
 - **Config** : nouvelles clés classées dans `config_classification.yaml`, validées
   au schéma, exposées à l'UI + i18n (patron habituel).
 
+### ⚠️ Écart entre ce tableau et la réalité (constaté 2026-07-27)
+
+Le tableau ci-dessus décrit l'INTENTION. À ce jour, **rien de ce chantier n'est atteignable
+par quelqu'un qui installe TranscrIA** : tout suppose de cloner le dépôt et de lancer des
+scripts à la main. Vérifié : `install.sh` ne mentionne ni les bots ni le connecteur (0
+occurrence) ; `connector_service/` n'est embarqué dans AUCUNE des trois images applicatives
+(slim, bundled, worker) ; aucun écran d'interface ; `README` et `docs/INSTALL.md` muets.
+
+C'est cohérent avec l'état du chantier — mais le risque est d'accumuler de la capacité sans
+chemin vers l'utilisateur, et donc **sans personne d'autre que l'auteur pour l'éprouver**.
+
+Reste à faire, par coût croissant :
+
+| # | Ce qui manque | Effet | Coût |
+|---|---|---|---|
+| L1 | Question à l'installation : « transcrire des réunions en direct ? » → pose `live.facade.enabled`, propose de déporter l'inférence | la façade devient découvrable au lieu d'être invisible | S |
+| L2 | Parcours documenté de bout en bout dans `README`/`INSTALL` : activer la façade → créer un jeton → image → `scripts/bot.sh` | rend le chantier **testable par d'autres** | S |
+| L3 | Publier les images de bot sur GHCR, comme les images applicatives | supprime Docker de l'expérience utilisateur (plus rien à construire) | M |
+| L4 | Écran « Rejoindre une réunion » : coller un lien, choisir la langue, le portail lance le bot | premier usage sans ligne de commande | **L — décision d'architecture** |
+| L5 | Déclenchement automatique depuis l'agenda | le produit visé | XL |
+
+**L4 est le premier point qui engage l'architecture** : le portail n'a aujourd'hui aucun droit
+sur Docker, et lui en donner n'est pas anodin (surface d'attaque, droits du démon, isolation).
+À trancher explicitement avant d'écrire la moindre ligne — pas à décider en passant.
+
+✅ Fait depuis ce constat : les cinq clés `live.facade.*`, lues par le code depuis la Phase K,
+n'étaient documentées NULLE PART ; elles le sont désormais (`CONFIG_REFERENCE.md`,
+`config.example.yaml`). La fonctionnalité était jusque-là inatteignable sans lire le code.
+
 ## 8. Briques à réutiliser
 
 ### Interne (TranscrIA)
