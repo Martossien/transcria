@@ -19,6 +19,7 @@ from transcria.gpu.cuda_visible import (
 )
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.opencode_setup import is_remote_arbitrage
+from transcria.gpu.vram_release import release_idle_vram
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +316,12 @@ class GPUAllocator:
                 return True
             for idx in indices:
                 if self._get_available_vram_mb_locked(idx) < shares[idx] + self.min_free_mb:
+                    # Libération SOUS PRESSION (tests réels réunions) : un modèle de façade
+                    # inactif peut tenir le GPU — on demande sa libération et on remesure
+                    # UNE fois, plutôt que d'attendre sa minuterie d'inactivité.
+                    release_idle_vram()
+                    if self._get_available_vram_mb_locked(idx) >= shares[idx] + self.min_free_mb:
+                        continue
                     logger.info(
                         "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (parts=%s, GPU %d insuffisant)",
                         job_id, phase, total_mb, shares, idx,

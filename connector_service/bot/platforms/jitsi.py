@@ -120,6 +120,17 @@ class JitsiDriver:
 
     async def request_join(self, display_name: str) -> None:
         page = self._page
+        # CEINTURE + BRETELLES pour le nom affiché (vécu : le bot apparaissait « Fellow
+        # Jitster », le nom d'invité aléatoire de Jitsi — le champ prejoin n'avait pas pris).
+        # 1) l'API de config par URL est le canal FIABLE de Jitsi : recharger la page avec
+        #    #userInfo.displayName="…" pose le nom quel que soit l'état du prejoin ;
+        # 2) le champ prejoin reste rempli en repli (instances au fragment désactivé).
+        if display_name:
+            from urllib.parse import quote
+
+            with contextlib.suppress(Exception):
+                base = (page.url or "").split("#")[0]
+                await page.goto(f'{base}#userInfo.displayName="{quote(display_name)}"')
         # Attend le rendu (React) du prejoin avant les count() instantanés (toléré absent).
         name_box = page.get_by_placeholder("Enter your name")
         with contextlib.suppress(Exception):

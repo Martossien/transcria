@@ -36,6 +36,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
 from transcria.config import get_config
+from transcria.gpu.vram_release import register_releaser
 from transcria.ingestion.manifest import (
     parse_participants_manifest,
     seed_participants,
@@ -46,11 +47,17 @@ from transcria.ingestion.store import MeetingImportStore, compute_dedup_key
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
+from transcria.queue.allocator import GPUAllocator
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
 from transcria.services.pipeline_service import PipelineService
 from transcria.stt.provenance import FINAL_LIVE, stamp_provenance
-from transcria.stt.transcriber_factory import create_transcriber, live_backend, summary_backend
+from transcria.stt.transcriber_factory import (
+    create_transcriber,
+    get_backend_vram_mb,
+    live_backend,
+    summary_backend,
+)
 from transcria.web import facade_format
 from transcria.web.blueprint import web_bp
 from transcria.web.request_helpers import bearer_token_required, clean_job_title
@@ -73,11 +80,35 @@ _facade_lock = threading.Lock()
 _facade_unload_timer: threading.Timer | None = None
 
 
+def _register_vram_releaser() -> None:
+    """La façade offre sa VRAM à l'allocateur SOUS PRESSION (cf. gpu/vram_release) — un
+    modèle live inactif ne bloque plus jamais un job en « attente de VRAM » pendant
+    idle_unload_s."""
+    register_releaser(_unload_facade_transcribers)
+
+
 def _get_facade_transcriber(cfg: dict, backend: str):
     with _facade_lock:
         transcriber = _facade_transcribers.get(backend)
         if transcriber is None:
-            transcriber = create_transcriber(cfg, backend=backend)
+            # PLACEMENT PAR L'ALLOCATEUR (constat utilisateur, 2026-07-30 : « 8 GPU, le
+            # moteur aurait dû trouver de la place ») : chargé sans réservation, le modèle
+            # de la façade atterrissait sur cuda:0 — précisément une carte du PLACEMENT LLM
+            # (statique par contrat : le script de lancement est spécifique machine, on ne
+            # le déplace pas). Le sélecteur de l'allocateur évite déjà les cartes LLM pour
+            # toutes les phases : la façade passe par lui comme tout le monde, et sa VRAM
+            # est enfin COMPTÉE (plus de squatteur invisible).
+            device = None
+            try:
+                vram_mb = int(get_backend_vram_mb(backend, cfg) or 0)
+                if vram_mb > 0:
+                    reservation = GPUAllocator.get_instance(cfg).try_reserve(
+                        "facade-live", vram_mb, f"live_stt_{backend}")
+                    if reservation is not None:
+                        device = f"cuda:{reservation.gpu_index}"
+            except Exception:  # noqa: BLE001 — sans allocateur (tests, CPU) : défaut historique
+                logger.debug("placement façade sans allocateur", exc_info=True)
+            transcriber = create_transcriber(cfg, backend=backend, device=device)
             _facade_transcribers[backend] = transcriber
         _arm_facade_unload(cfg)
         return transcriber
@@ -108,6 +139,10 @@ def _unload_facade_transcribers() -> None:
         _facade_transcribers.clear()
         _facade_unload_timer = None
     try:
+        GPUAllocator.get_instance(get_config()).release_reservations("facade-live")
+    except Exception:  # noqa: BLE001 — libération d'accounting best-effort
+        pass
+    try:
         import torch
 
         if torch.cuda.is_available():
@@ -117,6 +152,9 @@ def _unload_facade_transcribers() -> None:
             torch.cuda.empty_cache()
     except Exception:  # noqa: BLE001 — libération best-effort, jamais bloquante
         pass
+
+
+_register_vram_releaser()
 
 
 def facade_enabled(view):

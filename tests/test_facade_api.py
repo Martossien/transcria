@@ -131,7 +131,7 @@ class TestTranscriptions:
         assert r.status_code == 400
 
     def test_verbose_json_ok_et_provenance_final_live(self, client, facade_on, op_token, monkeypatch):
-        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None: _FakeTranscriber())
+        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None, device=None: _FakeTranscriber())
         data = _wav() | {"response_format": "verbose_json", "language": "fr"}
         r = client.post("/v1/audio/transcriptions", headers=_auth(op_token),
                         data=data, content_type="multipart/form-data")
@@ -145,14 +145,14 @@ class TestTranscriptions:
         assert "Set-Cookie" not in r.headers        # jeton ≠ session
 
     def test_format_json_simple(self, client, facade_on, op_token, monkeypatch):
-        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None: _FakeTranscriber())
+        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None, device=None: _FakeTranscriber())
         r = client.post("/v1/audio/transcriptions", headers=_auth(op_token),
                         data=_wav(), content_type="multipart/form-data")
         assert r.status_code == 200
         assert r.get_json() == {"text": "Bonjour le monde"}
 
     def test_format_srt(self, client, facade_on, op_token, monkeypatch):
-        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None: _FakeTranscriber())
+        monkeypatch.setattr(facade_api, "create_transcriber", lambda cfg, backend=None, device=None: _FakeTranscriber())
         data = _wav() | {"response_format": "srt"}
         r = client.post("/v1/audio/transcriptions", headers=_auth(op_token),
                         data=data, content_type="multipart/form-data")
