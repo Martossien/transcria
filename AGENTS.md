@@ -481,6 +481,18 @@ routes sans docstring : rien ne peut se dégrader) et `lint-imports` (contrats
   lourde au boot (torch, transformers, nemo, vllm, pyannote), dépendance optionnelle par
   topologie, ou point d'entrée à erreur lisible (doctor, entrypoint) — avec un commentaire
   d'une ligne qui le justifie.
+- **Une dépendance OPT-IN de `requirements-connectors.txt`** (boto3, cryptography, PyJWT,
+  livekit, aiortc…) → import **PARESSEUX, dans la fonction** (patron :
+  `connector_service/signatures.py`), et **jamais au niveau module d'un fichier de test** :
+  la collecte pytest s'effondre alors sur toute la suite, pas seulement sur le fichier
+  concerné (patron : `tests/test_signatures.py`, qui importe dans ses fonctions).
+  ⚠ **Une dépendance présente dans le venv local ne l'est pas forcément en CI** — la CI
+  n'installe que `requirements.txt` + `requirements-dev.txt`. Vécu : PyJWT arrivait chez moi
+  par transitivité via `livekit-api` et manquait en CI. Si un test DOIT tourner en CI (cas des
+  tests d'attaque de `test_jwt_crypto.py`), déclarer la dépendance dans `requirements-dev.txt`
+  avec le motif — la laisser se sauter faute de paquet rendrait le test décoratif.
+  Contrôle en une commande, avant de pousser :
+  `python -m pytest tests/ --collect-only -q` avec un `sitecustomize.py` qui interdit le module.
 - **Un résultat inter-couches** → objet typé (`PhaseOutcome`…), jamais un dict de forme
   libre. **Une lecture de config** → clé simple ou vue typée, jamais une nouvelle chaîne
   `get("a", {}).get("b")`.

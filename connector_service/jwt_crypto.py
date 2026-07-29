@@ -18,13 +18,15 @@ attaques pour que la protection reste vraie après une mise à jour.
 
 CE QUI RESTE HORS D'ICI : tout appel réseau. Le JWKS est PASSÉ en argument ; c'est ce qui rend
 ce module vérifiable en CI, avec une paire de clés engendrée sur place.
+
+⚠ PyJWT est une dépendance OPT-IN (`requirements-connectors.txt`) : elle est donc importée
+PARESSEUSEMENT, comme `cryptography` dans `signatures.py`. L'importer en tête ferait échouer
+l'import de `connector_service` sur une installation sans connecteurs — et, vécu, la COLLECTE
+de toute la suite de tests en CI.
 """
 from __future__ import annotations
 
 from typing import Any
-
-import jwt
-from jwt import InvalidTokenError
 
 # Seul algorithme accepté. Microsoft signe ses `validationTokens` en RS256.
 RS256 = "RS256"
@@ -37,6 +39,22 @@ CLOCK_SKEW_SECONDS = 300
 
 class SigningKeyError(ValueError):
     """Clé de vérification inutilisable."""
+
+
+def _jwt() -> Any:
+    """Charge PyJWT à la DEMANDE — même convention que `cryptography` dans `signatures.py`.
+
+    PyJWT est une dépendance OPT-IN (`requirements-connectors.txt`) : l'importer au niveau du
+    module ferait échouer l'import de `connector_service` sur une installation qui n'active pas
+    les connecteurs, et — vécu — la COLLECTE de la suite de tests.
+    """
+    try:
+        import jwt
+    except ImportError as exc:  # pragma: no cover - dépend de l'installation
+        raise SigningKeyError(
+            "PyJWT absent : installer « pip install -r requirements-connectors.txt » "
+            "pour vérifier les notifications Microsoft Graph") from exc
+    return jwt
 
 
 class VerificationError(ValueError):
@@ -55,6 +73,7 @@ def select_signing_key(jwks: Any, key_id: str) -> Any:
         raise SigningKeyError("document JWKS invalide : clé « keys » (liste) attendue")
     if not key_id:
         raise SigningKeyError("jeton sans « kid » : la clé de signature ne peut être identifiée")
+    jwt = _jwt()
     for entree in jwks["keys"]:
         if isinstance(entree, dict) and entree.get("kid") == key_id:
             try:
@@ -73,9 +92,10 @@ def unverified_key_id(token: str) -> str:
     demander pour pouvoir vérifier. Rien de ce qu'il contient n'est cru ensuite — la clé
     choisie ne vaut que si la signature tient.
     """
+    jwt = _jwt()
     try:
         return str(jwt.get_unverified_header(token).get("kid") or "")
-    except InvalidTokenError as exc:
+    except jwt.InvalidTokenError as exc:
         raise VerificationError(f"en-tête de jeton illisible : {exc}") from exc
 
 
@@ -96,6 +116,7 @@ def verify_token(token: str, public_key: Any, *, audiences: set[str],
         raise VerificationError(
             "aucune audience attendue : accepter n'importe quelle audience reviendrait à "
             "accepter un jeton destiné à une autre application")
+    jwt = _jwt()
     # `Any` assumé : le TypedDict d'options de PyJWT ne décrit pas « require ».
     options: Any = {"require": ["exp", "aud"]}
     try:
@@ -108,5 +129,5 @@ def verify_token(token: str, public_key: Any, *, audiences: set[str],
             leeway=leeway,
             options=options,
         )
-    except InvalidTokenError as exc:
+    except jwt.InvalidTokenError as exc:
         raise VerificationError(f"jeton refusé : {type(exc).__name__} — {exc}") from exc

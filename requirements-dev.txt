@@ -9,6 +9,10 @@ playwright>=1.60   # walkthrough UI (scripts/ui_walkthrough.py) — navigateur v
 import-linter>=2.1   # contrats d'architecture (.importlinter) + ratchet scripts/audit_imports.py — cf. docs/REFACTORING_QUALITE.md
 websockets>=12,<14   # test d'intégration du pont PCM du bot (vrai serveur WS, sans navigateur).
                      # Dép de TEST uniquement : l'image de prod (requirements.txt) reste inchangée.
+PyJWT[crypto]>=2.8,<3.0   # vérification RS256 des `validationTokens` Graph (connector_service/jwt_crypto.py).
+                     # Dép de TEST *aussi* : elle est opt-in en prod (requirements-connectors.txt), mais les deux
+                     # tests d'ATTAQUE (alg:none, confusion HS256) doivent tourner en CI — les laisser se sauter
+                     # faute de dépendance les rendrait décoratifs, précisément ce contre quoi ils protègent.
 
 # IdP OIDC factice en fixture pytest (chantier identité — tests lot 1).
 oidc-provider-mock>=0.3,<1.0

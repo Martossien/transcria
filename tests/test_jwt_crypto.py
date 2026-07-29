@@ -20,10 +20,7 @@ import hmac
 import json
 import time
 
-import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from connector_service.graph_validation import GRAPH_CHANGE_TRACKING_APP_ID, check_claims
 from connector_service.jwt_crypto import (
@@ -45,7 +42,15 @@ KID = "clé-de-test-1"
 @pytest.fixture(scope="module")
 def paire():
     """Une paire RSA engendrée une seule fois : 2048 bits coûtent assez pour ne pas le refaire
-    à chaque test."""
+    à chaque test.
+
+    ⚠ `cryptography` et PyJWT sont importés DANS les fixtures, jamais au niveau du module :
+    ce sont des dépendances opt-in, et un import de tête ferait échouer la COLLECTE de toute
+    la suite là où elles manquent — c'est arrivé en CI.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
     prive = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     pem_prive = prive.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -60,6 +65,8 @@ def paire():
 @pytest.fixture
 def signe(paire):
     """Fabrique un jeton signé localement — de quoi VÉRIFIER, seul objet de ce module."""
+    import jwt
+
     _, pem_prive, _ = paire
 
     def _signe(claims: dict, *, kid: str | None = KID) -> str:
