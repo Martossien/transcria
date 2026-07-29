@@ -10,9 +10,9 @@ Prérequis : `pip install -r requirements-connectors.txt` (playwright + websocke
 `playwright install chromium`. Jitsi (meet.jit.si) est public et ne demande pas de compte.
 
 Usage :
-    python scripts/gate_bot_jitsi.py https://meet.jit.si/ma-salle-de-test
-    python scripts/gate_bot_jitsi.py https://meet.jit.si/ma-salle --show   # fenêtre visible
-    python scripts/gate_bot_jitsi.py https://meet.jit.si/ma-salle --seconds 60
+    python scripts/gates/gate_bot_jitsi.py https://meet.jit.si/ma-salle-de-test
+    python scripts/gates/gate_bot_jitsi.py https://meet.jit.si/ma-salle --show   # fenêtre visible
+    python scripts/gates/gate_bot_jitsi.py https://meet.jit.si/ma-salle --seconds 60
 
 Pendant ce temps : ouvre la MÊME URL dans ton navigateur/téléphone, rejoins et PARLE.
 Le script affiche les frames reçues par participant. Zéro frame = la capture ne marche pas
@@ -28,7 +28,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from connector_service.bot.browser import CHROMIUM_ARGS  # noqa: E402
 from connector_service.bot.platforms.jitsi import JitsiDriver  # noqa: E402

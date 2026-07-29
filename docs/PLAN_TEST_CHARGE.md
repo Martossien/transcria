@@ -93,7 +93,7 @@ ressource sérialisée (pyannote) des ressources batchables (STT/LLM vLLM)**, sa
 
 ## 5. Outillage de charge
 
-- **Générateur** : `scripts/load_test.py` (nouveau) — N clients concurrents (threads), chacun :
+- **Générateur** : `scripts/bench/load_test.py` (nouveau) — N clients concurrents (threads), chacun :
   login → job → upload `test2.mp3` → wizard → process `quality` → poll → download. Réutilise les
   helpers de `scripts/verify_split_topology.py` (timeouts synchrones déjà gérés). Enregistre par job :
   succès/échec, latence bout-en-bout, tailles livrables, score qualité ; et un récap agrégé
@@ -104,7 +104,7 @@ ressource sérialisée (pyannote) des ressources batchables (STT/LLM vLLM)**, sa
 ## 6. Phases & checklist
 
 ### Phase 0 — Préparation (pas de charge)
-- [ ] Écrire `scripts/load_test.py` + échantillonneurs.
+- [ ] Écrire `scripts/bench/load_test.py` + échantillonneurs.
 - [ ] Vérifier la baseline séquentielle (1 job) inchangée sur les 2 modes (non-régression).
 
 ### Phase 1 — All-in-one : robustesse
@@ -203,7 +203,7 @@ tourner et thrasher la LLM — meilleure latence **et** meilleur débit qu'en su
 |---|---|
 | 2026-06-23 | Plan rédigé (brouillon) — cadrage validé : all-in-one robustesse 3→10 jobs ; split débit après refactor capacité ; `test2.mp3` ; priorités P0>P1>P2. |
 | 2026-06-23 | **Plan validé (go).** Design « capacité d'admission configurable, verrou pyannote inchangé » retenu ; parallélisation de la diar reportée à une version suivante (§11). Exécution lancée. |
-| 2026-06-23 | **Phase 0** livrée : `scripts/load_test.py` (N clients en rafale) + `scripts/load_sampler.py`. |
+| 2026-06-23 | **Phase 0** livrée : `scripts/bench/load_test.py` (N clients en rafale) + `scripts/bench/load_sampler.py`. |
 | 2026-06-23 | **Phase 1 (all-in-one) — robustesse OK à 3 jobs**, **2 vrais bugs de concurrence débusqués et corrigés** (commit `c83a8f6`) : (1) `Cannot copy out of meta tensor` à la diarisation — `accelerate.init_empty_weights()` (device_map Cohere) monkeypatch meta GLOBAL non thread-safe contamine pyannote → **verrou global d'instanciation** (`model_load_lock`) ; (2) **opencode FIGE** sous concurrence — SQLite `opencode.db` partagée → **`XDG_DATA_HOME` par invocation**. Après fix : **3/3 jobs OK, 0 régression, 0 skip**. Run 10 jobs **skippé par décision** (LLM hôte sérialisée `--parallel 1` ⇒ débit non scalable en all-in-one, ~730 s/3 jobs ; robustesse jugée prouvée à 3). Constat : l'all-in-one est **LLM-bound** (un seul moteur local). |
 | 2026-06-23 | **Phase 2** — refactor capacité d'admission : le nœud plafonnait le split à **1 job** (`_inprocess_slots = capacity−inflight−queued` → 0 dès qu'une diar tourne). Fix : le nœud annonce `resource_node.max_concurrent_jobs` (défaut 1) dans `/capabilities` ; `available_remote_slots = min(node_max, stt_slots)` ; les moteurs sérialisés (diar/voice-embed) ne plafonnent **plus** l'admission (ils s'auto-sérialisent). `--max-num-seqs` vLLM laissé au défaut (256, largement suffisant à ≤8). Tests unitaires ajoutés. Gate vert. |
 | 2026-06-23 | **Phase 3 — 1ère montée → finding P0 à concurrence ≥2.** Palier 1 OK (1104 s, cold start STT). Palier 2 : **1/2 échec**. Cause (logs) : le **verrou LLM de l'allocator** (`_llm_lock`, hérité du modèle « LLM locale mono-GPU ») **sérialisait l'accès même à une LLM distante qui batche** → la phase `correction` timeout 300 s sur le verrou → **échec DUR** (`LLM d'arbitrage occupée`), alors que résumé/relecture gèrent ça gracieusement. Mineur : `vram_manager.stop_arbitrage_llm` sans garde distante (tentait d'arrêter la LLM distante, bruit `lsof`). **Bon point** : batching vLLM réel (`num_requests_running=2`, GPU 0-3 à 100 %). **Fix** (local inchangé) : helper DRY `opencode_setup.is_remote_arbitrage` ; verrou LLM **no-op si distant** (`allocator`) ; `stop_arbitrage_llm` **no-op si distant**. Tests ajoutés ; rebuild images + re-montée. |

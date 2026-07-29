@@ -16,7 +16,7 @@ Il vérifie les points qui ont RÉELLEMENT cassé lors de la mise au point :
 
 À relancer après toute modification de `capture.js` ou des options du navigateur.
 
-Usage :  python scripts/gate_bot_capture_selftest.py [--origin https://example.com]
+Usage :  python scripts/gates/gate_bot_capture_selftest.py [--origin https://example.com]
 """
 from __future__ import annotations
 
@@ -32,12 +32,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from connector_service.bot.browser import CHROMIUM_ARGS  # noqa: E402
 from connector_service.live.bridge_source import parse_bridge_message  # noqa: E402
 
-CAPTURE_JS = Path(__file__).resolve().parent.parent / "connector_service" / "bot" / "capture.js"
+CAPTURE_JS = Path(__file__).resolve().parents[2] / "connector_service" / "bot" / "capture.js"
 TARGET_FRAMES = 5
 
 # Boucle WebRTC en page : pc1 (oscillateur) → pc2. L'interception de capture.js doit se

@@ -1,8 +1,8 @@
 """Transport LIVE Zoom par le Meeting SDK NATIF — dep OPT-IN `zoom-meeting-sdk`, gate manuel.
 
 Voie RECOMMANDÉE PAR ZOOM pour un bot headless Linux, en remplacement du pilote navigateur
-(`bot/platforms/zoom_web.py`) que le client Web refuse d'exécuter automatiquement (reCAPTCHA
-constaté au gate). Ce n'est pas un contournement : c'est la porte d'entrée prévue.
+Zoom-web (retiré du dépôt — le client Web refuse toute automatisation, reCAPTCHA constaté au
+gate). Ce n'est pas un contournement : c'est la porte d'entrée prévue.
 
 Ce que ce transport apporte et que le navigateur ne pouvait pas donner :
 - l'audio arrive PAR PARTICIPANT avec son identifiant de nœud, donc les locuteurs sont NOMMÉS ;
@@ -24,7 +24,7 @@ RÉPARTITION DÉLIBÉRÉE, comme pour `livekit_transport` :
 - les fonctions PURES (`join_fields`, `audio_frame_to_demuxed`) et toute la décision
   (`zoom_sdk_state`) sont testées en CI, sans le SDK ;
 - `zoom_sdk_demux_source` est la glue : elle n'enchaîne que des appels au SDK et est confirmée
-  au gate manuel (`scripts/gate_bot_zoom_sdk.py`).
+  au gate manuel (`scripts/gates/gate_bot_zoom_sdk.py`).
 
 ⚠ TROIS PIÈGES, tous rencontrés et vérifiés en exécution réelle :
 

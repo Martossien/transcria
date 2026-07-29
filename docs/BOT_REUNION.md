@@ -152,13 +152,13 @@ perte de média en est un.
 décodage) :
 
 ```bash
-python scripts/gate_bot_capture_selftest.py
+python scripts/gates/gate_bot_capture_selftest.py
 ```
 
 **Avec une réunion complète** — le script peut fabriquer lui-même les participants :
 
 ```bash
-python scripts/gate_bot_jitsi.py https://jitsi.exemple/salle-test \
+python scripts/gates/gate_bot_jitsi.py https://jitsi.exemple/salle-test \
   --fake-participant --participant-audio voix.wav \
   --transcribe http://127.0.0.1:7870 --token-file jeton.txt --language fr
 ```
@@ -318,7 +318,7 @@ docker run --rm --network host \
   -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
   --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
   -v "$PWD/scripts:/app/scripts:ro" \
-  transcria-zoom-sdk:latest python3 -u /app/scripts/gate_zoom_auth.py
+  transcria-zoom-sdk:latest python3 -u /app/scripts/gates/gate_zoom_auth.py
 ```
 
 Sortie `0` = accepté, `1` = refusé (le message énumère alors les causes). Ce test atteste de
@@ -338,7 +338,7 @@ docker run --rm --network host \
   --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
   -v "$PWD/scripts:/app/scripts:ro" -v /chemin/jeton.txt:/app/token.txt:ro \
   transcria-zoom-sdk:latest \
-  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "123 456 7890" --passcode ●●●●●● \
+  python3 -u /app/scripts/gates/gate_bot_zoom_sdk.py --meeting "123 456 7890" --passcode ●●●●●● \
     --join-timeout-s 300 --seconds 120 \
     --transcribe http://127.0.0.1:7870 --token-file /app/token.txt --language fr
 ```

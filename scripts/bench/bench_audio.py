@@ -18,35 +18,35 @@ Matrices disponibles (--matrix) :
   all      : base + extended + stt + vad + cohere_tune + pyannote_tune (91 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio tests/test1.mp3 \\
         --gpu-pool 3,4,5,6
 
 Benchmark Profil A (4 backends × 3 diarizations) sur test2.mp3 :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio tests/test2.mp3 \\
         --matrix stt \\
         --gpu-pool 0,1,2,3,4,5,6,7
 
 Matrice étendue pour fichier extrême (ex : test5.wav) :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio tests/test5.wav \\
         --matrix extended \\
         --gpu-pool 3
 
 Sous-ensemble de combos :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio tests/test2.mp3 \\
         --combos 001,005,S01,S07
 
 Benchmark ciblé VAD final/interne Whisper :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio archives/audio_tests/test5.wav \\
         --matrix vad \\
         --gpu-pool 3
 
 Reprendre un bench interrompu :
-    python scripts/bench_audio.py \\
+    python scripts/bench/bench_audio.py \\
         --audio tests/test1.mp3 \\
         --output-dir bench_results/test1_20260521_143000 \\
         --resume
@@ -71,7 +71,7 @@ from threading import Thread
 # ─────────────────────────────────────────────────────────────────────────────
 # Chemins
 # ─────────────────────────────────────────────────────────────────────────────
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 E2E_SCRIPT = REPO_ROOT / "tests" / "test_e2e_workflow.py"
 BENCH_RESULTS_DIR = REPO_ROOT / "bench_results"
 
@@ -1430,7 +1430,7 @@ def write_summary_md(
         "",
         "## Étape suivante",
         "",
-        f"    python scripts/bench_eval.py --bench-dir {output_dir}",
+        f"    python scripts/bench/bench_eval.py --bench-dir {output_dir}",
     ]
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

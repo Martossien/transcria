@@ -6,7 +6,7 @@
 applicatif. Il est conçu pour deux usages :
 
 - **Validation manuelle** : tester une configuration spécifique et inspecter les artefacts
-- **Benchmark automatisé** : appelé par `scripts/bench_audio.py` pour mesurer toutes les
+- **Benchmark automatisé** : appelé par `scripts/bench/bench_audio.py` pour mesurer toutes les
   combinaisons d'options. Les plans de campagne passés sont archivés hors documentation active.
 
 `tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix avec genre validé, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
@@ -747,7 +747,7 @@ indépendamment des flags `--enable-*` :
 
 ## Intégration avec bench_audio.py
 
-Le test est conçu pour être appelé en sous-processus par `scripts/bench_audio.py` :
+Le test est conçu pour être appelé en sous-processus par `scripts/bench/bench_audio.py` :
 
 ```python
 subprocess.run([
@@ -766,7 +766,7 @@ subprocess.run([
 Le bench runner supporte aussi `--config-override` pour les runs de tuning :
 
 ```bash
-venv/bin/python scripts/bench_audio.py \
+venv/bin/python scripts/bench/bench_audio.py \
     --audio tests/cse_excerpt_10m_15m.wav \
     --combos 013 \
     --gpu-pool 0,1,2 \

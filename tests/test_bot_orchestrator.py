@@ -55,6 +55,21 @@ def test_non_admis_ne_capture_pas_et_ferme():
     assert names[-1] == "close"                                      # nettoyage garanti
 
 
+def test_non_admis_remonte_la_cause_fine_du_driver():
+    """Un driver qui consigne `admission_reason` (ex. Jitsi : password_required) la voit
+    remontée dans `outcome.detail` — sans changer `reason` ni les codes de sortie."""
+    driver = FakeDriver(admitted=False)
+    driver.admission_reason = "password_required"
+    outcome = asyncio.run(BotSession(driver).run("https://meet.jit.si/salle"))
+    assert outcome.reason == "admission_timeout"      # le contrat de l'orchestrateur ne bouge pas
+    assert outcome.detail == "password_required"
+
+
+def test_non_admis_sans_introspection_driver_detail_vide():
+    outcome = asyncio.run(BotSession(FakeDriver(admitted=False)).run("https://meet.jit.si/x"))
+    assert outcome.detail == ""
+
+
 def test_erreur_driver_devient_outcome_error_et_ferme():
     class BoomDriver(FakeDriver):
         async def run_until_ended(self):

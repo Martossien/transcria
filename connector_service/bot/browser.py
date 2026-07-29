@@ -1,7 +1,7 @@
 """Options de lancement du navigateur du bot — PARTAGÉES driver ⟂ auto-test.
 
 Ces options ne sont pas cosmétiques : chacune corrige un blocage constaté empiriquement
-(cf. `scripts/gate_bot_capture_selftest.py`, qui rejoue la chaîne complète). Elles vivent
+(cf. `scripts/gates/gate_bot_capture_selftest.py`, qui rejoue la chaîne complète). Elles vivent
 ici pour que l'auto-test valide EXACTEMENT la configuration utilisée en vrai.
 """
 from __future__ import annotations

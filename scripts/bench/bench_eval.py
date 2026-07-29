@@ -6,20 +6,20 @@ Lit les SRTs issus d'un répertoire de bench, les envoie à la LLM d'arbitrage
 avec un prompt de notation multicritères, et génère un rapport Markdown.
 
 Utilisation :
-    python scripts/bench_eval.py --bench-dir bench_results/test2_20260521_143000
+    python scripts/bench/bench_eval.py --bench-dir bench_results/test2_20260521_143000
 
 Avec LLM sur port alternatif :
-    python scripts/bench_eval.py \\
+    python scripts/bench/bench_eval.py \\
         --bench-dir bench_results/test2_20260521_143000 \\
         --arbitrage-port 8080
 
 Comparer les SRTs corrigés (si LLM activée lors du bench) :
-    python scripts/bench_eval.py \\
+    python scripts/bench/bench_eval.py \\
         --bench-dir bench_results/test2_20260521_143000 \\
         --srt-type corrected
 
 Tronquer à 2000 mots par SRT (pour gros fichiers) :
-    python scripts/bench_eval.py \\
+    python scripts/bench/bench_eval.py \\
         --bench-dir bench_results/test2_20260521_143000 \\
         --max-words 2000
 """
@@ -36,7 +36,7 @@ from pathlib import Path
 
 import requests
 
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPT_FILE = REPO_ROOT / "prompts" / "bench_eval_prompt.txt"
 DEFAULT_PORT = 8080
 DEFAULT_MODEL = "arbitrage"

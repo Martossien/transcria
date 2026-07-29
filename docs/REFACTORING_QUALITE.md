@@ -631,7 +631,7 @@ disponibles, du moins cher au plus cher :
    (+ clés API) contre un nœud réel ;
 5. **Nœud de ressources** — `POST /engines/ensure` froid→launched, re-POST→ready,
    moteur inconnu→404, sur l'inference_service réel ;
-6. **Campagne de charge** — `scripts/load_test.py` : 3 jobs simultanés all-in-one,
+6. **Campagne de charge** — `scripts/bench/load_test.py` : 3 jobs simultanés all-in-one,
    montée à 8 en split (les seuils validés des tests de charge historiques).
 
 | Vague | 1. CI | 2. UI | 3. E2E all-in-one | 4. E2E frontale | 5. Nœud | 6. Charge |

@@ -8,7 +8,7 @@ un endpoint injoignable est ignoré (colonnes vides), jamais fatal. À lancer en
 pendant une campagne `load_test.py`, puis Ctrl-C / kill.
 
 Exemple (split) :
-    venv/bin/python scripts/load_sampler.py --interval 2 \
+    venv/bin/python scripts/bench/load_sampler.py --interval 2 \
         --capabilities http://localhost:8002/capabilities --api-key split-bench-key \
         --vllm stt=http://localhost:8003/metrics --vllm llm=http://localhost:8080/metrics
 """

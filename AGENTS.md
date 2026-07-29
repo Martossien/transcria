@@ -439,9 +439,10 @@ transcria/
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
     setup_opencode.py       # Configure opencode.json (provider local) de façon idempotente — cf. opencode_setup.py
-    bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices STT/VAD/Cohere/Pyannote
-    bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
-    bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
+    README.md               # CARTE du répertoire : racine = API (ne pas déplacer), gates/, bench/
+    gates/                  # Vérifications MANUELLES en conditions réelles (bot Jitsi/Zoom, LiveKit) — jamais en CI
+    bench/                  # Bancs d'essai & analyse : bench_audio.py (matrices), bench_analyze/bench_eval,
+                            #   corpus (prepare_reference_windows, extract_reference_docx), charge (load_test)
     _stt_serve_lib.sh       # Lib commune des lanceurs STT (moteur non hardcodé : STT_ENGINE vllm|sglang|custom)
     launch_stt_cohere.sh / launch_stt_whisper.sh / launch_stt_granite.sh # Lanceurs moteurs STT (vLLM par défaut)
     launch_stt_qwen3asr.sh / launch_stt_nemotron.sh # Lanceurs runtimes servis audio.cpp (STT_FAMILY, STT_GPU/STT_PORT)
@@ -990,7 +991,7 @@ La suite pytest dans les modules `test_*.py` (plus E2E) couvre stores, config, c
 - **Patcher LE CONSOMMATEUR, jamais la source** : les imports internes sont en tête (C5), donc `monkeypatch.setattr(module_consommateur, "symbole", fake)` — un patch sur le module SOURCE ne porte plus (13 coutures re-pointées pendant C5 en témoignent). Exceptions patchées à la source : attributs de CLASSE (`WorkflowRunner.run_summary`) et accès PAR MODULE explicites (`from x import y as module` + `module.attr`).
 - **Test étoile polaire** (`tests/test_pipeline_no_infra.py`) : le pipeline complet + reprise + échec tournent SANS Flask/PG/GPU en < 1 s — le garder vert et l'imiter pour tester de l'orchestration.
 - **Marqueurs** : `integration` (vrais sockets TCP), `gpu_e2e` (Docker+GPU, TRANSCRIA_GPU_E2E=1), `gpu_real` (smoke matériel RÉEL, TRANSCRIA_GPU_REAL=1, jamais en CI — filet du refactor GPU : `tests/test_gpu_real_smoke.py` doit rester vert sur la machine avant/après tout changement gpu/).
-- **Charge GPU** : tout changement de concurrence GPU/verrous rejoue la campagne (`scripts/load_test.py --jobs 3` en all-in-one, cf. `docs/PLAN_TEST_CHARGE.md`) — elle a attrapé 5 vrais bugs de concurrence à ce jour.
+- **Charge GPU** : tout changement de concurrence GPU/verrous rejoue la campagne (`scripts/bench/load_test.py --jobs 3` en all-in-one, cf. `docs/PLAN_TEST_CHARGE.md`) — elle a attrapé 5 vrais bugs de concurrence à ce jour.
 
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).

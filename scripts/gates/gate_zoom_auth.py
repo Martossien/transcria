@@ -22,7 +22,7 @@ audio. Sans eux il ne renvoie pas d'erreur — il plante par segfault (cf.
     docker run --rm --network host \
       -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
       --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
-      transcria-zoom-sdk:latest python3 -u /app/scripts/gate_zoom_auth.py
+      transcria-zoom-sdk:latest python3 -u /app/scripts/gates/gate_zoom_auth.py
 
 ⚠ Le Client Secret se lit UNIQUEMENT dans l'environnement : lui donner une option de ligne de
 commande le rendrait lisible dans la liste des processus de la machine.
@@ -39,7 +39,7 @@ from pathlib import Path
 
 # Lancé par CHEMIN (`python3 /app/scripts/…`), `sys.path[0]` vaut `scripts/` et non la racine :
 # sans cette ligne, `connector_service` est introuvable. Même motif que gate_bot_zoom_sdk.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from connector_service.live.glib_loop import GLibPump  # noqa: E402
 from connector_service.live.zoom_sdk_state import describe_auth_result  # noqa: E402

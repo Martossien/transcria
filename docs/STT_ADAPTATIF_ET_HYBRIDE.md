@@ -12,7 +12,7 @@
 Aujourd'hui, TranscrIA choisit **un seul backend STT pour tout le fichier**, via une décision **déterministe à seuils** (`AudioQualityEvaluator`). Ce document explore deux évolutions :
 
 1. **Axe 1 — Caractérisation enrichie** : ajouter des signaux acoustiques prédictifs et surtout *calibrer* les seuils existants sur le corpus de bench, pour mieux décider quand un audio est « difficile ».
-2. **Axe 2 — Hybride au segment** : ne plus subir un backend unique, mais re-transcrire les zones douteuses avec un backend alternatif et arbitrer au segment. La brique d'arbitrage existe déjà (`scripts/arbitrate_hybrid_llm.py`).
+2. **Axe 2 — Hybride au segment** : ne plus subir un backend unique, mais re-transcrire les zones douteuses avec un backend alternatif et arbitrer au segment. La brique d'arbitrage existe déjà (`scripts/bench/arbitrate_hybrid_llm.py`).
 
 **Principe directeur :** ne pas sur-investir dans la *prédiction* de difficulté avant transcription. Le meilleur détecteur de « segment à retravailler » est le score de fiabilité *post-transcription* (`reliability`), déjà calculé. L'hybride doit s'appuyer dessus.
 
@@ -56,9 +56,9 @@ Sortie → `metadata/audio_quality_decision.json` :
 
 | Script | Rôle |
 |---|---|
-| `scripts/compare_stt_segments.py` | Comparaison alignée dans le temps de plusieurs sorties STT |
-| `scripts/arbitrate_hybrid_llm.py` | Arbitrage LLM segment par segment entre 3 sorties STT |
-| `scripts/build_hybrid_transcript.py` | Reconstruction d'un transcript hybride |
+| `scripts/bench/compare_stt_segments.py` | Comparaison alignée dans le temps de plusieurs sorties STT |
+| `scripts/bench/arbitrate_hybrid_llm.py` | Arbitrage LLM segment par segment entre 3 sorties STT |
+| `scripts/bench/build_hybrid_transcript.py` | Reconstruction d'un transcript hybride |
 
 Ces scripts font déjà, **hors pipeline**, ce que le mode hybride doit faire **dans** le pipeline. L'enjeu est l'intégration, pas l'invention.
 
@@ -214,8 +214,8 @@ transcria/audio/preflight.py              # signaux par fenêtre (axe 1.b)
 transcria/stt/reliability.py              # source du sélecteur (axe 2.a)
 transcria/services/pipeline_service.py    # orchestration 2 passes (axe 2.b)
 transcria/stt/transcription.py            # re-transcription ciblée par segments
-scripts/arbitrate_hybrid_llm.py           # → à intégrer dans le pipeline (axe 2.c)
-scripts/compare_stt_segments.py           # alignement temporel des sorties
+scripts/bench/arbitrate_hybrid_llm.py           # → à intégrer dans le pipeline (axe 2.c)
+scripts/bench/compare_stt_segments.py           # alignement temporel des sorties
 docs/archive/BENCHMARK.md                         # protocole de calibration (axe 1.a)
 ```
 

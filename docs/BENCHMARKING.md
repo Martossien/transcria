@@ -4,12 +4,12 @@ Comment lancer un banc de mesure reproductible sur ta propre machine : comparer 
 options de prétraitement, des moteurs STT, des réglages de diarisation ou des paliers LLM,
 puis analyser les résultats — chiffres **mesurés**, pas supposés.
 
-Tout tourne autour d'un **runner de matrice** (`scripts/bench_audio.py`) qui écrit un dossier
+Tout tourne autour d'un **runner de matrice** (`scripts/bench/bench_audio.py`) qui écrit un dossier
 de résultats (`bench_root`), consommé ensuite par quatre analyseurs. Aucun de ces outils
 n'est requis pour utiliser TranscrIA — ce sont des outils d'ingénierie/qualification.
 
 ```
-                          scripts/bench_audio.py
+                          scripts/bench/bench_audio.py
                     (matrice de combos → bench_root/)
                                    │
         ┌──────────────┬──────────┴───────────┬─────────────────────┐
@@ -27,7 +27,7 @@ n'est requis pour utiliser TranscrIA — ce sont des outils d'ingénierie/qualif
 - Pour les combos `--with-llm` : une LLM d'arbitrage joignable (cf. [INSTALL.md](INSTALL.md)
   et [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) pour le choix du modèle par palier VRAM).
 
-## 1. Lancer un banc — `scripts/bench_audio.py`
+## 1. Lancer un banc — `scripts/bench/bench_audio.py`
 
 Le runner exécute une **matrice de combinaisons** (une par sous-processus `test_e2e_workflow.py`
 isolé) sur un ou plusieurs fichiers audio, en parallèle sur les GPU du pool.
@@ -47,13 +47,13 @@ Matrices intégrées (`--matrix`) :
 **Toujours commencer par un aperçu** (`--dry-run` n'exécute rien, il liste les commandes) :
 
 ```bash
-venv/bin/python scripts/bench_audio.py --audio tests/test2.mp3 --matrix stt --dry-run
+venv/bin/python scripts/bench/bench_audio.py --audio tests/test2.mp3 --matrix stt --dry-run
 ```
 
 Puis lancer réellement, sans LLM (STT + prétraitement uniquement, le plus rapide) :
 
 ```bash
-venv/bin/python scripts/bench_audio.py \
+venv/bin/python scripts/bench/bench_audio.py \
     --audio tests/test2.mp3 \
     --matrix stt \
     --gpu-pool 0,1,2,3,4,5,6,7
@@ -81,23 +81,23 @@ Chaque run crée `bench_results/<audio>_<horodatage>/` contenant :
 
 Ce dossier est le `bench_root` passé aux quatre analyseurs ci-dessous.
 
-## 2. Analyser (sans LLM) — `scripts/bench_analyze.py`
+## 2. Analyser (sans LLM) — `scripts/bench/bench_analyze.py`
 
 Agrège les métriques d'un ou plusieurs `bench_root` (durées, segments, signaux qualité) sans
 rien appeler de coûteux :
 
 ```bash
-venv/bin/python scripts/bench_analyze.py --bench-dir bench_results/test2_20260705_101500
+venv/bin/python scripts/bench/bench_analyze.py --bench-dir bench_results/test2_20260705_101500
 # → <bench-dir>/analysis.md + analysis.csv
 ```
 
-## 3. Juger la qualité — `scripts/bench_eval.py`
+## 3. Juger la qualité — `scripts/bench/bench_eval.py`
 
 Fait **noter les SRT** produits par la LLM d'arbitrage (comparaison relative des combos ;
 nécessite la LLM up) :
 
 ```bash
-venv/bin/python scripts/bench_eval.py \
+venv/bin/python scripts/bench/bench_eval.py \
     --bench-dir bench_results/test2_20260705_101500 \
     --arbitrage-port 8080 --runs 3
 # → <bench-dir>/eval_report.md   (utiliser --dry-run pour prévisualiser)
@@ -108,7 +108,7 @@ inversés observés entre deux passes identiques). Avec N runs, le rapport s'ouv
 tableau agrégé — médiane des notes globales + étendue min–max par combo — et une étendue
 large signale un verdict fragile, à trancher par lecture humaine ou par le score référence.
 
-## 4. Scorer contre une référence — `scripts/score_reference_bench.py`
+## 4. Scorer contre une référence — `scripts/bench/score_reference_bench.py`
 
 Proxy de calibration : compare les transcriptions à des **fenêtres de référence** (texte
 stable, p. ex. extrait d'un compte-rendu validé) et sort WER/CER approximatifs + ratio de mots.
@@ -119,20 +119,20 @@ et **boucles** (répétitions détectées par l'anti-hallucination du pipeline).
 publiés sur corpus réel : `docs/STT_BENCHMARK_REAL_MEETINGS.md`.
 
 ```bash
-venv/bin/python scripts/score_reference_bench.py \
+venv/bin/python scripts/bench/score_reference_bench.py \
     --bench-root bench_results/test2_20260705_101500 \
     --windows-dir bench_refs/test2 \
     --output score.md --csv score.csv
 ```
 
-## 5. Projeter la concurrence — `scripts/estimate_local_b5.py`
+## 5. Projeter la concurrence — `scripts/bench/estimate_local_b5.py`
 
 À partir des durées **mesurées** dans un `bench_root`, projette combien de jobs on peut traiter
 en parallèle sur les GPU disponibles (dimensionnement de `workflow.scheduling` / du nombre de
 workers avant une mise en charge). Logique dans `transcria/benchmarks/stt_concurrency_estimator.py`.
 
 ```bash
-venv/bin/python scripts/estimate_local_b5.py --bench-root bench_results/test2_20260705_101500
+venv/bin/python scripts/bench/estimate_local_b5.py --bench-root bench_results/test2_20260705_101500
 ```
 
 ## Bancs LLM (paliers VRAM)

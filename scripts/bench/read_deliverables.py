@@ -5,7 +5,7 @@ Le script de campagne vérifie la STRUCTURE ; celui-ci sort la SUBSTANCE (texte 
 résumé et participants du Word, points qualité) pour qu'on la LISE — un livrable peut
 être structurellement valide et vide de sens (« Résumé indisponible », charabia).
 
-    python scripts/read_deliverables.py --jobs-dir <dir> --job <id>
+    python scripts/bench/read_deliverables.py --jobs-dir <dir> --job <id>
 """
 from __future__ import annotations
 

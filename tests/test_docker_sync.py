@@ -47,10 +47,10 @@ def parse_pinned_refs(dockerfile_text: str) -> dict[str, str]:
     return {m.group("name"): m.group("value") for m in _ARG_RE.finditer(dockerfile_text)}
 
 
-def stt_runtimes_builder_block(dockerfile_text: str) -> list[str]:
-    """Les lignes de CODE du stage ``stt-runtimes-builder`` (commentaires et vides exclus).
+def stage_block(dockerfile_text: str, stage_name: str) -> list[str]:
+    """Les lignes de CODE d'un stage nommé (commentaires et vides exclus).
 
-    Le stage court du ``FROM … AS stt-runtimes-builder`` jusqu'au ``FROM`` suivant.
+    Le stage court du ``FROM … AS <stage_name>`` jusqu'au ``FROM`` suivant.
     """
     lines: list[str] = []
     in_stage = False
@@ -59,13 +59,18 @@ def stt_runtimes_builder_block(dockerfile_text: str) -> list[str]:
         if stripped.startswith("FROM "):
             if in_stage:
                 break
-            in_stage = stripped.endswith(" AS stt-runtimes-builder")
+            in_stage = stripped.endswith(f" AS {stage_name}")
             if in_stage:
                 lines.append(stripped)
             continue
         if in_stage and stripped and not stripped.startswith("#"):
             lines.append(line.rstrip())
     return lines
+
+
+def stt_runtimes_builder_block(dockerfile_text: str) -> list[str]:
+    """Les lignes de CODE du stage ``stt-runtimes-builder`` (garde historique C7-1b)."""
+    return stage_block(dockerfile_text, "stt-runtimes-builder")
 
 
 def dockerignore_names(dockerignore_text: str) -> set[str]:
@@ -139,6 +144,50 @@ class TestBuilderBlocksIdentical:
     def test_block_stops_at_next_stage(self):
         text = "FROM x AS stt-runtimes-builder\nRUN a\nFROM y AS final\nRUN pas-du-stage\n"
         assert stt_runtimes_builder_block(text) == ["FROM x AS stt-runtimes-builder", "RUN a"]
+
+
+# ── (b-bis) Blocs llama-builder identiques entre les deux all-in-one ─────────
+
+# Le stage llama-builder n'existe que dans les deux Dockerfiles all-in-one
+# (resource-node reçoit llama-server par un autre canal).
+LLAMA_DOCKERFILES = ("Dockerfile.allinone-gpu", "Dockerfile.allinone-bundled")
+_LLAMA_REF_RE = re.compile(r"^ARG\s+LLAMA_CPP_REF=(?P<value>\S+)\s*$", re.MULTILINE)
+
+
+class TestLlamaBuilderBlocksIdentical:
+    """Même classe de bug que C7-1b, sur l'AUTRE stage copié-collé : une correction de build
+    llama.cpp portée dans un seul des deux fichiers donne deux images au comportement LLM
+    différent, indétectable avant un vrai job."""
+
+    def test_the_two_blocks_are_identical(self):
+        blocks = {
+            name: stage_block((_ROOT / name).read_text(encoding="utf-8"), "llama-builder")
+            for name in LLAMA_DOCKERFILES
+        }
+        reference_name = LLAMA_DOCKERFILES[0]
+        reference = blocks[reference_name]
+        assert reference, f"stage llama-builder introuvable dans {reference_name}"
+        for name, block in blocks.items():
+            assert block == reference, (
+                f"le stage llama-builder de {name} diverge de {reference_name} — "
+                "les 2 copies doivent rester identiques hors commentaires"
+            )
+
+    def test_llama_ref_is_pinned_and_identical(self):
+        refs = {
+            name: _LLAMA_REF_RE.findall((_ROOT / name).read_text(encoding="utf-8"))
+            for name in LLAMA_DOCKERFILES
+        }
+        values = {name: ref for name, ref in refs.items()}
+        assert all(len(r) == 1 for r in refs.values()), f"ARG LLAMA_CPP_REF absent ou dupliqué : {values}"
+        assert len({r[0] for r in refs.values()}) == 1, (
+            f"LLAMA_CPP_REF diverge entre les deux all-in-one : {values}"
+        )
+
+    def test_guard_goes_red_on_code_divergence(self):
+        a = "FROM x AS llama-builder\nRUN cmake -DGGML_CUDA=ON\nFROM final\n"
+        b = "FROM x AS llama-builder\nRUN cmake -DGGML_CUDA=OFF\nFROM final\n"
+        assert stage_block(a, "llama-builder") != stage_block(b, "llama-builder")
 
 
 # ── (c) Répertoires lourds hors du contexte de build ─────────────────────────

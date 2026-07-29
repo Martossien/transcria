@@ -226,7 +226,8 @@ les **locuteurs nommés** — 29 segments attribués, code de sortie 0. Détail 
 en §6.5 de `docs/BOT_REUNION.md`.
 
 **Correction apportée en cours de chantier (juillet 2026) — Zoom par bot.** Le pilote
-navigateur écrit pour Zoom (`bot/platforms/zoom_web.py`) est **inexploitable** : le client Web
+navigateur écrit pour Zoom (`zoom_web`, **retiré du dépôt en vague 0 de consolidation —
+l'historique git le conserve**) est **inexploitable** : le client Web
 de Zoom oppose un reCAPTCHA à toute automatisation (vérifié au gate — le nom est saisi, le
 bouton s'active, le clic aboutit, et Zoom refuse en silence). La documentation de Zoom
 recommande d'ailleurs explicitement le **SDK natif** pour un bot headless Linux. Ce chemin est

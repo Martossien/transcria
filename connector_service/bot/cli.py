@@ -153,8 +153,9 @@ async def run(args: argparse.Namespace) -> int:
         args.meeting_url, occurrence, driver, transcriber,
         display_name=compose_display_name(explicit=args.name, initiator=args.initiator))
 
-    logger.info("Réunion terminée | admis=%s motif=%s segments=%d",
-                outcome.admitted, outcome.reason, len(segments))
+    logger.info("Réunion terminée | admis=%s motif=%s%s segments=%d",
+                outcome.admitted, outcome.reason,
+                f" ({outcome.detail})" if outcome.detail else "", len(segments))
     for segment in segments:
         print(f"[{segment.speaker or '?'}] {segment.text}", flush=True)
     return exit_code_for(outcome.admitted, outcome.reason)

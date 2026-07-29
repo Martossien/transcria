@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 
 def _load_script(name: str):
-    path = Path(__file__).resolve().parents[1] / "scripts" / name
+    path = Path(__file__).resolve().parents[1] / "scripts" / "bench" / name
     spec = importlib.util.spec_from_file_location(name.replace(".py", ""), path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

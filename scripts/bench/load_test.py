@@ -11,11 +11,11 @@ non-zéro sinon. Chaque échec est reporté avec sa raison (stderr de `run_job`)
 
 Exemples :
     # all-in-one : 10 jobs en rafale
-    venv/bin/python scripts/load_test.py --web http://localhost:7870 \
+    venv/bin/python scripts/bench/load_test.py --web http://localhost:7870 \
         --jobs 10 --audio tests/test2.mp3 --username admin --password "$PWD_ADMIN"
 
     # split : 8 jobs en rafale
-    venv/bin/python scripts/load_test.py --web http://localhost:7870 \
+    venv/bin/python scripts/bench/load_test.py --web http://localhost:7870 \
         --jobs 8 --audio tests/test2.mp3 --username admin --password "$PWD_ADMIN"
 """
 from __future__ import annotations

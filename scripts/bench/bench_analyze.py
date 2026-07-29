@@ -10,8 +10,8 @@ Lit tous les JSON d'un répertoire de bench et produit :
   - Export Markdown + CSV
 
 Utilisation :
-    python scripts/bench_analyze.py --bench-dir bench_results/test7_all
-    python scripts/bench_analyze.py --bench-dir bench_results/test2_all --bench-dir bench_results/test7_all
+    python scripts/bench/bench_analyze.py --bench-dir bench_results/test7_all
+    python scripts/bench/bench_analyze.py --bench-dir bench_results/test2_all --bench-dir bench_results/test7_all
 """
 
 from __future__ import annotations

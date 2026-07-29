@@ -11,8 +11,8 @@
 > be published. This document contains **no audio, no transcript excerpt, no name,
 > no organisation** — only aggregate metrics, acoustic descriptors and abstract
 > descriptions of error classes. Corpus identifiers are neutral (`R01`…, `L01`…).
-> The methodology and all scripts are open (`scripts/bench_audio.py`,
-> `scripts/score_reference_bench.py`, `scripts/bench_eval.py`), so anyone can
+> The methodology and all scripts are open (`scripts/bench/bench_audio.py`,
+> `scripts/bench/score_reference_bench.py`, `scripts/bench/bench_eval.py`), so anyone can
 > reproduce the protocol on their own recordings.
 
 ## Corpus
@@ -26,8 +26,8 @@ calls), recorded with ordinary equipment (dictaphone apps, room mics, visio).
 Eight 5-minute windows spread across a **3.6-hour formal committee meeting**
 (26 speakers in the reference), for which a **professionally produced verbatim
 transcript** exists. The transcript was aligned and windowed
-(`scripts/prepare_reference_windows.py`); hypothesis text is scored against it
-(`scripts/score_reference_bench.py`).
+(`scripts/bench/prepare_reference_windows.py`); hypothesis text is scored against it
+(`scripts/bench/score_reference_bench.py`).
 
 | Window | Ref. words | Speakers in window | Character |
 |---|---:|---:|---|
@@ -85,7 +85,7 @@ real meeting audio looks like, and it is far from LibriSpeech.
 
 All runs: full TranscrIA pipeline (preflight → pyannote diarization → turn-chunked
 STT), same GPU pool, deliverable language pinned to French, no session lexicon
-(raw engine quality). Matrix runner: `scripts/bench_audio.py --matrix stt`.
+(raw engine quality). Matrix runner: `scripts/bench/bench_audio.py --matrix stt`.
 
 ## Results — Set L (vs human reference)
 

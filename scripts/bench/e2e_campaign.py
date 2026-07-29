@@ -8,7 +8,7 @@ d'affinage discuss réel, type de réunion personnalisé, promotion de lexique).
 
 Operator-run (GPU) : lancer contre une instance jetable dédiée.
 
-    python scripts/e2e_campaign.py --base-url http://127.0.0.1:7902 \
+    python scripts/bench/e2e_campaign.py --base-url http://127.0.0.1:7902 \
         --password <pw> --audios test2.mp3=primary,cse.wav,reunion1.m4a
 """
 from __future__ import annotations

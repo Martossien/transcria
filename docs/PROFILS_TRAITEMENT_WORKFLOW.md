@@ -1276,7 +1276,7 @@ gerees par le modele de phases et ne sont pas un site d'impact des profils : ne 
   - Ajouter un diagnostic profils : disponibles, lents, distants, indisponibles, raison.
   - En split, verifier que le nœud expose les GPU via `/capabilities`.
 
-- `scripts/load_test.py`, `scripts/load_sampler.py`
+- `scripts/bench/load_test.py`, `scripts/bench/load_sampler.py`
   - A etendre pour les rafales mixtes par profil.
   - Doivent conserver les metriques `/capabilities`, vLLM `/metrics`, queue et GPU.
 
@@ -1925,7 +1925,7 @@ Objectif : verifier que les profils ne cassent pas les acquis de scaling avant e
 
 Actions :
 
-1. Adapter `scripts/load_test.py` pour lancer des profils mixtes.
+1. Adapter `scripts/bench/load_test.py` pour lancer des profils mixtes.
 2. Tester `8 x srt_express`.
 3. Tester `4 x dossier_qualite + 8 x srt_express`.
 4. Tester `4 x word_rapide + 4 x word_corrige`.

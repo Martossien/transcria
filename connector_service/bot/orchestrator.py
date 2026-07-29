@@ -41,6 +41,10 @@ class BrowserDriver(Protocol):
 class BotOutcome:
     admitted: bool
     reason: str            # admission_timeout / left_alone / removed / max_duration / stopped / error
+    # Cause FINE d'un refus d'admission quand le driver la connaît (ex. Jitsi :
+    # password_required / auth_required / lobby_waiting / timeout). Diagnostic seulement —
+    # `reason` et les codes de sortie restent le contrat de l'orchestrateur.
+    detail: str = ""
 
 
 class BotSession:
@@ -62,7 +66,10 @@ class BotSession:
             await self._driver.request_join(self._name)
             admitted = await self._driver.wait_admission(self._admission_timeout_s)
             if not admitted:
-                return BotOutcome(admitted=False, reason="admission_timeout")
+                # Le driver peut consigner POURQUOI (mot de passe, auth, timeout…) — précieuse
+                # pour l'exploitant, mais optionnelle : tout driver n'a pas cette introspection.
+                detail = str(getattr(self._driver, "admission_reason", "") or "")
+                return BotOutcome(admitted=False, reason="admission_timeout", detail=detail)
 
             admitted_flag = True
             self.state = BotState.ACTIVE

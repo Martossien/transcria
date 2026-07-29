@@ -15,7 +15,7 @@ Prérequis — un serveur LiveKit joignable. En local, mode développement :
     (clés du mode dev : devkey / secret)
 
 Usage :
-    python scripts/gate_visio_livekit.py --url ws://127.0.0.1:7880 \\
+    python scripts/gates/gate_visio_livekit.py --url ws://127.0.0.1:7880 \\
         --api-key devkey --api-secret secret --audio voix.wav \\
         [--transcribe http://127.0.0.1:7870 --token-file jeton.txt --language fr]
 """
@@ -29,7 +29,7 @@ import wave
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from connector_service.contract import ExternalMeetingOccurrence  # noqa: E402
 from connector_service.live._demux import DemuxFrameSource  # noqa: E402
