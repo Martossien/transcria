@@ -53,7 +53,7 @@ def parse_zoom_invite(value: str) -> tuple[str, str]:
     """Lien d'invitation OU numéro brut → (numéro de réunion, code secret).
 
     Fonction PURE, donc testée. Elle existe parce qu'un utilisateur transmet ce qu'il a sous
-    la main : « 578 629 7113 », ou le lien complet, dont le code est dans `?pwd=`. Exiger une
+    la main : « 123 456 7890 », ou le lien complet, dont le code est dans `?pwd=`. Exiger une
     forme précise ferait échouer l'entrée pour une raison sans rapport avec la réunion.
 
     ⚠ Le code porté par un lien (`?pwd=…`) est une forme CHIFFRÉE propre au client Web. Le
@@ -134,7 +134,7 @@ def looks_encrypted(passcode: str) -> bool:
 
     Un code saisissable par un humain est court (Zoom en limite la longueur) ; la forme
     chiffrée est longue et comporte un point séparant sa charge d'un indice de version
-    (`tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1`). La distinction sert à AVERTIR, pas à refuser :
+    (`ExempleFictifNePasUtiliser000.1`). La distinction sert à AVERTIR, pas à refuser :
     mieux vaut tenter et expliquer que bloquer sur une heuristique.
     """
     return len(passcode) > 12 and "." in passcode

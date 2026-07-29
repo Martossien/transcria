@@ -19,7 +19,7 @@ de commande — une option serait lisible dans la liste des processus.
       -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
       --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
       -v "$PWD/scripts:/app/scripts:ro" transcria-zoom-sdk:latest \
-      python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "578 629 7113" --seconds 60
+      python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "123 456 7890" --seconds 60
 
 Prérequis côté Zoom : une app de type « Meeting SDK » créée sur LE MÊME COMPTE que celui qui
 héberge la réunion. Ce régime ne demande ni revue de l'app, ni jeton ZAK/OBF — c'est ce qui

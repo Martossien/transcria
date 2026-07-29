@@ -31,7 +31,7 @@ def test_entree_silencieuse_par_defaut():
     """LE point qui compte : le bot est un AUDITEUR. Sur Jitsi il avait fallu neutraliser la
     capture par des réglages détournés, après qu'un bip a été entendu dans une vraie réunion ;
     ici c'est un paramètre d'entrée, et ce test le verrouille."""
-    fields = join_fields("5786297113", display_name="TranscrIA")
+    fields = join_fields("1234567890", display_name="TranscrIA")
     assert fields["isAudioOff"] is True
     assert fields["isVideoOff"] is True
     assert fields["isMyVoiceInMix"] is False
@@ -39,18 +39,18 @@ def test_entree_silencieuse_par_defaut():
 
 def test_audio_mono():
     """Le stéréo doublerait le volume transporté sans rien apporter à la parole."""
-    assert join_fields("5786297113", display_name="X")["isAudioRawDataStereo"] is False
+    assert join_fields("1234567890", display_name="X")["isAudioRawDataStereo"] is False
 
 
 def test_numero_de_reunion_entier():
     """Le SDK attend un entier, pas la forme affichée dans les invitations."""
-    assert join_fields("5786297113", display_name="X")["meetingNumber"] == 5786297113
+    assert join_fields("1234567890", display_name="X")["meetingNumber"] == 1234567890
 
 
 def test_jetons_d_autorisation_vides_par_defaut():
     """Une réunion du compte propriétaire de l'app n'exige NI ZAK NI OBF — c'est le régime qui
     dispense de revue Zoom. Les remplir par défaut ferait échouer ce cas nominal."""
-    fields = join_fields("5786297113", display_name="X")
+    fields = join_fields("1234567890", display_name="X")
     assert fields["userZAK"] == ""
     assert fields["onBehalfToken"] == ""
     assert fields["join_token"] == ""
@@ -58,7 +58,7 @@ def test_jetons_d_autorisation_vides_par_defaut():
 
 def test_jetons_transmis_quand_fournis():
     """Réunion externe : les emplacements existent et doivent être respectés."""
-    fields = join_fields("5786297113", display_name="X",
+    fields = join_fields("1234567890", display_name="X",
                          zak="zak-abc", on_behalf_token="obf-def", join_token="jt-ghi")
     assert fields["userZAK"] == "zak-abc"
     assert fields["onBehalfToken"] == "obf-def"
@@ -66,19 +66,19 @@ def test_jetons_transmis_quand_fournis():
 
 
 def test_code_secret_transmis():
-    assert join_fields("5786297113", display_name="X", passcode="s3cr3t")["psw"] == "s3cr3t"
+    assert join_fields("1234567890", display_name="X", passcode="s3cr3t")["psw"] == "s3cr3t"
 
 
 def test_nom_affiche_obligatoire():
     """Zoom refuse une entrée anonyme : échouer ici, avec un message clair, vaut mieux qu'un
     refus opaque au moment de rejoindre."""
     with pytest.raises(ValueError, match="[Nn]om affiché"):
-        join_fields("5786297113", display_name="")
+        join_fields("1234567890", display_name="")
 
 
 @pytest.mark.parametrize("debit", [SAMPLING_RATE_32K, SAMPLING_RATE_48K])
 def test_debits_geres_acceptes(debit):
-    assert join_fields("5786297113", display_name="X",
+    assert join_fields("1234567890", display_name="X",
                        sampling_rate_hz=debit)["_sampling_rate_hz"] == debit
 
 
@@ -87,7 +87,7 @@ def test_debit_non_gere_refuse(debit):
     """Le SDK n'expose QUE 32 et 48 kHz — pas 16 kHz, contrairement aux autres transports.
     Demander autre chose échouerait côté SDK, sans message utile."""
     with pytest.raises(ValueError, match="débit"):
-        join_fields("5786297113", display_name="X", sampling_rate_hz=debit)
+        join_fields("1234567890", display_name="X", sampling_rate_hz=debit)
 
 
 # --------------------------------------------------------------------------- #

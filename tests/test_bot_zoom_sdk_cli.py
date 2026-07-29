@@ -14,22 +14,22 @@ from connector_service.bot.zoom_sdk import EXIT_CONFIG, main, parse_zoom_invite
 #  Lecture de l'invitation
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("saisie", [
-    "5786297113",
-    "578 629 7113",          # la forme AFFICHÉE par Zoom, celle qu'un utilisateur recopie
-    "578-629-7113",
-    "  5786297113  ",
+    "1234567890",
+    "123 456 7890",          # la forme AFFICHÉE par Zoom, celle qu'un utilisateur recopie
+    "123-456-7890",
+    "  1234567890  ",
 ])
 def test_numero_brut_accepte_dans_ses_formes_usuelles(saisie):
-    assert parse_zoom_invite(saisie) == ("5786297113", "")
+    assert parse_zoom_invite(saisie) == ("1234567890", "")
 
 
 def test_lien_d_invitation_donne_numero_et_code():
     """Le code est dans `?pwd=` : l'ignorer ferait échouer l'entrée alors que l'utilisateur a
     fourni tout ce qu'il fallait."""
     numero, code = parse_zoom_invite(
-        "https://us05web.zoom.us/j/5786297113?pwd=tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1")
-    assert numero == "5786297113"
-    assert code == "tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1"
+        "https://us05web.zoom.us/j/1234567890?pwd=ExempleFictifNePasUtiliser000.1")
+    assert numero == "1234567890"
+    assert code == "ExempleFictifNePasUtiliser000.1"
 
 
 def test_lien_sans_code():
@@ -38,8 +38,8 @@ def test_lien_sans_code():
 
 def test_lien_du_client_web_aussi_lisible():
     """Un utilisateur peut copier l'URL depuis son navigateur, déjà réécrite en `/wc/`."""
-    assert parse_zoom_invite("https://app.zoom.us/wc/5786297113/join?pwd=abc.1") \
-        == ("5786297113", "abc.1")
+    assert parse_zoom_invite("https://app.zoom.us/wc/1234567890/join?pwd=abc.1") \
+        == ("1234567890", "abc.1")
 
 
 @pytest.mark.parametrize("saisie", ["", "   ", None])
@@ -85,7 +85,7 @@ def test_configuration_vide_signale_les_trois_manques(monkeypatch, caplog):
 
 def test_secret_manquant_seul_est_signale(monkeypatch, caplog):
     _clear_env(monkeypatch)
-    monkeypatch.setenv("ZOOM_MEETING", "5786297113")
+    monkeypatch.setenv("ZOOM_MEETING", "1234567890")
     monkeypatch.setenv("ZOOM_CLIENT_ID", "abc")
     assert main([]) == EXIT_CONFIG
     assert "ZOOM_CLIENT_SECRET" in caplog.text
@@ -109,7 +109,7 @@ def test_le_secret_ne_peut_pas_venir_de_la_ligne_de_commande(monkeypatch):
 def _args(**overrides):
     from connector_service.bot.zoom_sdk import build_parser
 
-    parsed = build_parser().parse_args(["--meeting", "5786297113", "--client-id", "abc"])
+    parsed = build_parser().parse_args(["--meeting", "1234567890", "--client-id", "abc"])
     for key, value in overrides.items():
         setattr(parsed, key, value)
     return parsed
@@ -201,8 +201,8 @@ def test_le_lien_sert_de_dernier_recours_AVEC_avertissement():
     autrement indiscernable d'une réunion non démarrée."""
     from connector_service.bot.zoom_sdk import resolve_passcode
 
-    code, avertissement = resolve_passcode(None, "tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1", "")
-    assert code == "tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1"
+    code, avertissement = resolve_passcode(None, "ExempleFictifNePasUtiliser000.1", "")
+    assert code == "ExempleFictifNePasUtiliser000.1"
     assert "CLAIR" in avertissement
 
 
@@ -216,7 +216,7 @@ def test_un_code_court_du_lien_ne_declenche_pas_d_avertissement():
 def test_reconnaissance_de_la_forme_chiffree():
     from connector_service.bot.zoom_sdk import looks_encrypted
 
-    assert looks_encrypted("tQtG8rwcfiQmVdwgJEL1mFqTqDCEcS.1")
+    assert looks_encrypted("ExempleFictifNePasUtiliser000.1")
     assert not looks_encrypted("8kzuW4")
     assert not looks_encrypted("")
 

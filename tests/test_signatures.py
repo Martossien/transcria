@@ -157,7 +157,7 @@ def _claims(token: str) -> dict:
 
 
 def test_jeton_a_trois_segments_et_un_entete_hs256():
-    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "5786297113", now=FROZEN)
+    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "1234567890", now=FROZEN)
     segments = token.split(".")
     assert len(segments) == 3
     assert json.loads(_b64url_decode(segments[0])) == {"alg": "HS256", "typ": "JWT"}
@@ -167,17 +167,17 @@ def test_charge_utile_exactement_celle_attendue_par_zoom():
     """Zoom rejette un jeton dont la charge utile diffère ; `mn` et `role` sont obligatoires
     pour le SDK Web. On verrouille donc l'ensemble EXACT des champs, pas seulement leur valeur."""
     claims = _claims(zoom_meeting_sdk_signature(
-        CLIENT_ID, CLIENT_SECRET, "5786297113", now=FROZEN))
+        CLIENT_ID, CLIENT_SECRET, "1234567890", now=FROZEN))
     assert set(claims) == {"appKey", "sdkKey", "mn", "role", "iat", "exp", "tokenExp"}
     assert claims["appKey"] == claims["sdkKey"] == CLIENT_ID
-    assert claims["mn"] == "5786297113"
+    assert claims["mn"] == "1234567890"
     assert claims["role"] == ROLE_PARTICIPANT
 
 
 def test_signature_recalculee_depuis_la_specification():
     """Vérification indépendante : HMAC-SHA256(secret, "<entête>.<charge>") en base64url
     sans remplissage. Si la construction dérive, ce test tombe."""
-    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "5786297113", now=FROZEN)
+    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "1234567890", now=FROZEN)
     signing_input, _, signature = token.rpartition(".")
     expected = base64.urlsafe_b64encode(
         hmac.new(CLIENT_SECRET.encode(), signing_input.encode("ascii"),
@@ -190,14 +190,14 @@ def test_horloge_antidatee_et_expiration_alignee():
     """L'antidatage absorbe une horloge locale en avance : sans lui, Zoom refuse un jeton
     par ailleurs valide, sans dire pourquoi."""
     claims = _claims(zoom_meeting_sdk_signature(
-        CLIENT_ID, CLIENT_SECRET, "5786297113", now=FROZEN, clock_skew_s=30))
+        CLIENT_ID, CLIENT_SECRET, "1234567890", now=FROZEN, clock_skew_s=30))
     assert claims["iat"] == int(FROZEN) - 30
     assert claims["exp"] == claims["iat"] + 2 * 3600
     assert claims["tokenExp"] == claims["exp"]
 
 
 def test_le_secret_n_apparait_jamais_dans_le_jeton():
-    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "5786297113", now=FROZEN)
+    token = zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "1234567890", now=FROZEN)
     assert CLIENT_SECRET not in token
     for segment in token.split("."):
         assert CLIENT_SECRET.encode() not in _b64url_decode(segment)
@@ -206,22 +206,22 @@ def test_le_secret_n_apparait_jamais_dans_le_jeton():
 def test_signature_reproductible_a_horloge_figee():
     """Sans tri des clés, l'ordre d'itération d'un dict deviendrait un détail dont
     dépendraient les jetons — donc les tests."""
-    args = (CLIENT_ID, CLIENT_SECRET, "5786297113")
+    args = (CLIENT_ID, CLIENT_SECRET, "1234567890")
     assert zoom_meeting_sdk_signature(*args, now=FROZEN) == \
         zoom_meeting_sdk_signature(*args, now=FROZEN)
 
 
 def test_role_hote_accepte():
     claims = _claims(zoom_meeting_sdk_signature(
-        CLIENT_ID, CLIENT_SECRET, "5786297113", role=ROLE_HOST, now=FROZEN))
+        CLIENT_ID, CLIENT_SECRET, "1234567890", role=ROLE_HOST, now=FROZEN))
     assert claims["role"] == 1
 
 
 @pytest.mark.parametrize("brut, attendu", [
-    ("578 629 7113", "5786297113"),      # forme affichée dans les invitations Zoom
-    ("578-629-7113", "5786297113"),
-    (5786297113, "5786297113"),          # entier
-    ("  5786297113  ", "5786297113"),
+    ("123 456 7890", "1234567890"),      # forme affichée dans les invitations Zoom
+    ("123-456-7890", "1234567890"),
+    (1234567890, "1234567890"),          # entier
+    ("  1234567890  ", "1234567890"),
 ])
 def test_numero_de_reunion_normalise(brut, attendu):
     assert normalize_meeting_number(brut) == attendu
@@ -238,7 +238,7 @@ def test_numero_de_reunion_illisible_refuse(brut):
 @pytest.mark.parametrize("duree", [1800, 2 * 3600, 48 * 3600])
 def test_durees_dans_les_bornes_zoom_acceptees(duree):
     claims = _claims(zoom_meeting_sdk_signature(
-        CLIENT_ID, CLIENT_SECRET, "5786297113", expires_in_s=duree, now=FROZEN))
+        CLIENT_ID, CLIENT_SECRET, "1234567890", expires_in_s=duree, now=FROZEN))
     assert claims["exp"] - claims["iat"] == duree
 
 
@@ -247,14 +247,14 @@ def test_duree_hors_bornes_refusee_localement(duree):
     """Zoom impose 30 min ≤ exp - iat ≤ 48 h. Échouer ici, avec un message explicite, vaut
     mieux qu'un refus opaque au moment de rejoindre la réunion."""
     with pytest.raises(ValueError, match="bornes"):
-        zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "5786297113",
+        zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "1234567890",
                                    expires_in_s=duree, now=FROZEN)
 
 
 @pytest.mark.parametrize("role", [-1, 2, 99])
 def test_role_invalide_refuse(role):
     with pytest.raises(ValueError, match="[Rr]ôle"):
-        zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "5786297113",
+        zoom_meeting_sdk_signature(CLIENT_ID, CLIENT_SECRET, "1234567890",
                                    role=role, now=FROZEN)
 
 
@@ -263,4 +263,4 @@ def test_identifiants_manquants_refuses(cid, secret):
     """Signer avec un secret vide produirait un jeton syntaxiquement valide et refusé par
     Zoom : mieux vaut le dire tout de suite."""
     with pytest.raises(ValueError, match="Client"):
-        zoom_meeting_sdk_signature(cid, secret, "5786297113", now=FROZEN)
+        zoom_meeting_sdk_signature(cid, secret, "1234567890", now=FROZEN)

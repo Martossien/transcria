@@ -76,7 +76,7 @@ def _b64url(raw: bytes) -> str:
 
 
 def normalize_meeting_number(meeting_number: str | int) -> str:
-    """« 578 629 7113 » → « 5786297113 ».
+    """« 123 456 7890 » → « 1234567890 ».
 
     Les identifiants Zoom se lisent et se transmettent par groupes de chiffres (c'est la forme
     affichée dans les invitations), alors que le JWT exige la forme compacte. Normaliser ici

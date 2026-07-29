@@ -27,8 +27,8 @@ retour** : l'orchestration n'a pas à les distinguer.
 transmet les identifiants et décide du mode réseau :
 
 ```bash
-./scripts/bot.sh zoom  "578 629 7113"
-./scripts/bot.sh zoom  "https://us05web.zoom.us/j/5786297113?pwd=…"   # le lien suffit
+./scripts/bot.sh zoom  "123 456 7890"
+./scripts/bot.sh zoom  "https://us05web.zoom.us/j/1234567890?pwd=…"   # le lien suffit
 ./scripts/bot.sh jitsi https://jitsi.exemple/ma-salle
 ```
 
@@ -247,11 +247,11 @@ docker build -f Dockerfile.zoom-sdk -t transcria-zoom-sdk:latest .
 docker run --rm \
   -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
   -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
-  transcria-zoom-sdk:latest --meeting "https://us05web.zoom.us/j/5786297113?pwd=…"
+  transcria-zoom-sdk:latest --meeting "https://us05web.zoom.us/j/1234567890?pwd=…"
 ```
 
 `--meeting` accepte aussi bien le **lien d'invitation** (le code secret en est extrait) que le
-numéro sous sa forme affichée (`578 629 7113`).
+numéro sous sa forme affichée (`123 456 7890`).
 
 Le **Client Secret se lit uniquement dans l'environnement** : il n'existe volontairement
 aucune option de ligne de commande pour lui, qui le rendrait lisible dans la liste des
@@ -315,7 +315,7 @@ docker run --rm --network host \
   --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
   -v "$PWD/scripts:/app/scripts:ro" -v /chemin/jeton.txt:/app/token.txt:ro \
   transcria-zoom-sdk:latest \
-  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "578 629 7113" --passcode ●●●●●● \
+  python3 -u /app/scripts/gate_bot_zoom_sdk.py --meeting "123 456 7890" --passcode ●●●●●● \
     --join-timeout-s 300 --seconds 120 \
     --transcribe http://127.0.0.1:7870 --token-file /app/token.txt --language fr
 ```

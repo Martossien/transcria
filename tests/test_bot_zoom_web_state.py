@@ -79,8 +79,8 @@ def test_libelles_insensibles_a_la_casse():
 
 def test_lien_invitation_devient_client_web():
     """Sans cette réécriture, la page propose l'application de bureau et n'expose aucun média."""
-    got = web_client_url("https://us05web.zoom.us/j/5786297113?pwd=abcDEF.1")
-    assert got == "https://app.zoom.us/wc/5786297113/join?pwd=abcDEF.1"
+    got = web_client_url("https://us05web.zoom.us/j/1234567890?pwd=abcDEF.1")
+    assert got == "https://app.zoom.us/wc/1234567890/join?pwd=abcDEF.1"
 
 
 def test_lien_sans_code_secret():

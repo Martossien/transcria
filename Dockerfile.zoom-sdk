@@ -38,7 +38,7 @@
 #   docker run --rm \
 #     -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
 #     -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
-#     transcria-zoom-sdk:latest --meeting "578 629 7113" --passcode ●●●●●●
+#     transcria-zoom-sdk:latest --meeting "123 456 7890" --passcode ●●●●●●
 
 FROM debian:bookworm-slim
 

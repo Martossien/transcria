@@ -7,7 +7,7 @@
 # ce qui manque, monte le jeton, décide du mode réseau et traduit les erreurs. Une seule
 # commande à retenir :
 #
-#   ./scripts/bot.sh zoom  "578 629 7113"
+#   ./scripts/bot.sh zoom  "123 456 7890"
 #   ./scripts/bot.sh jitsi https://jitsi.exemple/ma-salle
 #
 # Réglages : par variables d'environnement, ou dans un fichier de configuration
@@ -22,7 +22,7 @@
 #   ZOOM_PASSCODE        code secret, si absent du lien
 #
 # Tout argument supplémentaire est transmis TEL QUEL au bot :
-#   ./scripts/bot.sh zoom "578 629 7113" --name "Assistant" --max-duration-s 1800
+#   ./scripts/bot.sh zoom "123 456 7890" --name "Assistant" --max-duration-s 1800
 set -euo pipefail
 
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
