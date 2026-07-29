@@ -292,18 +292,33 @@ def facade_ingest():
                                 "status_url": f"/api/jobs/{record.job_id}/status"}), 200
             return jsonify({"status": "import_in_progress", "import_id": record.id}), 202
 
-    # Réunion à plusieurs intervenants : l'appelant peut demander un profil qui DIARISE
-    # (`mode=quality`), indispensable pour séparer les personnes d'une même salle.
+    # Profil : l'appelant reste maître (processing_profile_id / mode explicites). MAIS un
+    # dépôt qui déclare un `provider` est une RÉUNION : sans choix explicite, le défaut est
+    # le profil DIARISANT (`quality`) et non plus `fast` — un compte rendu de réunion qui ne
+    # sépare pas les personnes d'une même salle est un job raté (plan UI_REUNIONS §4 D6 ;
+    # avant ce défaut, TOUS les chemins de production des connecteurs ingéraient en fast).
+    explicit_profile = (request.form.get("processing_profile_id") or "").strip() or None
+    explicit_mode = (request.form.get("mode") or "").strip() or None
+    if provider and not explicit_profile and not explicit_mode:
+        explicit_mode = "quality"
     job_id, result, error = _create_and_queue_job(
         cfg, file, title,
-        processing_profile_id=(request.form.get("processing_profile_id") or "").strip() or None,
-        requested_mode=(request.form.get("mode") or "").strip() or None)
+        processing_profile_id=explicit_profile,
+        requested_mode=explicit_mode)
     if error is not None:
         if dedup_key:
             MeetingImportStore.release(dedup_key)  # rejeu propre après échec
         return error
     if dedup_key:
         MeetingImportStore.attach_job(dedup_key, result["job_id"])
+
+    # Provenance VISIBLE (plan UI_REUNIONS §4 D7) : avant, `MeetingImport` était écrit mais
+    # jamais relié au job côté UI — un job de réunion était indiscernable d'un upload.
+    if provider:
+        provenance = {"source": "meeting", "provider": provider}
+        if external_meeting_id:
+            provenance["external_meeting_id"] = external_meeting_id
+        JobStore.update_extra_data(result["job_id"], lambda extra: {**extra, **provenance})
 
     audit_log(
         action=AuditAction.JOB_ENQUEUE,

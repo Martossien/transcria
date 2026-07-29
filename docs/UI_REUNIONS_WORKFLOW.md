@@ -1,6 +1,9 @@
 # Réunions côté UTILISATEUR — plan directeur (UI, workflow locuteurs, planification, consolidation)
 
-> **Statut : PLAN — rien d'implémenté.** Rédigé le 2026-07-29 (v2, approfondie) après audit
+> **Statut : EN COURS.** Vague 0 (consolidation §9) **LIVRÉE le 2026-07-29** (5 pushes :
+> gardes Docker, purge zoom_web + câblage admission_reason, scripts/ rangé gates|bench + carte,
+> doctor/config_schema découpés par domaine derrière façade + goldens, helpers docx extraits).
+> Vague 1 en cours. Plan rédigé le 2026-07-29 (v2, approfondie) après audit
 > complet du dépôt : parcours wizard, chemin d'ingestion, déploiement des bots, modèle de
 > permissions, formulaire de config, gestion du temps. Ce plan prolonge
 > [`docs/TEMPS_REEL_REUNIONS.md`](TEMPS_REEL_REUNIONS.md) (il **réalise** ses items L1–L5) et

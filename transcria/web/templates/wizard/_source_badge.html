@@ -1,0 +1,15 @@
+{# Badge de PROVENANCE d'un job (plan UI_REUNIONS §4 D7) — attend `source_job` dans le
+   contexte. N'affiche RIEN pour un upload classique (pas d'UI morte, pas de bruit) :
+   seuls `meeting` (avec la plateforme du catalogue) et `mic` sont badgés. #}
+{% set _extra = source_job.get_extra_data() %}
+{% if _extra.get('source') == 'meeting' %}
+<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"
+      title="{{ _('Importé depuis une réunion en ligne') }}">
+  <i class="bi bi-camera-video"></i> {{ _extra.get('provider')|provider_label }}
+</span>
+{% elif _extra.get('source') == 'mic' %}
+<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+      title="{{ _('Enregistré au micro') }}">
+  <i class="bi bi-mic"></i> {{ _('Micro') }}
+</span>
+{% endif %}

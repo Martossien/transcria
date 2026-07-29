@@ -269,3 +269,57 @@ class TestIngest:
         r2 = client.post("/v1/audio/ingest", headers=headers, data=_wav(),
                          content_type="multipart/form-data")
         assert r2.status_code == 422  # re-tenté, pas coincé
+
+
+class TestIngestMeetingDefaults:
+    """Vague 1 du plan UI_REUNIONS (§8) — D6 : un dépôt qui déclare un `provider` est une
+    réunion → défaut DIARISANT (`quality`), plus jamais le `fast` implicite ; l'appelant
+    explicite reste maître. D7 : la provenance est écrite sur le job."""
+
+    def _wire_capture(self, monkeypatch):
+        captured: dict = {}
+        _wire_ingest(monkeypatch)
+
+        class _Prof:
+            id = "capture"
+
+        def _resolve(pid, mode):
+            captured["profile_id"], captured["mode"] = pid, mode
+            return _Prof(), mode
+        monkeypatch.setattr(facade_api.profiles, "resolve_request", _resolve)
+        monkeypatch.setattr(
+            facade_api.JobStore, "update_extra_data",
+            staticmethod(lambda job_id, updater: captured.setdefault("extra", updater({}))))
+        return captured
+
+    def test_provider_sans_choix_bascule_en_diarisant(self, client, facade_on, op_token, monkeypatch):
+        captured = self._wire_capture(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data=_wav() | {"provider": "zoom-sdk"}, content_type="multipart/form-data")
+        assert r.status_code == 202
+        assert captured["mode"] == "quality"
+
+    def test_choix_explicite_de_l_appelant_respecte(self, client, facade_on, op_token, monkeypatch):
+        captured = self._wire_capture(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data=_wav() | {"provider": "zoom-sdk", "mode": "fast"},
+                        content_type="multipart/form-data")
+        assert r.status_code == 202
+        assert captured["mode"] == "fast"
+
+    def test_sans_provider_le_defaut_upload_ne_change_pas(self, client, facade_on, op_token, monkeypatch):
+        captured = self._wire_capture(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data=_wav(), content_type="multipart/form-data")
+        assert r.status_code == 202
+        assert captured["mode"] == "fast"          # `requested_mode or "fast"` en aval
+        assert "extra" not in captured             # aucune provenance sans provider
+
+    def test_provenance_ecrite_sur_le_job(self, client, facade_on, op_token, monkeypatch):
+        captured = self._wire_capture(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data=_wav() | {"provider": "zoom-sdk", "external_meeting_id": "occ-7"},
+                        content_type="multipart/form-data")
+        assert r.status_code == 202
+        assert captured["extra"] == {"source": "meeting", "provider": "zoom-sdk",
+                                     "external_meeting_id": "occ-7"}

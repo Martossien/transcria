@@ -21,6 +21,7 @@
         {% endif %}
         <div class="d-flex justify-content-between align-items-center">
           <span class="badge {{ job.state|state_badge }}">{{ job.state|state_label }}</span>
+          {% with source_job = job %}{% include 'wizard/_source_badge.html' %}{% endwith %}
           <small class="text-muted">{{ job.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
         </div>
         <div class="mt-2 d-flex gap-1 flex-wrap">

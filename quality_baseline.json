@@ -182,7 +182,7 @@
   "transcria.web.refine_api": 10,
   "transcria.web.refine_shared": 4,
   "transcria.web.request_helpers": 3,
-  "transcria.web.routes": 6,
+  "transcria.web.routes": 7,
   "transcria.web.ui_labels": 1,
   "transcria.web.wizard_api": 32,
   "transcria.workflow": 3,

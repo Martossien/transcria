@@ -28,6 +28,7 @@ from transcria.config import get_config
 from transcria.jobs import artifact_store
 from transcria.jobs.store import JobStore
 from transcria.web.blueprint import web_bp
+from transcria.web.connector_catalog import load_catalog
 from transcria.web.ui_labels import state_badge, state_label
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,20 @@ def _state_label_filter(state):
 @web_bp.app_template_filter("state_badge")
 def _state_badge_filter(state):
     return state_badge(state)
+
+
+@web_bp.app_template_filter("provider_label")
+def _provider_label_filter(provider_id):
+    """Nom d'affichage d'une plateforme de réunion depuis le CATALOGUE (jamais en dur ici) :
+    le badge source d'un job importé (plan UI_REUNIONS §4 D7). Id inconnu → id tel quel,
+    jamais d'échec de rendu pour une provenance exotique."""
+    try:
+        for connector in load_catalog():
+            if connector.id == provider_id:
+                return connector.name
+    except Exception:  # noqa: BLE001 — un catalogue illisible ne casse pas la liste des jobs
+        pass
+    return str(provider_id or "")
 
 
 @web_bp.app_context_processor

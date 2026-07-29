@@ -257,3 +257,37 @@ class TestSystemPage:
             app.config["TRANSCRIA_ROLE"] = previous
         assert "frontale sans GPU" in html
         assert "mode frontale (web)" in html
+
+
+class TestSourceBadge:
+    """Vague 1 du plan UI_REUNIONS (§4 D7) — le badge de provenance : un job importé d'une
+    réunion est discernable d'un upload, partout où le job s'affiche."""
+
+    def test_meeting_job_shows_platform_badge_from_catalog(self, app, admin_client, owner_id):
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Réunion importée")
+            JobStore.update_extra_data(job.id, lambda e: {**e, "source": "meeting",
+                                                          "provider": "zoom-sdk"})
+            job_id = job.id
+        home = admin_client.get("/").data.decode()
+        assert "Zoom" in home                     # nom du CATALOGUE, pas l'id technique
+        assert "zoom-sdk" not in home
+        wizard = admin_client.get(f"/jobs/{job_id}").data.decode()
+        assert "Zoom" in wizard
+
+    def test_mic_job_shows_mic_badge(self, app, admin_client, owner_id):
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Dictée")
+            JobStore.update_extra_data(job.id, lambda e: {**e, "source": "mic"})
+        html = admin_client.get("/").data.decode()
+        assert "bi-mic" in html
+
+    def test_plain_upload_has_no_source_badge(self, app, admin_client, owner_id):
+        # Assertion locale au job (la page d'accueil liste AUSSI les jobs des tests voisins).
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Upload nu")
+            job_id = job.id
+        html = admin_client.get(f"/jobs/{job_id}").data.decode()
+        # le marqueur du badge est son infobulle — les icônes bi-* existent ailleurs dans le wizard
+        assert "Importé depuis une réunion en ligne" not in html
+        assert "Enregistré au micro" not in html

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 17:40+0000\n"
+"POT-Creation-Date: 2026-07-29 15:27+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -909,9 +909,9 @@ msgid "Participants & locuteurs"
 msgstr "Participants & speakers"
 
 #: transcria/i18n/js_catalog.py:180 transcria/notifications/job_facts.py:76
-#: transcria/web/templates/job_result.html:20
-#: transcria/web/templates/job_result.html:37
-#: transcria/web/templates/job_result.html:150
+#: transcria/web/templates/job_result.html:21
+#: transcria/web/templates/job_result.html:38
+#: transcria/web/templates/job_result.html:151
 msgid "Points à vérifier"
 msgstr "Points to review"
 
@@ -988,7 +988,7 @@ msgstr "Always present"
 msgid "TranscrIA · Réunion d'exemple · Page 1/4"
 msgstr "TranscrIA · Sample meeting · Page 1/4"
 
-#: transcria/i18n/js_catalog.py:199 transcria/web/templates/job_result.html:146
+#: transcria/i18n/js_catalog.py:199 transcria/web/templates/job_result.html:147
 msgid "Transcription"
 msgstr "Transcript"
 
@@ -1310,7 +1310,7 @@ msgid "Traité en"
 msgstr "Processed in"
 
 #: transcria/notifications/job_facts.py:73
-#: transcria/web/templates/job_result.html:10
+#: transcria/web/templates/job_result.html:11
 msgid "Score qualité"
 msgstr "Quality score"
 
@@ -1522,118 +1522,118 @@ msgstr "Generation failed: %(e)s"
 msgid "Voix désactivée."
 msgstr "Voice disabled."
 
-#: transcria/web/admin_routes.py:119 transcria/web/admin_routes.py:178
+#: transcria/web/admin_routes.py:120 transcria/web/admin_routes.py:179
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s validation error(s). Save cancelled."
 
-#: transcria/web/admin_routes.py:123
+#: transcria/web/admin_routes.py:124
 msgid "Réglages sauvegardés."
 msgstr "Settings saved."
 
-#: transcria/web/admin_routes.py:128
+#: transcria/web/admin_routes.py:129
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Identity backend changed: restart the service to apply it (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:154
+#: transcria/web/admin_routes.py:155
 msgid "Aucun prompt modifié."
 msgstr "No prompt modified."
 
-#: transcria/web/admin_routes.py:161
+#: transcria/web/admin_routes.py:162
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Invalid YAML: %(e)s"
 
-#: transcria/web/admin_routes.py:165
+#: transcria/web/admin_routes.py:166
 msgid "La configuration doit être un objet YAML racine."
 msgstr "The configuration must be a root YAML object."
 
-#: transcria/web/admin_routes.py:181
+#: transcria/web/admin_routes.py:182
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration saved to %(p)s."
 
-#: transcria/web/admin_routes.py:230
+#: transcria/web/admin_routes.py:231
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Scheduled backup enabled (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:235
+#: transcria/web/admin_routes.py:236
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Scheduled backup disabled."
 
-#: transcria/web/admin_routes.py:237
+#: transcria/web/admin_routes.py:238
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Scheduling failed: %(e)s"
 
-#: transcria/web/admin_routes.py:251
+#: transcria/web/admin_routes.py:252
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation required: restoring replaces the data and restarts the service."
 
-#: transcria/web/admin_routes.py:254
+#: transcria/web/admin_routes.py:255
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "The re-entered name does not match the archive — restore cancelled."
 
-#: transcria/web/admin_routes.py:262
+#: transcria/web/admin_routes.py:263
 msgid "Archive invalide — restauration refusée : "
 msgstr "Invalid archive — restore denied: "
 
-#: transcria/web/admin_routes.py:274
+#: transcria/web/admin_routes.py:275
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restore started. The service will stop, restore, then restart — sign back in within a minute or so."
 
-#: transcria/web/admin_routes.py:277
+#: transcria/web/admin_routes.py:278
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:329
+#: transcria/web/admin_routes.py:328
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:334
+#: transcria/web/admin_routes.py:333
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:337
+#: transcria/web/admin_routes.py:336
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:351
+#: transcria/web/admin_routes.py:350
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:360
+#: transcria/web/admin_routes.py:359
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:363
+#: transcria/web/admin_routes.py:362
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:365
+#: transcria/web/admin_routes.py:364
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:388
+#: transcria/web/admin_routes.py:387
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:422
+#: transcria/web/admin_routes.py:421
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:427
+#: transcria/web/admin_routes.py:426
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:433
+#: transcria/web/admin_routes.py:432
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2678,52 +2678,52 @@ msgstr "Participant bot"
 msgid "Transport natif"
 msgstr "Native transport"
 
-#: transcria/web/templates/admin_connectors.html:42
+#: transcria/web/templates/admin_connectors.html:43
 msgid "File interrogée"
 msgstr "Polled queue"
 
-#: transcria/web/templates/admin_connectors.html:43
+#: transcria/web/templates/admin_connectors.html:45
 msgid "Webhook plateforme"
 msgstr "Platform webhook"
 
-#: transcria/web/templates/admin_connectors.html:47
+#: transcria/web/templates/admin_connectors.html:49
 msgid "Ouverture de pare-feu requise"
 msgstr "Firewall opening required"
 
-#: transcria/web/templates/admin_connectors.html:51
+#: transcria/web/templates/admin_connectors.html:53
 msgid "Sortant uniquement"
 msgstr "Outbound only"
 
-#: transcria/web/templates/admin_connectors.html:58
+#: transcria/web/templates/admin_connectors.html:60
 msgid ""
 "Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie\n"
 "          plateforme. À éprouver avant tout usage sérieux."
 msgstr "The code exists and passes the tests, but has never been run against the real platform. To be proven before any serious use."
 
-#: transcria/web/templates/admin_connectors.html:67
+#: transcria/web/templates/admin_connectors.html:69
 msgid "Tous les renseignements sont fournis"
 msgstr "All details provided"
 
-#: transcria/web/templates/admin_connectors.html:72
+#: transcria/web/templates/admin_connectors.html:74
 #, fuzzy
 msgid "Manque :"
 msgstr "Disk:"
 
-#: transcria/web/templates/admin_connectors.html:81
+#: transcria/web/templates/admin_connectors.html:83
 msgid "Secret : ne jamais commiter"
 msgstr "Secret: never commit"
 
-#: transcria/web/templates/admin_connectors.html:88
+#: transcria/web/templates/admin_connectors.html:90
 #, fuzzy
 msgid "Aucun identifiant nécessaire"
 msgstr "Identifier"
 
-#: transcria/web/templates/admin_connectors.html:94
+#: transcria/web/templates/admin_connectors.html:96
 #, fuzzy
 msgid "Marche à suivre"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_connectors.html:109
+#: transcria/web/templates/admin_connectors.html:111
 #, fuzzy
 msgid "Documentation"
 msgstr "Administration"
@@ -3048,7 +3048,7 @@ msgstr "Job"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:121
+#: transcria/web/templates/job_wizard.html:122
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
@@ -3309,7 +3309,7 @@ msgstr "Add an entry"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:91
-#: transcria/web/templates/job_wizard.html:130
+#: transcria/web/templates/job_wizard.html:131
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Add"
@@ -3359,7 +3359,7 @@ msgid "Supprimer cette entrée ?"
 msgstr "Delete this entry?"
 
 #: transcria/web/templates/central_lexicon_detail.html:220
-#: transcria/web/templates/index.html:36
+#: transcria/web/templates/index.html:37
 #: transcria/web/templates/schedule.html:223
 #: transcria/web/templates/srt_editor.html:104
 msgid "Supprimer"
@@ -3404,7 +3404,7 @@ msgid "dernier %(d)s"
 msgstr "last %(d)s"
 
 #: transcria/web/templates/central_lexicons.html:61
-#: transcria/web/templates/index.html:27 transcria/web/templates/voices.html:45
+#: transcria/web/templates/index.html:28 transcria/web/templates/voices.html:45
 msgid "Ouvrir"
 msgstr "Open"
 
@@ -3634,7 +3634,7 @@ msgid "Aucun groupe accessible."
 msgstr "No accessible group."
 
 #: transcria/web/templates/index.html:2
-#: transcria/web/templates/job_result.html:161
+#: transcria/web/templates/job_result.html:162
 msgid "Accueil"
 msgstr "Home"
 
@@ -3651,24 +3651,24 @@ msgstr "New job"
 msgid "Partagé par %(name)s"
 msgstr "Shared by %(name)s"
 
-#: transcria/web/templates/index.html:29
+#: transcria/web/templates/index.html:30
 #: transcria/web/templates/srt_editor.html:10
 msgid "Résultats"
 msgstr "Results"
 
-#: transcria/web/templates/index.html:31
+#: transcria/web/templates/index.html:32
 msgid "Package"
 msgstr "Package"
 
-#: transcria/web/templates/index.html:35
+#: transcria/web/templates/index.html:36
 msgid "Supprimer ce traitement ? Cette action est irréversible."
 msgstr "Delete this job? This action is irreversible."
 
-#: transcria/web/templates/index.html:48
+#: transcria/web/templates/index.html:49
 msgid "Aucun traitement pour le moment."
 msgstr "No jobs yet."
 
-#: transcria/web/templates/index.html:49
+#: transcria/web/templates/index.html:50
 msgid "Créez votre premier traitement pour transcrire une réunion."
 msgstr "Create your first job to transcribe a meeting."
 
@@ -3676,105 +3676,105 @@ msgstr "Create your first job to transcribe a meeting."
 msgid "Résultat"
 msgstr "Result"
 
-#: transcria/web/templates/job_result.html:28
+#: transcria/web/templates/job_result.html:29
 msgid "Contrôles"
 msgstr "Checks"
 
-#: transcria/web/templates/job_result.html:52
+#: transcria/web/templates/job_result.html:53
 msgid "Le verbatim a été édité après la génération de la synthèse : le résumé du rapport Word peut être en retard sur vos corrections."
 msgstr "The transcript was edited after the summary was generated: the Word report summary may lag behind your corrections."
 
-#: transcria/web/templates/job_result.html:53
+#: transcria/web/templates/job_result.html:54
 msgid "Mettre à jour la synthèse depuis l'éditeur"
 msgstr "Update the summary from the editor"
 
-#: transcria/web/templates/job_result.html:64
+#: transcria/web/templates/job_result.html:65
 #: transcria/web/templates/wizard/_step_export.html:24
 msgid "Rapport Word (.docx)"
 msgstr "Word report (.docx)"
 
-#: transcria/web/templates/job_result.html:68
+#: transcria/web/templates/job_result.html:69
 msgid "Document Word généré à la demande depuis la transcription (sans synthèse — ce profil ne fait pas tourner la LLM)"
 msgstr "Word document generated on demand from the transcript (no summary — this profile does not run the LLM)"
 
-#: transcria/web/templates/job_result.html:69
+#: transcria/web/templates/job_result.html:70
 msgid "Word verbatim (.docx)"
 msgstr "Verbatim Word (.docx)"
 
-#: transcria/web/templates/job_result.html:73
+#: transcria/web/templates/job_result.html:74
 #: transcria/web/templates/wizard/_step_export.html:25
 msgid "Télécharger le SRT"
 msgstr "Download SRT"
 
-#: transcria/web/templates/job_result.html:77
+#: transcria/web/templates/job_result.html:78
 #: transcria/web/templates/wizard/_step_export.html:26
 msgid "Package complet"
 msgstr "Full package"
 
-#: transcria/web/templates/job_result.html:81
+#: transcria/web/templates/job_result.html:82
 #: transcria/web/templates/wizard/_step_export.html:27
 msgid "Télécharger l'audio"
 msgstr "Download audio"
 
-#: transcria/web/templates/job_result.html:84
+#: transcria/web/templates/job_result.html:85
 #: transcria/web/templates/srt_editor.html:2
 #: transcria/web/templates/wizard/_step_export.html:28
 msgid "Éditer la transcription"
 msgstr "Edit transcript"
 
-#: transcria/web/templates/job_result.html:95
+#: transcria/web/templates/job_result.html:96
 msgid "Aperçu du SRT"
 msgstr "SRT preview"
 
-#: transcria/web/templates/job_result.html:103
+#: transcria/web/templates/job_result.html:104
 msgid "Affiner les livrables avec l'assistant"
 msgstr "Refine deliverables with the assistant"
 
-#: transcria/web/templates/job_result.html:106
+#: transcria/web/templates/job_result.html:107
 msgid "L'assistant travaille (30 s à 2 min)…"
 msgstr "The assistant is working (30 s to 2 min)…"
 
-#: transcria/web/templates/job_result.html:111
+#: transcria/web/templates/job_result.html:112
 msgid "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
 msgstr "Discuss the result (question, check, rewording request), then <strong>apply</strong> when the proposal suits you: the documents are regenerated and each application creates a <strong>restorable version</strong>."
 
-#: transcria/web/templates/job_result.html:117
+#: transcria/web/templates/job_result.html:118
 msgid "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
 msgstr "E.g.: \"Shorten the summary and highlight the decisions\" — or ask a question about the content"
 
-#: transcria/web/templates/job_result.html:121
+#: transcria/web/templates/job_result.html:122
 msgid "Discuter"
 msgstr "Discuss"
 
-#: transcria/web/templates/job_result.html:124
+#: transcria/web/templates/job_result.html:125
 msgid "Appliquer les modifications"
 msgstr "Apply changes"
 
-#: transcria/web/templates/job_result.html:129
+#: transcria/web/templates/job_result.html:130
 msgid "Restaurer"
 msgstr "Restore"
 
-#: transcria/web/templates/job_result.html:134
+#: transcria/web/templates/job_result.html:135
 msgid "Options du document (sans assistant — immédiat)"
 msgstr "Document options (no assistant — instant)"
 
-#: transcria/web/templates/job_result.html:137
+#: transcria/web/templates/job_result.html:138
 msgid "Thème du rapport"
 msgstr "Report theme"
 
-#: transcria/web/templates/job_result.html:138
+#: transcria/web/templates/job_result.html:139
 msgid "(selon le type)"
 msgstr "(by type)"
 
-#: transcria/web/templates/job_result.html:142
+#: transcria/web/templates/job_result.html:143
 msgid "Participants"
 msgstr "Participants"
 
-#: transcria/web/templates/job_result.html:152
+#: transcria/web/templates/job_result.html:153
 msgid "Appliquer les options"
 msgstr "Apply options"
 
-#: transcria/web/templates/job_result.html:160
+#: transcria/web/templates/job_result.html:161
 msgid "Retour au traitement"
 msgstr "Back to job"
 
@@ -3782,48 +3782,48 @@ msgstr "Back to job"
 msgid "Traitement"
 msgstr "Job"
 
-#: transcria/web/templates/job_wizard.html:17
+#: transcria/web/templates/job_wizard.html:18
 #, python-format
 msgid "Créé le %(date)s"
 msgstr "Created on"
 
-#: transcria/web/templates/job_wizard.html:27
+#: transcria/web/templates/job_wizard.html:28
 msgid "Le traitement a échoué."
 msgstr "Processing failed."
 
-#: transcria/web/templates/job_wizard.html:31
+#: transcria/web/templates/job_wizard.html:32
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 msgstr "Your inputs (context, participants, glossary) are kept — you can restart processing."
 
-#: transcria/web/templates/job_wizard.html:34
+#: transcria/web/templates/job_wizard.html:35
 msgid "Relancer le traitement"
 msgstr "Restart processing"
 
-#: transcria/web/templates/job_wizard.html:103
+#: transcria/web/templates/job_wizard.html:104
 msgid "Ajouter au lexique central"
 msgstr "Add to central glossary"
 
-#: transcria/web/templates/job_wizard.html:104
+#: transcria/web/templates/job_wizard.html:105
 msgid "Fermer"
 msgstr "Close"
 
-#: transcria/web/templates/job_wizard.html:107
+#: transcria/web/templates/job_wizard.html:108
 msgid "Forme :"
 msgstr "Form:"
 
-#: transcria/web/templates/job_wizard.html:109
+#: transcria/web/templates/job_wizard.html:110
 msgid "Lexique existant"
 msgstr "Existing glossary"
 
-#: transcria/web/templates/job_wizard.html:114
+#: transcria/web/templates/job_wizard.html:115
 msgid "— Nouveau lexique… —"
 msgstr "— New glossary… —"
 
-#: transcria/web/templates/job_wizard.html:118
+#: transcria/web/templates/job_wizard.html:119
 msgid "Nom du nouveau lexique"
 msgstr "New glossary name"
 
-#: transcria/web/templates/job_wizard.html:119
+#: transcria/web/templates/job_wizard.html:120
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "E.g.: Cheese-making vocabulary"
 
@@ -4741,6 +4741,19 @@ msgstr "none"
 #: transcria/web/templates/voices.html:48
 msgid "Aucune voix enregistrée."
 msgstr "No enrolled voice."
+
+#: transcria/web/templates/wizard/_source_badge.html:7
+msgid "Importé depuis une réunion en ligne"
+msgstr "Imported from an online meeting"
+
+#: transcria/web/templates/wizard/_source_badge.html:12
+#, fuzzy
+msgid "Enregistré au micro"
+msgstr "Record from microphone"
+
+#: transcria/web/templates/wizard/_source_badge.html:13
+msgid "Micro"
+msgstr "Microphone"
 
 #: transcria/web/templates/wizard/_step_analysis.html:6
 msgid "Analyse audio"
