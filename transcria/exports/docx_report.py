@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -10,8 +9,6 @@ from typing import Any
 from docx import Document
 from docx.document import Document as DocumentT  # type pour annotations (docx.Document est une fabrique)
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
 from transcria.context.meeting_type_catalog import (
@@ -20,401 +17,52 @@ from transcria.context.meeting_type_catalog import (
     localized_field_labels,
     localized_type_display,
     quorum_types,
-    theme_specs,
+)
+from transcria.exports.docx_srt import (  # noqa: F401 — façade
+    _parse_srt,
+    _srt_duration_seconds,
+)
+from transcria.exports.docx_style import (  # noqa: F401 — façade
+    _BLUE_DARK,
+    _BLUE_LIGHT,
+    _BLUE_MID,
+    _DOCX_LABELS,
+    _GREEN,
+    _GREY_DARK,
+    _GREY_LIGHT,
+    _LANG_LABELS,
+    _ORANGE,
+    _RED,
+    _THEME_DEFAULT,
+    _THEMES,
+    _WHITE,
+    _YELLOW_BG,
+    _add_markdown_runs,
+    _add_num_pages_field,
+    _add_page_number_field,
+    _cell_bg,
+    _cell_margins,
+    _docx_labels,
+    _DocxTheme,
+    _fmt_date,
+    _fmt_duration,
+    _fmt_time,
+    _get_theme,
+    _para_bottom_border,
+    _split_markdown_bold,
+    _table_full_width,
+    _table_no_borders,
+    _table_thin_borders,
+    _theme_from_definition,
 )
 from transcria.gpu.opencode_runner import summary_markers
 from transcria.jobs.filesystem import JobFilesystem
 
 # ── Palette ──────────────────────────────────────────────────────────────────
-_BLUE_DARK  = RGBColor(0x1F, 0x38, 0x64)
-_BLUE_MID   = RGBColor(0x2E, 0x74, 0xB5)
-_BLUE_LIGHT = RGBColor(0xD6, 0xE4, 0xF0)
-_GREY_DARK  = RGBColor(0x59, 0x59, 0x59)
-_GREY_LIGHT = RGBColor(0xF5, 0xF5, 0xF5)
-_RED        = RGBColor(0xC0, 0x00, 0x00)
-_GREEN      = RGBColor(0x37, 0x86, 0x47)
-_ORANGE     = RGBColor(0xED, 0x7D, 0x31)
-_YELLOW_BG  = RGBColor(0xFF, 0xFF, 0xCC)
-_WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
-
-_LANG_LABELS: dict[str, str] = {
-    "fr": "Français", "en": "English", "de": "Deutsch",
-    "it": "Italiano", "es": "Español",
-}
-
-# Libellés de chrome du DOCX par langue (Axe B). Les entrées « fr » reproduisent À
-# L'IDENTIQUE les libellés historiques (non-régression). Une clé absente en « en »
-# retombe sur « fr » via _docx_labels().
-_DOCX_LABELS: dict[str, dict[str, str]] = {
-    "fr": {
-        "banner": "COMPTE-RENDU DE TRANSCRIPTION",
-        "generated_by": "Généré par TranscrIA",
-        "date": "Date", "duration": "Durée", "type": "Type",
-        "service": "Service", "language": "Langue", "topic": "Sujet",
-        "objective": "Objectif", "notes": "Notes / Ordre du jour",
-        "sec_context": "Contexte de la réunion", "synthese": "Synthèse",
-        "summary_stale_note": "⚠ Synthèse antérieure à la dernière édition du verbatim — "
-                              "à resynchroniser depuis l'éditeur pour refléter les corrections.",
-        "sec_specific": "Informations spécifiques",
-        "sec_participants": "Participants & Locuteurs",
-        "sec_transcription": "Transcription", "sec_review": "Points à vérifier",
-        "no_participants": "Aucun participant enregistré.",
-        "no_transcription": "Aucune transcription disponible.",
-        "next_meeting": "Prochaine réunion : ",
-        "sd_agenda": "Ordre du jour", "sd_decisions": "Décisions prises",
-        "sd_votes": "Votes", "sd_resolutions": "Résolutions adoptées",
-        "sd_actions": "Actions à réaliser", "sd_blockers": "Points bloquants",
-        "sd_deferred": "Points reportés",
-        "th_name": "Nom", "th_function": "Fonction", "th_service": "Service",
-        "th_role": "Rôle", "th_speaking_time": "Tps de parole",
-        "th_turns": "Interventions", "quality": "Qualité",
-        # Badges de couverture
-        "badge_crise": "⚠  SITUATION DE CRISE  ⚠",
-        "badge_confidentiel": "▪  DOCUMENT CONFIDENTIEL  ▪",
-        # Points à vérifier — libellés
-        "q_coverage": "⚠  Couverture audio", "q_relisten": "🔍  Zone à réécouter",
-        "q_term_validate": "✎  Terme à valider", "q_spelling": "✎  Orthographe à vérifier",
-        "q_altered_name": "⚠  Nom de locuteur altéré",
-        "q_missing_term": "✎  Terme du lexique non appliqué",
-        "q_unmapped": "⚠  Locuteurs non identifiés",
-        "q_foreign": "🔍  Segments en langue étrangère",
-        "q_non_latin": "🔍  Caractères non latins", "q_anomaly": "anomalie",
-        # Points à vérifier — descriptions (templates .format)
-        "d_coverage": "{pct}% — possible perte de transcription",
-        "d_term_validate": "{term} (variante : {variant})",
-        "d_spelling": "{form} proche de {term}",
-        "d_altered_name": "{sid} : « {found} » au lieu de « {expected} »",
-        "d_missing_term": "« {term} » introuvable dans la transcription corrigée",
-        "d_unmapped": "{count} segment(s) sans participant associé",
-        "d_foreign": "{count} segment(s) marqué(s) — hallucination ASR ou zone bruitée probable",
-        "d_non_latin": "{count} segment(s) — zones à réécouter",
-        "d_generic_count": "{count} élément(s) concerné(s)",
-        "d_generic_details": "détails dans quality_report.md",
-        # _CHECK_LABELS génériques
-        "chk_empty_segments": "Segments vides", "chk_short_segments": "Segments très courts",
-        "chk_long_segments": "Segments très longs", "chk_overlaps": "Chevauchements de parole",
-        "chk_audio_preflight_flags": "Alertes de qualité audio",
-        "chk_suspect_no_speech_prob": "Segments à faible probabilité de parole",
-        "chk_suspicious_short_segments": "Segments courts suspects",
-        "quorum": "Quorum", "quorum_reached": "✓ Quorum atteint",
-        "quorum_not_reached": "✗ Quorum non atteint", "odj_prefix": "ODJ",
-    },
-    "en": {
-        "banner": "TRANSCRIPTION REPORT",
-        "generated_by": "Generated by TranscrIA",
-        "date": "Date", "duration": "Duration", "type": "Type",
-        "service": "Department", "language": "Language", "topic": "Topic",
-        "objective": "Objective", "notes": "Notes / Agenda",
-        "sec_context": "Meeting context", "synthese": "Summary",
-        "summary_stale_note": "⚠ Summary predates the latest transcript edits — "
-                              "resynchronize from the editor to reflect the corrections.",
-        "sec_specific": "Specific information",
-        "sec_participants": "Participants & Speakers",
-        "sec_transcription": "Transcription", "sec_review": "Points to review",
-        "no_participants": "No participant recorded.",
-        "no_transcription": "No transcription available.",
-        "next_meeting": "Next meeting: ",
-        "sd_agenda": "Agenda", "sd_decisions": "Decisions made",
-        "sd_votes": "Votes", "sd_resolutions": "Adopted resolutions",
-        "sd_actions": "Action items", "sd_blockers": "Blocking points",
-        "sd_deferred": "Deferred items",
-        "th_name": "Name", "th_function": "Function", "th_service": "Department",
-        "th_role": "Role", "th_speaking_time": "Speaking time",
-        "th_turns": "Turns", "quality": "Quality",
-        "badge_crise": "⚠  CRISIS SITUATION  ⚠",
-        "badge_confidentiel": "▪  CONFIDENTIAL DOCUMENT  ▪",
-        "q_coverage": "⚠  Audio coverage", "q_relisten": "🔍  Zone to re-listen",
-        "q_term_validate": "✎  Term to validate", "q_spelling": "✎  Spelling to check",
-        "q_altered_name": "⚠  Altered speaker name",
-        "q_missing_term": "✎  Glossary term not applied",
-        "q_unmapped": "⚠  Unidentified speakers",
-        "q_foreign": "🔍  Foreign-language segments",
-        "q_non_latin": "🔍  Non-Latin characters", "q_anomaly": "anomaly",
-        "d_coverage": "{pct}% — possible transcription loss",
-        "d_term_validate": "{term} (variant: {variant})",
-        "d_spelling": "{form} close to {term}",
-        "d_altered_name": "{sid}: “{found}” instead of “{expected}”",
-        "d_missing_term": "“{term}” not found in the corrected transcription",
-        "d_unmapped": "{count} segment(s) with no associated participant",
-        "d_foreign": "{count} segment(s) flagged — probable ASR hallucination or noisy zone",
-        "d_non_latin": "{count} segment(s) — zones to re-listen",
-        "d_generic_count": "{count} element(s) concerned",
-        "d_generic_details": "details in quality_report.md",
-        "chk_empty_segments": "Empty segments", "chk_short_segments": "Very short segments",
-        "chk_long_segments": "Very long segments", "chk_overlaps": "Speech overlaps",
-        "chk_audio_preflight_flags": "Audio quality alerts",
-        "chk_suspect_no_speech_prob": "Low speech-probability segments",
-        "chk_suspicious_short_segments": "Suspicious short segments",
-        "quorum": "Quorum", "quorum_reached": "✓ Quorum reached",
-        "quorum_not_reached": "✗ Quorum not reached", "odj_prefix": "Agenda",
-    },
-}
-
-
-def _docx_labels(language: str | None) -> dict[str, str]:
-    """Libellés DOCX pour ``language`` (repli fr, fusion pour les clés manquantes)."""
-    base = dict(_DOCX_LABELS["fr"])
-    base.update(_DOCX_LABELS.get((language or "fr"), {}))
-    return base
-_MONTHS_FR = {
-    1: "janvier", 2: "février", 3: "mars", 4: "avril",
-    5: "mai", 6: "juin", 7: "juillet", 8: "août",
-    9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre",
-}
-
-# ── Helpers XML ──────────────────────────────────────────────────────────────
-
-def _hex(c: RGBColor) -> str:
-    return f"{c[0]:02X}{c[1]:02X}{c[2]:02X}"
-
-
-def _cell_bg(cell: Any, color: RGBColor) -> None:
-    tcPr = cell._tc.get_or_add_tcPr()
-    for old in tcPr.findall(qn("w:shd")):
-        tcPr.remove(old)
-    shd = OxmlElement("w:shd")
-    shd.set(qn("w:val"), "clear")
-    shd.set(qn("w:color"), "auto")
-    shd.set(qn("w:fill"), _hex(color))
-    tcPr.append(shd)
-
-
-def _cell_margins(cell: Any, top: int = 60, bottom: int = 60, left: int = 120, right: int = 120) -> None:
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcMar = OxmlElement("w:tcMar")
-    for side, val in (("top", top), ("left", left), ("bottom", bottom), ("right", right)):
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:w"), str(val))
-        el.set(qn("w:type"), "dxa")
-        tcMar.append(el)
-    tcPr.append(tcMar)
-
-
-def _table_full_width(table: Any) -> None:
-    tbl = table._tbl
-    tblPr = tbl.find(qn("w:tblPr"))
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
-    tblW = OxmlElement("w:tblW")
-    tblW.set(qn("w:w"), "5000")
-    tblW.set(qn("w:type"), "pct")
-    tblPr.append(tblW)
-
-
-def _table_no_borders(table: Any) -> None:
-    tbl = table._tbl
-    tblPr = tbl.find(qn("w:tblPr"))
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
-    borders = OxmlElement("w:tblBorders")
-    for name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{name}")
-        el.set(qn("w:val"), "none")
-        borders.append(el)
-    tblPr.append(borders)
-
-
-def _table_thin_borders(table: Any) -> None:
-    tbl = table._tbl
-    tblPr = tbl.find(qn("w:tblPr"))
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
-    borders = OxmlElement("w:tblBorders")
-    for name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{name}")
-        el.set(qn("w:val"), "single")
-        el.set(qn("w:sz"), "4")
-        el.set(qn("w:space"), "0")
-        el.set(qn("w:color"), "BFBFBF")
-        borders.append(el)
-    tblPr.append(borders)
-
-
-def _para_bottom_border(para: Any, color: RGBColor, sz: int = 6) -> None:
-    pPr = para._p.get_or_add_pPr()
-    pBdr = OxmlElement("w:pBdr")
-    b = OxmlElement("w:bottom")
-    b.set(qn("w:val"), "single")
-    b.set(qn("w:sz"), str(sz))
-    b.set(qn("w:space"), "1")
-    b.set(qn("w:color"), _hex(color))
-    pBdr.append(b)
-    pPr.append(pBdr)
-
-
-def _add_page_number_field(run: Any) -> None:
-    fldChar1 = OxmlElement("w:fldChar")
-    fldChar1.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.text = "PAGE"
-    fldChar2 = OxmlElement("w:fldChar")
-    fldChar2.set(qn("w:fldCharType"), "end")
-    run._r.append(fldChar1)
-    run._r.append(instr)
-    run._r.append(fldChar2)
-
-
-def _add_num_pages_field(run: Any) -> None:
-    fldChar1 = OxmlElement("w:fldChar")
-    fldChar1.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.text = "NUMPAGES"
-    fldChar2 = OxmlElement("w:fldChar")
-    fldChar2.set(qn("w:fldCharType"), "end")
-    run._r.append(fldChar1)
-    run._r.append(instr)
-    run._r.append(fldChar2)
-
-
-# ── Formatage ────────────────────────────────────────────────────────────────
-
-def _fmt_date(date_str: str) -> str:
-    if not date_str:
-        return "—"
-    try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        return f"{dt.day} {_MONTHS_FR[dt.month]} {dt.year}"
-    except ValueError:
-        return date_str
-
-
-def _fmt_time(seconds: float) -> str:
-    s = int(seconds)
-    m, sec = divmod(s, 60)
-    return f"{m}min {sec:02d}s" if m else f"{sec}s"
-
-
-# ── Système de thèmes visuels ─────────────────────────────────────────────────
-
-@dataclass
-class _DocxTheme:
-    primary:     RGBColor   # bannière, titres de section, en-têtes tableaux
-    accent:      RGBColor   # bordures, bullets, éléments secondaires
-    light:       RGBColor   # lignes alternées tableaux
-    banner_text: str        # texte du bandeau de couverture
-    cover_badge: str        # badge type affiché sous le titre (ex: "RÉUNION PROJET")
-
-
-def _hex_rgb(value: str) -> RGBColor:
-    """Couleur du catalogue (hex 6 chiffres, validé au chargement) → RGBColor."""
-    return RGBColor(int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
-
-
-# SOURCE UNIQUE : transcria/data/meeting_types.yaml (via meeting_type_catalog) — plus
-# aucun thème en dur ici (cf. docs/TYPES_REUNION_PERSONNALISES.md, lot A). Un type sans
-# palette dans le catalogue (Réunion interne, Autre) retombe sur _THEME_DEFAULT.
-_THEMES: dict[str, _DocxTheme] = {
-    name: _DocxTheme(
-        primary=_hex_rgb(spec["palette"]["primary"]),
-        accent=_hex_rgb(spec["palette"]["accent"]),
-        light=_hex_rgb(spec["palette"]["light"]),
-        banner_text=spec["banner_text"],
-        cover_badge=spec["badge"],
-    )
-    for name, spec in theme_specs().items()
-}
-
-
-_THEME_DEFAULT = _DocxTheme(
-    primary=_BLUE_DARK, accent=_BLUE_MID, light=_BLUE_LIGHT,
-    banner_text="COMPTE-RENDU DE TRANSCRIPTION",
-    cover_badge="",
-)
-
-
-def _get_theme(meeting_type: str) -> _DocxTheme:
-    return _THEMES.get(meeting_type, _THEME_DEFAULT)
-
-
-def _theme_from_definition(definition: dict) -> _DocxTheme:
-    """Thème d'une fiche de type personnalisé (palette validée au catalogue)."""
-    palette = definition.get("palette") or {}
-    try:
-        return _DocxTheme(
-            primary=_hex_rgb(palette["primary"]),
-            accent=_hex_rgb(palette["accent"]),
-            light=_hex_rgb(palette["light"]),
-            banner_text=str(definition.get("banner_text") or _THEME_DEFAULT.banner_text),
-            cover_badge=str(definition.get("badge") or ""),
-        )
-    except (KeyError, TypeError, ValueError):
-        # Fiche altérée (édition manuelle du JSON du job) : un livrable ne plante jamais.
-        return _THEME_DEFAULT
-
-
-# ── Routing par type de réunion ──────────────────────────────────────────────
-
-# Les sections enrichies (décisions, votes, ODJ…) ne sont PAS filtrées par type :
-# toute donnée extraite par le LLM s'affiche si elle est non vide (cf. _section_enriched).
-# Le type ne pilote que le thème visuel, les champs de saisie et la page de garde.
-
-# Types à quorum (+ sous-titre objet de séance) et types auto-confidentiels —
-# drapeaux `behavior` du catalogue, plus de noms de types en dur ici.
 _CSE_TYPES: frozenset[str] = quorum_types()
 _AUTO_CONFIDENTIEL: frozenset[str] = confidential_types()
 
 # ── Parsing SRT ───────────────────────────────────────────────────────────────
-
-_SRT_BLOCK = re.compile(
-    r"\d+\s*\n"
-    r"(\d{2}:\d{2}:\d{2}),\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}\s*\n"
-    r"(.*?)(?=\n\n|\Z)",
-    re.DOTALL,
-)
-_SPEAKER_LINE = re.compile(r"^[A-Z_0-9]+\(([^)]+)\):\s*(.+)$")
-# Repli : SRT dont les locuteurs sont au format lisible « Nom: texte » (observé en réel —
-# un agent LLM peut réécrire le préfixe `SPEAKER_XX(Nom):` en `Nom:` malgré la consigne).
-# Sans ce repli, la colonne Locuteur du rapport est vide et le nom reste collé au texte.
-# Heuristique prudente : majuscule initiale (accents inclus), ≤ 40 caractères avant le
-# deux-points — un libellé de prose type « Note : » peut matcher, compromis assumé.
-_SPEAKER_LINE_PLAIN = re.compile(r"^([A-ZÀ-ÖØ-Þ][^:\n]{0,39}?)\s*:\s+(.+)$")
-_SRT_END_TIME = re.compile(r"-->\s*(\d{2}):(\d{2}):(\d{2}),\d{3}")
-
-
-def _parse_srt(srt_text: str) -> list[dict[str, str]]:
-    """Retourne une liste de {"timestamp": "HH:MM:SS", "speaker": str, "text": str}."""
-    entries: list[dict[str, str]] = []
-    for m in _SRT_BLOCK.finditer(srt_text.strip()):
-        timestamp = m.group(1)
-        body = m.group(2).strip()
-        for line in body.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            sm = _SPEAKER_LINE.match(line) or _SPEAKER_LINE_PLAIN.match(line)
-            if sm:
-                entries.append({
-                    "timestamp": timestamp,
-                    "speaker": sm.group(1),
-                    "text": sm.group(2),
-                })
-            else:
-                entries.append({"timestamp": timestamp, "speaker": "", "text": line})
-    return entries
-
-
-def _srt_duration_seconds(srt_text: str) -> int:
-    """Durée de la réunion = dernier timestamp de FIN du SRT (0 si introuvable)."""
-    last = 0
-    for h, m, s in _SRT_END_TIME.findall(srt_text):
-        last = max(last, int(h) * 3600 + int(m) * 60 + int(s))
-    return last
-
-
-def _fmt_duration(seconds: int) -> str:
-    h, rem = divmod(int(seconds), 3600)
-    m = round(rem / 60)
-    if m == 60:  # arrondi de rem→60 min : bascule en heure même quand h == 0 (3599 s → « 1 h »)
-        h, m = h + 1, 0
-    if h:
-        return f"{h} h {m:02d} min" if m else f"{h} h"
-    return f"{max(m, 1)} min"
-
-
-# ── Options de rendu (data-driven : context/render_options.json) ─────────────
 
 _RENDER_SECTIONS = ("participants", "transcript", "quality")
 
@@ -1452,45 +1100,7 @@ def _extract_synthese(text: str, language: str = "fr") -> str:
     return cleaned.strip()
 
 
-_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
 
-
-def _split_markdown_bold(text: str) -> list[tuple[str, bool]]:
-    """Découpe un texte en segments ``(contenu, gras)`` selon le markdown `**..**`/`__..__`.
-
-    Les segments vides sont écartés. Un texte sans marqueur renvoie un unique
-    segment non gras. Sert à rendre le gras de la LLM dans le DOCX au lieu de
-    simplement retirer les astérisques.
-    """
-    segments: list[tuple[str, bool]] = []
-    pos = 0
-    for match in _MD_BOLD_RE.finditer(text):
-        if match.start() > pos:
-            segments.append((text[pos:match.start()], False))
-        segments.append((match.group(1) or match.group(2) or "", True))
-        pos = match.end()
-    if pos < len(text):
-        segments.append((text[pos:], False))
-    return [(content, bold) for content, bold in segments if content]
-
-
-def _add_markdown_runs(
-    paragraph: Any,
-    text: str,
-    *,
-    size: float = 10.0,
-    name: str = "Calibri",
-    bold_all: bool = False,
-) -> None:
-    """Ajoute ``text`` au paragraphe en rendant le gras markdown (`**`/`__`) en runs gras."""
-    for content, is_bold in _split_markdown_bold(text):
-        run = paragraph.add_run(content)
-        run.font.size = Pt(size)
-        run.font.name = name
-        run.font.bold = bool(is_bold or bold_all)
-
-
-# ── Point d'entrée public ─────────────────────────────────────────────────────
 
 def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
     """

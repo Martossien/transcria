@@ -315,8 +315,9 @@ transcria/
     exports/
       package_builder.py    # PackageBuilder — ZIP final (inclut le rapport DOCX)
       docx_report.py        # DocxReport — rapport Word pro adapté au type : extraction structurée (décisions/actions/votes…),
-                            #   rendu du gras markdown LLM via _split_markdown_bold()/_add_markdown_runs() (Synthèse),
-                            #   champs type-spécifiques, thèmes visuels par type (_DocxTheme), quorum CSE auto.
+                            #   champs type-spécifiques, quorum CSE auto ; FAÇADE (ré-exporte style+srt) — golden tests/test_docx_report_golden.py
+      docx_style.py         # helpers de STYLE extraits (vague 0) : palette, libellés FR/EN, thèmes (_DocxTheme), XML bas niveau, formats, gras markdown
+      docx_srt.py           # parsing SRT pur texte (blocs, locuteurs, durée) — réutilisable hors DOCX
                             #   generate_docx_report(job_id, jobs_dir, output_path). Exclu de mypy (python-docx sans stubs).
     gpu/
       inventory.py          # B3 : L'UNIQUE sonde GPU de l'arbre — snapshot() -> tuple[GpuState,...] + legacy_gpu_info() (VRAMManager, GPUAllocator, system_status, squim, refine_llm délèguent tous ici ; panne de sonde = inventaire vide, carte illisible ignorée)

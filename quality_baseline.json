@@ -62,7 +62,7 @@
   "transcria.diagnostics.doctor": 11,
   "transcria.diagnostics.system_status": 1,
   "transcria.exports": 2,
-  "transcria.exports.docx_report": 4,
+  "transcria.exports.docx_report": 6,
   "transcria.exports.package_builder": 5,
   "transcria.gpu": 3,
   "transcria.gpu.hardware_advisor": 2,
