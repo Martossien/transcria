@@ -33,10 +33,47 @@ TranscrIA.scheduleMeeting = function () {
     });
 };
 
+TranscrIA.meetingNow = function () {
+  document.getElementById("meeting-when").value = "";   // vide = dès que possible (serveur)
+  TranscrIA.scheduleMeeting();
+};
+
 TranscrIA.cancelMeeting = function (sessionId) {
   if (!window.confirm("Annuler cette captation de réunion ?")) return;
   fetch("/api/meetings/" + sessionId + "/cancel", { method: "POST" })
     .then(function () { window.location.reload(); });
 };
+
+TranscrIA.rescheduleMeeting = function (sessionId) {
+  fetch("/api/meetings/" + sessionId + "/reschedule", { method: "POST" })
+    .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) { window.alert(res.body.error || "Erreur"); return; }
+      window.location.reload();
+    });
+};
+
+// La page d'un job de réunion se tient À JOUR toute seule : au moindre changement d'état
+// (captation OU job — l'audio vient d'arriver), rechargement. États terminaux : on arrête.
+(function () {
+  var banner = document.getElementById("meeting-session-banner");
+  if (!banner) return;
+  var terminal = ["done", "not_admitted", "failed_final", "cancelled"];
+  var sessionState = banner.getAttribute("data-state");
+  var jobId = banner.getAttribute("data-job");
+  if (terminal.indexOf(sessionState) !== -1) return;
+  var timer = setInterval(function () {
+    fetch("/api/jobs/" + jobId + "/status")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var fresh = data.meeting_session ? data.meeting_session.state : null;
+        if ((fresh && fresh !== sessionState) || (data.state && data.state !== "created")) {
+          clearInterval(timer);
+          window.location.reload();
+        }
+      })
+      .catch(function () {});
+  }, 5000);
+})();
 
 window.TranscrIA = TranscrIA;

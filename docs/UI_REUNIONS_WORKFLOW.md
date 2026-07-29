@@ -157,7 +157,24 @@ dernière visible SEULEMENT si (connecteur `validated` configuré) ET (un runner
 < 2 min). Le reste du wizard est inchangé : le profil se choisit à l'étape 1 comme aujourd'hui
 (exigence ferme existante), simplement débloqué sans upload pour un job `source=meeting`.
 
-### D4 — Le job est créé D'ABORD, la réunion l'alimente ENSUITE
+### D4 — Le job est créé D'ABORD, la réunion l'alimente ENSUITE — et s'arrête AU MÊME POINT qu'un upload
+
+**Correction actée avec l'utilisateur (2026-07-29, après le premier test réel de bout en
+bout)** : la première implémentation lançait le pipeline COMPLET à la réception de l'audio —
+les livrables sortaient avec des SPEAKER_XX anonymes et les validations humaines du profil
+(résumé de contrôle, contexte, validation des locuteurs, lexique) devenaient décoratives.
+Règle désormais : **la réunion n'est qu'une autre façon d'amener l'audio à l'étape 1** — le
+rattachement fait upload + analyse puis S'ARRÊTE ; le wizard reprend la main exactement comme
+pour un fichier, et les suggestions du manifeste servent AVANT le traitement. Seul un profil
+sans aucune validation humaine (`profile_requires_human` faux — srt_express, srt_moss) part
+automatiquement jusqu'au bout. Apports propres à la réunion, actés : les NOMS des connectés
+(manifeste) ; et les SONS SÉPARÉS par participant — la parole simultanée est démêlable piste
+par piste avec timestamps (mixage insuffisant sur le chevauchement) → priorité n°1 du volet
+pistes séparées (vague 5). **Étage 1 LIVRÉ dans la foulée** : pour un job de
+réunion avec manifeste, les TOURS DE PAROLE viennent des pistes (`ingestion/manifest_turns.py`,
+détection `speaker_detection`) — exacts en parole simultanée, noms affichés à l'étape 5,
+jamais de sur-découpage d'une voix unique ; pyannote ne sert que sans manifeste. Compromis
+assumé : une piste « salle » = UN locuteur nommable jusqu'à la vague 5.
 
 Le job naît au moment où l'utilisateur planifie (état `CREATED`, `source=meeting`, profil
 choisi, **propriétaire = l'utilisateur qui planifie** — corrige le constat n°6). Il est visible

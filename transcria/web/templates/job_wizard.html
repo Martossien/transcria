@@ -16,12 +16,18 @@
       <h1 class="h4 mb-1">{{ job.title }}
         {% with source_job = job %}{% include 'wizard/_source_badge.html' %}{% endwith %}</h1>
       {% if meeting_session %}
-      <div class="small {{ 'text-danger' if meeting_session.state in ('not_admitted','failed_final') else 'text-muted' }}">
+      <div id="meeting-session-banner" data-job="{{ job.id }}" data-state="{{ meeting_session.state }}"
+           class="small {{ 'text-danger' if meeting_session.state in ('not_admitted','failed_final') else 'text-muted' }}">
         {% if meeting_session.retrying %}{{ _('Incident technique — nouvel essai prévu') }}
         {% elif meeting_session.state == 'planned' and meeting_session.scheduled_at %}🗓 {{ meeting_session.label }} — {{ meeting_session.scheduled_at.strftime('%d/%m/%Y %H:%M') }}
         {% else %}{{ meeting_session.label }}{% endif %}
         {% if meeting_session.last_error and meeting_session.state in ('not_admitted','failed_final') %}
         <span class="text-muted">({{ meeting_session.last_error }})</span>
+        {% endif %}
+        {% if meeting_session.state in ('not_admitted','failed_final') %}
+        <button type="button" class="btn btn-sm btn-outline-primary ms-2"
+                data-action="TranscrIA.rescheduleMeeting" data-arg="{{ meeting_session.id }}">
+          {{ _('Replanifier la captation') }}</button>
         {% endif %}
       </div>
       {% endif %}
@@ -105,6 +111,7 @@ window.__WIZARD_LEX_TERMS__ = {{ (meeting.termes_suspects if (meeting.get('terme
 <template id="lexicon-prio-tpl">{% for prio in lexicon_priorities %}<option value="{{ prio }}">{{ lexicon_priority_label(prio) }}</option>{% endfor %}</template>
 {# Initialisation de page : JS extrait (vague A3) — job_wizard_page.js (après wizard.js). #}
 <script src="{{ asset_url('js/job_wizard_page.js') }}"></script>
+{% if meeting_session %}<script src="{{ asset_url('js/meetings_page.js') }}"></script>{% endif %}
 
 {% if promote_allowed %}
 <div class="modal fade" id="lex-promote-modal" tabindex="-1" aria-hidden="true">

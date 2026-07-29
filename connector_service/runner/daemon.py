@@ -27,10 +27,11 @@ logger = logging.getLogger("connector_service.runner")
 
 
 class MeetingRunnerDaemon:
-    def __init__(self, config, *, post, launch) -> None:
+    def __init__(self, config, *, post, launch, probe_images=None) -> None:
         self._cfg = config
         self._post = post            # async (path, payload) -> (status, body)
         self._launch = launch        # async (intent) -> process (stdout lisible, .wait())
+        self._probe_images = probe_images   # () -> [{name, provider, present}] (Docker réel)
         self._active: dict[str, asyncio.Task] = {}      # session_id → tâche
         self._procs: dict[str, Any] = {}                # session_id → process (pour stop)
         self._stop = asyncio.Event()
@@ -59,7 +60,8 @@ class MeetingRunnerDaemon:
         status, body = await self._post("/v1/runners/heartbeat", {
             "runner": self._cfg.runner_name, "capacity": self._cfg.capacity,
             "active": self.active_count, "platforms": list(self._cfg.platforms),
-            "images": [{"name": n} for n in self._cfg.images.values()],
+            "images": (self._probe_images() if self._probe_images
+                       else [{"name": n} for n in self._cfg.images.values()]),
         })
         if status != 200:
             logger.warning("heartbeat refusé (HTTP %s) — jeton runner ? fonctionnalité activée ?", status)
@@ -103,14 +105,24 @@ class MeetingRunnerDaemon:
                               "category": "launch", "message": str(exc)[:200]})
             return
         self._procs[sid] = proc
+        await self._post(f"/v1/meetings/{sid}/events",
+                         {"runner": self._cfg.runner_name, "event": "joining"})
         relay = asyncio.ensure_future(self._relay_events(sid, proc))
         exit_code = await proc.wait()
         relay.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await relay
+        # Les codes 125/126/127 sont ceux de DOCKER lui-même (image absente, démon mort,
+        # commande introuvable) — pas du bot : le dire en clair, l'admin lit ce message
+        # tel quel sur la carte du job (vécu : « code 125 » cryptique au premier test UI).
+        if int(exit_code) in (125, 126, 127):
+            category, message = "docker", ("image de bot absente ou démon Docker indisponible "
+                                           "— vérifier la check-list /admin/connecteurs")
+        else:
+            category, message = "bot", f"code {exit_code}"
         await self._post(f"/v1/meetings/{sid}/result",
                          {"runner": self._cfg.runner_name, "exit_code": int(exit_code),
-                          "category": "bot", "message": f"code {exit_code}"})
+                          "category": category, "message": message})
 
     async def _relay_events(self, session_id: str, proc) -> None:
         """Relaie les lignes `{"bot_event": …}` (BOT_EVENTS=json) — toute autre sortie est

@@ -50,6 +50,58 @@ def _http_post(base_url: str, token: str):
     return post
 
 
+def probe_local_images(images: dict) -> list[dict]:
+    """Présence RÉELLE des images de bot (docker image inspect) — annoncée au heartbeat,
+    affichée par la check-list admin (« Image de bot disponible »)."""
+    import subprocess
+
+    from connector_service.runner.commands import DEFAULT_IMAGES
+
+    out = []
+    for provider, image in {**DEFAULT_IMAGES, **(images or {})}.items():
+        probe = subprocess.run(["docker", "image", "inspect", image],
+                               capture_output=True)
+        out.append({"name": image, "provider": provider,
+                    "present": probe.returncode == 0})
+    return out
+
+
+_DOCKERFILES = {"jitsi": "Dockerfile.bot", "zoom-sdk": "Dockerfile.zoom-sdk"}
+
+
+async def _image_autoheal(cfg) -> None:
+    """AUTO-RÉPARATION des images de bot (décision utilisateur : « si l'image est absente,
+    il faut la créer sans intervention ») : toutes les 5 min, pour chaque image absente —
+    `docker pull` (images GHCR épinglées) puis, en repli, `docker build` depuis le dépôt
+    (les Dockerfiles des bots, WorkingDirectory de l'unité). Journalisé, jamais bloquant :
+    la check-list admin passe au vert toute seule quand c'est prêt."""
+    from connector_service.runner.commands import DEFAULT_IMAGES
+
+    while True:
+        for provider, image in {**DEFAULT_IMAGES, **(cfg.images or {})}.items():
+            probe = await asyncio.create_subprocess_exec(
+                "docker", "image", "inspect", image,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            if await probe.wait() == 0:
+                continue
+            logger.info("image %s absente — tentative de pull…", image)
+            pull = await asyncio.create_subprocess_exec(
+                "docker", "pull", image,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            if await pull.wait() == 0:
+                logger.info("image %s tirée", image)
+                continue
+            dockerfile = _DOCKERFILES.get(provider)
+            if dockerfile and os.path.exists(dockerfile):
+                logger.info("pull impossible — construction locale de %s (%s)…", image, dockerfile)
+                build = await asyncio.create_subprocess_exec(
+                    "docker", "build", "-q", "-f", dockerfile, "-t", image, ".",
+                    stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.STDOUT)
+                logger.info("construction de %s : %s", image,
+                            "OK" if await build.wait() == 0 else "ÉCHEC (voir docker build à la main)")
+        await asyncio.sleep(300)
+
+
 def _docker_launcher(cfg):
     async def launch(intent: dict):
         argv, env = docker_argv(intent, portal_url=cfg.portal_url, token=cfg.token,
@@ -76,13 +128,18 @@ async def _amain() -> int:
                 warned = True
             await asyncio.sleep(30)
     daemon = MeetingRunnerDaemon(cfg, post=_http_post(cfg.portal_url, cfg.token),
-                                 launch=_docker_launcher(cfg))
+                                 launch=_docker_launcher(cfg),
+                                 probe_images=lambda: probe_local_images(cfg.images))
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, daemon.stop)
     logger.info("meeting-runner « %s » démarré — portail %s, plateformes %s",
                 cfg.runner_name, cfg.portal_url, list(cfg.platforms))
-    await daemon.run_forever()
+    autoheal = asyncio.ensure_future(_image_autoheal(cfg))
+    try:
+        await daemon.run_forever()
+    finally:
+        autoheal.cancel()
     return 0
 
 

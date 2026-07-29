@@ -32,6 +32,7 @@ from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import can_manage_queue_job, get_job_for_api
+from transcria.web.meetings_views import sessions_for_jobs
 from transcria.web.request_helpers import api_stable, bearer_token_allowed
 from transcria.workflow import profiles
 from transcria.workflow.concurrency_profile import summarize_concurrency
@@ -308,6 +309,17 @@ def api_job_status(job_id: str):
             payload["vram_wait_exceeded"] = True
     except Exception:  # noqa: BLE001 — enrichissement best-effort
         pass
+    # Job de RÉUNION : l'état de la captation voyage avec le statut — la page se met à
+    # jour toute seule (vécu au test UI : « Le bot se prépare… » figé, l'utilisateur ne
+    # savait pas ce qui se passait).
+    session_view = sessions_for_jobs([job]).get(job.id)
+    if session_view is not None:
+        payload["meeting_session"] = {
+            "id": session_view["id"],
+            "state": session_view["state"],
+            "retrying": session_view["retrying"],
+            "label": str(session_view["label"]),
+        }
     return jsonify(payload)
 
 

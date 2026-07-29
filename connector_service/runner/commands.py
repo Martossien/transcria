@@ -33,6 +33,7 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
         "TRANSCRIA_URL": portal_url,
         "TRANSCRIA_TOKEN": token,
         "TRANSCRIA_JOB_ID": str(intent["job_id"]),
+        "TRANSCRIA_PROVIDER": str(intent.get("provider") or "bot"),
         "BOT_LANGUAGE": str(intent.get("language") or "fr"),
         # Politique d'affichage des plateformes : le bot se nomme « fonction — initiateur »
         # (compose_display_name côté bot) — les participants savent QUI l'a envoyé.

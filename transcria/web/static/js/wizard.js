@@ -1299,3 +1299,19 @@ window.TranscrIA = TranscrIA;
 TranscrIA.initWorkflowStatusBanner();
 TranscrIA.initProfileSelector();
 console.log('[TranscrIA] wizard.js loaded, functions: ' + Object.keys(TranscrIA).join(', '));
+
+
+// « Une seule personne ? » (étape 5) — la diarisation peut sur-découper une voix unique :
+// un seul nom saisi, recopié sur toutes les voix du micro partagé (la VALIDATION reste à faire).
+TranscrIA.sameSpeakerForRoom = function (joined) {
+  var ids = String(joined || "").split("||").filter(Boolean);
+  if (!ids.length) return;
+  var name = window.prompt("Nom de la personne (appliqué aux " + ids.length + " voix) :");
+  if (!name) return;
+  ids.forEach(function (sid) {
+    var item = document.getElementById("spk-" + sid);
+    if (!item) return;
+    var input = item.querySelector(".speaker-name");
+    if (input) input.value = name;
+  });
+};

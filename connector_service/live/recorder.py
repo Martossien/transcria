@@ -152,3 +152,38 @@ class ParticipantLedger:
             })
         return {"version": 1, "source": source, "mix": "timeline_common",
                 "participants": participants}
+
+
+class RecordingTee:
+    """Transcripteur-enregistreur : délègue le LIVE au moteur interne ET alimente mixage +
+    registre — promu du gate Jitsi au BOT DE PRODUCTION (le chaînon manquant du parcours
+    100 % interface : capté par le bot docker, l'audio doit devenir un job tout seul).
+
+    Les participants sont déclarés `unknown` (traités en salle par prudence — « piste ≠
+    personne ») : le bot ne SAIT pas qu'une connexion est une personne seule.
+    """
+
+    def __init__(self, inner, *, sample_rate_hz: int = 48000):
+        self._inner = inner
+        self.mixer = MeetingMixer(sample_rate_hz)
+        self.ledger = ParticipantLedger()
+        self._t0: float | None = None
+        self.uses_local_agreement = getattr(inner, "uses_local_agreement", False)
+
+    def stream(self, frames):
+        import time
+
+        async def _tee():
+            async for frame in frames:
+                if self._t0 is None:
+                    self._t0 = time.monotonic()
+                at_s = time.monotonic() - self._t0
+                self.mixer.add(frame.payload, at_s)
+                rate = getattr(frame, "sample_rate_hz", 48000) or 48000
+                self.ledger.note(
+                    frame.participant_id,
+                    getattr(frame, "participant_display_name", "") or "",
+                    at_s, len(frame.payload) / 2.0 / rate,
+                    pcm=frame.payload)
+                yield frame
+        return self._inner.stream(_tee())

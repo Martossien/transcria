@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-29 20:14+0200\n"
+"POT-Creation-Date: 2026-07-29 22:14+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -265,7 +265,7 @@ msgstr "Ajouter cette forme validée à un lexique central, partagé et réutili
 
 #: transcria/i18n/js_catalog.py:34
 #: transcria/web/templates/change_password.html:24
-#: transcria/web/templates/index.html:73
+#: transcria/web/templates/index.html:77
 #: transcria/web/templates/meeting_types.html:141
 #: transcria/web/templates/queue.html:173
 #: transcria/web/templates/srt_editor.html:105
@@ -388,9 +388,9 @@ msgid "Finalisation…"
 msgstr "Finalisation…"
 
 #: transcria/i18n/js_catalog.py:60
-#: transcria/web/templates/wizard/_step_participants.html:99
-#: transcria/web/templates/wizard/_step_participants.html:124
-#: transcria/web/templates/wizard/_step_participants.html:147
+#: transcria/web/templates/wizard/_step_participants.html:107
+#: transcria/web/templates/wizard/_step_participants.html:132
+#: transcria/web/templates/wizard/_step_participants.html:155
 msgid "Fonction"
 msgstr "Fonction"
 
@@ -460,9 +460,9 @@ msgstr "Lexique central : %(name)s"
 #: transcria/web/templates/central_lexicons.html:18
 #: transcria/web/templates/schedule.html:139
 #: transcria/web/templates/schedule.html:195
-#: transcria/web/templates/wizard/_step_participants.html:93
-#: transcria/web/templates/wizard/_step_participants.html:123
-#: transcria/web/templates/wizard/_step_participants.html:146
+#: transcria/web/templates/wizard/_step_participants.html:101
+#: transcria/web/templates/wizard/_step_participants.html:131
+#: transcria/web/templates/wizard/_step_participants.html:154
 msgid "Nom"
 msgstr "Nom"
 
@@ -529,7 +529,7 @@ msgid "Réponse serveur invalide."
 msgstr "Réponse serveur invalide."
 
 #: transcria/i18n/js_catalog.py:89
-#: transcria/web/templates/wizard/_step_participants.html:100
+#: transcria/web/templates/wizard/_step_participants.html:108
 msgid "Rôle dans la réunion"
 msgstr "Rôle dans la réunion"
 
@@ -1291,74 +1291,82 @@ msgstr "Go"
 msgid "téléchargement…"
 msgstr "téléchargement…"
 
-#: transcria/ingestion/runner_provisioning.py:51
+#: transcria/ingestion/runner_provisioning.py:55
 #, fuzzy, python-format
 msgid "Compte de service créé : %(name)s"
 msgstr "DN du compte de service"
 
-#: transcria/ingestion/runner_provisioning.py:59
+#: transcria/ingestion/runner_provisioning.py:63
 #, python-format
 msgid "Jeton d'exécutant déposé : %(path)s"
 msgstr "Jeton d'exécutant déposé : %(path)s"
 
-#: transcria/ingestion/runner_provisioning.py:73
+#: transcria/ingestion/runner_provisioning.py:77
 msgid "Réunions en ligne activées (façade temps réel incluse)."
 msgstr "Réunions en ligne activées (façade temps réel incluse)."
 
-#: transcria/ingestion/runner_provisioning.py:84
+#: transcria/ingestion/runner_provisioning.py:86
 #, fuzzy
 msgid "Réunions en ligne désactivées."
 msgstr "Importé depuis une réunion en ligne"
 
-#: transcria/ingestion/runner_provisioning.py:129
+#: transcria/ingestion/runner_provisioning.py:125
 #, fuzzy
 msgid "Fonctionnalité activée"
 msgstr "VAD final activé"
 
-#: transcria/ingestion/runner_provisioning.py:130
+#: transcria/ingestion/runner_provisioning.py:126
 msgid "Utiliser le bouton « Activer » ci-dessus."
 msgstr "Utiliser le bouton « Activer » ci-dessus."
 
-#: transcria/ingestion/runner_provisioning.py:131
+#: transcria/ingestion/runner_provisioning.py:127
 #, fuzzy
 msgid "Façade temps réel active"
 msgstr "Façade STT temps réel"
 
-#: transcria/ingestion/runner_provisioning.py:132
+#: transcria/ingestion/runner_provisioning.py:128
 msgid "Réactiver via le bouton « Activer » (elle est incluse)."
 msgstr "Réactiver via le bouton « Activer » (elle est incluse)."
 
-#: transcria/ingestion/runner_provisioning.py:133
+#: transcria/ingestion/runner_provisioning.py:129
 msgid "Clé de chiffrement présente (.env)"
 msgstr "Clé de chiffrement présente (.env)"
 
-#: transcria/ingestion/runner_provisioning.py:134
+#: transcria/ingestion/runner_provisioning.py:130
 msgid "Relancer l'installation (elle la génère) puis redémarrer le service."
 msgstr "Relancer l'installation (elle la génère) puis redémarrer le service."
 
-#: transcria/ingestion/runner_provisioning.py:135
+#: transcria/ingestion/runner_provisioning.py:131
 msgid "Compte et jeton d'exécutant provisionnés"
 msgstr "Compte et jeton d'exécutant provisionnés"
 
-#: transcria/ingestion/runner_provisioning.py:136
+#: transcria/ingestion/runner_provisioning.py:132
 msgid "Utiliser le bouton « Activer » — le portail les crée lui-même."
 msgstr "Utiliser le bouton « Activer » — le portail les crée lui-même."
 
-#: transcria/ingestion/runner_provisioning.py:137
+#: transcria/ingestion/runner_provisioning.py:133
 msgid "Exécutant vivant (vu < 2 min)"
 msgstr "Exécutant vivant (vu < 2 min)"
 
-#: transcria/ingestion/runner_provisioning.py:138
+#: transcria/ingestion/runner_provisioning.py:134
 msgid "Démarrer le service : systemctl enable --now transcria-meeting-runner"
 msgstr "Démarrer le service : systemctl enable --now transcria-meeting-runner"
 
-#: transcria/ingestion/runner_provisioning.py:146
+#: transcria/ingestion/runner_provisioning.py:142
 msgid "Jitsi couvert par un exécutant"
 msgstr "Jitsi couvert par un exécutant"
 
-#: transcria/ingestion/runner_provisioning.py:147
+#: transcria/ingestion/runner_provisioning.py:143
 msgid "Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant."
 msgstr "Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant."
+
+#: transcria/ingestion/runner_provisioning.py:156
+msgid "Image de bot Jitsi présente sur l'exécutant"
+msgstr "Image de bot Jitsi présente sur l'exécutant"
+
+#: transcria/ingestion/runner_provisioning.py:157
+msgid "Construire : docker build -f Dockerfile.bot -t transcria-bot:latest . (ou renseigner une image GHCR dans runner.yaml)."
+msgstr "Construire : docker build -f Dockerfile.bot -t transcria-bot:latest . (ou renseigner une image GHCR dans runner.yaml)."
 
 #: transcria/notifications/job_facts.py:43
 msgid "Type détecté"
@@ -3233,7 +3241,7 @@ msgstr "Job"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:132
+#: transcria/web/templates/job_wizard.html:139
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
@@ -3494,7 +3502,7 @@ msgstr "Ajouter une entrée"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:91
-#: transcria/web/templates/job_wizard.html:141
+#: transcria/web/templates/job_wizard.html:148
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Ajouter"
@@ -3544,7 +3552,7 @@ msgid "Supprimer cette entrée ?"
 msgstr "Supprimer cette entrée ?"
 
 #: transcria/web/templates/central_lexicon_detail.html:220
-#: transcria/web/templates/index.html:89
+#: transcria/web/templates/index.html:93
 #: transcria/web/templates/schedule.html:223
 #: transcria/web/templates/srt_editor.html:104
 msgid "Supprimer"
@@ -3589,7 +3597,7 @@ msgid "dernier %(d)s"
 msgstr "dernier %(d)s"
 
 #: transcria/web/templates/central_lexicons.html:61
-#: transcria/web/templates/index.html:80 transcria/web/templates/voices.html:45
+#: transcria/web/templates/index.html:84 transcria/web/templates/voices.html:45
 msgid "Ouvrir"
 msgstr "Ouvrir"
 
@@ -3856,48 +3864,58 @@ msgstr "Titre"
 msgid "Quand"
 msgstr "lundi"
 
-#: transcria/web/templates/index.html:38
+#: transcria/web/templates/index.html:39
 #, fuzzy
 msgid "Vide = dès que possible"
 msgstr "dès que possible"
 
-#: transcria/web/templates/index.html:42
+#: transcria/web/templates/index.html:41
+#, fuzzy
+msgid "Dès que possible"
+msgstr "dès que possible"
+
+#: transcria/web/templates/index.html:41
+#, fuzzy
+msgid "Maintenant"
+msgstr "Maintenance"
+
+#: transcria/web/templates/index.html:46
 #, fuzzy
 msgid "Planifier"
 msgstr "Planification"
 
-#: transcria/web/templates/index.html:46
+#: transcria/web/templates/index.html:50
 msgid "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 msgstr "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 
-#: transcria/web/templates/index.html:60
+#: transcria/web/templates/index.html:64
 #, python-format
 msgid "Partagé par %(name)s"
 msgstr "Partagé par %(name)s"
 
-#: transcria/web/templates/index.html:68
-#: transcria/web/templates/job_wizard.html:20
+#: transcria/web/templates/index.html:72
+#: transcria/web/templates/job_wizard.html:21
 msgid "Incident technique — nouvel essai prévu"
 msgstr "Incident technique — nouvel essai prévu"
 
-#: transcria/web/templates/index.html:82
+#: transcria/web/templates/index.html:86
 #: transcria/web/templates/srt_editor.html:10
 msgid "Résultats"
 msgstr "Résultats"
 
-#: transcria/web/templates/index.html:84
+#: transcria/web/templates/index.html:88
 msgid "Package"
 msgstr "Package"
 
-#: transcria/web/templates/index.html:88
+#: transcria/web/templates/index.html:92
 msgid "Supprimer ce traitement ? Cette action est irréversible."
 msgstr "Supprimer ce traitement ? Cette action est irréversible."
 
-#: transcria/web/templates/index.html:101
+#: transcria/web/templates/index.html:105
 msgid "Aucun traitement pour le moment."
 msgstr "Aucun traitement pour le moment."
 
-#: transcria/web/templates/index.html:102
+#: transcria/web/templates/index.html:106
 msgid "Créez votre premier traitement pour transcrire une réunion."
 msgstr "Créez votre premier traitement pour transcrire une réunion."
 
@@ -4011,48 +4029,53 @@ msgstr "Retour au traitement"
 msgid "Traitement"
 msgstr "Traitement"
 
-#: transcria/web/templates/job_wizard.html:28
+#: transcria/web/templates/job_wizard.html:30
+#, fuzzy
+msgid "Replanifier la captation"
+msgstr "Planification"
+
+#: transcria/web/templates/job_wizard.html:34
 #, python-format
 msgid "Créé le %(date)s"
 msgstr "Créé le %(date)s"
 
-#: transcria/web/templates/job_wizard.html:38
+#: transcria/web/templates/job_wizard.html:44
 msgid "Le traitement a échoué."
 msgstr "Le traitement a échoué."
 
-#: transcria/web/templates/job_wizard.html:42
+#: transcria/web/templates/job_wizard.html:48
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 msgstr "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 
-#: transcria/web/templates/job_wizard.html:45
+#: transcria/web/templates/job_wizard.html:51
 msgid "Relancer le traitement"
 msgstr "Relancer le traitement"
 
-#: transcria/web/templates/job_wizard.html:114
+#: transcria/web/templates/job_wizard.html:121
 msgid "Ajouter au lexique central"
 msgstr "Ajouter au lexique central"
 
-#: transcria/web/templates/job_wizard.html:115
+#: transcria/web/templates/job_wizard.html:122
 msgid "Fermer"
 msgstr "Fermer"
 
-#: transcria/web/templates/job_wizard.html:118
+#: transcria/web/templates/job_wizard.html:125
 msgid "Forme :"
 msgstr "Forme :"
 
-#: transcria/web/templates/job_wizard.html:120
+#: transcria/web/templates/job_wizard.html:127
 msgid "Lexique existant"
 msgstr "Lexique existant"
 
-#: transcria/web/templates/job_wizard.html:125
+#: transcria/web/templates/job_wizard.html:132
 msgid "— Nouveau lexique… —"
 msgstr "— Nouveau lexique… —"
 
-#: transcria/web/templates/job_wizard.html:129
+#: transcria/web/templates/job_wizard.html:136
 msgid "Nom du nouveau lexique"
 msgstr "Nom du nouveau lexique"
 
-#: transcria/web/templates/job_wizard.html:130
+#: transcria/web/templates/job_wizard.html:137
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "Ex : Vocabulaire fromagerie"
 
@@ -4315,7 +4338,7 @@ msgstr "Scheduler"
 
 #: transcria/web/templates/queue.html:69
 #: transcria/web/templates/schedule.html:96
-#: transcria/web/templates/wizard/_step_file.html:87
+#: transcria/web/templates/wizard/_step_file.html:91
 msgid "indisponible"
 msgstr "indisponible"
 
@@ -4782,8 +4805,8 @@ msgstr "Email"
 
 #: transcria/web/templates/user_form.html:24
 #: transcria/web/templates/users.html:13
-#: transcria/web/templates/wizard/_step_participants.html:125
-#: transcria/web/templates/wizard/_step_participants.html:148
+#: transcria/web/templates/wizard/_step_participants.html:133
+#: transcria/web/templates/wizard/_step_participants.html:156
 msgid "Rôle"
 msgstr "Rôle"
 
@@ -5117,7 +5140,7 @@ msgstr "Analyser le fichier"
 
 #: transcria/web/templates/wizard/_step_analysis.html:131
 #: transcria/web/templates/wizard/_step_context.html:190
-#: transcria/web/templates/wizard/_step_participants.html:165
+#: transcria/web/templates/wizard/_step_participants.html:173
 #: transcria/web/templates/wizard/_step_summary.html:110
 msgid "Étapes optionnelles pour ce profil"
 msgstr "Étapes optionnelles pour ce profil"
@@ -5285,72 +5308,76 @@ msgstr "%(min)s min"
 msgid "L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant."
 msgstr "L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant."
 
-#: transcria/web/templates/wizard/_step_file.html:23
+#: transcria/web/templates/wizard/_step_file.html:25
+msgid "La captation de la réunion a échoué — replanifiez-la (bandeau ci-dessus) ou déposez l'enregistrement manuellement."
+msgstr "La captation de la réunion a échoué — replanifiez-la (bandeau ci-dessus) ou déposez l'enregistrement manuellement."
+
+#: transcria/web/templates/wizard/_step_file.html:27
 msgid "Déposez le fichier audio ou vidéo de la réunion."
 msgstr "Déposez le fichier audio ou vidéo de la réunion."
 
-#: transcria/web/templates/wizard/_step_file.html:26
+#: transcria/web/templates/wizard/_step_file.html:30
 msgid "Téléverser"
 msgstr "Téléverser"
 
-#: transcria/web/templates/wizard/_step_file.html:34
+#: transcria/web/templates/wizard/_step_file.html:38
 msgid "Ou enregistrez directement depuis votre micro :"
 msgstr "Ou enregistrez directement depuis votre micro :"
 
-#: transcria/web/templates/wizard/_step_file.html:36
+#: transcria/web/templates/wizard/_step_file.html:40
 msgid "Enregistrer au micro"
 msgstr "Enregistrer au micro"
 
-#: transcria/web/templates/wizard/_step_file.html:40
+#: transcria/web/templates/wizard/_step_file.html:44
 msgid "Enregistrement…"
 msgstr "Enregistrement…"
 
-#: transcria/web/templates/wizard/_step_file.html:43
+#: transcria/web/templates/wizard/_step_file.html:47
 msgid "Arrêter"
 msgstr "Arrêter"
 
-#: transcria/web/templates/wizard/_step_file.html:50
+#: transcria/web/templates/wizard/_step_file.html:54
 msgid "Utiliser cet enregistrement"
 msgstr "Utiliser cet enregistrement"
 
-#: transcria/web/templates/wizard/_step_file.html:53
+#: transcria/web/templates/wizard/_step_file.html:57
 msgid "Recommencer"
 msgstr "Recommencer"
 
-#: transcria/web/templates/wizard/_step_file.html:67
+#: transcria/web/templates/wizard/_step_file.html:71
 msgid "<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées."
 msgstr "<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées."
 
-#: transcria/web/templates/wizard/_step_file.html:71
+#: transcria/web/templates/wizard/_step_file.html:75
 msgid "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
 msgstr "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
 
-#: transcria/web/templates/wizard/_step_file.html:77
+#: transcria/web/templates/wizard/_step_file.html:81
 msgid "Profil de traitement"
 msgstr "Profil de traitement"
 
-#: transcria/web/templates/wizard/_step_file.html:83
+#: transcria/web/templates/wizard/_step_file.html:87
 msgid "Téléversez d'abord le fichier audio"
 msgstr "Téléversez d'abord le fichier audio"
 
-#: transcria/web/templates/wizard/_step_file.html:87
+#: transcria/web/templates/wizard/_step_file.html:91
 #, python-format
 msgid "niveau %(n)s"
 msgstr "niveau %(n)s"
 
-#: transcria/web/templates/wizard/_step_file.html:93
+#: transcria/web/templates/wizard/_step_file.html:97
 msgid "Rapide"
 msgstr "Rapide"
 
-#: transcria/web/templates/wizard/_step_file.html:94
+#: transcria/web/templates/wizard/_step_file.html:98
 msgid "Complet"
 msgstr "Complet"
 
-#: transcria/web/templates/wizard/_step_file.html:98
+#: transcria/web/templates/wizard/_step_file.html:102
 msgid "Sélectionnez un profil…"
 msgstr "Sélectionnez un profil…"
 
-#: transcria/web/templates/wizard/_step_file.html:102
+#: transcria/web/templates/wizard/_step_file.html:106
 #: transcria/web/templates/wizard/_step_launch.html:13
 msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
 msgstr "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
@@ -5488,75 +5515,84 @@ msgstr "voix masculine dominante"
 msgid "voix féminine dominante"
 msgstr "voix féminine dominante"
 
-#: transcria/web/templates/wizard/_step_participants.html:73
+#: transcria/web/templates/wizard/_step_participants.html:74
 #, fuzzy, python-format
 msgid "Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
 msgstr "Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
 
 #: transcria/web/templates/wizard/_step_participants.html:79
+msgid "Si ces voix sont en réalité une seule personne : un seul nom, appliqué à toutes."
+msgstr "Si ces voix sont en réalité une seule personne : un seul nom, appliqué à toutes."
+
+#: transcria/web/templates/wizard/_step_participants.html:80
+#, fuzzy
+msgid "Une seule personne ?"
+msgstr "Nom de la personne"
+
+#: transcria/web/templates/wizard/_step_participants.html:87
 #, python-format
 msgid "%(done)s locuteur(s) nommés par la réunion, %(rest)s à valider — la validation reste obligatoire."
 msgstr "%(done)s locuteur(s) nommés par la réunion, %(rest)s à valider — la validation reste obligatoire."
 
-#: transcria/web/templates/wizard/_step_participants.html:90
+#: transcria/web/templates/wizard/_step_participants.html:98
 #, python-format
 msgid "%(s)ss, %(n)s interventions"
 msgstr "%(s)ss, %(n)s interventions"
 
-#: transcria/web/templates/wizard/_step_participants.html:92
+#: transcria/web/templates/wizard/_step_participants.html:100
 msgid "Écouter des extraits de ce locuteur"
 msgstr "Écouter des extraits de ce locuteur"
 
-#: transcria/web/templates/wizard/_step_participants.html:96
+#: transcria/web/templates/wizard/_step_participants.html:104
 msgid "Nom proposé par la plateforme de réunion — vérifiez puis validez"
 msgstr "Nom proposé par la plateforme de réunion — vérifiez puis validez"
 
-#: transcria/web/templates/wizard/_step_participants.html:97
+#: transcria/web/templates/wizard/_step_participants.html:105
 #, fuzzy
 msgid "suggéré par la réunion"
 msgstr "Rôle dans la réunion"
 
-#: transcria/web/templates/wizard/_step_participants.html:101
+#: transcria/web/templates/wizard/_step_participants.html:109
 msgid "Genre vocal (modifiable)"
 msgstr "Genre vocal (modifiable)"
 
-#: transcria/web/templates/wizard/_step_participants.html:102
+#: transcria/web/templates/wizard/_step_participants.html:110
 msgid "Non déterminé"
 msgstr "Non déterminé"
 
-#: transcria/web/templates/wizard/_step_participants.html:103
+#: transcria/web/templates/wizard/_step_participants.html:111
 msgid "Féminin ♀"
 msgstr "Féminin ♀"
 
-#: transcria/web/templates/wizard/_step_participants.html:104
+#: transcria/web/templates/wizard/_step_participants.html:112
 msgid "Masculin ♂"
 msgstr "Masculin ♂"
 
-#: transcria/web/templates/wizard/_step_participants.html:109
+#: transcria/web/templates/wizard/_step_participants.html:117
 msgid "Suggestion issue des voix enregistrées"
 msgstr "Suggestion issue des voix enregistrées"
 
-#: transcria/web/templates/wizard/_step_participants.html:122
+#: transcria/web/templates/wizard/_step_participants.html:130
 msgid "participant"
 msgstr "participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:126
+#: transcria/web/templates/wizard/_step_participants.html:134
 msgid "Animateur"
 msgstr "Animateur"
 
-#: transcria/web/templates/wizard/_step_participants.html:145
+#: transcria/web/templates/wizard/_step_participants.html:153
 msgid "suggéré"
 msgstr "suggéré"
 
-#: transcria/web/templates/wizard/_step_participants.html:156
+#: transcria/web/templates/wizard/_step_participants.html:164
 msgid "+ Ajouter un participant"
 msgstr "+ Ajouter un participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:158
+#: transcria/web/templates/wizard/_step_participants.html:166
 msgid "Valider participants & locuteurs"
 msgstr "Valider participants & locuteurs"
 
-#: transcria/web/templates/wizard/_step_participants.html:159
+#: transcria/web/templates/wizard/_step_participants.html:167
 msgid "Validé"
 msgstr "Validé"
 

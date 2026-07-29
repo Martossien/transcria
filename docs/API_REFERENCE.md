@@ -187,6 +187,7 @@
 | ⭐ `/api/jobs/<job_id>/upload` | POST | connexion requise | Dépose le fichier audio d'un job fraîchement créé (contrat scriptable). | `transcria.web.wizard_api` |
 | `/api/meetings` | POST | connexion requise | Planifie une réunion : crée le JOB (provenance posée) + la session (référence chiffrée), | `transcria.web.meetings_api` |
 | `/api/meetings/<session_id>/cancel` | POST | connexion requise | Annule une session (états annulables seulement) — visibilité = celle du job porteur. | `transcria.web.meetings_api` |
+| `/api/meetings/<session_id>/reschedule` | POST | connexion requise | Relance une captation depuis un état terminal replanifiable : NOUVELLE session, MÊME | `transcria.web.meetings_api` |
 | `/api/meetings/availability` | GET | connexion requise | Moteurs prêts + nombre de runners — pilote l'affichage de la carte « Réunion ». | `transcria.web.meetings_api` |
 | `/api/profiles/availability` | GET | connexion requise | Profils de traitement disponibles + profil recommandé (source unique pour le wizard). | `transcria.web.wizard_api` |
 | `/api/resources/status` | GET | connexion requise | État des ressources distantes pour le panneau frontale (mode dégradé inclus). | `transcria.web.processing_api` |
@@ -206,7 +207,7 @@
 | `/v1/meetings/claim` | POST | — | Claim atomique (SKIP LOCKED) des sessions dues — SEUL endroit où la référence de | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 140 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 141 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

@@ -27,7 +27,10 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
 from transcria.config import get_config
+from transcria.ingestion import session_states as st
+from transcria.ingestion.meeting_ref_crypto import decrypt_meeting_ref
 from transcria.ingestion.session_store import MeetingSessionStore
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.services.job_service import JobService
 from transcria.web.blueprint import web_bp
@@ -108,7 +111,12 @@ def api_meetings_create():
             return jsonify({"error": "Date/heure invalide (ISO 8601 attendu)"}), 400
         scheduled_at = (parsed.replace(tzinfo=tz) if parsed.tzinfo is None else parsed
                         ).astimezone(timezone.utc)
-        if scheduled_at < datetime.now(timezone.utc):
+        now = datetime.now(timezone.utc)
+        if scheduled_at <= now + __import__("datetime").timedelta(minutes=2):
+            # « la même heure même minute » doit marcher (vécu) : tout horaire déjà atteint
+            # ou imminent = DÈS QUE POSSIBLE, pas une erreur.
+            scheduled_at = None
+        elif scheduled_at < now:
             return jsonify({"error": "La date de la réunion est déjà passée"}), 400
 
     # « Déjà planifiée » (§7) : même plateforme + même empreinte de référence, session active.
@@ -124,6 +132,17 @@ def api_meetings_create():
         owner_id=current_user.id, job_id=job_id, provider=provider,
         meeting_ref=meeting_ref, title=title, language=language, scheduled_at=scheduled_at)
     JobStore.update_extra_data(job_id, lambda extra: {**extra, "meeting_session_id": session.id})
+    # Étape 4 pré-remplie dès la planification (demande utilisateur) : titre, date de la
+    # réunion, langue — l'utilisateur complète le reste AVANT la réunion s'il veut.
+    try:
+        cfg_now = get_config()
+        local_when = ((scheduled_at or datetime.now(timezone.utc))
+                      .astimezone(ZoneInfo(str((cfg_now.get("queue", {}) or {}).get("timezone", "Europe/Paris")))))
+        JobFilesystem(cfg_now["storage"]["jobs_dir"], job_id).save_json(
+            "context/meeting_context.json",
+            {"title": title, "date": local_when.strftime("%Y-%m-%d"), "language": language})
+    except Exception:  # noqa: BLE001 — semis best-effort, jamais bloquant
+        logger.warning("semis du contexte impossible (job %s)", job_id, exc_info=True)
     audit_log(action=AuditAction.MEETING_SCHEDULE, target_type="meeting_session",
               target_id=session.id, target_label=title,
               details={"provider": provider, "job_id": job_id,
@@ -154,6 +173,31 @@ def api_meetings_cancel(session_id: str):
               details={"job_id": session.job_id, "previous_state": session.state})
     refreshed = MeetingSessionStore.get(session_id)
     return jsonify({"session": refreshed.to_public_dict() if refreshed else None})
+
+
+@web_bp.route("/api/meetings/<session_id>/reschedule", methods=["POST"])
+@meetings_enabled
+@login_required
+@_require(Permission.SCHEDULE_MEETINGS)
+def api_meetings_reschedule(session_id: str):
+    """Relance une captation depuis un état terminal replanifiable : NOUVELLE session, MÊME
+    job (les préparatifs — contexte, lexique — sont conservés). Audit MEETING_SCHEDULE."""
+    session = MeetingSessionStore.get(session_id)
+    if session is None:
+        return jsonify({"error": "Session inconnue"}), 404
+    job = JobStore.get_by_id(session.job_id)
+    if job is None or not can_access_job(job, current_user):
+        return jsonify({"error": "Session inconnue"}), 404
+    if session.state not in st.RESCHEDULABLE_STATES:
+        return jsonify({"error": f"état {session.state} non replanifiable"}), 409
+    fresh = MeetingSessionStore.create(
+        owner_id=session.owner_id, job_id=session.job_id, provider=session.provider,
+        meeting_ref=decrypt_meeting_ref(session.meeting_ref_encrypted),
+        title=session.meeting_title, language=session.language, scheduled_at=None)
+    audit_log(action=AuditAction.MEETING_SCHEDULE, target_type="meeting_session",
+              target_id=fresh.id, target_label=session.meeting_title,
+              details={"job_id": session.job_id, "rescheduled_from": session_id})
+    return jsonify({"session": fresh.to_public_dict()}), 201
 
 
 # ── Famille RUNNER ────────────────────────────────────────────────────────────

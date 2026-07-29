@@ -588,3 +588,21 @@ def profile_deliverables(profile: ProcessingProfile) -> list[str]:
     if profile.zip_level == "full":
         items.append("Archive ZIP complète")
     return items
+
+
+def profile_requires_human(profile: ProcessingProfile) -> bool:
+    """Le profil exige-t-il des étapes HUMAINES avant le traitement complet ?
+
+    Décision utilisateur (2026-07-29, workflow réunions) : l'ingestion d'une réunion amène
+    le job AU MÊME POINT qu'un upload — le pipeline complet ne part automatiquement que si
+    le profil n'attend RIEN de l'humain (ex. SRT express). Sinon, le wizard reprend la main
+    (résumé de contrôle, contexte, validation des locuteurs, lexique) exactement comme pour
+    un fichier — c'est là que les livrables gagnent les vrais noms.
+    """
+    return bool(
+        profile.requires_summary
+        or profile.requires_context not in ("none",)
+        or profile.requires_participants not in ("none",)
+        or profile.requires_speaker_validation not in ("none",)
+        or profile.requires_lexicon not in ("none",)
+    )

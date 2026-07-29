@@ -284,6 +284,15 @@ def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict
     except (KeyError, ValueError):
         profile, mode = profiles.resolve_request(None, "quality")
 
+    # DÉCISION UTILISATEUR (2026-07-29) : la réunion n'est qu'une AUTRE façon d'amener
+    # l'audio à l'étape 1 — le job s'arrête AU MÊME POINT qu'un upload (analysé), et le
+    # workflow humain du profil (résumé de contrôle, contexte, validation des locuteurs,
+    # lexique) reste souverain : c'est LÀ que les livrables gagnent les vrais noms, les
+    # suggestions du manifeste servant AVANT le traitement, pas après. Le pipeline complet
+    # ne part tout seul que pour un profil sans aucune validation humaine (ex. SRT express).
+    if profiles.profile_requires_human(profile):
+        return None                     # état ANALYZED : le wizard reprend la main
+
     audio_path = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).get_original_audio_path()
     executor = get_job_executor()
     if audio_path is None or executor is None:
@@ -475,7 +484,9 @@ def facade_ingest():
                   target_label=title,
                   details={"source": "facade_ingest_attach", "provider": provider,
                            "external_meeting_id": external_meeting_id})
-        return jsonify({"job_id": target_job_id, "state": JobState.READY_TO_PROCESS.value,
+        attached_job = JobStore.get_by_id(target_job_id)
+        return jsonify({"job_id": target_job_id,
+                        "state": attached_job.state if attached_job else "analyzed",
                         "attached": True,
                         "status_url": f"/api/jobs/{target_job_id}/status"}), 202
 

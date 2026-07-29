@@ -34,8 +34,12 @@
       </div>
       <div class="col-auto">
         <label class="form-label small mb-1">{{ _('Quand') }}</label>
-        <input type="datetime-local" id="meeting-when" class="form-control form-control-sm"
-               title="{{ _('Vide = dès que possible') }}">
+        <div class="input-group input-group-sm">
+          <input type="datetime-local" id="meeting-when" class="form-control form-control-sm"
+                 title="{{ _('Vide = dès que possible') }}">
+          <button type="button" class="btn btn-outline-secondary" data-action="TranscrIA.meetingNow"
+                  title="{{ _('Dès que possible') }}">{{ _('Maintenant') }}</button>
+        </div>
       </div>
       <div class="col-auto">
         <button type="button" class="btn btn-sm btn-primary" data-action="TranscrIA.scheduleMeeting">

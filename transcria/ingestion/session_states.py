@@ -41,11 +41,15 @@ RESCHEDULABLE_STATES = frozenset({NOT_ADMITTED, FAILED_FINAL, FAILED_RETRYABLE})
 # périmé qui envoie `joining` sur une session annulée ne doit rien écraser.
 _TRANSITIONS: dict[str, frozenset[str]] = {
     PLANNED: frozenset({CLAIMED, CANCELLED, FAILED_FINAL}),
-    CLAIMED: frozenset({JOINING, PLANNED, CANCELLED, FAILED_RETRYABLE, FAILED_FINAL, NOT_ADMITTED, DONE}),
-    JOINING: frozenset({WAITING_ADMISSION, IN_MEETING, NOT_ADMITTED, FAILED_RETRYABLE,
-                        FAILED_FINAL, CANCELLED, DONE}),
-    WAITING_ADMISSION: frozenset({IN_MEETING, NOT_ADMITTED, FAILED_RETRYABLE, FAILED_FINAL,
-                                  CANCELLED, DONE}),
+    # Depuis CLAIMED, les états d'AVANCE sont tolérés (vécu : le bot émet
+    # waiting_admission/in_meeting avant que « joining » n'ait été relayé — l'état initial
+    # du bot n'est jamais une transition ; les 409 gelaient l'affichage utilisateur).
+    CLAIMED: frozenset({JOINING, WAITING_ADMISSION, IN_MEETING, INGESTING, PLANNED, CANCELLED,
+                        FAILED_RETRYABLE, FAILED_FINAL, NOT_ADMITTED, DONE}),
+    JOINING: frozenset({WAITING_ADMISSION, IN_MEETING, INGESTING, NOT_ADMITTED,
+                        FAILED_RETRYABLE, FAILED_FINAL, CANCELLED, DONE}),
+    WAITING_ADMISSION: frozenset({IN_MEETING, INGESTING, NOT_ADMITTED, FAILED_RETRYABLE,
+                                  FAILED_FINAL, CANCELLED, DONE}),
     IN_MEETING: frozenset({INGESTING, DONE, FAILED_RETRYABLE, CANCELLED}),
     INGESTING: frozenset({DONE, FAILED_RETRYABLE}),
     FAILED_RETRYABLE: frozenset({PLANNED, CANCELLED, FAILED_FINAL}),   # PLANNED = re-claimable

@@ -101,6 +101,9 @@ class JitsiDriver:
     async def open(self, meeting_url: str) -> None:
         from playwright.async_api import async_playwright  # dép opt-in
 
+        # Nom de salle retenu pour distinguer « salle close » (l'URL a navigué ailleurs)
+        # d'une vraie perte de navigateur (cf. run_until_ended).
+        self._room_name = meeting_url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(
             headless=self._headless, args=list(CHROMIUM_ARGS))
@@ -193,6 +196,14 @@ class JitsiDriver:
                 # distinguer les causes — sauf pendant un arrêt volontaire, où c'est normal.
                 if self._shutting_down:
                     return "stopped"
+                # La fermeture de la salle par le modérateur NAVIGUE la page (l'évaluation
+                # lève alors) : si l'URL a quitté la salle, c'est une fin de réunion, pas
+                # une panne de navigateur (vécu : classé error → rejeu dans une salle vide).
+                try:
+                    if self._room_name and self._room_name not in (self._page.url or ""):
+                        return "conference_ended"
+                except Exception:  # noqa: BLE001
+                    pass
                 return "browser_lost"
 
             phase = interpret_conference_state(raw)

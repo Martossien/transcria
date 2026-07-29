@@ -70,7 +70,15 @@
         <div class="alert alert-info py-2 mb-2">
           <i class="bi bi-building"></i>
           {% for room, spk in manifest_rooms.items() %}
-          <div>{{ _('Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez.', room=room, n=spk|length, speakers=spk|join(', ')) }}</div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span>{{ _('Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez.', room=room, n=spk|length, speakers=spk|join(', ')) }}</span>
+            {# La diarisation peut SUR-découper une voix unique (vécu : 1 personne → 2 voix).
+               L'inverse de la prudence « piste ≠ personne » : dire en UN clic « c'est moi seul ». #}
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-action="TranscrIA.sameSpeakerForRoom" data-arg="{{ spk|join('||') }}"
+                    title="{{ _('Si ces voix sont en réalité une seule personne : un seul nom, appliqué à toutes.') }}">
+              {{ _('Une seule personne ?') }}</button>
+          </div>
           {% endfor %}
         </div>
         {% endif %}

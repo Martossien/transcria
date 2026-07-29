@@ -92,7 +92,12 @@ class BotSession:
             reason = await self._driver.run_until_ended()
 
             self.state = BotState.LEAVING
-            await self._driver.leave()
+            # leave() best-effort : quand le modérateur a CLOS la salle, la page est déjà
+            # morte et le clic « quitter » lève — cela ne doit pas transformer un motif
+            # honnête (conference_ended…) en « error » rejouable (vécu : rejeu dans une
+            # salle vide → salle d'attente → not_admitted).
+            with contextlib.suppress(Exception):
+                await self._driver.leave()
             return BotOutcome(admitted=True, reason=reason)
         except Exception:                            # le cycle de vie ne crashe pas l'appelant
             _log.exception("échec du cycle de vie du bot (%s)", meeting_url)

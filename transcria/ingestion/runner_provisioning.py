@@ -141,4 +141,19 @@ def meetings_checklist(cfg: dict) -> list[dict]:
             pass
     items.append({"ok": "jitsi" in covered, "label": _l("Jitsi couvert par un exécutant"),
                   "remedy": _l("Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant.")})
+    # Présence RÉELLE des images de bot, annoncée par les exécutants (vécu : « code 125 »
+    # cryptique quand l'image manquait — désormais la check-list le dit AVANT la réunion).
+    image_ok, image_seen = False, False
+    for r in runners:
+        try:
+            for img in json.loads(r.images_json or "[]"):
+                if isinstance(img, dict) and img.get("provider") == "jitsi":
+                    image_seen = True
+                    image_ok = image_ok or bool(img.get("present"))
+        except ValueError:
+            pass
+    items.append({"ok": image_ok if image_seen else not runners,
+                  "label": _l("Image de bot Jitsi présente sur l'exécutant"),
+                  "remedy": _l("Construire : docker build -f Dockerfile.bot -t transcria-bot:latest . "
+                               "(ou renseigner une image GHCR dans runner.yaml).")})
     return items

@@ -20,6 +20,10 @@
         {{ _("L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant.") }}
       </div>
     {% else %}
+      {% if meeting_session %}
+      <p class="text-muted"><i class="bi bi-info-circle"></i>
+        {{ _("La captation de la réunion a échoué — replanifiez-la (bandeau ci-dessus) ou déposez l'enregistrement manuellement.") }}</p>
+      {% endif %}
       <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
       <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg,.webm" class="form-control mb-2">
       <button class="btn btn-primary" data-action="TranscrIA.uploadFile">

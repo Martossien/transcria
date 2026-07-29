@@ -162,8 +162,22 @@ async def run(args: argparse.Namespace) -> int:
                          max_duration_s=args.max_duration_s)
     transcriber = build_transcriber(args.transcria_url, args.token, args.language)
 
-    logger.info("Bot en route | réunion=%s durée_max=%.0fs", args.meeting_url,
-                args.max_duration_s)
+    # Parcours 100 % interface (vécu au premier test UI : le bot captait sans jamais
+    # nourrir le job) : quand une session PLANIFIÉE porte un job cible, le bot ENREGISTRE
+    # (mixage + registre des fenêtres de parole) et, en fin de réunion, RATTACHE
+    # audio + manifeste au job via la façade — le pipeline diarisant part tout seul.
+    target_job_id = (os.environ.get("TRANSCRIA_JOB_ID") or "").strip() or None
+    recording = None
+    if target_job_id and args.transcria_url:
+        from connector_service.live.recorder import RecordingTee
+
+        recording = RecordingTee(transcriber)
+        transcriber = recording
+
+    logger.info("Bot en route | réunion=%s durée_max=%.0fs nom=« %s »%s", args.meeting_url,
+                args.max_duration_s,
+                compose_display_name(explicit=args.name, initiator=args.initiator),
+                f" job={target_job_id}" if target_job_id else "")
     on_state = _json_event_emitter() if os.environ.get("BOT_EVENTS") == "json" else None
     outcome, segments = await run_bot_session(
         args.meeting_url, occurrence, driver, transcriber,
@@ -175,7 +189,35 @@ async def run(args: argparse.Namespace) -> int:
                 f" ({outcome.detail})" if outcome.detail else "", len(segments))
     for segment in segments:
         print(f"[{segment.speaker or '?'}] {segment.text}", flush=True)
+
+    if recording is not None and target_job_id and outcome.admitted and recording.mixer.duration_s > 0:
+        await _ingest_recording(args, occurrence, recording, target_job_id)
     return exit_code_for(outcome.admitted, outcome.reason)
+
+
+async def _ingest_recording(args, occurrence, recording, job_id: str) -> None:
+    """Rattache l'enregistrement au job planifié — best-effort JOURNALISÉ : un échec ici ne
+    change pas le code de sortie (la réunion a bien eu lieu), mais il se voit."""
+    from connector_service.bridge import JobsApiBridge
+    from connector_service.transports import RequestsTransport
+
+    if os.environ.get("BOT_EVENTS") == "json":
+        print(json.dumps({"bot_event": "ingesting"}), flush=True)
+    try:
+        bridge = JobsApiBridge(args.transcria_url, args.token or "", RequestsTransport())
+        result = await bridge.ingest_recording(
+            recording.mixer.to_wav(),
+            f"{occurrence.external_occurrence_id}.wav",
+            idempotency_key=f"bot|{occurrence.external_occurrence_id}|{job_id}",
+            provider=os.environ.get("TRANSCRIA_PROVIDER") or "bot",
+            external_meeting_id=occurrence.external_occurrence_id,
+            participants_manifest=recording.ledger.to_manifest(
+                os.environ.get("TRANSCRIA_PROVIDER") or "bot"),
+            job_id=job_id)
+        logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio)",
+                    job_id, result.status_code, recording.mixer.duration_s)
+    except Exception:  # noqa: BLE001
+        logger.exception("rattachement de l'enregistrement impossible (job %s)", job_id)
 
 
 def main(argv: list[str] | None = None) -> int:

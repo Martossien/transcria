@@ -23,11 +23,24 @@ def _force_feature_baseline(app):
     cfg = get_config()
     prev = cfg.get("connectors")
     cfg.pop("connectors", None)
-    yield
-    if prev is None:
-        cfg.pop("connectors", None)
-    else:
-        cfg["connectors"] = prev
+    # Isolation du fichier de jeton local : les tests ne touchent JAMAIS au instance/ réel
+    # (vécu : le vrai jeton déposé par le bouton « Activer » du service, root 0600, entrait
+    # en collision avec la suite).
+    import tempfile
+    from pathlib import Path as _P
+
+    from transcria.ingestion import runner_provisioning as _rp
+    with tempfile.TemporaryDirectory() as tmp_tokens:
+        original = _rp._token_path
+        _rp._token_path = lambda: _P(tmp_tokens) / "token.txt"
+        try:
+            yield
+        finally:
+            _rp._token_path = original
+            if prev is None:
+                cfg.pop("connectors", None)
+            else:
+                cfg["connectors"] = prev
 
 # Clé STABLE pour tout le module : la base de test est partagée entre tests — une clé par
 # test rendrait indéchiffrables les sessions créées par le test précédent.
@@ -241,14 +254,7 @@ class TestIngestAttach:
                         content_type="multipart/form-data")
         assert r.status_code == 403
 
-    def test_runner_rattache_au_job_planifie(self, meetings_on, client, admin_client,
-                                             runner_token, app, monkeypatch):
-        import io
-        self._facade_on(app)
-        _heartbeat(client, runner_token)
-        job_id = _create(client, admin_client, ref="https://meet.jit.si/attach2").get_json()["job_id"]
-        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
-
+    def _wire_attach(self, monkeypatch):
         from transcria.web import facade_api
         monkeypatch.setattr(facade_api.JobService, "upload", staticmethod(lambda *a, **k: {"ok": True}))
         monkeypatch.setattr(facade_api.JobService, "analyze", staticmethod(lambda *a, **k: {"ok": True}))
@@ -264,12 +270,43 @@ class TestIngestAttach:
                 captured["mode"] = mode
                 return {"accepted": True}
         monkeypatch.setattr(facade_api, "get_job_executor", lambda: _Exec())
+        return captured
+
+    def test_profil_a_validations_le_wizard_reprend_la_main(self, meetings_on, client,
+                                                            admin_client, runner_token, app,
+                                                            monkeypatch):
+        """Décision utilisateur 2026-07-29 : la réunion amène l'audio AU MÊME POINT qu'un
+        upload — pas de pipeline automatique quand le profil exige l'humain (résumé,
+        locuteurs, lexique) : les suggestions du manifeste servent AVANT le traitement."""
+        import io
+        self._facade_on(app)
+        _heartbeat(client, runner_token)
+        job_id = _create(client, admin_client, ref="https://meet.jit.si/attach2").get_json()["job_id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        captured = self._wire_attach(monkeypatch)
         r = client.post("/v1/audio/ingest", headers=_auth(runner_token),
                         data={"file": (io.BytesIO(b"RIFF0000WAVE"), "r.wav"), "job_id": job_id},
                         content_type="multipart/form-data")
         assert r.status_code == 202, r.get_json()
-        assert r.get_json()["attached"] is True and r.get_json()["job_id"] == job_id
-        assert captured["mode"] == "quality"      # défaut diarisant du job de réunion
+        assert r.get_json()["attached"] is True
+        assert "mode" not in captured             # AUCUN pipeline lancé : l'humain d'abord
+
+    def test_profil_sans_validation_part_tout_seul(self, meetings_on, client, admin_client,
+                                                   runner_token, app, monkeypatch):
+        import io
+        self._facade_on(app)
+        _heartbeat(client, runner_token)
+        job_id = _create(client, admin_client, ref="https://meet.jit.si/attach3").get_json()["job_id"]
+        with app.app_context():
+            from transcria.jobs.store import JobStore as JS
+            JS.update_extra_data(job_id, lambda e: {**e, "processing_profile_id": "srt_express"})
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        captured = self._wire_attach(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(runner_token),
+                        data={"file": (io.BytesIO(b"RIFF0000WAVE"), "r.wav"), "job_id": job_id},
+                        content_type="multipart/form-data")
+        assert r.status_code == 202, r.get_json()
+        assert "mode" in captured                 # SRT express : rien à valider → pipeline direct
 
     def test_job_sans_session_409(self, meetings_on, client, admin_client, runner_token, app):
         import io
@@ -373,3 +410,27 @@ class TestAdminOneClick:
         with app.app_context():
             from transcria.ingestion.session_store import MeetingSessionStore
             assert MeetingSessionStore.live_runners() == []
+
+
+class TestReschedule:
+    def test_echec_replanifiable_nouvelle_session_meme_job(self, meetings_on, client,
+                                                           admin_client, runner_token, app):
+        _heartbeat(client, runner_token)
+        body = _create(client, admin_client, ref="https://meet.jit.si/resched").get_json()
+        sid, job_id = body["session"]["id"], body["job_id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        client.post(f"/v1/meetings/{sid}/result", headers=_auth(runner_token),
+                    json={"runner": "runner-1", "exit_code": 125, "category": "docker",
+                          "message": "image de bot absente"})
+        r = admin_client.post(f"/api/meetings/{sid}/reschedule")
+        assert r.status_code == 201
+        fresh = r.get_json()["session"]
+        assert fresh["job_id"] == job_id and fresh["state"] == "planned"   # même job, préparatifs gardés
+
+    def test_session_reussie_non_replanifiable(self, meetings_on, client, admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        sid = _create(client, admin_client, ref="https://meet.jit.si/done-ok").get_json()["session"]["id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        client.post(f"/v1/meetings/{sid}/result", headers=_auth(runner_token),
+                    json={"runner": "runner-1", "exit_code": 0})
+        assert admin_client.post(f"/api/meetings/{sid}/reschedule").status_code == 409

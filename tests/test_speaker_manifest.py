@@ -152,3 +152,33 @@ class TestSoloTrackActuallyShared:
         m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B]))
         result = project_speakers(m, _turns(("SPEAKER_00", 1.0, 9.0), ("SPEAKER_01", 11.0, 19.0)))
         assert {s.name for s in result.suggestions} == {"Alice Durand", "Benoît Marchand"}
+
+
+class TestTurnsFromManifest:
+    """« Perdre l'avantage des locuteurs fait perdre beaucoup trop » (utilisateur,
+    2026-07-29) : les tours viennent des PISTES — exacts même en parole simultanée,
+    jamais de sur-découpage d'une voix unique."""
+
+    def test_tours_exacts_et_noms_affichables(self):
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, ROOM]))
+        r = turns_from_manifest(m)
+        assert r["available"] and r["source"] == "manifest"
+        assert r["speakers"] == ["Alice Durand", "Salle Marengo"]   # noms, pas SPEAKER_XX
+        assert r["stats"]["Alice Durand"]["turn_count"] == 2
+        assert r["turns"][0]["start"] == 0.0
+
+    def test_parole_simultanee_conservee(self):
+        # Deux pistes qui parlent EN MÊME TEMPS : deux tours qui se chevauchent — l'avantage
+        # que le mixage seul perdait.
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        a = dict(SOLO_A, speech_windows=[[0.0, 10.0]])
+        b = dict(SOLO_B, speech_windows=[[5.0, 15.0]])
+        r = turns_from_manifest(parse_participants_manifest(_manifest([a, b]))[0])
+        assert [(t["speaker"], t["start"], t["end"]) for t in r["turns"]] == [
+            ("Alice Durand", 0.0, 10.0), ("Benoît Marchand", 5.0, 15.0)]
+
+    def test_piste_sans_nom_id_lisible(self):
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        m, _ = parse_participants_manifest(_manifest([dict(SOLO_A, name="")]))
+        assert turns_from_manifest(m)["speakers"] == ["PISTE_p1"]
