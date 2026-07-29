@@ -29,6 +29,7 @@ from transcria.context.participants import ParticipantsManager
 from transcria.diagnostics.system_status import get_system_status
 from transcria.gpu.opencode_runner import _SUMMARY_MARKERS, OpenCodeRunner, resolve_output_language, summary_markers
 from transcria.i18n import select_locale
+from transcria.ingestion.manifest import parse_participants_manifest
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
@@ -48,6 +49,7 @@ from transcria.workflow.agent_workspace import resolve_agent_work_root
 from transcria.workflow.profile_availability import compute_profiles_view, compute_wizard_layout
 from transcria.workflow.profiles import get_profile, is_profile, profile_for_job
 from transcria.workflow.runner import WorkflowRunner
+from transcria.workflow.speaker_manifest import project_speakers
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.timing_service import estimate_total_with_human
 
@@ -391,6 +393,36 @@ def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
     }
 
 
+def _apply_manifest_suggestions(fs, manifest_raw: dict, speakers_data: dict,
+                                speaker_turns: dict) -> dict:
+    """Projette le manifeste participants sur les locuteurs affichés à l'étape 5.
+
+    Pré-remplit `suggested_name` (+ `suggested_source`) sur les SPEAKER_XX encore sans nom
+    validé — le champ du formulaire s'en sert comme valeur initiale, la pastille « suggéré
+    par la réunion » l'annonce, et la VALIDATION humaine reste le seul juge (principe 4 du
+    plan). Rend le regroupement {micro de salle → SPEAKER_XX} pour l'encadré dédié.
+    Best-effort intégral : au moindre doute, aucun pré-remplissage (une mauvaise suggestion
+    serait validée par habitude)."""
+    manifest, _ = parse_participants_manifest(manifest_raw)
+    turns = speaker_turns.get("turns") if isinstance(speaker_turns, dict) else None
+    if manifest is None or not isinstance(turns, list):
+        return {}
+    result = project_speakers(manifest, turns)
+    try:  # audit rejouable (seuils + scores) — une seule écriture, jamais bloquante
+        fs.save_json("metadata/speaker_manifest_projection.json",
+                     result.to_audit_dict(min_overlap_ratio=0.65, min_margin=0.2))
+    except Exception:  # noqa: BLE001
+        pass
+    for s in speakers_data.get("speakers", []):
+        if s.get("mapped_name"):
+            continue                                 # un nom déjà posé n'est jamais écrasé
+        suggestion = result.suggestion_for(str(s.get("speaker_id")))
+        if suggestion and suggestion.name:
+            s["suggested_name"] = suggestion.name
+            s["suggested_source"] = manifest.source or "meeting"
+    return {name: list(spk) for name, spk in result.rooms.items()}
+
+
 def _fill_missing_speaker_genders(
     speakers_data: dict,
     mapping_data: dict,
@@ -595,6 +627,15 @@ def job_wizard(job_id: str):
                 s["mapped_name"] = normalized["label"]
             if normalized["role"]:
                 s["mapped_role"] = normalized["role"]
+    # Vague 2 (plan UI_REUNIONS D5) — suggestions depuis le MANIFESTE de la réunion : les
+    # SPEAKER_XX dont la parole recouvre majoritairement une piste NOMMÉE arrivent pré-remplis
+    # (marqués « suggéré », jamais validés d'office) ; les micros de salle produisent un
+    # regroupement affiché à l'écran. Calcul PUR au rendu, audit persisté une fois.
+    manifest_rooms: dict = {}
+    manifest_raw = fs.load_json("metadata/participants_manifest.json")
+    if manifest_raw and speakers_data.get("speakers"):
+        manifest_rooms = _apply_manifest_suggestions(fs, manifest_raw, speakers_data, speaker_turns)
+
     if _fill_missing_speaker_genders(speakers_data, mapping_data, audio_scene, speaker_turns):
         fs.save_json("speakers/speaker_stats.json", speakers_data)
     audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
@@ -624,6 +665,7 @@ def job_wizard(job_id: str):
         next_step=next_step,
         summary=summary_data,
         meeting=meeting,
+        manifest_rooms=manifest_rooms,
         synthese_prefill=synthese_prefill,
         participants=participants,
         lexicon=lexicon,

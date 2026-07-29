@@ -1,0 +1,136 @@
+"""Vague 2 (plan UI_REUNIONS §6.3/D5) — manifeste participants : validation PURE + projection.
+
+Ce que ces tests verrouillent : (1) la validation STRICTE (un manifeste douteux est rejeté en
+bloc — de fausses suggestions de noms seraient validées par habitude à l'étape 5) ; (2) la
+projection fenêtres × diarisation (solo net → suggestion, ambigu → rien, salle → regroupement
+sans nom) ; (3) les semis (participants.json, speaker_hint)."""
+from __future__ import annotations
+
+from transcria.ingestion.manifest import (
+    parse_participants_manifest,
+    seed_participants,
+    speaker_hint_from_manifest,
+)
+from transcria.workflow.speaker_manifest import project_speakers
+
+
+def _manifest(participants):
+    return {"version": 1, "source": "zoom-sdk", "mix": "timeline_common",
+            "participants": participants}
+
+
+SOLO_A = {"id": "p1", "name": "Alice Durand", "kind": "solo",
+          "speech_windows": [[0.0, 10.0], [20.0, 30.0]]}
+SOLO_B = {"id": "p2", "name": "Benoît Marchand", "kind": "solo",
+          "speech_windows": [[10.0, 20.0]]}
+ROOM = {"id": "p3", "name": "Salle Marengo", "kind": "room",
+        "speech_windows": [[30.0, 60.0]]}
+
+
+# ── Validation stricte ────────────────────────────────────────────────────────
+
+class TestParse:
+    def test_manifeste_valide(self):
+        m, err = parse_participants_manifest(_manifest([SOLO_A, ROOM]))
+        assert err == "" and m is not None
+        assert [p.id for p in m.solo_participants] == ["p1"]
+        assert [p.id for p in m.room_participants] == ["p3"]
+        assert m.participants[0].speech_total_s == 20.0
+
+    def test_unknown_est_traite_en_room(self):
+        m, _ = parse_participants_manifest(_manifest([dict(SOLO_A, kind="unknown")]))
+        assert m.participants[0].is_solo is False       # prudence : piste ≠ personne
+
+    def test_rejets_en_bloc(self):
+        cas = [
+            ({"version": 2, "participants": [SOLO_A]}, "version"),
+            (_manifest([]), "vide"),
+            (_manifest([dict(SOLO_A, id="")]), "id"),
+            (_manifest([SOLO_A, dict(SOLO_B, id="p1")]), "dupliqué"),
+            (_manifest([dict(SOLO_A, kind="humain")]), "kind"),
+            (_manifest([dict(SOLO_A, speech_windows=[[5.0, 2.0]])]), "incohérente"),
+            (_manifest([dict(SOLO_A, speech_windows=[["x", 2.0]])]), "numérique"),
+            (_manifest([dict(SOLO_A, speech_windows="plein")]), "absent"),
+            ("pas un objet", "objet"),
+        ]
+        for raw, fragment in cas:
+            m, err = parse_participants_manifest(raw)
+            assert m is None and fragment in err, (raw, err)
+
+    def test_fenetres_triees_a_la_lecture(self):
+        m, _ = parse_participants_manifest(
+            _manifest([dict(SOLO_A, speech_windows=[[20.0, 30.0], [0.0, 10.0]])]))
+        assert m.participants[0].speech_windows == ((0.0, 10.0), (20.0, 30.0))
+
+
+# ── Semis ─────────────────────────────────────────────────────────────────────
+
+class TestSeeds:
+    def test_speaker_hint_compte_les_salles_en_plus(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B, ROOM]))
+        assert speaker_hint_from_manifest(m) == {"min": 3, "max": 6}
+
+    def test_seed_participants_exclut_les_salles(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, ROOM]))
+        seeded = seed_participants(m)
+        assert [p["name"] for p in seeded] == ["Alice Durand"]   # un lieu n'est pas un participant
+
+    def test_seed_ignore_les_solos_sans_nom(self):
+        m, _ = parse_participants_manifest(_manifest([dict(SOLO_A, name="")]))
+        assert seed_participants(m) == []
+
+
+# ── Projection ────────────────────────────────────────────────────────────────
+
+def _turns(*spans):
+    return [{"speaker": s, "start": a, "end": b} for s, a, b in spans]
+
+
+class TestProjection:
+    def test_solo_net_suggere_le_nom(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B]))
+        result = project_speakers(m, _turns(("SPEAKER_00", 1.0, 9.0), ("SPEAKER_01", 11.0, 19.0)))
+        assert result.suggestion_for("SPEAKER_00").name == "Alice Durand"
+        assert result.suggestion_for("SPEAKER_01").name == "Benoît Marchand"
+        assert result.rooms == {}
+
+    def test_ambigu_sous_la_marge_ne_suggere_rien(self):
+        # SPEAKER à cheval 50/50 entre deux pistes solo : marge nulle → aucune suggestion.
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B]))
+        result = project_speakers(m, _turns(("SPEAKER_00", 5.0, 15.0)))
+        assert result.suggestions == ()
+        assert "SPEAKER_00" in result.scores       # mais l'audit garde les scores
+
+    def test_salle_regroupe_sans_nommer(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, ROOM]))
+        result = project_speakers(
+            m, _turns(("SPEAKER_02", 31.0, 40.0), ("SPEAKER_04", 45.0, 59.0)))
+        assert result.suggestions == ()            # jamais de nom depuis un micro de salle
+        assert result.rooms == {"Salle Marengo": ("SPEAKER_02", "SPEAKER_04")}
+
+    def test_sous_le_seuil_de_recouvrement_rien(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A]))
+        # 4 s sur 10 s de parole recouvrent la piste → ratio 0,4 < 0,65.
+        result = project_speakers(m, _turns(("SPEAKER_00", 6.0, 16.0)))
+        assert result.suggestions == () and result.rooms == {}
+
+    def test_tours_malformes_ignores_sans_crash(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A]))
+        turns = [{"speaker": "SPEAKER_00", "start": "x", "end": 2},
+                 {"start": 1, "end": 2},
+                 {"speaker": "SPEAKER_00", "start": 1.0, "end": 9.0}]
+        assert project_speakers(m, turns).suggestion_for("SPEAKER_00") is not None
+
+    def test_seuils_injectables(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B]))
+        strict = project_speakers(m, _turns(("SPEAKER_00", 5.0, 15.0)),
+                                  min_overlap_ratio=0.4, min_margin=0.0)
+        assert strict.suggestion_for("SPEAKER_00") is not None
+
+    def test_audit_dict_complet(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A]))
+        result = project_speakers(m, _turns(("SPEAKER_00", 1.0, 9.0)))
+        audit = result.to_audit_dict(min_overlap_ratio=0.65, min_margin=0.2)
+        assert audit["thresholds"]["min_overlap_ratio"] == 0.65
+        assert audit["suggestions"][0]["speaker"] == "SPEAKER_00"
+        assert "SPEAKER_00" in audit["scores"]

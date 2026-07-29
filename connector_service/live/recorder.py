@@ -86,3 +86,55 @@ class MeetingMixer:
             w.setframerate(self._rate)
             w.writeframes(self.to_pcm())
         return buf.getvalue()
+
+
+class ParticipantLedger:
+    """Registre PUR des fenêtres de parole par participant — produit le manifeste (vague 2).
+
+    Alimenté au fil des frames captées (mêmes instants `at_s` que le `MeetingMixer` : les
+    fenêtres vivent sur la MÊME timeline que le mixage, condition de validité de la projection
+    aval). Les frames consécutives d'un même participant sont FUSIONNÉES en fenêtres tant que
+    le silence qui les sépare reste sous `merge_gap_s` — sans fusion, un manifeste compterait
+    des milliers de micro-fenêtres de 20 ms sans valeur pour la projection.
+    """
+
+    def __init__(self, *, merge_gap_s: float = 0.75) -> None:
+        self._gap = max(float(merge_gap_s), 0.0)
+        self._windows: dict[str, list[list[float]]] = {}
+        self._names: dict[str, str] = {}
+        self._kinds: dict[str, str] = {}
+
+    def note(self, participant_id: str, name: str, at_s: float, duration_s: float,
+             *, kind: str = "unknown") -> None:
+        pid = str(participant_id or "").strip()
+        if not pid or duration_s <= 0:
+            return
+        if name:
+            self._names[pid] = name                  # le dernier nom connu gagne
+        if kind in ("solo", "room"):                 # `unknown` n'écrase jamais un vrai type
+            self._kinds[pid] = kind
+        start, end = max(float(at_s), 0.0), max(float(at_s), 0.0) + float(duration_s)
+        windows = self._windows.setdefault(pid, [])
+        if windows and start - windows[-1][1] <= self._gap and start >= windows[-1][0]:
+            windows[-1][1] = max(windows[-1][1], end)
+        else:
+            windows.append([start, end])
+
+    def to_manifest(self, source: str) -> dict | None:
+        """Le manifeste (contrat §6.3 du plan UI_REUNIONS), ou None si rien n'a été capté —
+        un manifeste vide serait REJETÉ par la validation stricte du serveur, autant ne pas
+        l'envoyer."""
+        if not self._windows:
+            return None
+        participants = []
+        for pid in sorted(self._windows):
+            windows = [[round(a, 3), round(b, 3)] for a, b in self._windows[pid]]
+            participants.append({
+                "id": pid,
+                "name": self._names.get(pid, ""),
+                "kind": self._kinds.get(pid, "unknown"),
+                "speech_windows": windows,
+                "speech_total_s": round(sum(b - a for a, b in self._windows[pid]), 3),
+            })
+        return {"version": 1, "source": source, "mix": "timeline_common",
+                "participants": participants}

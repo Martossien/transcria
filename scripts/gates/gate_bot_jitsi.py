@@ -37,7 +37,7 @@ from connector_service.bridge import JobsApiBridge  # noqa: E402
 from connector_service.contract import ExternalMeetingOccurrence  # noqa: E402
 from connector_service.live.facade_client import facade_transcriber  # noqa: E402
 from connector_service.live.facade_stt import FacadeTranscriber  # noqa: E402
-from connector_service.live.recorder import MeetingMixer  # noqa: E402
+from connector_service.live.recorder import MeetingMixer, ParticipantLedger  # noqa: E402
 from connector_service.transports import RequestsTransport  # noqa: E402
 
 
@@ -94,9 +94,13 @@ class TeeTranscriber:
     """Mesure l'énergie captée PUIS délègue au vrai moteur STT : on voit d'un coup d'œil si
     un silence de transcription vient de la CAPTURE (rien de sonore) ou du MOTEUR."""
 
-    def __init__(self, counter, inner, mixer=None):
+    def __init__(self, counter, inner, mixer=None, ledger=None):
         self._counter = counter
         self._inner = inner
+        # Registre des fenêtres de parole par participant (vague 2) : produit le manifeste
+        # envoyé avec l'ingestion — les participants du gate sont déclarés `solo` (ils sont
+        # fabriqués par le gate, qui SAIT qu'une piste = une personne).
+        self._ledger = ledger
         # Enregistreur : le direct attribue PAR PISTE (une salle de réunion = plusieurs
         # personnes sur une seule piste, donc fusionnées). L'enregistrement complet repart
         # ensuite dans le pipeline batch, dont la DIARISATION sépare ces voix (ADR-001 D5).
@@ -112,7 +116,14 @@ class TeeTranscriber:
                 if self._mixer is not None:
                     if self._t0 is None:
                         self._t0 = time.monotonic()
-                    self._mixer.add(frame.payload, time.monotonic() - self._t0)
+                    at_s = time.monotonic() - self._t0
+                    self._mixer.add(frame.payload, at_s)
+                    if self._ledger is not None:
+                        rate = getattr(frame, "sample_rate_hz", 48000) or 48000
+                        self._ledger.note(
+                            frame.participant_id,
+                            getattr(frame, "participant_display_name", "") or "",
+                            at_s, len(frame.payload) / 2.0 / rate, kind="solo")
                 yield frame
         return self._inner.stream(_tee())
 
@@ -208,8 +219,9 @@ async def main() -> int:
     if args.transcribe:
         token = Path(args.token_file).read_text().strip() if args.token_file else ""
         mixer = MeetingMixer(48000) if args.ingest else None
+        ledger = ParticipantLedger() if args.ingest else None
         transcriber = TeeTranscriber(counter, FacadeTranscriber(
-            facade_transcriber(args.transcribe, token, language=args.language)), mixer)
+            facade_transcriber(args.transcribe, token, language=args.language)), mixer, ledger)
         print(f"→ STT       : façade {args.transcribe} (transcription en direct)")
     driver = JitsiDriver(f"ws://127.0.0.1:{args.port}", headless=not args.show,
                          alone_poll_s=5.0, max_duration_s=args.seconds,
@@ -263,7 +275,8 @@ async def main() -> int:
                 wav, f"{occurrence.external_occurrence_id}.wav",
                 idempotency_key=f"bot|{occurrence.external_occurrence_id}",
                 provider="bot", external_meeting_id=occurrence.external_occurrence_id,
-                mode="quality")   # profil DIARISANT : sépare les personnes d'une même salle
+                mode="quality",   # profil DIARISANT : sépare les personnes d'une même salle
+                participants_manifest=(ledger.to_manifest("jitsi") if ledger else None))
             print(f"  job créé : {result.job_id} (la diarisation séparera les locuteurs "
                   f"d'une même salle)")
         print(f"  capture : {sum(counter.per_participant.values())} frames, "

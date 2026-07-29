@@ -10,6 +10,7 @@ client HTTP dans le contrat, et les tests passent un transport factice (zéro r�
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -53,6 +54,7 @@ class JobsApiBridge:
         provider: str | None = None,
         external_meeting_id: str | None = None,
         mode: str | None = None,
+        participants_manifest: dict | None = None,
     ) -> IngestResult:
         """POST /v1/audio/ingest. `idempotency_key` porte l'idempotence côté serveur :
         deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`).
@@ -71,9 +73,17 @@ class JobsApiBridge:
             data["external_meeting_id"] = external_meeting_id
         if mode:
             data["mode"] = mode
+        files: dict = {"file": (filename, audio)}
+        if participants_manifest is not None:
+            # Vague 2 (D5 niveau 1) : le manifeste voyage en part multipart dédiée — le
+            # serveur le valide STRICTEMENT et ingère SANS lui s'il est douteux.
+            files["participants_manifest"] = (
+                "participants_manifest.json",
+                json.dumps(participants_manifest, ensure_ascii=False).encode("utf-8"),
+            )
         status, body = await self._transport.request(
             "POST", f"{self._base}/v1/audio/ingest",
-            headers=headers, data=data, files={"file": (filename, audio)},
+            headers=headers, data=data, files=files,
         )
         return IngestResult(
             status_code=status,

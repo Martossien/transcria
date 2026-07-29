@@ -7,6 +7,7 @@ transcription elle-même relève de l'E2E, pas d'un test unitaire de route.
 from __future__ import annotations
 
 import io
+import json
 import uuid
 from pathlib import Path
 
@@ -323,3 +324,44 @@ class TestIngestMeetingDefaults:
         assert r.status_code == 202
         assert captured["extra"] == {"source": "meeting", "provider": "zoom-sdk",
                                      "external_meeting_id": "occ-7"}
+
+
+class TestIngestParticipantsManifest:
+    """Vague 2 (D5 niveau 1) — la part multipart `participants_manifest` : validée
+    strictement, semée avant la mise en file ; invalide → ingestion SANS manifeste (202),
+    jamais un 500."""
+
+    def _post(self, client, token, monkeypatch, manifest_bytes=None):
+        _wire_ingest(monkeypatch)
+        calls = {}
+        monkeypatch.setattr(facade_api, "_seed_from_manifest",
+                            lambda cfg, job_id, raw: calls.setdefault("raw", raw))
+        data = _wav() | {"provider": "zoom-sdk"}
+        if manifest_bytes is not None:
+            data["participants_manifest"] = (io.BytesIO(manifest_bytes), "manifest.json")
+        r = client.post("/v1/audio/ingest", headers=_auth(token),
+                        data=data, content_type="multipart/form-data")
+        return r, calls
+
+    def test_manifeste_valide_est_seme(self, client, facade_on, op_token, monkeypatch):
+        raw = {"version": 1, "source": "zoom-sdk", "participants": [
+            {"id": "p1", "name": "Alice", "kind": "solo", "speech_windows": [[0, 5]]}]}
+        r, calls = self._post(client, op_token, monkeypatch,
+                              json.dumps(raw).encode("utf-8"))
+        assert r.status_code == 202
+        assert calls["raw"]["participants"][0]["name"] == "Alice"
+
+    def test_manifeste_invalide_ingestion_continue_sans(self, client, facade_on, op_token, monkeypatch):
+        r, calls = self._post(client, op_token, monkeypatch, b'{"version": 99}')
+        assert r.status_code == 202
+        assert "raw" not in calls
+
+    def test_json_illisible_ingestion_continue_sans(self, client, facade_on, op_token, monkeypatch):
+        r, calls = self._post(client, op_token, monkeypatch, b"pas du json")
+        assert r.status_code == 202
+        assert "raw" not in calls
+
+    def test_sans_manifeste_rien_ne_change(self, client, facade_on, op_token, monkeypatch):
+        r, calls = self._post(client, op_token, monkeypatch, None)
+        assert r.status_code == 202
+        assert "raw" not in calls

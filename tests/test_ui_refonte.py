@@ -291,3 +291,47 @@ class TestSourceBadge:
         # le marqueur du badge est son infobulle — les icônes bi-* existent ailleurs dans le wizard
         assert "Importé depuis une réunion en ligne" not in html
         assert "Enregistré au micro" not in html
+
+
+class TestStep5ManifestSuggestions:
+    """Vague 2 (D5) — l'étape 5 pré-remplie par le manifeste : suggestion sur piste solo,
+    encadré micro de salle, et jamais d'écrasement d'un nom déjà posé."""
+
+    def _seed(self, app, owner_id, *, with_mapping=False):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Réunion manifeste")
+            JobStore.update_state(job.id, JobState.CONTEXT_DONE)   # l'étape 5 ne se rend qu'après le contexte
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job.id)
+            fs.save_json("speakers/speaker_stats.json", {"speakers": [
+                {"speaker_id": "SPEAKER_00", "speaking_time_seconds": 8, "turn_count": 2},
+                {"speaker_id": "SPEAKER_01", "speaking_time_seconds": 9, "turn_count": 3},
+            ]})
+            fs.save_json("speakers/speaker_turns.json", {"available": True, "turns": [
+                {"speaker": "SPEAKER_00", "start": 1.0, "end": 9.0},
+                {"speaker": "SPEAKER_01", "start": 31.0, "end": 40.0},
+            ]})
+            fs.save_json("metadata/participants_manifest.json", {
+                "version": 1, "source": "jitsi", "participants": [
+                    {"id": "p1", "name": "Alice Durand", "kind": "solo",
+                     "speech_windows": [[0.0, 10.0]]},
+                    {"id": "p2", "name": "Salle Marengo", "kind": "room",
+                     "speech_windows": [[30.0, 60.0]]}]})
+            if with_mapping:
+                fs.save_json("speakers/speaker_mapping.json", {"mapping": {}, "speakers": [
+                    {"speaker_id": "SPEAKER_00", "mapped_name": "Nom Validé"}]})
+            return job.id
+
+    def test_solo_prefills_and_room_box_shown(self, app, admin_client, owner_id):
+        job_id = self._seed(app, owner_id)
+        html = admin_client.get(f"/jobs/{job_id}").data.decode()
+        assert 'value="Alice Durand"' in html
+        assert "suggéré par la réunion" in html
+        assert "Salle Marengo" in html and "SPEAKER_01" in html
+
+    def test_validated_name_never_overwritten(self, app, admin_client, owner_id):
+        job_id = self._seed(app, owner_id, with_mapping=True)
+        html = admin_client.get(f"/jobs/{job_id}").data.decode()
+        assert 'value="Nom Validé"' in html
+        assert 'value="Alice Durand"' not in html

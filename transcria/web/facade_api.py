@@ -21,6 +21,7 @@ Ce module respecte ``routes-independantes`` (import-linter) : il n'importe aucun
 autre module de routes, seulement des helpers partagés et les couches métier.
 """
 import functools
+import json
 import logging
 import os
 import tempfile
@@ -34,6 +35,11 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
 from transcria.config import get_config
+from transcria.ingestion.manifest import (
+    parse_participants_manifest,
+    seed_participants,
+    speaker_hint_from_manifest,
+)
 from transcria.ingestion.store import MeetingImportStore, compute_dedup_key
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
@@ -186,9 +192,48 @@ def _remote_transcribe(inference_url: str, audio_path: Path, language: str,
 
 
 
+def _read_participants_manifest(req) -> tuple[dict | None, str]:
+    """Lit et VALIDE la part multipart `participants_manifest` (vague 2, D5 niveau 1).
+
+    Rend `(manifeste_brut, "")` si valide, `(None, raison)` sinon — la raison est journalisée
+    et l'ingestion CONTINUE sans manifeste (règle §7 du plan : l'enrichissement n'est jamais
+    une exigence, et un 500 sur un document de contrôle serait pire que son absence)."""
+    part = req.files.get("participants_manifest")
+    if part is None:
+        return None, ""
+    try:
+        raw = json.loads(part.read().decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        return None, f"manifeste illisible : {exc}"
+    manifest, reason = parse_participants_manifest(raw)
+    if manifest is None:
+        return None, reason
+    return raw, ""
+
+
+def _seed_from_manifest(cfg: dict, job_id: str, raw: dict) -> None:
+    """Sème sur le job ce que le manifeste sait : le document lui-même (audit + projection
+    aval), les participants NOMMÉS (pistes solo) et la fourchette de locuteurs. Best-effort :
+    un échec de semis ne bloque pas l'ingestion (le job reste traitable sans)."""
+    manifest, _ = parse_participants_manifest(raw)
+    if manifest is None:                            # déjà validé en amont — ceinture
+        return
+    try:
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job_id)
+        fs.save_json("metadata/participants_manifest.json", raw)
+        seeded = seed_participants(manifest)
+        if seeded:
+            fs.save_json("context/participants.json", seeded)
+        JobStore.update_extra_data(
+            job_id, lambda extra: {**extra, "speaker_hint": speaker_hint_from_manifest(manifest)})
+    except Exception:  # noqa: BLE001
+        logger.warning("semis du manifeste participants impossible (job %s)", job_id, exc_info=True)
+
+
 def _create_and_queue_job(cfg: dict, file, title: str, *,
                           processing_profile_id: str | None = None,
-                          requested_mode: str | None = None):
+                          requested_mode: str | None = None,
+                          participants_manifest_raw: dict | None = None):
     """Crée → dépose → analyse → met en file un job depuis un fichier uploadé.
 
     Primitives identiques au wizard (JobService + exécuteur), via l'API de jobs.
@@ -208,6 +253,9 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
 
     job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+
+    if participants_manifest_raw is not None:
+        _seed_from_manifest(cfg, job_id, participants_manifest_raw)
 
     analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
     if analysis.get("error"):
@@ -301,10 +349,15 @@ def facade_ingest():
     explicit_mode = (request.form.get("mode") or "").strip() or None
     if provider and not explicit_profile and not explicit_mode:
         explicit_mode = "quality"
+    manifest_raw, manifest_reason = _read_participants_manifest(request)
+    if manifest_reason:
+        logger.warning("[façade] manifeste participants REJETÉ (%s) — ingestion sans manifeste",
+                       manifest_reason)
     job_id, result, error = _create_and_queue_job(
         cfg, file, title,
         processing_profile_id=explicit_profile,
-        requested_mode=explicit_mode)
+        requested_mode=explicit_mode,
+        participants_manifest_raw=manifest_raw)
     if error is not None:
         if dedup_key:
             MeetingImportStore.release(dedup_key)  # rejeu propre après échec
@@ -332,6 +385,9 @@ def facade_ingest():
             "idempotent": bool(dedup_key),
             "processing_profile_id": result["profile_id"],
             "mode": result["mode"],
+            "participants_manifest": ("accepted" if manifest_raw is not None
+                                      else (f"rejected: {manifest_reason}" if manifest_reason
+                                            else "absent")),
         },
     )
     return jsonify({
