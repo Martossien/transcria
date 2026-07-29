@@ -27,6 +27,21 @@ SECRET_SENTINEL = "********"
 # de bord. `lazy_gettext` est extrait par pybabel (clé ajoutée dans scripts/i18n_check.py).
 CONFIG_FORM_SECTIONS: list[dict] = [
     {
+        "title": _l("Réunions en ligne"),
+        "help": _l("Planification de bots de réunion par les utilisateurs (Zoom/Jitsi/Visio) — "
+                   "exige la façade temps réel active et un exécutant (meeting-runner) démarré."),
+        "fields": [
+            {"path": "connectors.meetings.enabled", "label": _l("Activer les réunions planifiées"),
+             "type": "bool",
+             "help": _l("Fait apparaître « Depuis une réunion » à la création d'un job (si un "
+                        "exécutant est vivant) et ouvre l'API de planification.")},
+            {"path": "connectors.meetings.runner_usernames", "label": _l("Comptes de service runner"),
+             "type": "csv",
+             "help": _l("Noms d'utilisateurs autorisés à opérer un meeting-runner — attribution "
+                        "nominative, jamais par rôle (revue sécurité).")},
+        ],
+    },
+    {
         "title": _l("Modèles & backends"),
         "help": _l("Choix des moteurs de transcription et de diarisation."),
         "fields": [

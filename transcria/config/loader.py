@@ -133,6 +133,18 @@ _DEFAULT_CONFIG = {
     # Temps réel & connecteurs de réunion (docs/TEMPS_REEL_REUNIONS.md). Tout est
     # OPT-IN, défaut OFF : sans activation, aucune route façade n'existe et la
     # surface d'API par défaut est strictement inchangée.
+    # Réunions côté utilisateur (vague 3, docs/UI_REUNIONS_WORKFLOW.md) : l'INTENTION
+    # (« le bot rejoint telle réunion à telle heure ») et son exécution. OPT-IN : false =
+    # ni API /api/meetings ni carte « Réunion » à la création de job.
+    "connectors": {
+        "meetings": {
+            "enabled": False,
+            # Comptes de SERVICE autorisés à opérer le meeting-runner (claim des intentions,
+            # relais d'états, rattachement d'audio). Attribution NOMINATIVE — jamais par rôle
+            # (la référence de réunion déchiffrée passe par ce canal). Cf. revue sécurité.
+            "runner_usernames": [],
+        },
+    },
     "live": {
         # Façade STT keystone : POST /v1/audio/transcriptions (OpenAI-audio) +
         # ingestion fichier POST /v1/audio/ingest (→ job). false = endpoints absents

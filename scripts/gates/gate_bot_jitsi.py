@@ -21,6 +21,7 @@ Le script affiche les frames reçues par participant. Zéro frame = la capture n
 from __future__ import annotations
 
 import argparse
+import os
 import asyncio
 import logging
 import struct
@@ -199,6 +200,8 @@ async def main() -> int:
     parser.add_argument("--ingest", action="store_true",
                         help="en fin de réunion, ingérer l'enregistrement complet → job batch "
                              "AVEC DIARISATION (sépare les personnes d'une même salle)")
+    parser.add_argument("--job-id", default=os.environ.get("TRANSCRIA_JOB_ID") or None,
+                        help="rattacher l'audio à un job PLANIFIÉ (vague 3, D4) au lieu d'en créer un")
     parser.add_argument("--participant-audio", metavar="FICHIER.wav", action="append",
                         help="voix jouée par un participant factice (WAV 48 kHz mono). "
                              "RÉPÉTABLE : un participant par occurrence → permet de tester "
@@ -276,7 +279,8 @@ async def main() -> int:
                 idempotency_key=f"bot|{occurrence.external_occurrence_id}",
                 provider="bot", external_meeting_id=occurrence.external_occurrence_id,
                 mode="quality",   # profil DIARISANT : sépare les personnes d'une même salle
-                participants_manifest=(ledger.to_manifest("jitsi") if ledger else None))
+                participants_manifest=(ledger.to_manifest("jitsi") if ledger else None),
+                job_id=args.job_id)
             print(f"  job créé : {result.job_id} (la diarisation séparera les locuteurs "
                   f"d'une même salle)")
         print(f"  capture : {sum(counter.per_participant.values())} frames, "

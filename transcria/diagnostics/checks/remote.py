@@ -1,6 +1,7 @@
 """Doctor — topologie distante : nœuds d'inférence, STT distant/servi, GPU des nœuds."""
 from __future__ import annotations
 
+import os
 from typing import Callable
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
@@ -16,6 +17,7 @@ from transcria.gpu.stt_instance_planner import (
     DEFAULT_SAFETY_MARGIN_MB,
     llm_reserved_by_gpu,
 )
+from transcria.ingestion.session_store import MeetingSessionStore
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     audiocpp_home,
@@ -234,3 +236,27 @@ def check_stt_instances_vram(
     if overflows:
         return CheckResult(name, WARN, " ; ".join(overflows), hint=_t("stt_inst_hint"))
     return CheckResult(name, OK, _t("stt_inst_ok", n=len(served)))
+
+
+def check_meeting_scheduling(cfg: dict) -> CheckResult:
+    """Réunions planifiées (vague 3) : si activées, la chaîne doit être complète — façade
+    active (le bot pousse l'audio par elle), clé de chiffrement présente, un runner vivant.
+    Sans runner, la carte « Réunion » est masquée : WARN avec la cause, pas un mystère."""
+    name = _t("chk_meetings")
+    meetings = ((cfg.get("connectors", {}) or {}).get("meetings", {}) or {})
+    if not meetings.get("enabled", False):
+        return CheckResult(name, OK, _t("meetings_disabled"))
+    problems = []
+    if not ((cfg.get("live", {}) or {}).get("facade", {}) or {}).get("enabled", False):
+        problems.append(_t("meetings_need_facade"))
+    if not (os.environ.get("TRANSCRIA_MEETING_REF_KEY") or "").strip():
+        problems.append(_t("meetings_need_key"))
+    if problems:
+        return CheckResult(name, FAIL, " ; ".join(problems), hint=_t("meetings_hint"))
+    try:
+        runners = len(MeetingSessionStore.live_runners(max_age_s=86400))
+    except Exception:  # noqa: BLE001 — base injoignable : déjà signalé par check_database
+        runners = -1
+    if runners == 0:
+        return CheckResult(name, WARN, _t("meetings_no_runner"), hint=_t("meetings_runner_hint"))
+    return CheckResult(name, OK, _t("meetings_ok"))

@@ -319,3 +319,23 @@ def _check_live(cfg: dict, r: ValidationResult) -> None:
 
 # Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale
 # fantaisiste dans le sélecteur). Étendre ici en même temps qu'on livre un catalogue.
+
+
+def _check_connectors(cfg: dict, r: ValidationResult) -> None:
+    """Section `connectors.meetings` (vague 3 réunions) — opt-in, validation minimale."""
+    if cfg is None:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("connectors: doit être un objet YAML")
+        return
+    meetings = cfg.get("meetings")
+    if meetings is None:
+        return
+    if not isinstance(meetings, dict):
+        r.add_error("connectors.meetings: doit être un objet YAML")
+        return
+    _check_bool(meetings, "enabled", "connectors.meetings.enabled", r)
+    usernames = meetings.get("runner_usernames")
+    if usernames is not None and (not isinstance(usernames, list)
+                                  or any(not isinstance(u, str) or not u.strip() for u in usernames)):
+        r.add_error("connectors.meetings.runner_usernames: liste de noms d'utilisateurs non vides attendue")

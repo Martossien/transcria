@@ -3,7 +3,19 @@
 > **Statut : EN COURS.** Vague 0 (consolidation §9) **LIVRÉE le 2026-07-29** (5 pushes :
 > gardes Docker, purge zoom_web + câblage admission_reason, scripts/ rangé gates|bench + carte,
 > doctor/config_schema découpés par domaine derrière façade + goldens, helpers docx extraits).
-> Vague 1 en cours. Plan rédigé le 2026-07-29 (v2, approfondie) après audit
+> Vagues 1 et 2 **LIVRÉES le 2026-07-29** (défaut diarisant + provenance/badges ; manifeste
+> participants bot→ingest→projection→étape 5). Vague 3 **LIVRÉE le 2026-07-29** : table
+> `meeting_sessions` (+ `meeting_runners`), chiffrement `meeting_ref` (module unique, clé
+> `TRANSCRIA_MEETING_REF_KEY`), machine d'états pure calquée sur les codes bot 0/1/2/3,
+> permissions `SCHEDULE_MEETINGS` (rôles) + `OPERATE_MEETING_RUNNER` (nominative par config
+> `connectors.meetings.runner_usernames`), API humaine `/api/meetings/*` + API runner
+> `/v1/meetings/*` (claim SKIP LOCKED, la référence ne sort déchiffrée QUE là), rattachement
+> d'audio au job planifié (`/v1/audio/ingest` + `job_id`), UI « Depuis une réunion » (panneau
+> de planification, états sur les cartes, wizard « audio à venir » avec profil débloqué),
+> section admin, check doctor, et le runner MANUEL de gate
+> (`scripts/gates/gate_meeting_manual_runner.py`) qui éprouve toute la chaîne sur Jitsi réel.
+> Prochaine : vague 4 (meeting-runner démon + installation + GHCR). Plan rédigé le
+> 2026-07-29 (v2, approfondie) après audit
 > complet du dépôt : parcours wizard, chemin d'ingestion, déploiement des bots, modèle de
 > permissions, formulaire de config, gestion du temps. Ce plan prolonge
 > [`docs/TEMPS_REEL_REUNIONS.md`](TEMPS_REEL_REUNIONS.md) (il **réalise** ses items L1–L5) et

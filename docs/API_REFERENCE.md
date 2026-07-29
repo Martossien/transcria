@@ -183,6 +183,9 @@
 | ⭐ `/api/jobs/<job_id>/status` | GET | connexion requise | Endpoint léger de polling — état courant du job pendant le traitement (contrat scriptable). | `transcria.web.processing_api` |
 | `/api/jobs/<job_id>/summary` | POST | connexion requise | _(docstring manquante)_ | `transcria.web.wizard_api` |
 | ⭐ `/api/jobs/<job_id>/upload` | POST | connexion requise | Dépose le fichier audio d'un job fraîchement créé (contrat scriptable). | `transcria.web.wizard_api` |
+| `/api/meetings` | POST | connexion requise | Planifie une réunion : crée le JOB (provenance posée) + la session (référence chiffrée), | `transcria.web.meetings_api` |
+| `/api/meetings/<session_id>/cancel` | POST | connexion requise | Annule une session (états annulables seulement) — visibilité = celle du job porteur. | `transcria.web.meetings_api` |
+| `/api/meetings/availability` | GET | connexion requise | Moteurs prêts + nombre de runners — pilote l'affichage de la carte « Réunion ». | `transcria.web.meetings_api` |
 | `/api/profiles/availability` | GET | connexion requise | Profils de traitement disponibles + profil recommandé (source unique pour le wizard). | `transcria.web.wizard_api` |
 | `/api/resources/status` | GET | connexion requise | État des ressources distantes pour le panneau frontale (mode dégradé inclus). | `transcria.web.processing_api` |
 | `/api/system/status` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.processing_api` |
@@ -196,8 +199,12 @@
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/v1/audio/ingest` | POST | — | Dépôt d'un enregistrement post-réunion → job TranscrIA (pipeline complet). | `transcria.web.facade_api` |
 | `/v1/audio/transcriptions` | POST | — | Transcription STT sans état, compatible OpenAI Audio Transcriptions. | `transcria.web.facade_api` |
+| `/v1/meetings/<session_id>/events` | POST | — | Événement de vie relayé par le runner claimant (jamais un terminal) — idempotent, | `transcria.web.meetings_api` |
+| `/v1/meetings/<session_id>/result` | POST | — | Issue d'une exécution de bot : mapping des codes 0/1/2/3 par la machine d'états | `transcria.web.meetings_api` |
+| `/v1/meetings/claim` | POST | — | Claim atomique (SKIP LOCKED) des sessions dues — SEUL endroit où la référence de | `transcria.web.meetings_api` |
+| `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 131 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 138 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

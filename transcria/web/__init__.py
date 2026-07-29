@@ -10,6 +10,7 @@ from transcria.web import (  # noqa: F401 — accrochage des routes au blueprint
     facade_api,
     health_routes,
     lexicon_api,
+    meetings_api,
     pages_routes,
     processing_api,
     refine_api,

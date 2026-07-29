@@ -77,6 +77,7 @@ from transcria.diagnostics.checks.probes import (  # noqa: F401 — façade
 from transcria.diagnostics.checks.remote import (  # noqa: F401 — façade
     check_inference_node_gpus,
     check_inference_nodes,
+    check_meeting_scheduling,
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
     check_stt_instances_vram,
@@ -117,6 +118,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_inference_nodes,
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
+    check_meeting_scheduling,
     check_stt_instances_vram,
     check_identity_backend,
     check_transport_security,
@@ -134,6 +136,7 @@ _PROFILE_CHECKS: dict[str, tuple[Callable[[dict], CheckResult], ...]] = {
         check_database_encoding,
         check_inference_nodes,
         check_remote_stt_control_plane,
+        check_meeting_scheduling,
         check_inference_node_gpus,
         check_storage,
         check_shared_storage,

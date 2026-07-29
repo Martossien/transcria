@@ -44,6 +44,7 @@ from transcria.web.lexicon_views import (
     promote_groups_view,
     promote_lexicons_view,
 )
+from transcria.web.meetings_views import meeting_creation_context, sessions_for_jobs
 from transcria.web.request_helpers import clean_job_title
 from transcria.workflow.agent_workspace import resolve_agent_work_root
 from transcria.workflow.profile_availability import compute_profiles_view, compute_wizard_layout
@@ -518,7 +519,9 @@ def index():
             cfg.get("security", {}).get("audit_retention_by_family") or {},
         )
     jobs = JobStore.list_for_user(current_user, include_all=current_user.has_role(Role.ADMIN))
-    return render_template("index.html", jobs=jobs, roles=Role)
+    return render_template("index.html", jobs=jobs, roles=Role,
+                           meeting_sessions=sessions_for_jobs(jobs),
+                           **meeting_creation_context(current_user))
 
 
 @web_bp.route("/jobs/new", methods=["POST"])
@@ -666,6 +669,7 @@ def job_wizard(job_id: str):
         summary=summary_data,
         meeting=meeting,
         manifest_rooms=manifest_rooms,
+        meeting_session=sessions_for_jobs([job]).get(job.id),
         synthese_prefill=synthese_prefill,
         participants=participants,
         lexicon=lexicon,

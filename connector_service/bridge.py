@@ -55,6 +55,7 @@ class JobsApiBridge:
         external_meeting_id: str | None = None,
         mode: str | None = None,
         participants_manifest: dict | None = None,
+        job_id: str | None = None,
     ) -> IngestResult:
         """POST /v1/audio/ingest. `idempotency_key` porte l'idempotence côté serveur :
         deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`).
@@ -73,6 +74,10 @@ class JobsApiBridge:
             data["external_meeting_id"] = external_meeting_id
         if mode:
             data["mode"] = mode
+        if job_id:
+            # Rattachement D4 (vague 3) : l'audio rejoint le job PLANIFIÉ au lieu d'en créer
+            # un second — réservé au compte de service runner côté serveur.
+            data["job_id"] = job_id
         files: dict = {"file": (filename, audio)}
         if participants_manifest is not None:
             # Vague 2 (D5 niveau 1) : le manifeste voyage en part multipart dédiée — le

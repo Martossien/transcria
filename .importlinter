@@ -77,6 +77,7 @@ name = Les modules de routes web sont indépendants entre eux
 type = independence
 modules =
     transcria.web.pages_routes
+    transcria.web.meetings_api
     transcria.web.wizard_api
     transcria.web.lexicon_api
     transcria.web.processing_api

@@ -6,8 +6,48 @@
   <form method="POST" action="/jobs/new" class="d-flex gap-2">
     <input type="text" name="title" class="form-control" placeholder="{{ _('Nom de la réunion') }}" style="width: 250px;">
     <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> {{ _('Nouveau traitement') }}</button>
+    {% if meeting_providers %}
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#meeting-panel">
+      <i class="bi bi-camera-video"></i> {{ _('Depuis une réunion') }}</button>
+    {% endif %}
   </form>
 </div>
+
+
+{% if meeting_providers %}
+<div class="collapse mb-4" id="meeting-panel">
+  <div class="card card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small mb-1">{{ _('Plateforme') }}</label>
+        <select id="meeting-provider" class="form-select form-select-sm">
+          {% for p in meeting_providers %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col">
+        <label class="form-label small mb-1">{{ _('Lien ou numéro de réunion') }}</label>
+        <input type="text" id="meeting-ref" class="form-control form-control-sm" autocomplete="off">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">{{ _('Titre') }}</label>
+        <input type="text" id="meeting-title" class="form-control form-control-sm">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">{{ _('Quand') }}</label>
+        <input type="datetime-local" id="meeting-when" class="form-control form-control-sm"
+               title="{{ _('Vide = dès que possible') }}">
+      </div>
+      <div class="col-auto">
+        <button type="button" class="btn btn-sm btn-primary" data-action="TranscrIA.scheduleMeeting">
+          {{ _('Planifier') }}</button>
+      </div>
+    </div>
+    <div class="small text-muted mt-2"><i class="bi bi-info-circle"></i>
+      {{ _("Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement.") }}</div>
+    <div id="meeting-error" class="small text-danger mt-1 d-none"></div>
+  </div>
+</div>
+{% endif %}
 
 {% if jobs %}
 <div class="row">
@@ -22,6 +62,18 @@
         <div class="d-flex justify-content-between align-items-center">
           <span class="badge {{ job.state|state_badge }}">{{ job.state|state_label }}</span>
           {% with source_job = job %}{% include 'wizard/_source_badge.html' %}{% endwith %}
+          {% set msess = meeting_sessions.get(job.id) if meeting_sessions else None %}
+          {% if msess %}
+          <span class="small {{ 'text-danger' if msess.state in ('not_admitted','failed_final') else 'text-muted' }}">
+            {% if msess.retrying %}{{ _('Incident technique — nouvel essai prévu') }}
+            {% elif msess.state == 'planned' and msess.scheduled_at %}🗓 {{ msess.label }} ({{ msess.scheduled_at.strftime('%d/%m %H:%M') }})
+            {% else %}{{ msess.label }}{% endif %}
+            {% if msess.cancellable %}
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1"
+                    data-action="TranscrIA.cancelMeeting" data-arg="{{ msess.id }}">{{ _('Annuler') }}</button>
+            {% endif %}
+          </span>
+          {% endif %}
           <small class="text-muted">{{ job.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
         </div>
         <div class="mt-2 d-flex gap-1 flex-wrap">
@@ -49,5 +101,11 @@
   <p class="mt-3 text-muted">{{ _('Aucun traitement pour le moment.') }}</p>
   <p class="text-muted">{{ _('Créez votre premier traitement pour transcrire une réunion.') }}</p>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if meeting_providers or meeting_sessions %}
+<script src="{{ asset_url('js/meetings_page.js') }}"></script>
 {% endif %}
 {% endblock %}

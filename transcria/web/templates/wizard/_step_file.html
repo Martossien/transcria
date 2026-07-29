@@ -14,6 +14,11 @@
           {% endif %}
         {% endif %}
       </div>
+    {% elif meeting_session and meeting_session.state not in ('not_admitted','failed_final','cancelled') %}
+      <div class="alert alert-info">
+        <i class="bi bi-camera-video"></i>
+        {{ _("L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant.") }}
+      </div>
     {% else %}
       <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
       <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg,.webm" class="form-control mb-2">
@@ -54,7 +59,9 @@
 
     <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent.
          Verrouillé tant que le fichier n'est pas téléversé : on choisit le profil APRÈS l'upload. -->
-    {% set profile_locked = file_status != 'done' %}
+    {# Job « réunion » : le profil se choisit AVANT l'audio (il arrivera tout seul) —
+       l'exigence « profil à l'étape 1 » vaut aussi sans upload (plan UI_REUNIONS §5.3). #}
+    {% set profile_locked = file_status != 'done' and not meeting_session %}
     <hr class="my-3">
     <p class="text-muted mb-2">
       {% trans %}<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées.{% endtrans %}

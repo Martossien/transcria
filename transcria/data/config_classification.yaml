@@ -29,6 +29,8 @@ exposed:
 - gpu.preemption
 - i18n.available_locales
 - i18n.default_locale
+- connectors.meetings.enabled
+- connectors.meetings.runner_usernames
 - live.facade.enabled
 - models.diarization_backend
 - models.live_stt_backend

@@ -1015,3 +1015,12 @@ inference:
 #     max_sync_audio_mb: 25     # au-delà, l'envoi est refusé (protège la mémoire du portail)
 #     max_sync_duration_s: 600  # durée maximale d'un envoi synchrone
 #     inference_timeout_s: 300  # patience côté moteur avant d'abandonner une fenêtre
+
+# ── Réunions planifiées par les utilisateurs (vague 3, docs/UI_REUNIONS_WORKFLOW.md) ──────
+# Opt-in : activer fait apparaître « Depuis une réunion » à la création d'un job (si un
+# meeting-runner est vivant) et ouvre /api/meetings. Exige la façade (live.facade.enabled)
+# et la clé TRANSCRIA_MEETING_REF_KEY dans .env (chiffrement des références de réunion).
+# connectors:
+#   meetings:
+#     enabled: true
+#     runner_usernames: [svc-runner]   # comptes de SERVICE du meeting-runner (nominatif)

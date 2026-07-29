@@ -57,6 +57,7 @@ from transcria.config.checks.orchestration import (  # noqa: F401 — façade
 )
 from transcria.config.checks.platform import (  # noqa: F401 — façade
     _KNOWN_LOCALES,
+    _check_connectors,
     _check_gpu,
     _check_i18n,
     _check_live,
@@ -118,4 +119,5 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_maintenance(cfg.get("maintenance", {}), result)
     _check_i18n(cfg.get("i18n", {}), result)
     _check_live(cfg.get("live", {}), result)
+    _check_connectors(cfg.get("connectors", {}), result)
     return result

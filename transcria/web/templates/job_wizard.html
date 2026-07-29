@@ -15,6 +15,16 @@
     <div>
       <h1 class="h4 mb-1">{{ job.title }}
         {% with source_job = job %}{% include 'wizard/_source_badge.html' %}{% endwith %}</h1>
+      {% if meeting_session %}
+      <div class="small {{ 'text-danger' if meeting_session.state in ('not_admitted','failed_final') else 'text-muted' }}">
+        {% if meeting_session.retrying %}{{ _('Incident technique — nouvel essai prévu') }}
+        {% elif meeting_session.state == 'planned' and meeting_session.scheduled_at %}🗓 {{ meeting_session.label }} — {{ meeting_session.scheduled_at.strftime('%d/%m/%Y %H:%M') }}
+        {% else %}{{ meeting_session.label }}{% endif %}
+        {% if meeting_session.last_error and meeting_session.state in ('not_admitted','failed_final') %}
+        <span class="text-muted">({{ meeting_session.last_error }})</span>
+        {% endif %}
+      </div>
+      {% endif %}
       <small class="text-muted">{{ _('Créé le %(date)s', date=job.created_at.strftime('%d/%m/%Y à %H:%M')) }}</small>
     </div>
     <div>

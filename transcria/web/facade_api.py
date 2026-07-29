@@ -40,6 +40,7 @@ from transcria.ingestion.manifest import (
     seed_participants,
     speaker_hint_from_manifest,
 )
+from transcria.ingestion.session_store import MeetingSessionStore
 from transcria.ingestion.store import MeetingImportStore, compute_dedup_key
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
@@ -190,6 +191,50 @@ def _remote_transcribe(inference_url: str, audio_path: Path, language: str,
     payload = resp.json() or {}
     return [seg for seg in (payload.get("segments") or []) if isinstance(seg, dict)]
 
+
+
+def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict | None):
+    """Rattache l'enregistrement d'une réunion au job PLANIFIÉ (D4). Rend une réponse
+    d'erreur Flask, ou None si le job est déposé + mis en file.
+
+    Garde-fous : le job doit exister, porter une session de réunion, et cette session doit
+    être claimée par LE runner porteur du jeton (un jeton ordinaire, même valide, ne
+    rattache rien — la frontière du compte de service). Le profil vient du job (choisi par
+    l'utilisateur à la planification), défaut diarisant sinon."""
+    if Permission.OPERATE_MEETING_RUNNER not in get_user_permissions(current_user):
+        return jsonify({"error": "Rattachement réservé au compte de service runner"}), 403
+    job = JobStore.get_by_id(job_id)
+    if job is None:
+        return jsonify({"error": "Job cible inconnu"}), 404
+    session = MeetingSessionStore.for_job(job_id)
+    if session is None:
+        return jsonify({"error": "Ce job ne porte aucune session de réunion"}), 409
+
+    JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+    if manifest_raw is not None:
+        _seed_from_manifest(cfg, job_id, manifest_raw)
+    analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
+    if analysis.get("error"):
+        return jsonify({"error": f"Analyse impossible: {analysis['error']}", "job_id": job_id}), 422
+
+    profile_id = (job.get_extra_data() or {}).get("processing_profile_id")
+    try:
+        profile, mode = profiles.resolve_request(profile_id, "quality")
+    except (KeyError, ValueError):
+        profile, mode = profiles.resolve_request(None, "quality")
+
+    audio_path = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).get_original_audio_path()
+    executor = get_job_executor()
+    if audio_path is None or executor is None:
+        return jsonify({"error": "Dépôt ou worker indisponible", "job_id": job_id}), 503
+    result = executor.submit_process(job_id, str(audio_path), mode,
+                                     vram_profile=PipelineService.estimate_profile_resources(cfg, profile),
+                                     processing_profile_id=profile.id)
+    if not result.get("accepted"):
+        return jsonify({"error": "Un traitement est déjà en cours", "job_id": job_id}), 409
+    JobStore.update(job_id, processing_mode=mode)
+    JobStore.update_state(job_id, JobState.READY_TO_PROCESS)
+    return None
 
 
 def _read_participants_manifest(req) -> tuple[dict | None, str]:
@@ -353,6 +398,26 @@ def facade_ingest():
     if manifest_reason:
         logger.warning("[façade] manifeste participants REJETÉ (%s) — ingestion sans manifeste",
                        manifest_reason)
+
+    # Vague 3 (D4) : un job de RÉUNION existe AVANT son audio — le bot RATTACHE
+    # l'enregistrement au job planifié au lieu d'en créer un second. Réservé au runner
+    # claimant de la session du job (le jeton ordinaire ne rattache rien).
+    target_job_id = (request.form.get("job_id") or "").strip() or None
+    if target_job_id:
+        attach_error = _attach_recording_to_job(cfg, target_job_id, file,
+                                                manifest_raw=manifest_raw)
+        if attach_error is not None:
+            return attach_error
+        if dedup_key:
+            MeetingImportStore.attach_job(dedup_key, target_job_id)
+        audit_log(action=AuditAction.JOB_ENQUEUE, target_type="job", target_id=target_job_id,
+                  target_label=title,
+                  details={"source": "facade_ingest_attach", "provider": provider,
+                           "external_meeting_id": external_meeting_id})
+        return jsonify({"job_id": target_job_id, "state": JobState.READY_TO_PROCESS.value,
+                        "attached": True,
+                        "status_url": f"/api/jobs/{target_job_id}/status"}), 202
+
     job_id, result, error = _create_and_queue_job(
         cfg, file, title,
         processing_profile_id=explicit_profile,
