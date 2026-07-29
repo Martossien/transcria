@@ -34,6 +34,7 @@ class ConnectorsPlan:
     install_systemd: bool = False
     systemd_dir: Path = Path("/etc/systemd/system")
     install_browsers: bool = False        # playwright install chromium (bot HORS conteneur)
+    install_deps: bool = True             # False = ne poser que config + unité (flux TOUJOURS)
     env_file: Path | None = None          # .env où poser la clé de chiffrement (défaut repo)
 
 
@@ -41,9 +42,9 @@ RUNNER_CONFIG_TEMPLATE = """\
 # Configuration du meeting-runner (vague 4 — docs/UI_REUNIONS_WORKFLOW.md).
 # Démarrage : TRANSCRIA_RUNNER_CONFIG={config_path} python -m connector_service.runner
 portal_url: http://127.0.0.1:7870
-# Jeton d'API d'un compte listé dans connectors.meetings.runner_usernames (portail).
-# Générer : venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner
-token_file: {config_dir}/runner_token.txt
+# Jeton d'exécutant : DÉPOSÉ AUTOMATIQUEMENT par le bouton « Activer » de
+# /admin/connecteurs (auto-provisionnement) — rien à faire ici dans le cas nominal.
+token_file: {config_dir}/instance/{token_filename}
 runner_name: meeting-runner-1
 capacity: 2
 poll_interval_s: 30
@@ -86,7 +87,9 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
     requirements = plan.repo_root / "requirements-connectors.txt"
     if not requirements.exists():
         raise ConnectorsPhaseError(f"requirements-connectors.txt introuvable ({requirements})")
-    if connectors_deps_complete(plan.venv_python):
+    if not plan.install_deps:
+        console.ok("dépendances connecteurs : ignorées (pose du runner dormant seulement)")
+    elif connectors_deps_complete(plan.venv_python):
         console.ok("dépendances connecteurs déjà présentes")
     else:
         console.info("installation des dépendances connecteurs (opt-in)…")
@@ -97,7 +100,7 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
         console.ok(f"config runner déjà présente : {config_path}")
     else:
         config_path.write_text(
-            RUNNER_CONFIG_TEMPLATE.format(config_path=config_path, config_dir=plan.config_dir),
+            RUNNER_CONFIG_TEMPLATE.format(config_path=config_path, config_dir=plan.config_dir, token_filename="meeting_runner_token.txt"),
             encoding="utf-8")
         console.ok(f"squelette de config runner écrit : {config_path} (compléter token_file)")
 
@@ -109,14 +112,22 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
 
     if plan.install_systemd:
         unit_path = plan.systemd_dir / "transcria-meeting-runner.service"
-        unit_path.write_text(
-            SYSTEMD_UNIT_TEMPLATE.format(repo_root=plan.repo_root,
-                                         config_path=config_path,
-                                         venv_python=plan.venv_python),
-            encoding="utf-8")
+        try:
+            unit_path.write_text(
+                SYSTEMD_UNIT_TEMPLATE.format(repo_root=plan.repo_root,
+                                             config_path=config_path,
+                                             venv_python=plan.venv_python),
+                encoding="utf-8")
+        except PermissionError:
+            # Jamais bloquant : la check-list admin affiche le remède exact.
+            console.info(f"droits insuffisants pour {unit_path} — poser l'unité en root : "
+                         "sudo venv/bin/python -m transcria.installer.cli connectors --no-deps --systemd")
+            return
         runner(["systemctl", "daemon-reload"])
-        console.ok(f"unité systemd installée : {unit_path} (activer : systemctl enable --now "
-                   "transcria-meeting-runner)")
+        # DORMANT par défaut (décision utilisateur) : démarrée tout de suite, elle patiente
+        # tant que l'admin n'a pas cliqué « Activer » — zéro commande au moment voulu.
+        runner(["systemctl", "enable", "--now", "transcria-meeting-runner"])
+        console.ok(f"unité systemd installée et démarrée (DORMANTE) : {unit_path}")
 
 
 def _ensure_meeting_ref_key(plan: ConnectorsPlan, console) -> None:

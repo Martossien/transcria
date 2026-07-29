@@ -39,7 +39,7 @@ def test_installe_deps_et_ecrit_le_squelette(tmp_path, monkeypatch):
     apply_connectors(plan, console=_Console(), runner=cmds.append)
     assert any("pip" in c for c in cmds[0])
     runner_yaml = (plan.config_dir / "runner.yaml").read_text(encoding="utf-8")
-    assert "portal_url" in runner_yaml and "create-runner-token" in runner_yaml
+    assert "portal_url" in runner_yaml and "meeting_runner_token.txt" in runner_yaml  # jeton auto-provisionné
 
 
 def test_idempotent_deps_presentes_et_config_existante(tmp_path, monkeypatch):
@@ -64,6 +64,7 @@ def test_systemd_ecrit_l_unite_et_recharge(tmp_path, monkeypatch):
     unit = (sysd / "transcria-meeting-runner.service").read_text(encoding="utf-8")
     assert "connector_service.runner" in unit and "TimeoutStopSec" in unit
     assert ["systemctl", "daemon-reload"] in cmds
+    assert ["systemctl", "enable", "--now", "transcria-meeting-runner"] in cmds   # DORMANTE, démarrée
 
 
 def test_requirements_absent_erreur_actionnable(tmp_path):

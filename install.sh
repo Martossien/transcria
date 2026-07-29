@@ -1484,6 +1484,16 @@ if [[ "$WITH_STT_RUNTIMES" = true ]]; then
     log "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."
 fi
 
+# ── Runner de réunion DORMANT (TOUJOURS posé — l'activation se fait dans l'UI admin) ────────
+# Décision utilisateur 2026-07-29 : « l'admin ne touche que l'interface ». Le démon est
+# quasi sans dépendances (les bots vivent dans les images Docker) : on pose runner.yaml,
+# la clé de chiffrement et l'unité systemd démarrée DORMANTE — elle patiente jusqu'au
+# bouton « Activer » de /admin/connecteurs, qui auto-provisionne le reste.
+CONNECTORS_ARGS=(--no-deps --config-dir "$INSTALL_DIR")
+[[ "$INSTALL_SYSTEMD" = true && "$HAVE_SYSTEMCTL" = true ]] && CONNECTORS_ARGS+=(--systemd)
+python_module transcria.installer.cli connectors "${CONNECTORS_ARGS[@]}" \
+    || warn "Pose du runner dormant échouée (relancer : venv/bin/python -m transcria.installer.cli connectors --no-deps --systemd)"
+
 # ── Réunions planifiées (opt-in --with-meeting-bots) ─────────────────────────
 # Délégation pure à la phase transcria/installer/connectors_phase.py (vague 4 du plan
 # docs/UI_REUNIONS_WORKFLOW.md). Jamais dans le flux par défaut : Playwright/aiortc lourds.

@@ -61,11 +61,20 @@ def _docker_launcher(cfg):
 
 
 async def _amain() -> int:
-    try:
-        cfg = load_runner_config()
-    except RunnerConfigError as exc:
-        logger.error("%s", exc)
-        return 3
+    # MODE DORMANT (décision utilisateur 2026-07-29) : l'unité systemd est posée dès
+    # l'installation, AVANT toute activation — config ou jeton absents ne sont pas une
+    # erreur, c'est « pas encore activé depuis le menu admin ». On patiente : dès que le
+    # bouton « Activer » a déposé le jeton, le cycle suivant démarre tout seul.
+    cfg = None
+    warned = False
+    while cfg is None:
+        try:
+            cfg = load_runner_config()
+        except RunnerConfigError as exc:
+            if not warned:
+                logger.info("dormant — %s (activation depuis /admin/connecteurs)", exc)
+                warned = True
+            await asyncio.sleep(30)
     daemon = MeetingRunnerDaemon(cfg, post=_http_post(cfg.portal_url, cfg.token),
                                  launch=_docker_launcher(cfg))
     loop = asyncio.get_running_loop()
