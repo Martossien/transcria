@@ -475,7 +475,27 @@ marche à suivre pour l'activer : page **`/admin/connecteurs`** du portail.
 
 `docker-compose.legacy-gpu.yml` remplace le mode **CDI** par l'ancien `runtime: nvidia`. Utile
 uniquement là où le démon Docker est antérieur à la version 25 et ignore CDI — `docker.io`
-d'Ubuntu/Debian, ou un LXC imbriqué. À empiler sur le compose principal :
+d'Ubuntu/Debian, ou un LXC imbriqué.
+
+⚠ **Ce fichier n'est PAS versionné** (il est dans `.gitignore`) : il dépend de la machine, et
+un clone neuf ne l'aura pas. Le voici en entier, à recréer si besoin :
+
+```yaml
+# Surcharge LOCALE : GPU en mode legacy `runtime: nvidia` pour les démons Docker < 25 sans CDI.
+services:
+  migrate-gpu:
+    devices: []
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+  all-in-one:
+    devices: []
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+```
+
+À empiler sur le compose principal :
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.legacy-gpu.yml --profile gpu up -d

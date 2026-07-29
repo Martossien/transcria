@@ -66,6 +66,10 @@ pare-feu traîne, et c'est aussi le connecteur le plus facile à faire accepter 
 
 ### À préparer sur la machine « pare-feu » AVANT de commencer
 
+0. **Ce que `git clone` ne transporte PAS** — secrets, poids, `~/.transcria-bot.env`, données
+   privées : liste complète et vérifiée dans **[docs/INSTALL.md § 14](INSTALL.md#14-reprendre-le-projet-sur-une-autre-machine--ce-que-git-ne-transporte-pas)**.
+   ⚠ En particulier : ne pas recopier `config.yaml` tel quel (chemins absolus et calibration
+   VRAM de l'ANCIENNE machine), le laisser régénérer par `install.sh`.
 1. Le dépôt à jour (`git pull`) — tout le code est sur `main`.
 2. Les deux comptes ci-dessus, **et les procédures pas à pas sont déjà écrites** : ouvrir
    `/admin/connecteurs` dans le portail, chaque plateforme y porte ses étapes exactes.

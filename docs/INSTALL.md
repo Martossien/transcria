@@ -19,6 +19,7 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 11. [Service systemd](#11-service-systemd)
 12. [Dépannage](#12-dépannage)
 13. [Déploiement distribué (frontale + nœud de ressources)](#13-déploiement-distribué-frontale--nœud-de-ressources)
+14. [Reprendre le projet sur une AUTRE machine](#14-reprendre-le-projet-sur-une-autre-machine--ce-que-git-ne-transporte-pas)
 
 ---
 
@@ -1936,6 +1937,66 @@ sudo systemctl start transcria        # ou ./start.sh
 - **Pare-feu** : n'exposer les ports du nœud (8002/8003/8005/8080) qu'à la frontale.
 - `transport.audio: upload` est **obligatoire** (la frontale envoie les octets ; un chemin
   `file_ref` ne serait pas résoluble côté nœud — filesystem non partagé).
+
+## 14. Reprendre le projet sur une AUTRE machine — ce que git ne transporte pas
+
+`git clone` ne suffit pas, et la liste de ce qui manque n'est pas devinable : plusieurs
+éléments sont dans `.gitignore` **à dessein** (secrets, poids, données privées, réglages
+propres à la machine). Cette section les énumère, en distinguant ce qui se **régénère** de ce
+qui doit être **copié** — copier ce qui se régénère fait perdre du temps et transporte des
+chemins absolus périmés.
+
+### Ce qui se régénère seul — NE PAS copier
+
+| Élément | Qui le recrée |
+|---|---|
+| `venv/`, `runtimes/` | `install.sh` |
+| `models/` (~6 Go) | `install.sh` (re-télécharge ; propose Cohere, vérifie pyannote avec `HF_TOKEN`) |
+| `config.yaml` | `install.sh` via `scripts/bootstrap_config.py` — **auto-détecte les binaires et chemins de la NOUVELLE machine**, ce qu'une copie ne ferait pas |
+| `transcria/web/translations/**/*.mo` | `install.sh` (phase i18n, `transcria/installer/i18n_phase.py`) |
+| `instance/`, `jobs/` (les répertoires vides) | `install.sh` |
+
+⚠ **Ne recopiez pas `config.yaml` machine à machine sans le relire** : il contient des chemins
+absolus (binaire llama.cpp, modèles, base) et une calibration VRAM propre au matériel. Sur un
+GPU différent, la reprendre telle quelle donne des échecs d'allocation difficiles à rattacher
+à leur cause.
+
+### Ce qu'il faut COPIER — rien ne le recréera
+
+| Élément | Nature | Remarque |
+|---|---|---|
+| `.env` | secrets (base, jetons) | jamais versionné |
+| `~/.transcria-bot.env` | identifiants du bot de réunion (Zoom…) | **hors du dépôt**, dans le home |
+| `voices/` (~4 Mo) | empreintes vocales des locuteurs connus | petit, et non reconstituable |
+| `jobs/` (~3,7 Go) | **données privées** de validation | à copier SEULEMENT pour rejouer le banc d'essai. ⚠ Contenus et NOMS jamais sur GitHub |
+| `backups/`, `transcrIA.db` | base locale et sauvegardes | selon le besoin de continuité |
+| `docker-compose.legacy-gpu.yml` | surcharge GPU locale | non versionné — contenu intégral dans [docs/DOCKER.md](DOCKER.md) |
+| Scripts d'exploitation locaux | ex. bascule de configuration LLM | volontairement non commités |
+
+### À refaire sur la nouvelle machine
+
+1. **PostgreSQL de test** — la suite exige un rôle dédié. Sans lui, `conftest` tente un
+   PostgreSQL éphémère via `initdb`, **qui échoue en root** :
+   ```bash
+   export TRANSCRIA_TEST_PG_HOST=127.0.0.1 TRANSCRIA_TEST_PG_USER=transcria_test \
+          TRANSCRIA_TEST_PG_PASSWORD=… PGCLIENTENCODING=UTF8
+   ```
+2. **Spec CDI NVIDIA** — à régénérer après tout changement de pilote ou de GPU (cf.
+   [docs/DOCKER.md](DOCKER.md)). Si le démon Docker est antérieur à la v25, recréer aussi la
+   surcharge legacy.
+3. **Calibration VRAM** — les paliers LLM dépendent des cartes présentes : relancer
+   `install.sh` plutôt que reprendre les valeurs de l'ancienne machine.
+4. **Images de bot** — rien à copier : `scripts/bot.sh` construit l'image manquante.
+
+### Vérifier que la reprise est complète
+
+```bash
+venv/bin/python scripts/doctor.py --config config.yaml     # diagnostic sans effet de bord
+TRANSCRIA_TEST_PG_HOST=… venv/bin/python -m pytest tests -q # la suite doit passer
+```
+
+Le `doctor` nomme ce qui manque. Tant qu'il signale un modèle absent, ce n'est pas la peine de
+lancer un traitement : l'échec surviendrait plus loin, avec un message moins clair.
 
 ---
 
