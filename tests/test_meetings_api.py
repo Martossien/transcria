@@ -266,3 +266,52 @@ class TestIngestAttach:
                         data={"file": (io.BytesIO(b"RIFF0000WAVE"), "r.wav"), "job_id": job_id},
                         content_type="multipart/form-data")
         assert r.status_code == 409
+
+
+class TestLeasesAndCancellations:
+    """Lot 4a : baux de claim (un runner mort rend ses sessions) + canal d'annulation à chaud."""
+
+    def test_claim_perime_redevient_claimable(self, meetings_on, client, admin_client,
+                                              runner_token, app):
+        from datetime import datetime, timedelta, timezone
+        _heartbeat(client, runner_token)
+        _create(client, admin_client, ref="https://meet.jit.si/lease")
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "mort"})
+        with app.app_context():
+            from transcria.database import db
+            from transcria.ingestion.session_models import MeetingSession
+            from transcria.ingestion.session_store import MeetingSessionStore
+            s = db.session.execute(db.select(MeetingSession)).scalars().first()
+            s.claimed_at = datetime.now(timezone.utc) - timedelta(seconds=600)
+            db.session.commit()
+            assert MeetingSessionStore.release_expired_leases() == 1
+            db.session.refresh(s)
+            assert s.state == "planned" and s.claimed_by is None
+
+    def test_in_meeting_bail_long_termine_honnetement(self, meetings_on, client, admin_client,
+                                                      runner_token, app):
+        from datetime import datetime, timedelta, timezone
+        _heartbeat(client, runner_token)
+        sid = _create(client, admin_client, ref="https://meet.jit.si/lost").get_json()["session"]["id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        for event in ("joining", "in_meeting"):
+            client.post(f"/v1/meetings/{sid}/events", headers=_auth(runner_token),
+                        json={"runner": "runner-1", "event": event})
+        with app.app_context():
+            from transcria.database import db
+            from transcria.ingestion.session_store import MeetingSessionStore
+            s = MeetingSessionStore.get(sid)
+            s.claimed_at = datetime.now(timezone.utc) - timedelta(hours=9)
+            db.session.commit()
+            assert MeetingSessionStore.release_expired_leases() == 1
+            db.session.refresh(s)
+            assert s.state == "failed_final" and "peut-être" in s.last_error
+
+    def test_heartbeat_rend_les_annulations_a_stopper(self, meetings_on, client, admin_client,
+                                                      runner_token):
+        _heartbeat(client, runner_token)
+        sid = _create(client, admin_client, ref="https://meet.jit.si/stop").get_json()["session"]["id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        admin_client.post(f"/api/meetings/{sid}/cancel")
+        body = _heartbeat(client, runner_token).get_json()
+        assert body["cancelled_sessions"] == [sid]

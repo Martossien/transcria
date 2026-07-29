@@ -14,7 +14,14 @@
 > de planification, états sur les cartes, wizard « audio à venir » avec profil débloqué),
 > section admin, check doctor, et le runner MANUEL de gate
 > (`scripts/gates/gate_meeting_manual_runner.py`) qui éprouve toute la chaîne sur Jitsi réel.
-> Prochaine : vague 4 (meeting-runner démon + installation + GHCR). Plan rédigé le
+> Vague 4 **LIVRÉE le 2026-07-29** : démon `connector_service/runner/` (config fail-loud,
+> argv Docker purs — jamais un secret dans ps —, boucle testée avec portail/lanceur injectés,
+> relais des événements BOT_EVENTS=json émis par l'orchestrateur du bot, annulation à chaud
+> par SIGTERM, arrêt propre qui laisse finir les réunions), baux côté serveur (runner tué →
+> sessions re-claimables ; in_meeting muet > 8 h → échec honnête), phase installeur
+> `connectors` + `install.sh --with-meeting-bots` + unité systemd + `create-runner-token`,
+> images bot publiées sur GHCR à chaque tag (job matrix léger). Reste vague 5 (pistes
+> séparées + panneau live + câblage LiveConnectorSession). Plan rédigé le
 > 2026-07-29 (v2, approfondie) après audit
 > complet du dépôt : parcours wizard, chemin d'ingestion, déploiement des bots, modèle de
 > permissions, formulaire de config, gestion du temps. Ce plan prolonge

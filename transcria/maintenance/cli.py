@@ -253,6 +253,41 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_create_runner_token(args: argparse.Namespace) -> int:
+    """Crée (ou réutilise) le COMPTE DE SERVICE du meeting-runner et émet son jeton d'API.
+
+    Vague 4 réunions (docs/UI_REUNIONS_WORKFLOW.md §5.8) : évite la connexion interactive
+    d'un compte de service. Le jeton est affiché UNE seule fois (ou écrit dans --out avec
+    permissions 600). Rappel affiché : le compte doit figurer dans
+    `connectors.meetings.runner_usernames` (attribution NOMINATIVE de la permission)."""
+    import secrets
+
+    from app import create_app
+
+    app = create_app(args.config)
+    with app.app_context():
+        from transcria.auth.api_tokens import create_token
+        from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
+
+        user = UserStore.get_by_username(args.username)
+        if user is None:
+            user = UserStore.create_user(args.username, secrets.token_urlsafe(24),
+                                         role=Role.OPERATOR)
+            print(f"✔ compte de service créé : {args.username} (rôle operator, mot de passe aléatoire)")
+        full, _record = create_token(user.id, label=f"meeting-runner ({args.username})")
+        if args.out:
+            out = Path(args.out)
+            out.write_text(full + "\n", encoding="utf-8")
+            out.chmod(0o600)
+            print(f"✔ jeton écrit : {out} (600)")
+        else:
+            print(f"JETON (affiché UNE fois) : {full}")
+        print(f"⚠ Ajouter '{args.username}' à connectors.meetings.runner_usernames dans config.yaml —")
+        print("  sans cela le jeton n'a PAS la permission runner (attribution nominative).")
+    return 0
+
+
 def _cmd_reset_admin_password(args: argparse.Namespace) -> int:
     """Réinitialise le mot de passe d'un compte (PISTES_AMELIORATION §6.4).
 
@@ -392,6 +427,12 @@ def main(argv: list[str] | None = None) -> int:
     oc.add_argument("--opencode-home", default=None,
                     help="HOME contenant .opencode (défaut : HOME courant — root pour le service)")
     oc.set_defaults(func=_cmd_opencode_upgrade)
+
+    crt = sub.add_parser("create-runner-token",
+                         help="crée le compte de service du meeting-runner et émet son jeton (affiché une fois)")
+    crt.add_argument("username", help="nom du compte de service (ex. svc-runner)")
+    crt.add_argument("--out", default="", help="écrire le jeton dans ce fichier (600) au lieu de l'afficher")
+    crt.set_defaults(func=_cmd_create_runner_token)
 
     rap = sub.add_parser("reset-admin-password",
                          help="réinitialise le mot de passe d'un compte (exécution locale, audité)")

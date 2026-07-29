@@ -417,6 +417,10 @@ transcria/
     health.py / fakes.py    # sonde de santé ; doublures utilisées par les tests
     live/                   # capture TEMPS RÉEL : transports (livekit, rtms, meet_media, teams_rtm, zoom_sdk),
                             #   façade STT (facade_stt.py), démultiplexage par locuteur
+    runner/                 # meeting-runner (vague 4) : SEUL composant à voir Docker — tire les intentions
+                            #   du portail (claim/events/result), lance un conteneur par session (config, commands
+                            #   PURS + daemon testé avec portail et lanceur injectés) ; unité systemd via la phase
+                            #   installeur `connectors` (+ maintenance.cli create-runner-token)
     bot/                    # bot participant : navigateur headless (Jitsi/Meet) + zoom_sdk.py (SDK natif)
     # --- Briques cloud PURES (aucun réseau ici : c'est ce qui les rend testables sans compte) ---
     teams_graph.py          # abonnements Microsoft Graph : construction, durées (max 4320 min), notifications, cycle de vie

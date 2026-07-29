@@ -185,7 +185,8 @@ def v1_runner_heartbeat():
         platforms_json=json.dumps([str(p) for p in (body.get("platforms") or [])][:32]),
         images_json=json.dumps(list(body.get("images") or [])[:16]),
     )
-    return jsonify({"ok": True})
+    return jsonify({"ok": True,
+                    "cancelled_sessions": MeetingSessionStore.cancelled_for_runner(name)})
 
 
 @web_bp.route("/v1/meetings/claim", methods=["POST"])

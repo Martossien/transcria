@@ -79,3 +79,20 @@ def test_erreur_driver_devient_outcome_error_et_ferme():
     outcome = asyncio.run(BotSession(driver).run("https://x"))       # ne crashe PAS l'appelant
     assert outcome.reason == "error" and outcome.admitted is True    # admis puis erreur
     assert ("close",) in driver.calls                                # nettoyage garanti
+
+
+def test_on_state_notifie_chaque_transition():
+    """Vague 4 : le runner relaie les états au portail via ce rappel — jamais par les logs."""
+    driver = FakeDriver(admitted=True, end_reason="left_alone")
+    seen: list[str] = []
+    session = BotSession(driver, on_state=lambda s: seen.append(s.value))
+    asyncio.run(session.run("https://meet.jit.si/x"))
+    assert seen[:3] == ["waiting_admission", "active", "leaving"]
+
+
+def test_observateur_defaillant_ne_casse_pas_le_cycle():
+    def boom(_):
+        raise RuntimeError("observateur cassé")
+    outcome = asyncio.run(BotSession(FakeDriver(admitted=True), on_state=boom)
+                          .run("https://meet.jit.si/x"))
+    assert outcome.admitted is True

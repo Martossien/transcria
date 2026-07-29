@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 200,
- "deferred_internal_imports": 85,
+ "deferred_internal_imports": 88,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -81,7 +81,7 @@
   "transcria.ingestion.models": 1,
   "transcria.ingestion.store": 2,
   "transcria.installer.arbitrage": 8,
-  "transcria.installer.cli": 24,
+  "transcria.installer.cli": 25,
   "transcria.installer.config_phase": 3,
   "transcria.installer.messages": 1,
   "transcria.installer.models": 3,
@@ -103,7 +103,7 @@
   "transcria.jobs.models": 2,
   "transcria.jobs.store": 5,
   "transcria.jobs.timing_store": 2,
-  "transcria.maintenance.cli": 13,
+  "transcria.maintenance.cli": 15,
   "transcria.maintenance.restore": 1,
   "transcria.maintenance.restore_service": 2,
   "transcria.models_catalog": 3,

@@ -23,6 +23,8 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --with-meeting-bots  Provisionner le meeting-runner (réunions planifiées, opt-in) :
+#                        dépendances connecteurs + runner.yaml + unité systemd.
 #   --with-stt-runtimes  Provisionner aussi les runtimes STT servis (opt-in) :
 #                      audio.cpp (backend qwen3asr, + modèle Qwen3-ASR-1.7B) et
 #                      parakeet.cpp (backend nemotron) — builds CUDA épinglés,
@@ -169,6 +171,7 @@ FORCE_CONFIG=false
 NON_INTERACTIVE=false
 SKIP_DOCTOR=false
 WITH_STT_RUNTIMES=false   # --with-stt-runtimes : phases audiocpp+parakeetcpp (opt-in, GPU)
+WITH_MEETING_BOTS=false   # --with-meeting-bots : phase connectors (meeting-runner, opt-in)
 STRICT_DOCTOR=false
 INSTALL_STARTED_AT=$(date +%s)   # métrique time-to-first-job, affichée au résumé final
 PYTHON_BIN=""
@@ -217,6 +220,7 @@ while [[ $# -gt 0 ]]; do
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --skip-doctor)     SKIP_DOCTOR=true; shift ;;
         --with-stt-runtimes) WITH_STT_RUNTIMES=true; shift ;;
+        --with-meeting-bots) WITH_MEETING_BOTS=true; shift ;;
         --strict-doctor)   STRICT_DOCTOR=true; shift ;;
         --postgres)        SETUP_PG=true; shift ;;
         --sqlite-dev|--allow-sqlite-dev|--no-postgres)
@@ -1478,6 +1482,20 @@ if [[ "$WITH_STT_RUNTIMES" = true ]]; then
         || warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
     log "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
     log "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."
+fi
+
+# ── Réunions planifiées (opt-in --with-meeting-bots) ─────────────────────────
+# Délégation pure à la phase transcria/installer/connectors_phase.py (vague 4 du plan
+# docs/UI_REUNIONS_WORKFLOW.md). Jamais dans le flux par défaut : Playwright/aiortc lourds.
+if [[ "$WITH_MEETING_BOTS" = true ]]; then
+    log "Réunions planifiées : dépendances connecteurs + config du meeting-runner…"
+    python_module transcria.installer.cli connectors --config-dir "$INSTALL_DIR" \
+        || warn "Phase connecteurs échouée (relancer : venv/bin/python -m transcria.installer.cli connectors)"
+    log "Ensuite : 1) activer connectors.meetings.enabled + live.facade.enabled (Administration → Configuration) ;"
+    log "          2) poser TRANSCRIA_MEETING_REF_KEY dans .env (cf. .env.example) ;"
+    log "          3) venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner --out runner_token.txt ;"
+    log "          4) ajouter svc-runner à connectors.meetings.runner_usernames ;"
+    log "          5) démarrer le runner (unité systemd via --systemd, ou TRANSCRIA_RUNNER_CONFIG=runner.yaml python -m connector_service.runner)."
 fi
 
 # ============================================================================

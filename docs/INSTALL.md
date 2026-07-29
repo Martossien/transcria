@@ -1938,6 +1938,27 @@ sudo systemctl start transcria        # ou ./start.sh
 - `transport.audio: upload` est **obligatoire** (la frontale envoie les octets ; un chemin
   `file_ref` ne serait pas résoluble côté nœud — filesystem non partagé).
 
+## 13 bis. Réunions planifiées (opt-in `--with-meeting-bots`)
+
+Chaîne complète (vague 4 du plan [UI_REUNIONS_WORKFLOW.md](UI_REUNIONS_WORKFLOW.md)) — un
+utilisateur planifie une réunion, un bot la rejoint, l'audio devient un job diarisé :
+
+```bash
+./install.sh --with-meeting-bots          # dépendances connecteurs + squelette runner.yaml
+# puis, dans l'ordre :
+#  1. Administration → Configuration : activer « Réunions en ligne » ET la façade temps réel ;
+#  2. .env : poser TRANSCRIA_MEETING_REF_KEY (cf. .env.example — chiffrement des références) ;
+#  3. venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner --out runner_token.txt
+#  4. config.yaml : connectors.meetings.runner_usernames: [svc-runner]
+#  5. compléter runner.yaml (token_file) puis :
+#     TRANSCRIA_RUNNER_CONFIG=runner.yaml venv/bin/python -m connector_service.runner
+#     (ou : venv/bin/python -m transcria.installer.cli connectors --systemd  # unité systemd)
+```
+
+`venv/bin/python scripts/doctor.py` vérifie la chaîne (« Réunions planifiées (bots) ») ;
+la carte « Depuis une réunion » n'apparaît aux utilisateurs que quand un runner est vivant.
+Exploitation des bots : [BOT_REUNION.md](BOT_REUNION.md).
+
 ## 14. Reprendre le projet sur une AUTRE machine — ce que git ne transporte pas
 
 `git clone` ne suffit pas, et la liste de ce qui manque n'est pas devinable : plusieurs

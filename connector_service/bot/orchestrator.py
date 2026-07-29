@@ -52,11 +52,27 @@ class BotSession:
     `close()` est toujours appelé (même sur échec) — un conteneur/réunion, nettoyage garanti."""
 
     def __init__(self, driver: BrowserDriver, *, display_name: str = "TranscrIA",
-                 admission_timeout_s: float = 120.0) -> None:
+                 admission_timeout_s: float = 120.0, on_state=None) -> None:
         self._driver = driver
         self._name = display_name
         self._admission_timeout_s = admission_timeout_s
-        self.state = BotState.JOINING
+        # Rappel optionnel à CHAQUE transition (vague 4) : le runner relaie l'état au portail
+        # (salle d'attente, en réunion…) sans parser les logs. Best-effort : ne casse jamais.
+        self._on_state = on_state
+        self._state = BotState.JOINING
+
+    @property
+    def state(self) -> BotState:
+        return self._state
+
+    @state.setter
+    def state(self, value: BotState) -> None:
+        self._state = value
+        if self._on_state is not None:
+            try:
+                self._on_state(value)
+            except Exception:  # noqa: BLE001 — un observateur ne casse jamais le cycle de vie
+                _log.debug("observateur d'état en échec", exc_info=True)
 
     async def run(self, meeting_url: str) -> BotOutcome:
         admitted_flag = False

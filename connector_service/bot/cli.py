@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -122,6 +123,20 @@ class _NullTranscriber:
         yield  # pragma: no cover — générateur sans émission
 
 
+def _json_event_emitter():
+    """BOT_EVENTS=json (vague 4) : une ligne JSON par transition d'état sur stdout — le
+    meeting-runner les relaie au portail (états « salle d'attente », « en réunion » sur la
+    carte du job) sans parser les logs. Mapping vers les événements de /v1/meetings/events."""
+    mapping = {"joining": "joining", "waiting_admission": "waiting_admission",
+               "active": "in_meeting"}
+
+    def emit(state) -> None:
+        event = mapping.get(getattr(state, "value", str(state)))
+        if event:
+            print(json.dumps({"bot_event": event}), flush=True)
+    return emit
+
+
 def build_transcriber(transcria_url: str | None, token: str | None, language: str | None):
     """Transcripteur réel si TranscrIA est joignable, sinon capture seule (jamais d'échec
     au lancement pour autant : un bot qui capte sans transcrire reste utile)."""
@@ -149,9 +164,11 @@ async def run(args: argparse.Namespace) -> int:
 
     logger.info("Bot en route | réunion=%s durée_max=%.0fs", args.meeting_url,
                 args.max_duration_s)
+    on_state = _json_event_emitter() if os.environ.get("BOT_EVENTS") == "json" else None
     outcome, segments = await run_bot_session(
         args.meeting_url, occurrence, driver, transcriber,
-        display_name=compose_display_name(explicit=args.name, initiator=args.initiator))
+        display_name=compose_display_name(explicit=args.name, initiator=args.initiator),
+        on_state=on_state)
 
     logger.info("Réunion terminée | admis=%s motif=%s%s segments=%d",
                 outcome.admitted, outcome.reason,

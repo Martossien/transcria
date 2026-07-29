@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_JOIN_MARGIN_S = 120        # rejoindre 2 min avant l'heure (config en vague 4)
 DEFAULT_LATE_MAX_S = 900           # au-delà de 15 min de retard : JAMAIS un bot qui débarque à H+3
 DEFAULT_MAX_ATTEMPTS = 4
+# Baux : un runner qui ne bat plus rend ses claims (re-claimables) ; une session in_meeting
+# garde un bail LONG (2 × la durée max d'un bot, 4 h) — on ne relance JAMAIS un bot dans une
+# réunion peut-être encore captée, on finit par constater honnêtement la perte probable.
+DEFAULT_CLAIM_LEASE_S = 300
+DEFAULT_IN_MEETING_LEASE_S = 2 * 4 * 3600
 _BACKOFF_BASE_S = 60
 _BACKOFF_CAP_S = 900
 
@@ -81,6 +86,7 @@ class MeetingSessionStore:
         déchiffrée — seul endroit du code). Les sessions trop en retard sont closes
         honnêtement au passage (« aucun exécutant disponible à l'heure »)."""
         now = now or _utcnow()
+        MeetingSessionStore.release_expired_leases(now=now)   # opportuniste, à chaque claim
         horizon = now + timedelta(seconds=join_margin_s)
         stmt = (
             db.select(MeetingSession)
@@ -118,6 +124,50 @@ class MeetingSessionStore:
             })
         db.session.commit()
         return claimed
+
+    @staticmethod
+    def release_expired_leases(*, now: datetime | None = None,
+                               claim_lease_s: int = DEFAULT_CLAIM_LEASE_S,
+                               in_meeting_lease_s: int = DEFAULT_IN_MEETING_LEASE_S) -> int:
+        """Rend les sessions d'un runner MORT : claimed/joining/waiting_admission périmés
+        redeviennent planned (re-claimables) ; in_meeting au-delà du bail long devient un
+        échec HONNÊTE (« la capture a peut-être été perdue ») — jamais un rejeu automatique
+        d'une réunion passée. Rend le nombre de sessions libérées."""
+        now = now or _utcnow()
+        released = 0
+        stmt = (db.select(MeetingSession)
+                .where(MeetingSession.state.in_((st.CLAIMED, st.JOINING, st.WAITING_ADMISSION,
+                                                 st.IN_MEETING)),
+                       MeetingSession.claimed_at.isnot(None))
+                .with_for_update(skip_locked=True))
+        for session in db.session.execute(stmt).scalars():
+            age = (now - session.claimed_at).total_seconds()
+            if session.state == st.IN_MEETING:
+                if age > in_meeting_lease_s:
+                    # PAS de rejeu automatique d'une réunion passée : terminal honnête,
+                    # replanifiable à la main seulement.
+                    session.state = st.FAILED_FINAL
+                    session.last_error = "exécutant muet en pleine réunion — la capture a peut-être été perdue"
+                    session.ended_at = now
+                    released += 1
+            elif age > claim_lease_s:
+                session.state = st.PLANNED
+                session.claimed_by = None
+                session.claimed_at = None
+                released += 1
+        if released:
+            db.session.commit()
+        return released
+
+    @staticmethod
+    def cancelled_for_runner(runner: str) -> list[str]:
+        """Sessions ANNULÉES encore claimées par ce runner — le heartbeat les lui rend pour
+        qu'il stoppe les conteneurs à chaud (docker stop → chemin « stopped », code 0)."""
+        stmt = db.select(MeetingSession).where(
+            MeetingSession.state == st.CANCELLED,
+            MeetingSession.claimed_by == runner,
+            MeetingSession.ended_at.isnot(None))
+        return [s.id for s in db.session.execute(stmt).scalars()]
 
     @staticmethod
     def apply_event(session_id: str, runner: str, event: str) -> tuple[bool, str]:

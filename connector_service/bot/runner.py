@@ -38,7 +38,8 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
                           driver: BrowserDriver, transcriber: Any, *,
                           provider_name: str = "bot", display_name: str = "TranscrIA",
                           bridge_host: str = "127.0.0.1",
-                          bridge_port: int = 0) -> tuple[BotOutcome, list]:
+                          bridge_port: int = 0,
+                          on_state=None) -> tuple[BotOutcome, list]:
     """Déroule une réunion via bot : le payload JS pousse le PCM sur le pont, une `LiveSession`
     le transcrit pendant que l'orchestrateur pilote le navigateur. Retourne (issue, segments)."""
     # Le payload de capture se (re)connecte PLUSIEURS fois au cours d'une réunion : la page
@@ -86,7 +87,7 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
 
     transcribe_task = asyncio.ensure_future(_transcribe())
     try:
-        outcome = await BotSession(driver, display_name=display_name).run(meeting_url)
+        outcome = await BotSession(driver, display_name=display_name, on_state=on_state).run(meeting_url)
         await inbox.put(end_of_stream)               # fin de réunion → clôt la transcription
         results = await asyncio.gather(transcribe_task, return_exceptions=True)
         for res in results:                          # ne pas avaler une vraie erreur en silence

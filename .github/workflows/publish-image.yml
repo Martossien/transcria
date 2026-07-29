@@ -88,3 +88,50 @@ jobs:
             type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache-runtimes
             type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache-llama
           cache-to: type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache,mode=max
+
+  # ── Images de BOT de réunion (vague 4 — L3 du plan UI_REUNIONS) ──────────────────────────
+  # Publiées à CHAQUE tag applicatif : supprime le build Docker local de l'expérience
+  # utilisateur (le meeting-runner tire par tag/digest — cf. runner.yaml `images:`).
+  # Légères (pas de CUDA) : job séparé, parallèle, sans le nettoyage disque du job GPU.
+  build-push-bots:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        bot:
+          - { name: transcria-bot, dockerfile: Dockerfile.bot }
+          - { name: transcria-zoom-sdk, dockerfile: Dockerfile.zoom-sdk }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Métadonnées image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.bot.name }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+      - name: Build & push (${{ matrix.bot.dockerfile }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.bot.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=registry,ref=ghcr.io/martossien/${{ matrix.bot.name }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/martossien/${{ matrix.bot.name }}:buildcache,mode=max

@@ -23,6 +23,11 @@ from transcria.installer.audiocpp_phase import (
     apply_audiocpp,
     resolve_runtimes_dir,
 )
+from transcria.installer.connectors_phase import (
+    ConnectorsPhaseError,
+    ConnectorsPlan,
+    apply_connectors,
+)
 from transcria.installer.console import Console
 from transcria.installer.i18n_phase import I18nError, I18nPlan, apply_i18n
 from transcria.installer.moss_site_phase import MossSiteError, MossSitePlan, apply_moss_site
@@ -513,6 +518,36 @@ def _add_moss_site_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--python", default=sys.executable, help="Python du venv (défaut : l'interpréteur courant)")
     p.add_argument("--force", action="store_true", help="Réinstaller même si le site semble complet")
 
+    c = sub.add_parser(
+        "connectors",
+        help="Provisionne le meeting-runner : dépendances connecteurs, config, unité systemd (opt-in).",
+    )
+    c.add_argument("--python", default=sys.executable, help="Python du venv (défaut : l'interpréteur courant)")
+    c.add_argument("--config-dir", default=".", help="Répertoire où poser runner.yaml (défaut : racine)")
+    c.add_argument("--systemd", action="store_true",
+                   help="Installe aussi l'unité transcria-meeting-runner.service (root requis)")
+
+
+def _cmd_connectors(args: argparse.Namespace) -> int:
+    import subprocess
+
+    console = Console()
+    plan = ConnectorsPlan(
+        repo_root=Path(__file__).resolve().parents[2],
+        venv_python=Path(args.python),
+        config_dir=Path(args.config_dir).resolve(),
+        install_systemd=bool(args.systemd),
+    )
+    try:
+        def _runner(cmd: list[str]) -> None:
+            subprocess.run(cmd, check=True)
+
+        apply_connectors(plan, console=console, runner=_runner)
+    except ConnectorsPhaseError as exc:
+        console.error(str(exc))
+        return 1
+    return 0
+
 
 def _cmd_moss_site(args: argparse.Namespace) -> int:
     import subprocess
@@ -672,6 +707,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_summary(args)
     if args.command == "recommend-llm":
         return _cmd_recommend_llm(args)
+    if args.command == "connectors":
+        return _cmd_connectors(args)
     if args.command == "moss-site":
         return _cmd_moss_site(args)
     if args.command == "audiocpp":
