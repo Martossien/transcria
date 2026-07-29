@@ -151,7 +151,8 @@ transcria/
   transcria/
     config/
       loader.py             # load_config(), get_config(), save_config(), _deep_merge()
-      config_schema.py      # validate_config(), ValidationResult
+      config_schema.py      # validate_config() — FAÇADE + dispatcher (ré-exporte tout)
+      checks/               # vérificateurs PAR DOMAINE (vague 0) : base (ValidationResult+primitives), platform, auth, stt, audio, orchestration — golden tests/test_config_schema_golden.py
       llm_profiles.py       # catalogue de profils LLM (data/llm_profiles.yaml) + select_profile piloté matériel (mono/multi) ; cf. docs/LLM_BACKENDS.md
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque ; _resolve_binary = PATH + emplacements connus hors PATH (nvcc/llama-server introuvables via PATH réduit du service root)
       loader.py (i18n)      # override env TRANSCRIA_DEFAULT_LOCALE → i18n.default_locale (ergonomie Docker/CI)

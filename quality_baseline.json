@@ -42,7 +42,7 @@
   "transcria.auth.routes": 14,
   "transcria.auth.store": 2,
   "transcria.config": 3,
-  "transcria.config.config_schema": 1,
+  "transcria.config.config_schema": 6,
   "transcria.config.llm_profiles": 1,
   "transcria.context": 4,
   "transcria.context.central_lexicon_models": 1,
