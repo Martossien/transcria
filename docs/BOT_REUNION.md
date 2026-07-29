@@ -309,6 +309,29 @@ pas. C'est bien l'absence de parole qui fait halluciner.
 
 ### 6.7 Vérifier
 
+**D'abord les identifiants seuls — dix secondes, aucune réunion.** À faire juste après avoir
+créé l'application sur le Marketplace : inutile d'organiser une réunion pour apprendre que le
+Client Secret est mal recopié.
+
+```bash
+docker run --rm --network host \
+  -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
+  --entrypoint /usr/local/bin/zoom-sdk-entrypoint \
+  -v "$PWD/scripts:/app/scripts:ro" \
+  transcria-zoom-sdk:latest python3 -u /app/scripts/gate_zoom_auth.py
+```
+
+Sortie `0` = accepté, `1` = refusé (le message énumère alors les causes). Ce test atteste de
+l'**application**, pas de la réunion : le numéro porté par la signature n'est pas validé par
+Zoom. Un succès signifie donc « identifiants bons ET Meeting SDK activé ».
+
+⚠ **Zoom ne distingue pas les causes d'un refus** : `AUTHRET_JWTTOKENWRONG` couvre
+indifféremment un secret erroné et un Meeting SDK désactivé. Le message les énumère dans leur
+ordre de probabilité, faute de mieux. Vérifié le 2026-07-29 en désactivant réellement le SDK
+sur l'application : le refus est bien celui-là.
+
+**Ensuite le parcours complet, en réunion réelle.**
+
 ```bash
 docker run --rm --network host \
   -e ZOOM_CLIENT_ID=… -e ZOOM_CLIENT_SECRET=… \
