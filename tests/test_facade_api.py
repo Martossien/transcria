@@ -13,6 +13,24 @@ from pathlib import Path
 
 import pytest
 
+@pytest.fixture(autouse=True)
+def _force_feature_baseline(app):
+    """Leçon 0.3.5 : les tests gatés par config FORCENT leur baseline — sans quoi le
+    config.yaml de la MACHINE (ex. façade/réunions activées pour un gate réel) change le
+    comportement de la suite. OFF par défaut ici ; les fixtures d'activation surchargent."""
+    from transcria.config import get_config
+    from transcria.web import facade_api as _fa
+    cfg = get_config()
+    prev = cfg.get("live")
+    cfg.pop("live", None)
+    _fa._facade_transcribers.clear()          # le cache (voulu en prod) ne fuit pas entre tests
+    yield
+    _fa._facade_transcribers.clear()
+    if prev is None:
+        cfg.pop("live", None)
+    else:
+        cfg["live"] = prev
+
 from transcria.auth.api_tokens import create_token
 from transcria.auth.models import Role
 from transcria.auth.store import UserStore

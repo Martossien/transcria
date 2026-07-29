@@ -53,6 +53,7 @@ def run_session(portal: str, token: str, intent: dict, runner: str) -> int:
         "BOT_LANGUAGE": intent.get("language") or "fr",
         # Rattachement D4 : le bot pousse audio+manifeste sur CE job (façade, part job_id).
         "TRANSCRIA_JOB_ID": intent["job_id"],
+        "BOT_INITIATOR": intent.get("owner_name") or "",
     })
     if intent["provider"] == "jitsi":
         # Le gate Jitsi est aujourd'hui le seul chemin qui ENREGISTRE + INGÈRE (manifeste +

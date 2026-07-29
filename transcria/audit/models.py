@@ -25,6 +25,8 @@ class AuditAction(str, enum.Enum):
     JOB_ENQUEUE = "job_enqueue"
     MEETING_SCHEDULE = "meeting_schedule"      # vague 3 : planification d'un bot de réunion
     MEETING_CANCEL = "meeting_cancel"
+    MEETING_FEATURE_TOGGLE = "meeting_feature_toggle"   # interrupteur admin réunions en ligne
+    MEETING_RUNNER_REVOKE = "meeting_runner_revoke"
     JOB_DEQUEUE = "job_dequeue"
     JOB_REFINE_REQUEST = "job_refine_request"
     JOB_REFINE_REVERT = "job_refine_revert"

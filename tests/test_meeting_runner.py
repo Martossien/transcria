@@ -51,6 +51,7 @@ class TestDockerArgv:
         assert "tia_secret" not in " ".join(argv)          # env only, jamais lisible dans ps
         assert env["TRANSCRIA_TOKEN"] == "tia_secret"
         assert env["BOT_EVENTS"] == "json" and env["TRANSCRIA_JOB_ID"] == "j1"
+        assert "BOT_INITIATOR" in env
         assert "--network" not in argv                     # portail non-loopback : bridge
 
     def test_loopback_active_le_reseau_hote(self):

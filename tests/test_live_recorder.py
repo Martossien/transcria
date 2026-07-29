@@ -83,3 +83,28 @@ def test_frame_vide_ignoree():
     mix = MeetingMixer(RATE)
     mix.add(b"", at_s=0.0)
     assert mix.duration_s == 0.0
+
+
+class TestLedgerEnergyThreshold:
+    """Constat du gate Jitsi réel : les trames coulent en continu (bruit de confort) — sans
+    seuil d'énergie, les fenêtres de parole couvrent toute la réunion et la projection perd
+    tout pouvoir de suggestion à plusieurs participants."""
+
+    def test_trame_silencieuse_ignoree_trame_sonore_comptee(self):
+        import array
+
+        from connector_service.live.recorder import ParticipantLedger
+        led = ParticipantLedger()
+        silence = array.array("h", [10] * 480).tobytes()      # crête 10 << 300
+        voice = array.array("h", [5000] * 480).tobytes()
+        led.note("p1", "Alice", 0.0, 0.5, pcm=silence)
+        assert led.to_manifest("jitsi") is None               # rien capté de PARLÉ
+        led.note("p1", "Alice", 1.0, 0.5, pcm=voice)
+        m = led.to_manifest("jitsi")
+        assert m["participants"][0]["speech_windows"] == [[1.0, 1.5]]
+
+    def test_sans_pcm_comportement_historique(self):
+        from connector_service.live.recorder import ParticipantLedger
+        led = ParticipantLedger()
+        led.note("p1", "Alice", 0.0, 0.5)                     # pas de PCM = pas de jugement
+        assert led.to_manifest("jitsi") is not None

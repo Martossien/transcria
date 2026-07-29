@@ -6,10 +6,60 @@
   <a href="/" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
 </div>
 
+{# ── Réunions en ligne : interrupteur unique + check-list vivante + exécutants ──────────
+   Décision utilisateur 2026-07-29 : l'admin ne touche QUE l'interface — le bouton
+   auto-provisionne, chaque prérequis affiche verdict ET remède. #}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0"><i class="bi bi-calendar-event me-2"></i>{{ _('Réunions en ligne (planification par les utilisateurs)') }}</h2>
+      <form method="POST" action="/admin/connecteurs/meetings/toggle" class="d-inline">
+        {% if meetings_enabled %}
+        <input type="hidden" name="action" value="disable">
+        <button class="btn btn-outline-danger btn-sm">{{ _('Désactiver') }}</button>
+        {% else %}
+        <button class="btn btn-primary btn-sm">{{ _('Activer') }}</button>
+        {% endif %}
+      </form>
+    </div>
+    <ul class="list-unstyled mb-2">
+      {% for item in meetings_checklist %}
+      <li class="mb-1">
+        {% if item.ok %}<span class="text-success">✓</span> {{ item.label }}
+        {% else %}<span class="text-danger">✗</span> {{ item.label }}
+        <span class="text-muted small">— {{ item.remedy }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if meeting_runners %}
+    <h3 class="h6 mt-3">{{ _('Exécutants') }}</h3>
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>{{ _('Nom') }}</th><th>{{ _('Vu') }}</th><th>{{ _('Sessions') }}</th>
+        <th>{{ _('Plateformes') }}</th><th></th></tr></thead>
+      <tbody>
+      {% for r in meeting_runners %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td class="small text-muted">{{ r.last_seen.strftime('%d/%m %H:%M:%S') }}</td>
+        <td>{{ r.active }}/{{ r.capacity }}</td>
+        <td class="small">{{ r.platforms }}</td>
+        <td class="text-end">
+          <form method="POST" action="/admin/connecteurs/runners/{{ r.name }}/revoke" class="d-inline"
+                data-confirm="{{ _('Révoquer cet exécutant ? Son jeton sera invalidé.') }}">
+            <button class="btn btn-outline-danger btn-sm">{{ _('Révoquer') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
 <div class="alert alert-secondary small">
-  {{ _("Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque
-  plateforme. Les identifiants se placent dans la configuration des bots ou du service
-  connecteur, jamais ici.") }}
+  {{ _("Les fiches ci-dessous décrivent chaque plateforme (état vérifié, identifiants requis
+  côté exécutant — jamais stockés ici).") }}
 </div>
 
 <div class="row g-3">

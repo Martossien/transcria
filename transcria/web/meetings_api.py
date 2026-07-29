@@ -158,6 +158,14 @@ def api_meetings_cancel(session_id: str):
 
 # ── Famille RUNNER ────────────────────────────────────────────────────────────
 
+def _bearer_token_public_id(req) -> str:
+    """Partie PUBLIQUE du jeton porteur (tia_<id>_…) — pour la révocation précise ; jamais
+    le secret."""
+    raw = (req.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+    parts = raw.split("_")
+    return parts[1] if len(parts) >= 3 and parts[0] == "tia" else ""
+
+
 def _runner_guard(view):
     @functools.wraps(view)
     def wrapper(*args, **kwargs):
@@ -184,6 +192,7 @@ def v1_runner_heartbeat():
         active_sessions=max(int(body.get("active") or 0), 0),
         platforms_json=json.dumps([str(p) for p in (body.get("platforms") or [])][:32]),
         images_json=json.dumps(list(body.get("images") or [])[:16]),
+        token_id=_bearer_token_public_id(request),
     )
     return jsonify({"ok": True,
                     "cancelled_sessions": MeetingSessionStore.cancelled_for_runner(name)})

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-29 18:33+0200\n"
+"POT-Creation-Date: 2026-07-29 20:14+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -455,6 +455,7 @@ msgid "Lexique central : %(name)s"
 msgstr "Lexique central : %(name)s"
 
 #: transcria/i18n/js_catalog.py:75
+#: transcria/web/templates/admin_connectors.html:37
 #: transcria/web/templates/central_lexicon_detail.html:18
 #: transcria/web/templates/central_lexicons.html:18
 #: transcria/web/templates/schedule.html:139
@@ -1290,6 +1291,75 @@ msgstr "Go"
 msgid "téléchargement…"
 msgstr "téléchargement…"
 
+#: transcria/ingestion/runner_provisioning.py:51
+#, fuzzy, python-format
+msgid "Compte de service créé : %(name)s"
+msgstr "DN du compte de service"
+
+#: transcria/ingestion/runner_provisioning.py:59
+#, python-format
+msgid "Jeton d'exécutant déposé : %(path)s"
+msgstr "Jeton d'exécutant déposé : %(path)s"
+
+#: transcria/ingestion/runner_provisioning.py:73
+msgid "Réunions en ligne activées (façade temps réel incluse)."
+msgstr "Réunions en ligne activées (façade temps réel incluse)."
+
+#: transcria/ingestion/runner_provisioning.py:84
+#, fuzzy
+msgid "Réunions en ligne désactivées."
+msgstr "Importé depuis une réunion en ligne"
+
+#: transcria/ingestion/runner_provisioning.py:129
+#, fuzzy
+msgid "Fonctionnalité activée"
+msgstr "VAD final activé"
+
+#: transcria/ingestion/runner_provisioning.py:130
+msgid "Utiliser le bouton « Activer » ci-dessus."
+msgstr "Utiliser le bouton « Activer » ci-dessus."
+
+#: transcria/ingestion/runner_provisioning.py:131
+#, fuzzy
+msgid "Façade temps réel active"
+msgstr "Façade STT temps réel"
+
+#: transcria/ingestion/runner_provisioning.py:132
+msgid "Réactiver via le bouton « Activer » (elle est incluse)."
+msgstr "Réactiver via le bouton « Activer » (elle est incluse)."
+
+#: transcria/ingestion/runner_provisioning.py:133
+msgid "Clé de chiffrement présente (.env)"
+msgstr "Clé de chiffrement présente (.env)"
+
+#: transcria/ingestion/runner_provisioning.py:134
+msgid "Relancer l'installation (elle la génère) puis redémarrer le service."
+msgstr "Relancer l'installation (elle la génère) puis redémarrer le service."
+
+#: transcria/ingestion/runner_provisioning.py:135
+msgid "Compte et jeton d'exécutant provisionnés"
+msgstr "Compte et jeton d'exécutant provisionnés"
+
+#: transcria/ingestion/runner_provisioning.py:136
+msgid "Utiliser le bouton « Activer » — le portail les crée lui-même."
+msgstr "Utiliser le bouton « Activer » — le portail les crée lui-même."
+
+#: transcria/ingestion/runner_provisioning.py:137
+msgid "Exécutant vivant (vu < 2 min)"
+msgstr "Exécutant vivant (vu < 2 min)"
+
+#: transcria/ingestion/runner_provisioning.py:138
+msgid "Démarrer le service : systemctl enable --now transcria-meeting-runner"
+msgstr "Démarrer le service : systemctl enable --now transcria-meeting-runner"
+
+#: transcria/ingestion/runner_provisioning.py:146
+msgid "Jitsi couvert par un exécutant"
+msgstr "Jitsi couvert par un exécutant"
+
+#: transcria/ingestion/runner_provisioning.py:147
+msgid "Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant."
+msgstr "Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant."
+
 #: transcria/notifications/job_facts.py:43
 msgid "Type détecté"
 msgstr "Type détecté"
@@ -1523,118 +1593,123 @@ msgstr "Génération impossible : %(e)s"
 msgid "Voix désactivée."
 msgstr "Voix désactivée."
 
-#: transcria/web/admin_routes.py:120 transcria/web/admin_routes.py:179
+#: transcria/web/admin_routes.py:128 transcria/web/admin_routes.py:187
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s erreur(s) de validation. Sauvegarde annulée."
 
-#: transcria/web/admin_routes.py:124
+#: transcria/web/admin_routes.py:132
 msgid "Réglages sauvegardés."
 msgstr "Réglages sauvegardés."
 
-#: transcria/web/admin_routes.py:129
+#: transcria/web/admin_routes.py:137
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:155
+#: transcria/web/admin_routes.py:163
 msgid "Aucun prompt modifié."
 msgstr "Aucun prompt modifié."
 
-#: transcria/web/admin_routes.py:162
+#: transcria/web/admin_routes.py:170
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "YAML invalide : %(e)s"
 
-#: transcria/web/admin_routes.py:166
+#: transcria/web/admin_routes.py:174
 msgid "La configuration doit être un objet YAML racine."
 msgstr "La configuration doit être un objet YAML racine."
 
-#: transcria/web/admin_routes.py:182
+#: transcria/web/admin_routes.py:190
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration sauvegardée dans %(p)s."
 
-#: transcria/web/admin_routes.py:231
+#: transcria/web/admin_routes.py:239
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Sauvegarde planifiée activée (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:236
+#: transcria/web/admin_routes.py:244
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Sauvegarde planifiée désactivée."
 
-#: transcria/web/admin_routes.py:238
+#: transcria/web/admin_routes.py:246
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Échec de la planification : %(e)s"
 
-#: transcria/web/admin_routes.py:252
+#: transcria/web/admin_routes.py:260
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation requise : la restauration remplace les données et redémarre le service."
 
-#: transcria/web/admin_routes.py:255
+#: transcria/web/admin_routes.py:263
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 
-#: transcria/web/admin_routes.py:263
+#: transcria/web/admin_routes.py:271
 msgid "Archive invalide — restauration refusée : "
 msgstr "Archive invalide — restauration refusée : "
 
-#: transcria/web/admin_routes.py:275
+#: transcria/web/admin_routes.py:283
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 
-#: transcria/web/admin_routes.py:278
+#: transcria/web/admin_routes.py:286
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Échec du déclenchement de la restauration : %(e)s"
 
-#: transcria/web/admin_routes.py:328
+#: transcria/web/admin_routes.py:363
+#, python-format
+msgid "Exécutant « %(name)s » révoqué."
+msgstr "Exécutant « %(name)s » révoqué."
+
+#: transcria/web/admin_routes.py:380
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 
-#: transcria/web/admin_routes.py:333
+#: transcria/web/admin_routes.py:385
 msgid "Téléchargement refusé — "
 msgstr "Téléchargement refusé — "
 
-#: transcria/web/admin_routes.py:336
+#: transcria/web/admin_routes.py:388
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Téléchargement de « %(l)s » lancé en arrière-plan."
 
-#: transcria/web/admin_routes.py:350
+#: transcria/web/admin_routes.py:402
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Téléchargez d'abord ce modèle avant de l'activer."
 
-#: transcria/web/admin_routes.py:359
+#: transcria/web/admin_routes.py:411
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:362
+#: transcria/web/admin_routes.py:414
 msgid "Échec de l'activation : "
 msgstr "Échec de l'activation : "
 
-#: transcria/web/admin_routes.py:364
+#: transcria/web/admin_routes.py:416
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Échec de l'activation : %(e)s"
 
-#: transcria/web/admin_routes.py:387
+#: transcria/web/admin_routes.py:439
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 
-#: transcria/web/admin_routes.py:421
+#: transcria/web/admin_routes.py:473
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Rien à appliquer : le plan n'est plus d'actualité."
 
-#: transcria/web/admin_routes.py:426
+#: transcria/web/admin_routes.py:478
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Échec de l'application du plan : %(err)s"
 
-#: transcria/web/admin_routes.py:432
+#: transcria/web/admin_routes.py:484
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
@@ -2583,6 +2658,7 @@ msgid "Révoquer ce jeton ? Les scripts qui l'utilisent cesseront de fonctionner
 msgstr "Révoquer ce jeton ? Les scripts qui l'utilisent cesseront de fonctionner."
 
 #: transcria/web/templates/account_tokens.html:62
+#: transcria/web/templates/admin_connectors.html:49
 msgid "Révoquer"
 msgstr "Révoquer"
 
@@ -2723,56 +2799,90 @@ msgstr "Sauvegarder le YAML"
 msgid "Connecteurs de réunion"
 msgstr "Types de réunion"
 
-#: transcria/web/templates/admin_connectors.html:10
-msgid ""
-"Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque\n"
-"  plateforme. Les identifiants se placent dans la configuration des bots ou du service\n"
-"  connecteur, jamais ici."
-msgstr ""
-"Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque\n"
-"  plateforme. Les identifiants se placent dans la configuration des bots ou du service\n"
-"  connecteur, jamais ici."
+#: transcria/web/templates/admin_connectors.html:15
+msgid "Réunions en ligne (planification par les utilisateurs)"
+msgstr "Réunions en ligne (planification par les utilisateurs)"
 
-#: transcria/web/templates/admin_connectors.html:27
+#: transcria/web/templates/admin_connectors.html:19
+#: transcria/web/templates/admin_maintenance.html:59
+#: transcria/web/templates/schedule.html:220
+msgid "Désactiver"
+msgstr "Désactiver"
+
+#: transcria/web/templates/admin_connectors.html:21
+#: transcria/web/templates/schedule.html:220
+msgid "Activer"
+msgstr "Activer"
+
+#: transcria/web/templates/admin_connectors.html:35
+#, fuzzy
+msgid "Exécutants"
+msgstr "Résultats"
+
+#: transcria/web/templates/admin_connectors.html:37
+msgid "Vu"
+msgstr "Vu"
+
+#: transcria/web/templates/admin_connectors.html:37
+#, fuzzy
+msgid "Sessions"
+msgstr "Version"
+
+#: transcria/web/templates/admin_connectors.html:38
+#, fuzzy
+msgid "Plateformes"
+msgstr "Webhook plateforme"
+
+#: transcria/web/templates/admin_connectors.html:48
+msgid "Révoquer cet exécutant ? Son jeton sera invalidé."
+msgstr "Révoquer cet exécutant ? Son jeton sera invalidé."
+
+#: transcria/web/templates/admin_connectors.html:61
+msgid ""
+"Les fiches ci-dessous décrivent chaque plateforme (état vérifié, identifiants requis\n"
+"  côté exécutant — jamais stockés ici)."
+msgstr "Les fiches ci-dessous décrivent chaque plateforme (état vérifié, identifiants requis côté exécutant — jamais stockés ici)."
+
+#: transcria/web/templates/admin_connectors.html:77
 #, fuzzy
 msgid "Éprouvé"
 msgstr "Privé"
 
-#: transcria/web/templates/admin_connectors.html:29
+#: transcria/web/templates/admin_connectors.html:79
 msgid "Jamais exécuté en réel"
 msgstr "Jamais exécuté en réel"
 
-#: transcria/web/templates/admin_connectors.html:31
+#: transcria/web/templates/admin_connectors.html:81
 #, fuzzy
 msgid "À venir"
 msgstr "à surveiller"
 
-#: transcria/web/templates/admin_connectors.html:39
+#: transcria/web/templates/admin_connectors.html:89
 #, fuzzy
 msgid "Bot participant"
 msgstr "participant"
 
-#: transcria/web/templates/admin_connectors.html:41
+#: transcria/web/templates/admin_connectors.html:91
 msgid "Transport natif"
 msgstr "Transport natif"
 
-#: transcria/web/templates/admin_connectors.html:43
+#: transcria/web/templates/admin_connectors.html:93
 msgid "File interrogée"
 msgstr "File interrogée"
 
-#: transcria/web/templates/admin_connectors.html:45
+#: transcria/web/templates/admin_connectors.html:95
 msgid "Webhook plateforme"
 msgstr "Webhook plateforme"
 
-#: transcria/web/templates/admin_connectors.html:49
+#: transcria/web/templates/admin_connectors.html:99
 msgid "Ouverture de pare-feu requise"
 msgstr "Ouverture de pare-feu requise"
 
-#: transcria/web/templates/admin_connectors.html:53
+#: transcria/web/templates/admin_connectors.html:103
 msgid "Sortant uniquement"
 msgstr "Sortant uniquement"
 
-#: transcria/web/templates/admin_connectors.html:60
+#: transcria/web/templates/admin_connectors.html:110
 msgid ""
 "Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie\n"
 "          plateforme. À éprouver avant tout usage sérieux."
@@ -2780,30 +2890,30 @@ msgstr ""
 "Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie\n"
 "          plateforme. À éprouver avant tout usage sérieux."
 
-#: transcria/web/templates/admin_connectors.html:69
+#: transcria/web/templates/admin_connectors.html:119
 msgid "Tous les renseignements sont fournis"
 msgstr "Tous les renseignements sont fournis"
 
-#: transcria/web/templates/admin_connectors.html:74
+#: transcria/web/templates/admin_connectors.html:124
 #, fuzzy
 msgid "Manque :"
 msgstr "Disque :"
 
-#: transcria/web/templates/admin_connectors.html:83
+#: transcria/web/templates/admin_connectors.html:133
 msgid "Secret : ne jamais commiter"
 msgstr "Secret : ne jamais commiter"
 
-#: transcria/web/templates/admin_connectors.html:90
+#: transcria/web/templates/admin_connectors.html:140
 #, fuzzy
 msgid "Aucun identifiant nécessaire"
 msgstr "Identifiant client"
 
-#: transcria/web/templates/admin_connectors.html:96
+#: transcria/web/templates/admin_connectors.html:146
 #, fuzzy
 msgid "Marche à suivre"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_connectors.html:111
+#: transcria/web/templates/admin_connectors.html:161
 #, fuzzy
 msgid "Documentation"
 msgstr "Administration"
@@ -2926,11 +3036,6 @@ msgstr "audios inclus"
 #: transcria/web/templates/admin_maintenance.html:53
 msgid "Activer / mettre à jour le timer"
 msgstr "Activer / mettre à jour le timer"
-
-#: transcria/web/templates/admin_maintenance.html:59
-#: transcria/web/templates/schedule.html:220
-msgid "Désactiver"
-msgstr "Désactiver"
 
 #: transcria/web/templates/admin_maintenance.html:63
 msgid "État systemd :"
@@ -4502,10 +4607,6 @@ msgstr "Actif"
 msgid "Désactivé"
 msgstr "Désactivé"
 
-#: transcria/web/templates/schedule.html:220
-msgid "Activer"
-msgstr "Activer"
-
 #: transcria/web/templates/schedule.html:229
 msgid "Aucun créneau configuré"
 msgstr "Aucun créneau configuré"
@@ -5657,4 +5758,13 @@ msgstr "Générer le résumé"
 #~ "           contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md).\n"
 #~ "           Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
 #~ msgstr ""
+
+#~ msgid ""
+#~ "Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque\n"
+#~ "  plateforme. Les identifiants se placent dans la configuration des bots ou du service\n"
+#~ "  connecteur, jamais ici."
+#~ msgstr ""
+#~ "Cette page est en LECTURE : elle décrit ce qu'il faut fournir et où en est chaque\n"
+#~ "  plateforme. Les identifiants se placent dans la configuration des bots ou du service\n"
+#~ "  connecteur, jamais ici."
 

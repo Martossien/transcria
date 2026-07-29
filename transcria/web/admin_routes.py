@@ -4,6 +4,7 @@
 Vague A2 — routes déplacées telles quelles depuis ``web/routes.py``.
 """
 import copy
+import json
 import logging
 import os
 import subprocess
@@ -22,6 +23,13 @@ from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
+from transcria.ingestion.runner_provisioning import (
+    disable_meetings,
+    meetings_checklist,
+    provision_local_runner,
+    revoke_runner,
+)
+from transcria.ingestion.session_store import MeetingSessionStore
 
 # Accès PAR MODULE (pas `from … import fonction`) : les tests substituent ces
 # fonctions à la source (monkeypatch) — un import par nom figerait la référence.
@@ -300,19 +308,63 @@ def admin_models():
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_connectors():
-    """État des connecteurs de réunion et marche à suivre pour les activer.
+    """Connecteurs de réunion : check-list vivante, activation en UN clic, exécutants.
 
-    Page de LECTURE : elle ne modifie rien. Les identifiants vivent hors du portail (fichier
-    de configuration des bots, unité systemd du service connecteur), et les écrire ici
-    supposerait que le portail sache lancer des conteneurs — décision d'architecture non
-    prise (cf. docs/TEMPS_REEL_REUNIONS.md, point L4).
-
-    Ce qu'elle apporte malgré cela : la procédure exacte par plateforme, l'état RÉEL de
-    chacune (éprouvé / jamais exécuté), et ce qui manque encore.
+    Décision utilisateur (2026-07-29) : « l'admin ne touche que l'interface ». Le bouton
+    Activer auto-provisionne (compte de service + jeton local + config) — le portail ne
+    lance toujours AUCUN conteneur (D1) : le runner dormant, installé par l'installeur, se
+    réveille de lui-même au poll suivant. Chaque prérequis affiche son verdict ET son remède.
     """
+    cfg = ConfigService.get_singleton()
     fournis = {cle: valeur for cle, valeur in os.environ.items()}
     vues = [describe_configuration(connecteur, fournis) for connecteur in load_catalog()]
-    return render_template("admin_connectors.html", vues=vues)
+    meetings_cfg = ((cfg.get("connectors") or {}).get("meetings") or {})
+    runners = [{
+        "name": r.name, "last_seen": r.last_seen, "capacity": r.capacity,
+        "active": r.active_sessions,
+        "platforms": ", ".join(json.loads(r.platforms_json or "[]")),
+    } for r in MeetingSessionStore.live_runners(max_age_s=86400)]
+    return render_template(
+        "admin_connectors.html", vues=vues,
+        meetings_enabled=bool(meetings_cfg.get("enabled", False)),
+        meetings_checklist=meetings_checklist(cfg),
+        meeting_runners=runners)
+
+
+@web_bp.route("/admin/connecteurs/meetings/toggle", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_meetings_toggle():
+    """Interrupteur UNIQUE des réunions en ligne — active = auto-provisionnement complet
+    (compte de service, jeton local, façade incluse) ; désactive = coupe la fonctionnalité
+    seule. Audité."""
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+    enable = request.form.get("action") != "disable"
+    if enable:
+        ok, messages = provision_local_runner(cfg, config_path)
+    else:
+        ok, messages = disable_meetings(cfg, config_path)
+    for msg in messages:
+        flash(msg, "success" if ok else "error")
+    audit_log(action=AuditAction.MEETING_FEATURE_TOGGLE, target_type="config",
+              target_id="connectors.meetings", target_label="réunions en ligne",
+              details={"enabled": enable, "ok": ok})
+    return redirect("/admin/connecteurs")
+
+
+@web_bp.route("/admin/connecteurs/runners/<name>/revoke", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_runner_revoke(name: str):
+    """Révoque PRÉCISÉMENT cet exécutant (son jeton du heartbeat) — son prochain battement
+    sera refusé et il s'arrêtera. Audité."""
+    ok, reason = revoke_runner(name)
+    flash(_("Exécutant « %(name)s » révoqué.", name=name) if ok else reason,
+          "success" if ok else "error")
+    audit_log(action=AuditAction.MEETING_RUNNER_REVOKE, target_type="meeting_runner",
+              target_id=name, target_label=name, details={"ok": ok})
+    return redirect("/admin/connecteurs")
 
 
 @web_bp.route("/admin/models/download", methods=["POST"])

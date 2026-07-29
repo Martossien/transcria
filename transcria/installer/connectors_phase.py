@@ -33,6 +33,8 @@ class ConnectorsPlan:
     config_dir: Path                      # où poser runner.yaml (défaut : racine du dépôt)
     install_systemd: bool = False
     systemd_dir: Path = Path("/etc/systemd/system")
+    install_browsers: bool = False        # playwright install chromium (bot HORS conteneur)
+    env_file: Path | None = None          # .env où poser la clé de chiffrement (défaut repo)
 
 
 RUNNER_CONFIG_TEMPLATE = """\
@@ -99,6 +101,12 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
             encoding="utf-8")
         console.ok(f"squelette de config runner écrit : {config_path} (compléter token_file)")
 
+    _ensure_meeting_ref_key(plan, console)
+
+    if plan.install_browsers:
+        console.info("navigateurs Playwright (bot hors conteneur)…")
+        runner([str(plan.venv_python), "-m", "playwright", "install", "chromium"])
+
     if plan.install_systemd:
         unit_path = plan.systemd_dir / "transcria-meeting-runner.service"
         unit_path.write_text(
@@ -109,3 +117,22 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
         runner(["systemctl", "daemon-reload"])
         console.ok(f"unité systemd installée : {unit_path} (activer : systemctl enable --now "
                    "transcria-meeting-runner)")
+
+
+def _ensure_meeting_ref_key(plan: ConnectorsPlan, console) -> None:
+    """Pose TRANSCRIA_MEETING_REF_KEY dans .env si absente — une étape admin de moins.
+
+    La clé est GÉNÉRÉE ici (Fernet) et jamais affichée ; sans elle la fonctionnalité refuse
+    de démarrer (contrat meeting_ref_crypto : pas de repli en clair). Idempotent : une clé
+    existante n'est JAMAIS remplacée (la remplacer rendrait les sessions indéchiffrables)."""
+    env_path = plan.env_file or (plan.repo_root / ".env")
+    existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    if "TRANSCRIA_MEETING_REF_KEY" in existing:
+        console.ok("clé de chiffrement des références déjà présente (.env)")
+        return
+    from cryptography.fernet import Fernet
+
+    with env_path.open("a", encoding="utf-8") as fh:
+        fh.write("\n# Chiffrement des références de réunion (généré par la phase connectors)\n")
+        fh.write(f"TRANSCRIA_MEETING_REF_KEY={Fernet.generate_key().decode()}\n")
+    console.ok(f"clé de chiffrement générée et posée dans {env_path}")

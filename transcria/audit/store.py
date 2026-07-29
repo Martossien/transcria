@@ -15,7 +15,7 @@ class AuditStore:
         # token_* (jetons d'API personnels) : cycle de vie d'identifiant → famille auth
         # (rétention des événements de sécurité, pas la rétention par défaut « other »).
         "auth": ("login", "login_failed", "logout", "token_"),
-        "job": ("job_", "queue_", "schedule_", "meeting_schedule", "meeting_cancel"),
+        "job": ("job_", "queue_", "schedule_", "meeting_schedule", "meeting_cancel", "meeting_feature_toggle", "meeting_runner_revoke"),
         "lexicon": ("lexicon_",),
         "voice": ("voice_",),
         "config": ("config_", "user_", "group_", "audit_", "meeting_type_", "maintenance_"),

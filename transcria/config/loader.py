@@ -164,6 +164,10 @@ _DEFAULT_CONFIG = {
             # - taille : garde grossier (25 Mo = défaut OpenAI) — MAIS un conteneur
             #   compressé (opus) de 25 Mo peut décoder des heures : proxy insuffisant ;
             # - durée : le VRAI garde (sonde ffprobe avant inférence). 600 s = 10 min.
+            # Déchargement du transcripteur de façade après N s sans requête (0 = jamais).
+            # Sans lui, le modèle chargé PAR le live reste résident dans le process web et
+            # peut bloquer le placement de la LLM d'arbitrage (vécu au gate Jitsi réel).
+            "idle_unload_s": 600,
             "max_sync_audio_mb": 25,
             "max_sync_duration_s": 600,
         },

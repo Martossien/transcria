@@ -315,6 +315,8 @@ def _check_live(cfg: dict, r: ValidationResult) -> None:
             if "max_sync_duration_s" in facade:
                 _check_int_range(facade, "max_sync_duration_s",
                                  "live.facade.max_sync_duration_s", 1, 86400, r)
+            if "idle_unload_s" in facade:
+                _check_optional_number(facade, "idle_unload_s", "live.facade.idle_unload_s", r)
 
 
 # Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale

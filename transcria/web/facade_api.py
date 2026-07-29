@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 from flask import Response, jsonify, request
@@ -56,6 +57,66 @@ from transcria.web.request_helpers import bearer_token_required, clean_job_title
 from transcria.workflow import profiles
 
 logger = logging.getLogger(__name__)
+
+
+# ── Transcripteur de façade : UNE instance par backend, déchargée après inactivité ─────────
+# Constat du gate Jitsi réel (2026-07-29) : `create_transcriber` À CHAQUE fenêtre live créait
+# une instance NEUVE hors allocateur VRAM — les modèles s'accumulaient sur le GPU par défaut
+# (≈22 Go observés après une réunion d'1 min) et bloquaient ensuite le (re)lancement de la
+# LLM d'arbitrage : les jobs partaient en différé VRAM jusqu'au redémarrage du service.
+# Réponse : cache par backend (plus rapide aussi — plus de rechargement par fenêtre) + minuterie
+# de déchargement (`live.facade.idle_unload_s`, 0 = jamais) armée après chaque requête : une
+# réunion enchaîne ses fenêtres sur la MÊME instance, et quelques minutes après la fin, la
+# VRAM est rendue.
+_facade_transcribers: dict[str, object] = {}
+_facade_lock = threading.Lock()
+_facade_unload_timer: threading.Timer | None = None
+
+
+def _get_facade_transcriber(cfg: dict, backend: str):
+    with _facade_lock:
+        transcriber = _facade_transcribers.get(backend)
+        if transcriber is None:
+            transcriber = create_transcriber(cfg, backend=backend)
+            _facade_transcribers[backend] = transcriber
+        _arm_facade_unload(cfg)
+        return transcriber
+
+
+def _arm_facade_unload(cfg: dict) -> None:
+    """(Ré)arme la minuterie de déchargement — appelée SOUS _facade_lock."""
+    global _facade_unload_timer
+    facade_cfg = (cfg.get("live") or {}).get("facade") or {}
+    idle_s = float(facade_cfg.get("idle_unload_s", 600) or 0)
+    if _facade_unload_timer is not None:
+        _facade_unload_timer.cancel()
+        _facade_unload_timer = None
+    if idle_s <= 0:
+        return
+    _facade_unload_timer = threading.Timer(idle_s, _unload_facade_transcribers)
+    _facade_unload_timer.daemon = True
+    _facade_unload_timer.start()
+
+
+def _unload_facade_transcribers() -> None:
+    global _facade_unload_timer
+    with _facade_lock:
+        if not _facade_transcribers:
+            return
+        logger.info("[façade] déchargement des transcripteurs inactifs : %s",
+                    sorted(_facade_transcribers))
+        _facade_transcribers.clear()
+        _facade_unload_timer = None
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            import gc
+
+            gc.collect()
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001 — libération best-effort, jamais bloquante
+        pass
 
 
 def facade_enabled(view):
@@ -143,7 +204,7 @@ def facade_transcriptions():
                                           float(facade_cfg.get("inference_timeout_s", 300)))
             transcriber = None
         else:
-            transcriber = create_transcriber(cfg, backend=backend)
+            transcriber = _get_facade_transcriber(cfg, backend)
             segments = transcriber.transcribe(Path(tmp.name), language=language)
     except Exception:  # noqa: BLE001 — moteur indispo/échec → 503 propre, pas un 500 opaque
         logger.exception("[façade] Transcription échouée (backend=%s)", backend)

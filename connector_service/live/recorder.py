@@ -98,17 +98,25 @@ class ParticipantLedger:
     des milliers de micro-fenêtres de 20 ms sans valeur pour la projection.
     """
 
-    def __init__(self, *, merge_gap_s: float = 0.75) -> None:
+    def __init__(self, *, merge_gap_s: float = 0.75, min_peak: int = 300) -> None:
         self._gap = max(float(merge_gap_s), 0.0)
+        # Seuil d'ÉNERGIE (crête s16) : constat du gate Jitsi réel (2026-07-29) — un bot
+        # navigateur reçoit des trames EN CONTINU (bruit de confort), donc « une trame est
+        # arrivée » ne veut pas dire « il a parlé » : sans seuil, les fenêtres couvrent toute
+        # la réunion et, à plusieurs participants, la marge de projection tuerait toutes les
+        # suggestions de noms. Même seuil que la preuve de voix de capture.js (300).
+        self._min_peak = int(min_peak)
         self._windows: dict[str, list[list[float]]] = {}
         self._names: dict[str, str] = {}
         self._kinds: dict[str, str] = {}
 
     def note(self, participant_id: str, name: str, at_s: float, duration_s: float,
-             *, kind: str = "unknown") -> None:
+             *, kind: str = "unknown", pcm: bytes | None = None) -> None:
         pid = str(participant_id or "").strip()
         if not pid or duration_s <= 0:
             return
+        if pcm is not None and self._peak(pcm) < self._min_peak:
+            return                                   # trame silencieuse : pas une fenêtre de parole
         if name:
             self._names[pid] = name                  # le dernier nom connu gagne
         if kind in ("solo", "room"):                 # `unknown` n'écrase jamais un vrai type
@@ -119,6 +127,12 @@ class ParticipantLedger:
             windows[-1][1] = max(windows[-1][1], end)
         else:
             windows.append([start, end])
+
+    @staticmethod
+    def _peak(pcm: bytes) -> int:
+        samples = array.array("h")
+        samples.frombytes(pcm[: len(pcm) // 2 * 2])
+        return max((abs(v) for v in samples), default=0)
 
     def to_manifest(self, source: str) -> dict | None:
         """Le manifeste (contrat §6.3 du plan UI_REUNIONS), ou None si rien n'a été capté —

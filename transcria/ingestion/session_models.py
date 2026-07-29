@@ -75,4 +75,7 @@ class MeetingRunner(db.Model):
     capacity = db.Column(db.Integer, nullable=False, default=1, server_default="1")
     active_sessions = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     platforms_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")   # ids du catalogue
-    images_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")      # [{name, digest}]
+    images_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")
+    # Identifiant PUBLIC du jeton utilisé par cet exécutant (jamais le secret) — permet la
+    # révocation PRÉCISE depuis la page admin (invalider CE runner, pas les autres).
+    token_id = db.Column(db.String(32), nullable=False, default="", server_default="")      # [{name, digest}]

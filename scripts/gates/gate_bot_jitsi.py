@@ -124,7 +124,8 @@ class TeeTranscriber:
                         self._ledger.note(
                             frame.participant_id,
                             getattr(frame, "participant_display_name", "") or "",
-                            at_s, len(frame.payload) / 2.0 / rate, kind="solo")
+                            at_s, len(frame.payload) / 2.0 / rate, kind="solo",
+                            pcm=frame.payload)
                 yield frame
         return self._inner.stream(_tee())
 

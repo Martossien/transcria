@@ -71,3 +71,17 @@ def test_requirements_absent_erreur_actionnable(tmp_path):
                           config_dir=tmp_path)
     with pytest.raises(ConnectorsPhaseError, match="requirements-connectors"):
         apply_connectors(plan, console=_Console(), runner=lambda c: None)
+
+
+def test_cle_de_chiffrement_generee_et_jamais_remplacee(tmp_path, monkeypatch):
+    import transcria.installer.connectors_phase as mod
+    monkeypatch.setattr(mod, "connectors_deps_complete", lambda p: True)
+    plan = _plan(tmp_path)
+    apply_connectors(plan, console=_Console(), runner=lambda c: None)
+    env = (plan.repo_root / ".env").read_text(encoding="utf-8")
+    assert "TRANSCRIA_MEETING_REF_KEY=" in env
+    key1 = [line for line in env.splitlines() if line.startswith("TRANSCRIA_MEETING_REF_KEY")][0]
+    apply_connectors(plan, console=_Console(), runner=lambda c: None)   # rejoué
+    env2 = (plan.repo_root / ".env").read_text(encoding="utf-8")
+    assert env2.count("TRANSCRIA_MEETING_REF_KEY") == 1                 # jamais dupliquée
+    assert key1 in env2                                                 # JAMAIS remplacée

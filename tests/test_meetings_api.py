@@ -14,6 +14,21 @@ import uuid
 import pytest
 from cryptography.fernet import Fernet
 
+@pytest.fixture(autouse=True)
+def _force_feature_baseline(app):
+    """Leçon 0.3.5 : les tests gatés par config FORCENT leur baseline — sans quoi le
+    config.yaml de la MACHINE (ex. façade/réunions activées pour un gate réel) change le
+    comportement de la suite. OFF par défaut ici ; les fixtures d'activation surchargent."""
+    from transcria.config import get_config
+    cfg = get_config()
+    prev = cfg.get("connectors")
+    cfg.pop("connectors", None)
+    yield
+    if prev is None:
+        cfg.pop("connectors", None)
+    else:
+        cfg["connectors"] = prev
+
 # Clé STABLE pour tout le module : la base de test est partagée entre tests — une clé par
 # test rendrait indéchiffrables les sessions créées par le test précédent.
 _MODULE_KEY = Fernet.generate_key().decode()
@@ -129,6 +144,7 @@ class TestScheduleAndLifecycle:
         assert len(claim["sessions"]) == 1
         intent = claim["sessions"][0]
         assert intent["meeting_ref"] == "https://meet.jit.si/salle-test"   # déchiffrée ICI seulement
+        assert intent["owner_name"]                       # l'initiateur voyage jusqu'au bot
 
         sid = session["id"]
         for event in ("joining", "waiting_admission", "in_meeting", "ingesting"):
@@ -315,3 +331,45 @@ class TestLeasesAndCancellations:
         admin_client.post(f"/api/meetings/{sid}/cancel")
         body = _heartbeat(client, runner_token).get_json()
         assert body["cancelled_sessions"] == [sid]
+
+
+class TestAdminOneClick:
+    """Décision utilisateur 2026-07-29 : l'admin ne touche que l'interface — l'interrupteur
+    auto-provisionne tout, la check-list dit quoi réparer, la révocation est précise."""
+
+    def test_activer_provisionne_tout(self, app, admin_client, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_MEETING_REF_KEY", _MODULE_KEY)
+        # ConfigService écrit un YAML : rediriger vers un fichier jetable
+        from transcria.services.config_service import ConfigService
+        cfg_file = tmp_path / "config.yaml"
+        monkeypatch.setattr(ConfigService, "get_path", staticmethod(lambda *a: str(cfg_file)))
+        r = admin_client.post("/admin/connecteurs/meetings/toggle", data={"action": "enable"})
+        assert r.status_code == 302
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.ingestion.runner_provisioning import _token_path
+            assert UserStore.get_by_username("svc-runner") is not None
+            assert _token_path().exists()
+            assert _token_path().read_text(encoding="utf-8").startswith("tia_")
+        import yaml
+        saved = yaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+        assert saved["connectors"]["meetings"]["enabled"] is True
+        assert "svc-runner" in saved["connectors"]["meetings"]["runner_usernames"]
+        assert saved["live"]["facade"]["enabled"] is True      # dépendance masquée à l'admin
+
+    def test_checklist_affichee_avec_remedes(self, app, admin_client):
+        html = admin_client.get("/admin/connecteurs").data.decode()
+        assert "Réunions en ligne" in html
+        assert "Activer" in html or "Désactiver" in html
+        assert "✗" in html or "✓" in html
+
+    def test_revocation_precise_par_token_id(self, meetings_on, client, admin_client,
+                                             runner_token, app):
+        _heartbeat(client, runner_token)
+        r = admin_client.post("/admin/connecteurs/runners/runner-1/revoke")
+        assert r.status_code == 302
+        # le battement suivant est refusé : le jeton est mort
+        assert _heartbeat(client, runner_token).status_code == 401
+        with app.app_context():
+            from transcria.ingestion.session_store import MeetingSessionStore
+            assert MeetingSessionStore.live_runners() == []

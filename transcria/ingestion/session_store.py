@@ -14,6 +14,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 
+from transcria.auth.models import User
 from transcria.database import db
 from transcria.ingestion import session_states as st
 from transcria.ingestion.meeting_ref_crypto import decrypt_meeting_ref, encrypt_meeting_ref
@@ -113,8 +114,10 @@ class MeetingSessionStore:
             session.claimed_by = runner
             session.claimed_at = now
             session.attempt_count += 1
+            owner = db.session.get(User, session.owner_id)
             claimed.append({
                 "session_id": session.id,
+                "owner_name": (owner.display_name or owner.username) if owner else "",
                 "job_id": session.job_id,
                 "provider": session.provider,
                 "meeting_ref": decrypt_meeting_ref(session.meeting_ref_encrypted),
@@ -224,7 +227,7 @@ class MeetingSessionStore:
 
     @staticmethod
     def heartbeat(name: str, *, capacity: int, active_sessions: int,
-                  platforms_json: str, images_json: str) -> None:
+                  platforms_json: str, images_json: str, token_id: str = "") -> None:
         runner = db.session.get(MeetingRunner, name)
         if runner is None:
             runner = MeetingRunner(name=name)
@@ -234,6 +237,8 @@ class MeetingSessionStore:
         runner.active_sessions = active_sessions
         runner.platforms_json = platforms_json
         runner.images_json = images_json
+        if token_id:
+            runner.token_id = token_id
         db.session.commit()
 
     @staticmethod

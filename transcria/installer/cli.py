@@ -526,6 +526,8 @@ def _add_moss_site_parser(sub: argparse._SubParsersAction) -> None:
     c.add_argument("--config-dir", default=".", help="Répertoire où poser runner.yaml (défaut : racine)")
     c.add_argument("--systemd", action="store_true",
                    help="Installe aussi l'unité transcria-meeting-runner.service (root requis)")
+    c.add_argument("--with-browsers", action="store_true",
+                   help="Installe les navigateurs Playwright (bot HORS conteneur)")
 
 
 def _cmd_connectors(args: argparse.Namespace) -> int:
@@ -537,6 +539,7 @@ def _cmd_connectors(args: argparse.Namespace) -> int:
         venv_python=Path(args.python),
         config_dir=Path(args.config_dir).resolve(),
         install_systemd=bool(args.systemd),
+        install_browsers=bool(args.with_browsers),
     )
     try:
         def _runner(cmd: list[str]) -> None:
