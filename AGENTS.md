@@ -165,7 +165,8 @@ transcria/
     database.py             # db = SQLAlchemy()
     app_services.py         # C4 : fabriques explicites de create_app (resolve_app_config, configure_*, build_*, register_*, start_runtime) — create_app(config=None|chemin|dict, start_background_services=False pour tests/outils
     diagnostics/
-      doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers — sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
+      doctor.py             # Préflight GPU-free — FAÇADE (ré-exporte tout) + registre par profil + CLI ; sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
+      checks/               # les vérifications PAR DOMAINE (vague 0) : common (socle), probes (sondes injectables), database, llm, remote, storage, deployment, identity — golden tests/test_doctor_registry_golden.py
       doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
     installer/              # TOUTE la logique d'installation (C6 : plus aucun install_*.py à la racine)
       cli.py                # `python -m transcria.installer.cli <phase|helper>` — SEUL point d'entrée Python d'install.sh : 14 phases (python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, recommend-llm, moss-site, audiocpp, parakeetcpp) + 9 helpers transférés (prerequisites, hardware, paths, profiles, check-imports, models, arbitrage, summary-log, postgres-tools). Tête stdlib-pure : python-env tourne AVANT requirements avec le python système
