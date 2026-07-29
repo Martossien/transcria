@@ -1,0 +1,12 @@
+# Configuration du meeting-runner (vague 4 — docs/UI_REUNIONS_WORKFLOW.md).
+# Démarrage : TRANSCRIA_RUNNER_CONFIG=/home/admin_ia/transcria/runner.yaml python -m connector_service.runner
+portal_url: http://127.0.0.1:7870
+# Jeton d'exécutant : DÉPOSÉ AUTOMATIQUEMENT par le bouton « Activer » de
+# /admin/connecteurs (auto-provisionnement) — rien à faire ici dans le cas nominal.
+token_file: /home/admin_ia/transcria/instance/meeting_runner_token.txt
+runner_name: meeting-runner-1
+capacity: 2
+poll_interval_s: 30
+platforms: [jitsi]
+# images:                     # digests GHCR épinglés — défauts : images locales bot.sh
+#   jitsi: ghcr.io/<owner>/transcria-bot@sha256:…

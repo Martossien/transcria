@@ -62,6 +62,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+WorkingDirectory={repo_root}
+Environment=PYTHONPATH={repo_root}
 Environment=TRANSCRIA_RUNNER_CONFIG={config_path}
 ExecStart={venv_python} -m connector_service.runner
 Restart=on-failure

@@ -63,6 +63,7 @@ def test_systemd_ecrit_l_unite_et_recharge(tmp_path, monkeypatch):
     apply_connectors(plan, console=_Console(), runner=cmds.append)
     unit = (sysd / "transcria-meeting-runner.service").read_text(encoding="utf-8")
     assert "connector_service.runner" in unit and "TimeoutStopSec" in unit
+    assert "WorkingDirectory=" in unit and "PYTHONPATH=" in unit   # sans eux : ModuleNotFoundError (vécu)
     assert ["systemctl", "daemon-reload"] in cmds
     assert ["systemctl", "enable", "--now", "transcria-meeting-runner"] in cmds   # DORMANTE, démarrée
 
