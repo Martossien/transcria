@@ -443,6 +443,47 @@ scripts/release_bundled.sh --skip-build --push
 
 Côté testeur ensuite : `scripts/docker_quickstart.sh --bundled` fait un simple **`pull`**.
 
+### Images de BOT DE RÉUNION — séparées à dessein
+
+Deux images supplémentaires servent à faire **rejoindre une réunion** par un participant
+automatique. Elles ne sont **jamais** dans l'image applicative, et ce n'est pas un oubli : la
+première embarque Chromium, la seconde 207 Mo de bibliothèque native Zoom. Les faire entrer dans
+l'image par défaut la ferait grossir pour tous les déploiements qui ne transcrivent aucune
+réunion en direct — c'est-à-dire la majorité.
+
+| Fichier | Ce qu'il construit | Quand s'en servir |
+|---|---|---|
+| `Dockerfile.bot` | bot NAVIGATEUR (Chromium headless, capture WebRTC dans la page) | Jitsi, et tout service sans SDK |
+| `Dockerfile.zoom-sdk` | bot ZOOM natif (Meeting SDK officiel Linux, sans navigateur) | Zoom — **la seule voie éprouvée en réunion réelle** |
+| `docker-compose.bot.yml` | lancement du bot NAVIGATEUR, un conteneur ÉPHÉMÈRE par réunion (`run --rm bot <url>`) — il ne construit pas l'image Zoom | Jitsi, en direct |
+| `docker/zoom_sdk_entrypoint.sh` | amorçage D-Bus/audio exigé par le SDK Zoom | inclus dans l'image |
+| `docker/zoom_sdk_verify_libs.py` | garde-fou de BUILD : l'environnement natif est-il complet ? | inclus dans l'image |
+
+⚠ **Les deux scripts `docker/zoom_sdk_*` ne sont pas des détails de packaging.** Le Meeting SDK
+n'est pas une bibliothèque réseau mais un CLIENT ZOOM complet : sans bus D-Bus ni sous-système
+audio, il ne renvoie aucune erreur — il **plante par segfault**, au milieu d'une réunion. Le
+garde-fou de build échoue en nommant la bibliothèque manquante plutôt que de laisser découvrir
+le problème en production. Les deux fichiers portent le raisonnement complet en en-tête.
+
+**Ne pas construire ces images à la main** pour un usage courant : `scripts/bot.sh` choisit
+l'image selon la plateforme, **la construit si elle manque**, règle le mode réseau et lit
+`~/.transcria-bot.env`. C'est la seule commande à connaître. Procédure complète, identifiants et
+qualité mesurée : **[docs/BOT_REUNION.md](BOT_REUNION.md)**. État de chaque plateforme et
+marche à suivre pour l'activer : page **`/admin/connecteurs`** du portail.
+
+### Surcharge GPU « legacy » (démons Docker anciens)
+
+`docker-compose.legacy-gpu.yml` remplace le mode **CDI** par l'ancien `runtime: nvidia`. Utile
+uniquement là où le démon Docker est antérieur à la version 25 et ignore CDI — `docker.io`
+d'Ubuntu/Debian, ou un LXC imbriqué. À empiler sur le compose principal :
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.legacy-gpu.yml --profile gpu up -d
+```
+
+Si `docker compose --profile gpu` échoue avec une erreur de périphérique alors que
+`nvidia-smi` fonctionne sur l'hôte, c'est le premier essai à tenter.
+
 ### Nœud de ressources GPU séparé (déploiement split)
 
 ```bash

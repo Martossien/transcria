@@ -8,7 +8,12 @@ embarque un runtime différent de celui qualifié. Trois gardes :
     (AUDIOCPP_PINNED_COMMIT / PARAKEETCPP_PINNED_COMMIT) ;
 (b) les blocs ``stt-runtimes-builder`` des 3 fichiers sont IDENTIQUES hors
     commentaires (le code, pas la prose) ;
-(c) les répertoires lourds connus sont couverts par ``.dockerignore``.
+(c) les répertoires lourds connus sont couverts par ``.dockerignore`` ;
+(d) tout Dockerfile / docker-compose présent sur le disque est CITÉ dans au
+    moins une documentation. Classe de bug distincte mais de même nature : un
+    artefact qu'on ne peut pas trouver n'existe pas pour qui reprend le projet
+    sur une autre machine. Vécu : ``docker-compose.legacy-gpu.yml`` et les deux
+    scripts ``docker/zoom_sdk_*`` n'étaient mentionnés NULLE PART.
 
 Chaque garde est une fonction PURE testée recto-verso (elle passe sur l'arbre
 réel ET rougit sur une mutation synthétique — un filet qui ne rougit jamais
@@ -29,6 +34,10 @@ _ARG_RE = re.compile(r"^ARG\s+(?P<name>AUDIOCPP_REF|PARAKEETCPP_REF)=(?P<value>\
 # Répertoires lourds qui ne doivent JAMAIS entrer dans un contexte de build
 # (modèles = dizaines de Go ; venv/runtimes = reconstruits dans l'image).
 HEAVY_DIRS = ("venv", ".venv", "jobs", "models", "instance", "backups", "runtimes")
+
+# Où un lecteur cherche un artefact Docker. Les README comptent : ce sont les seules pages
+# qu'un nouvel arrivant lit à coup sûr.
+DOC_GLOBS = ("docs/*.md", "AGENTS.md", "README.md", "README.fr.md")
 
 
 # ── Fonctions de garde (pures texte) ─────────────────────────────────────────
@@ -67,6 +76,19 @@ def dockerignore_names(dockerignore_text: str) -> set[str]:
         if stripped and not stripped.startswith(("#", "!")):
             out.add(stripped.rstrip("/"))
     return out
+
+
+def docker_artifacts(root: Path) -> list[str]:
+    """Tout ce qui construit ou compose une image, tel que présent sur le disque."""
+    noms = [p.name for p in root.glob("Dockerfile*")]
+    noms += [p.name for p in root.glob("docker-compose*.yml")]
+    noms += [f"docker/{p.name}" for p in (root / "docker").glob("*") if p.is_file()]
+    return sorted(noms)
+
+
+def undocumented(artifacts: list[str], documentation: str) -> list[str]:
+    """Ceux qu'aucune documentation ne nomme. PURE : le texte est passé, pas lu ici."""
+    return [a for a in artifacts if a not in documentation]
 
 
 # ── (a) SHAs épinglés : Dockerfiles == constantes Python ─────────────────────
@@ -132,3 +154,38 @@ class TestHeavyDirsIgnored:
 
     def test_guard_goes_red_on_uncovered_dir(self):
         assert "models" not in dockerignore_names("venv\n# models\n!licenses\n")
+
+
+# ── (d) tout artefact Docker est trouvable dans la documentation ─────────────
+
+class TestDockerArtifactsAreDocumented:
+    """Un artefact que la documentation ne nomme pas est introuvable en pratique.
+
+    Ce n'est pas de la cosmétique : le projet se reprend sur d'autres machines, et un
+    `docker-compose` dont personne ne sait qu'il existe sera soit ignoré, soit réinventé.
+    """
+
+    @staticmethod
+    def _documentation() -> str:
+        morceaux = []
+        for motif in DOC_GLOBS:
+            for chemin in sorted(_ROOT.glob(motif)):
+                morceaux.append(chemin.read_text(encoding="utf-8", errors="ignore"))
+        return "\n".join(morceaux)
+
+    def test_every_dockerfile_and_compose_is_named_somewhere(self):
+        manquants = undocumented(docker_artifacts(_ROOT), self._documentation())
+        assert not manquants, (
+            f"artefacts Docker qu'aucune documentation ne nomme : {manquants} — "
+            f"les citer dans docs/DOCKER.md (ou la doc du chantier concerné)")
+
+    def test_guard_goes_red_on_an_undocumented_artifact(self):
+        """Un filet qui ne rougit jamais ne protège rien."""
+        assert undocumented(["Dockerfile.inconnu"], self._documentation()) == ["Dockerfile.inconnu"]
+
+    def test_the_inventory_sees_the_helper_scripts_too(self):
+        """Les scripts de `docker/` comptent : l'entrypoint du SDK Zoom porte la raison pour
+        laquelle le bot ne plante pas par segfault — le perdre coûterait cher."""
+        inventaire = docker_artifacts(_ROOT)
+        assert "docker/zoom_sdk_entrypoint.sh" in inventaire
+        assert any(n.startswith("Dockerfile") for n in inventaire)

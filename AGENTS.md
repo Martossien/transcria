@@ -128,7 +128,15 @@ transcria/
   Dockerfile.allinone-gpu   # Image all-in-one GPU SLIM (CUDA 12.6 ; compile llama.cpp = LLM embarquée ; NeMo/Sortformer). AUCUN poids baké → publiable (GHCR)
   Dockerfile.allinone-bundled # Idem + 3 modèles NON gated BAKÉS (whisper+Sortformer+Qwen-9B) → zéro-download/hors-ligne ; build local (~31 Go) ; /licenses/ (attributions)
   docker-compose.yml        # split: db→migrate→web+scheduler ; gpu: db→migrate-gpu→all-in-one (image GPU, CDI). TRANSCRIA_HF_SOURCE=hfcache → cache HF en volume nommé (mode bundled)
-                            # RÈGLE DE RELEASE (C7) : tout Dockerfile MODIFIÉ est buildé avant le tag (au minimum `docker build --target <étage modifié>`) — la CI ne parse ni bundled ni resource-node. Gardes texte : tests/test_docker_sync.py (SHAs épinglés == constantes Python, blocs stt-runtimes-builder identiques, .dockerignore) ; release bundled : scripts/release_bundled.sh UNIQUEMENT (build + vérif contenu conteneur + push GHCR sur --push)
+  Dockerfile.bot            # Bot NAVIGATEUR de réunion (Chromium headless) — JAMAIS dans l'image par défaut (poids de Chromium)
+  Dockerfile.zoom-sdk       # Bot ZOOM natif (Meeting SDK Linux, 207 Mo de .so) — seule voie ÉPROUVÉE en réunion réelle
+  docker/                   # zoom_sdk_entrypoint.sh (amorçage D-Bus/audio : sans lui le SDK SEGFAULTE, sans message)
+                            #   + zoom_sdk_verify_libs.py (garde-fou de BUILD : nomme la lib manquante au lieu de la découvrir en réunion)
+                            # ⚠ Ne pas construire ces images à la main : `scripts/bot.sh` choisit l'image, la construit si absente,
+                            #   règle le mode réseau et lit ~/.transcria-bot.env. Cf. docs/BOT_REUNION.md, docs/DOCKER.md
+  docker-compose.bot.yml    # Bot navigateur, un conteneur ÉPHÉMÈRE par réunion (`run --rm bot <url>`) — pas l'image Zoom
+  docker-compose.legacy-gpu.yml # Surcharge : `runtime: nvidia` au lieu de CDI, pour un démon Docker < 25 (docker.io Debian/Ubuntu, LXC imbriqué)
+                            # RÈGLE DE RELEASE (C7) : tout Dockerfile MODIFIÉ est buildé avant le tag (au minimum `docker build --target <étage modifié>`) — la CI ne parse ni bundled ni resource-node. Gardes texte : tests/test_docker_sync.py (SHAs épinglés == constantes Python, blocs stt-runtimes-builder identiques, .dockerignore, ET tout Dockerfile/compose CITÉ dans une doc — un artefact introuvable n'existe pas pour qui reprend le projet) ; release bundled : scripts/release_bundled.sh UNIQUEMENT (build + vérif contenu conteneur + push GHCR sur --push)
   licenses/                 # Attributions des modèles embarqués (image :bundled) : NOTICE.md + NVIDIA Open Model License + MIT faster-whisper
   .dockerignore             # Exclut venv/secrets/artefacts du contexte de build (ré-inclut licenses/)
   config.yaml               # Configuration production (pas dans git)
