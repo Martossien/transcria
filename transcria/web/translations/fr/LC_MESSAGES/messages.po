@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-29 17:54+0200\n"
+"POT-Creation-Date: 2026-07-29 18:33+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -5388,9 +5388,9 @@ msgid "voix féminine dominante"
 msgstr "voix féminine dominante"
 
 #: transcria/web/templates/wizard/_step_participants.html:73
-#, python-format
-msgid "Micro de salle « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
-msgstr "Micro de salle « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
+#, fuzzy, python-format
+msgid "Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
+msgstr "Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
 
 #: transcria/web/templates/wizard/_step_participants.html:79
 #, python-format

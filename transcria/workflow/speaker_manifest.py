@@ -122,8 +122,25 @@ def project_speakers(
         elif best_ratio >= min_overlap_ratio:
             rooms.setdefault(best.name or best.id, []).append(speaker)
 
+    # DURCISSEMENT (constat utilisateur, 2026-07-29) : une piste déclarée `solo` peut cacher
+    # PLUSIEURS personnes (portable posé au milieu d'une salle — l'organisateur lui-même peut
+    # l'ignorer). Si la diarisation attribue DEUX voix distinctes à la même piste solo, c'est
+    # la preuve qu'elle est partagée : on retire TOUTES ses suggestions (suggérer le même nom
+    # à deux voix serait validé par habitude) et la piste rejoint l'affichage « N voix
+    # détectées sur le micro de X », comme une salle.
+    by_participant: dict[str, list[SpeakerSuggestion]] = {}
+    for suggestion in suggestions:
+        by_participant.setdefault(suggestion.participant_id, []).append(suggestion)
+    kept: list[SpeakerSuggestion] = []
+    for participant_id, group in by_participant.items():
+        if len(group) == 1:
+            kept.append(group[0])
+            continue
+        label = group[0].name or participant_id
+        rooms.setdefault(label, []).extend(sug.speaker for sug in group)
+
     return ProjectionResult(
-        suggestions=tuple(suggestions),
-        rooms={name: tuple(spk) for name, spk in rooms.items()},
+        suggestions=tuple(kept),
+        rooms={name: tuple(sorted(spk)) for name, spk in rooms.items()},
         scores=scores,
     )

@@ -70,7 +70,7 @@
         <div class="alert alert-info py-2 mb-2">
           <i class="bi bi-building"></i>
           {% for room, spk in manifest_rooms.items() %}
-          <div>{{ _('Micro de salle « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez.', room=room, n=spk|length, speakers=spk|join(', ')) }}</div>
+          <div>{{ _('Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez.', room=room, n=spk|length, speakers=spk|join(', ')) }}</div>
           {% endfor %}
         </div>
         {% endif %}

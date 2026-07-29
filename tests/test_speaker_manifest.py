@@ -134,3 +134,21 @@ class TestProjection:
         assert audit["thresholds"]["min_overlap_ratio"] == 0.65
         assert audit["suggestions"][0]["speaker"] == "SPEAKER_00"
         assert "SPEAKER_00" in audit["scores"]
+
+
+class TestSoloTrackActuallyShared:
+    """Durcissement (constat utilisateur 2026-07-29) : une piste déclarée `solo` peut cacher
+    plusieurs personnes — si la diarisation y voit DEUX voix, plus aucune suggestion de nom,
+    la piste s'affiche comme un micro partagé."""
+
+    def test_deux_voix_sur_une_piste_solo_aucun_nom_suggere(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A]))
+        # Deux SPEAKER distincts, chacun majoritairement sur la piste d'Alice.
+        result = project_speakers(m, _turns(("SPEAKER_00", 0.0, 8.0), ("SPEAKER_01", 20.0, 28.0)))
+        assert result.suggestions == ()                          # jamais le même nom pour deux voix
+        assert result.rooms == {"Alice Durand": ("SPEAKER_00", "SPEAKER_01")}
+
+    def test_une_seule_voix_reste_suggeree(self):
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, SOLO_B]))
+        result = project_speakers(m, _turns(("SPEAKER_00", 1.0, 9.0), ("SPEAKER_01", 11.0, 19.0)))
+        assert {s.name for s in result.suggestions} == {"Alice Durand", "Benoît Marchand"}
