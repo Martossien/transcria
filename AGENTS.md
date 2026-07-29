@@ -761,6 +761,25 @@ centralisés). Règles pour tout agent de codage :
    INACTIF « à relire » (activé par édition-enregistrement) ; `community/meeting-types/`
    = contributions par PR, chaque fichier validé par un test CI.
 
+### Connecteurs de réunion & temps réel (paquet `connector_service/`)
+**👉 Point d'entrée pour reprendre le chantier : `docs/TEMPS_REEL_REUNIONS.md` § 0 « REPRISE ».**
+Elle dit en une page ce qui est ÉPROUVÉ, ce qui ne l'est pas, ce qui bloque et par quoi continuer
+— écrite pour qu'on puisse changer de machine sans relire les 1 300 lignes du plan.
+
+Trois règles structurantes, chacune correspondant à un piège déjà payé :
+1. **Le cœur `transcria/` n'importe JAMAIS `connector_service`** (contrat import-linter). Ce qui
+   doit remonter jusqu'à l'UI passe par de la DONNÉE : `transcria/data/meeting_connectors.yaml`,
+   lu par `transcria/web/connector_catalog.py` et affiché par `/admin/connecteurs`.
+2. **`status` distingue `validated` (éprouvé EN VRAI, date obligatoire) de `implemented` (passe la
+   CI, jamais exécuté)** — afficher le second comme prêt tromperait l'exploitant. C'est vérifié
+   par test, et un `validated` sans `verified_on` fait échouer la lecture du catalogue.
+3. **Les règles des plateformes sont des modules PURS** (durées, revendications, formes,
+   algorithmes acceptés), le réseau ne fait que transporter. C'est ce qui permet de tester sans
+   compte — et ce qui a permis de corriger trois erreurs avant qu'elles ne coûtent une session de
+   débogage contre un service distant.
+⚠ **Inventorier ce paquet AVANT d'y écrire** (cf. la liste des modules plus haut) : un module OAuth
+y a déjà été écrit en double faute de l'avoir fait.
+
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.
 

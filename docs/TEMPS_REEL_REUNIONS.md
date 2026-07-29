@@ -26,6 +26,92 @@
 > .NET — la lib média `Microsoft.Skype.Bots.Media` est Windows-only, .NET lui-même tourne sous
 > Linux). Tout en commits ; le gate réel (E2E par plateforme) reste à faire ensemble.
 
+## 0. REPRISE — où on en est, et par quoi continuer (à jour du 2026-07-29)
+
+> **Lisez cette section en premier.** Elle existe pour qu'on puisse reprendre le chantier depuis
+> une autre machine sans relire les 1 300 lignes qui suivent. Les détails vivent plus bas ; ici,
+> seulement l'état, les blocages, et l'ordre de travail.
+
+### Ce qui est ÉPROUVÉ, et ce qui ne l'est pas
+
+La distinction est la seule chose qui compte pour décider quoi faire ensuite. Elle est portée
+par le champ `status` de `transcria/data/meeting_connectors.yaml`, que la page
+**`/admin/connecteurs`** affiche telle quelle.
+
+| Plateforme | Voie | État | Réseau exigé |
+|---|---|---|---|
+| **Zoom** | bot SDK natif | ✅ **éprouvé en réunion réelle** (compte GRATUIT) : 9 879 trames, locuteur nommé, 48 segments, 0 hallucination | sortant seul |
+| **Jitsi** | bot navigateur | ✅ éprouvé | sortant seul |
+| **Visio** (La Suite) | transport natif LiveKit | ✅ éprouvé | sortant seul |
+| **Zoom RTMS** | webhook | 🧪 code + CI, **jamais exécuté** | ⚠ entrant HTTPS |
+| **Teams** | Graph (post-réunion) | 🧪 code + CI, **jamais exécuté** | ⚠ entrant HTTPS ×2 |
+| **Meet** | Pub/Sub **pull** | 🧪 code + CI, **jamais exécuté** | **aucun entrant** |
+
+« 🧪 » ne veut pas dire « presque fini ». Il veut dire : les RÈGLES sont écrites et testées, le
+transport ne l'est pas, et rien n'a jamais vu une vraie plateforme.
+
+### Ce qui bloque — un ACHAT, pas du code
+
+Teams et Meet attendent des abonnements payants, à prendre **sur la machine qui a accès au
+pare-feu** :
+
+- **Microsoft 365 Business** ~7 $/mois — l'enregistrement de réunion exige une édition payante.
+- **Google Workspace Business Standard** ~14 $/mois, **essai gratuit de 14 jours**. Un seul
+  utilisateur suffit (l'organisateur).
+
+⚠ **Commencer par Meet, pas par Teams**, malgré son coût double : Meet n'exige **aucune
+ouverture de pare-feu** (Google publie dans une file Pub/Sub qu'on interroge), là où Teams
+impose deux points d'entrée HTTPS publics. Meet est donc validable même si l'ouverture de
+pare-feu traîne, et c'est aussi le connecteur le plus facile à faire accepter par une DSI.
+
+### À préparer sur la machine « pare-feu » AVANT de commencer
+
+1. Le dépôt à jour (`git pull`) — tout le code est sur `main`.
+2. Les deux comptes ci-dessus, **et les procédures pas à pas sont déjà écrites** : ouvrir
+   `/admin/connecteurs` dans le portail, chaque plateforme y porte ses étapes exactes.
+3. Pour **Teams uniquement** : deux URL HTTPS publiques (notifications + cycle de vie).
+   Un tunnel (`cloudflared`) suffit pour éprouver.
+4. Pour **Meet** : rien de réseau. Un projet Google Cloud, un compte de service, la délégation
+   à l'échelle du domaine, et un abonnement Pub/Sub **de type pull** (surtout pas « push »).
+
+### Les deux pannes MUETTES à ne pas se faire
+
+Aucune des deux ne produit d'erreur : le code semble marcher et rien n'arrive jamais.
+
+- **Teams** — sans politique d'accès applicatif (`New-CsApplicationAccessPolicy`), l'application
+  s'authentifie mais ne voit les artefacts d'AUCUN organisateur.
+- **Meet** — sans le rôle *Pub/Sub Publisher* accordé à
+  `meet-api-event-push@system.gserviceaccount.com` sur le sujet, l'abonnement est créé, l'API
+  répond 200, et la file reste vide à jamais.
+
+### Ordre de travail recommandé
+
+**Sans rien acheter** (par rapport valeur/effort décroissant) :
+
+1. **L2 — parcours documenté de bout en bout** dans `README`/`INSTALL` (activer la façade →
+   créer un jeton → image → `scripts/bot.sh`). C'est ce qui rend le chantier **testable par
+   quelqu'un d'autre que son auteur**. Coût S. *Le meilleur choix aujourd'hui.*
+2. **L1 — question à l'installation** (« transcrire des réunions en direct ? »). Coût S.
+3. **L3 — publier les images de bot sur GHCR**. Supprime Docker de l'expérience utilisateur —
+   plus rien à construire côté client. Coût M.
+4. **Sous-salles Zoom** : codées, jamais exécutées. Ne demande qu'une salle ouverte.
+
+**Une fois les comptes achetés** : brancher les appels réseau derrière les points d'injection
+déjà spécifiés (cf. §7-quinquies), puis le branchement sur l'ingestion, puis l'E2E réel.
+
+**À trancher explicitement, pas en passant** : **L4** (écran « Rejoindre une réunion ») suppose
+de donner au portail des droits sur Docker — surface d'attaque, droits du démon, isolation.
+
+### Où trouver le reste
+
+| Question | Fichier |
+|---|---|
+| Que contient `connector_service/`, module par module ? | `AGENTS.md` § Structure du projet |
+| Quelle procédure pour activer une plateforme ? | `/admin/connecteurs`, ou `transcria/data/meeting_connectors.yaml` |
+| Pourquoi telle décision d'architecture ? | `docs/adr/ADR-001-frontiere-ingestion-reunions.md` |
+| Comment lancer un bot ? | `docs/BOT_REUNION.md` |
+| Quelles briques cloud existent, et ce qui manque ? | §7-quinquies de ce document |
+
 ## Positionnement stratégique — pourquoi ce chantier
 
 TranscrIA est **fort sur son cœur** : donner le son d'une réunion + sa
