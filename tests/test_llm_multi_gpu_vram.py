@@ -229,3 +229,69 @@ class TestProfileVramProfileAdmission:
         assert sched._local_required_mb(self._vram_profile("srt_express"), set()) == 6000
         # srt_locuteurs : pas de phase diarisation (locuteurs via wizard) → STT seul aussi.
         assert sched._local_required_mb(self._vram_profile("srt_locuteurs"), set()) == 6000
+
+
+class TestLiberationSousPressionHorsVerrou:
+    """Ordre des verrous — audit du 2026-07-30 (P0) : `release_idle_vram` appelé
+    `_alloc_lock` TENU inversait l'ordre face au chemin de chargement de la façade
+    (`_facade_lock` → `try_reserve` → `_alloc_lock`, contre relâcheur →
+    `_facade_lock` sous `_alloc_lock`) → interblocage possible de toute l'admission.
+    Ces tests verrouillent le déroulé corrigé : tentative atomique → libération HORS
+    verrou → seconde tentative atomique."""
+
+    _CFG = {"llm_indices": [0, 1, 2], "llm_per_gpu": [15000, 15000, 15000]}
+
+    def test_le_relacheur_tourne_verrou_d_allocation_libre(self, tmp_path, monkeypatch):
+        """LA preuve de l'invariant : pendant le relâcheur, `_alloc_lock` est acquérable
+        par un AUTRE fil (un relâcheur qui revient vers l'allocateur ne peut donc plus
+        s'interbloquer)."""
+        import threading
+
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 23500, 5000], **self._CFG)
+        lock_was_free: list[bool] = []
+
+        def _releaser_probe() -> None:
+            got: list[bool] = []
+
+            def _try() -> None:
+                acquired = alloc._alloc_lock.acquire(timeout=1)
+                got.append(acquired)
+                if acquired:
+                    alloc._alloc_lock.release()
+
+            probe = threading.Thread(target=_try)
+            probe.start()
+            probe.join(timeout=2)
+            lock_was_free.append(bool(got and got[0]))
+
+        monkeypatch.setattr("transcria.queue.allocator.release_idle_vram", _releaser_probe)
+        assert alloc.try_reserve_llm("job-1", 45000, "summary_llm") is False
+        assert lock_was_free == [True]
+
+    def test_relacheur_reentrant_comme_la_facade(self, tmp_path, monkeypatch):
+        """Rejoue le flux RÉEL de la façade : le relâcheur libère sa réservation en
+        rappelant l'allocateur (`release_reservations`) — la place rendue permet la
+        réservation LLM à la seconde tentative, sans interblocage."""
+        from transcria.gpu import vram_release
+
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 23500, 23500], **self._CFG)
+        monkeypatch.setattr(vram_release, "_releasers", [])
+        vram_release.register_releaser(
+            lambda: alloc.release_reservations("facade-live"))
+        # La façade occupe (comptablement) 12,5 Go sur la carte 2 → part LLM refusée…
+        assert alloc.reserve("facade-live", 2, 12500, "live_stt_cohere") is True
+        # …mais la libération sous pression la décharge, et la LLM se réserve.
+        assert alloc.try_reserve_llm("job-1", 45000, "summary_llm") is True
+        parts = {r.gpu_index for gpu in alloc._gpu_reservations.values() for r in gpu}
+        assert parts == {0, 1, 2}
+
+    def test_echec_final_reste_diagnosticable(self, tmp_path, monkeypatch, caplog):
+        """Sans relâcheur utile, l'échec liste les cartes en manque (exploitant)."""
+        import logging
+
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 23500, 4000], **self._CFG)
+        monkeypatch.setattr("transcria.queue.allocator.release_idle_vram", lambda: None)
+        with caplog.at_level(logging.INFO, logger="transcria.queue.allocator"):
+            assert alloc.try_reserve_llm("job-1", 45000, "summary_llm") is False
+        assert any("impossible" in rec.getMessage() and "GPU 2" in rec.getMessage()
+                   for rec in caplog.records)

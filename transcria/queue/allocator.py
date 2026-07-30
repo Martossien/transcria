@@ -300,7 +300,17 @@ class GPUAllocator:
         TOUT-OU-RIEN (aucune réservation laissée en cas d'échec partiel).
 
         Idempotent par (job, phase) ; libérer via `release_phase(job_id, phase)`
-        (qui supprime déjà toutes les parts) ou `release(job_id)`."""
+        (qui supprime déjà toutes les parts) ou `release(job_id)`.
+
+        ⚠ ORDRE DES VERROUS (audit du 2026-07-30) : la libération sous pression
+        (`release_idle_vram`) s'exécute HORS `_alloc_lock`. Un relâcheur prend son
+        propre verrou puis REVIENT vers l'allocateur (la façade :
+        `_facade_lock` → `release_reservations` → `_alloc_lock`) ; l'appeler verrou
+        tenu inversait l'ordre face au chemin de chargement de la façade
+        (`_facade_lock` → `try_reserve` → `_alloc_lock`) → interblocage possible de
+        TOUTE l'admission GPU. D'où le déroulé : tentative atomique → libération
+        hors verrou → seconde tentative atomique.
+        """
         if not job_id or not phase:
             raise ValueError("job_id et phase requis")
         total_mb = int(total_mb)
@@ -311,32 +321,50 @@ class GPUAllocator:
         if not indices:
             return False
         shares = self._llm_shares(total_mb, indices)
-        with self._alloc_lock:
-            if self._find_reservation_locked(job_id, phase) is not None:
-                return True
-            for idx in indices:
-                if self._get_available_vram_mb_locked(idx) < shares[idx] + self.min_free_mb:
-                    # Libération SOUS PRESSION (tests réels réunions) : un modèle de façade
-                    # inactif peut tenir le GPU — on demande sa libération et on remesure
-                    # UNE fois, plutôt que d'attendre sa minuterie d'inactivité.
-                    release_idle_vram()
-                    if self._get_available_vram_mb_locked(idx) >= shares[idx] + self.min_free_mb:
-                        continue
-                    logger.info(
-                        "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (parts=%s, GPU %d insuffisant)",
-                        job_id, phase, total_mb, shares, idx,
-                    )
+        # Cartes en manque lors de la DERNIÈRE tentative — pour un échec diagnosticable.
+        shortage: list[tuple[int, int]] = []
+
+        def _attempt_locked() -> bool:
+            """Une tentative ATOMIQUE : vérifie TOUTES les parts puis réserve, sous verrou."""
+            shortage.clear()
+            with self._alloc_lock:
+                if self._find_reservation_locked(job_id, phase) is not None:
+                    return True
+                shortage.extend(
+                    (idx, available)
+                    for idx in indices
+                    if (available := self._get_available_vram_mb_locked(idx))
+                    < shares[idx] + self.min_free_mb
+                )
+                if shortage:
                     return False
-            now = time.monotonic()
-            for idx in indices:
-                self._gpu_reservations.setdefault(idx, []).append(Reservation(
-                    job_id=job_id, gpu_index=idx, vram_mb=shares[idx], phase=phase, reserved_at=now,
-                ))
-            logger.info(
-                "LLM réservée: job=%s phase=%s total=%d Mo (parts=%s)",
-                job_id, phase, total_mb, shares,
-            )
+                now = time.monotonic()
+                for idx in indices:
+                    self._gpu_reservations.setdefault(idx, []).append(Reservation(
+                        job_id=job_id, gpu_index=idx, vram_mb=shares[idx], phase=phase,
+                        reserved_at=now,
+                    ))
+                logger.info(
+                    "LLM réservée: job=%s phase=%s total=%d Mo (parts=%s)",
+                    job_id, phase, total_mb, shares,
+                )
+                return True
+
+        if _attempt_locked():
             return True
+        # Libération SOUS PRESSION (tests réels réunions) : un modèle de façade inactif
+        # peut tenir le GPU — on demande sa libération et on retente UNE fois, plutôt
+        # que d'attendre sa minuterie d'inactivité.
+        release_idle_vram()
+        if _attempt_locked():
+            return True
+        logger.info(
+            "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (parts=%s, "
+            "insuffisant sur %s)",
+            job_id, phase, total_mb, shares,
+            ", ".join(f"GPU {idx} ({available} Mo dispo)" for idx, available in shortage),
+        )
+        return False
 
     def reserve(self, job_id: str, gpu_index: int, vram_mb: int, phase: str = "stt") -> bool:
         with self._alloc_lock:
