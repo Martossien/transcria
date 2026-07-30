@@ -137,3 +137,14 @@ def test_from_vram_manager_plans_on_real_state():
     d = planner.plan(assigned_gpu=5, gpu_memory_utilization=0.85, auto_relocate=True)
     assert d.status == "relocate"   # GPU 5 plein (1 GiB) → repli sur GPU 3
     assert d.gpu_index == 3
+
+
+def test_from_vram_manager_marge_unique_min_free(monkeypatch):
+    """P1.d (audit 2026-07-30) : la marge du lancement RÉEL suit gpu.min_free_vram_mb —
+    le chemin qui alloue le plus n'est plus le moins protégé (512 → marge d'admission)."""
+    from transcria.gpu.vram_manager import VRAMManager
+
+    mgr = VRAMManager({"gpu": {"min_free_vram_mb": 4000}})
+    assert SttVramPlanner.from_vram_manager(mgr).headroom_mb == 4000
+    # Surcharge explicite toujours possible (bancs, cas particuliers).
+    assert SttVramPlanner.from_vram_manager(mgr, headroom_mb=512).headroom_mb == 512

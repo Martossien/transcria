@@ -21,6 +21,10 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 # Marge de sécurité sous le total réservé (fragmentation, overhead driver/contexte).
+# ⚠ Défaut du CONSTRUCTEUR nu seulement : en production (`from_vram_manager`), la marge
+# suit `gpu.min_free_vram_mb` — P1.d, audit 2026-07-30 : le chemin qui ALLOUE le plus
+# (lancement réel des moteurs) était protégé par la marge la plus faible du périmètre
+# (512 Mio contre 4000 à l'admission des phases).
 _DEFAULT_HEADROOM_MB = 512
 
 
@@ -88,8 +92,14 @@ class SttVramPlanner:
         self.headroom_mb = int(headroom_mb)
 
     @classmethod
-    def from_vram_manager(cls, vram_manager, *, headroom_mb: int = _DEFAULT_HEADROOM_MB) -> "SttVramPlanner":
-        """Planificateur câblé sur l'état GPU réel via `VRAMManager.get_gpu_info`."""
+    def from_vram_manager(cls, vram_manager, *, headroom_mb: int | None = None) -> "SttVramPlanner":
+        """Planificateur câblé sur l'état GPU réel via `VRAMManager.get_gpu_info`.
+
+        Marge par défaut = `gpu.min_free_vram_mb` du manager (P1.d) : LA marge unique
+        de l'admission, au lieu d'un 512 local qui laissait le lancement réel des
+        moteurs moins protégé que les simples réservations comptables."""
+        if headroom_mb is None:
+            headroom_mb = int(getattr(vram_manager, "min_free_mb", _DEFAULT_HEADROOM_MB))
         return cls(lambda: gpu_states_from_vram_manager(vram_manager), headroom_mb=headroom_mb)
 
     @staticmethod

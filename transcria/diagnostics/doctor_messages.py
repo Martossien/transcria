@@ -79,6 +79,10 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "place_mismatch_hint": "Aligner gpu.llm_gpu_indices/llm_vram_mb_per_gpu sur le --tensor-split réel du script "
                                "(vécu 2026-07-30 : segfault OOM au lancement).",
         "place_ok": "script et config alignés ({cards} carte(s) : {indices})",
+        "place_cvd_set": "CUDA_VISIBLE_DEVICES={cvd} est posé sur le service alors que gpu.llm_gpu_indices={indices} — "
+                         "les index risquent de désigner des cartes différentes selon les modules",
+        "place_cvd_set_hint": "Ne pas poser CUDA_VISIBLE_DEVICES sur le process du service : llm_gpu_indices est déclaré "
+                              "dans le référentiel nvidia-smi de la machine (le confinement GPU se fait par script moteur).",
         # check_opencode
         "oc_disabled": "phases LLM désactivées — opencode non requis",
         "oc_missing": "opencode introuvable (PATH, TRANSCRIA_OPENCODE_BIN, chemins connus)",
@@ -336,6 +340,10 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "place_mismatch_hint": "Align gpu.llm_gpu_indices/llm_vram_mb_per_gpu with the script's actual --tensor-split "
                                "(seen 2026-07-30: OOM segfault at launch).",
         "place_ok": "script and config aligned ({cards} card(s): {indices})",
+        "place_cvd_set": "CUDA_VISIBLE_DEVICES={cvd} is set on the service while gpu.llm_gpu_indices={indices} — "
+                         "indices may point at different cards depending on the module",
+        "place_cvd_set_hint": "Do not set CUDA_VISIBLE_DEVICES on the service process: llm_gpu_indices is declared "
+                              "in the machine's nvidia-smi frame (GPU confinement belongs to engine launch scripts).",
         "oc_disabled": "LLM phases disabled — opencode not required",
         "oc_missing": "opencode not found (PATH, TRANSCRIA_OPENCODE_BIN, known paths)",
         "oc_missing_hint": "Install opencode and/or set TRANSCRIA_OPENCODE_BIN — see docs/INSTALL.md.",

@@ -15,6 +15,7 @@ import logging
 from types import SimpleNamespace
 
 from transcria.gpu.gpu_session import GPUSession
+from transcria.gpu.opencode_setup import is_remote_arbitrage
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.jobs.models import Job
@@ -108,6 +109,13 @@ class GpuPhaseSession:
             self.vram.offload_all()
 
     def should_reserve_llm_vram(self) -> bool:
+        """Faut-il réserver la VRAM LLM LOCALEMENT ? Non sans GPU, et non si l'arbitrage
+        est DISTANT (P1.e, audit 2026-07-30) : sur une frontale À GPU (STT local + LLM
+        sur un nœud), réserver ~60 Go locaux pour une LLM qui ne tournera jamais ici
+        produisait, dès que la distante saturait, une attente « VRAM insuffisante »
+        mensongère sur une machine incapable de l'héberger."""
+        if is_remote_arbitrage(self.config or {}):
+            return False
         return bool(self.allocator.get_gpu_info())
 
     def phase_runs_remotely(self, phase: str) -> bool:
@@ -157,7 +165,6 @@ class GpuPhaseSession:
         from transcria.gpu.stt_engine_supervisor import (
             build_stt_supervisor,
             engine_specs_from_config,
-            probe_engine_health,
         )
 
         config = self.config or {}
@@ -168,28 +175,10 @@ class GpuPhaseSession:
             supervisor = build_stt_supervisor(config)
         except Exception:  # noqa: BLE001 — jamais bloquant pour une phase LLM
             return False
-        import time as _time
-
-        stopped_any = False
-        for spec in engine_specs_from_config(config):
-            if spec.gpu not in llm_indices:
-                continue
-            try:
-                if not probe_engine_health(supervisor._health, spec):
-                    continue  # pas vivant → rien à libérer
-                last = supervisor._last_used_for(spec.name)
-                if last is not None and (_time.monotonic() - last) < min_idle_s:
-                    continue  # utilisé à l'instant (job concurrent) → protégé
-                if supervisor.stop_engine(spec):
-                    stopped_any = True
-                    (sl or logger).info(
-                        "[gpu] Moteur STT servi '%s' arrêté pour libérer le GPU %d "
-                        "à la LLM (relancé à la demande au prochain besoin)",
-                        spec.name, spec.gpu,
-                    )
-            except Exception:  # noqa: BLE001 — best-effort par moteur
-                continue
-        return stopped_any
+        # Délégation à l'API PUBLIQUE du superviseur (P1.a) : l'état d'usage des moteurs
+        # lui appartient — cette façade ne pioche plus dans ses membres privés.
+        return supervisor.stop_idle_engines_on(
+            llm_indices, engine_specs_from_config(config), min_idle_s=min_idle_s)
 
     def reclaim_idle_arbitrage_llm(self, sl) -> bool:
         """Libère la VRAM en arrêtant NOTRE LLM d'arbitrage inactive (catégorie 1).

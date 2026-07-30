@@ -87,6 +87,9 @@ _DEFAULT_CONFIG = {
         # --tensor-split) : déclarer moins de cartes que le split laisse l'allocateur
         # poser d'autres modèles sur les cartes manquantes → segfault OOM au lancement
         # (vécu 2026-07-30 : split 3 cartes, config [0], façade STT sur la carte 2).
+        # Référentiel : index nvidia-smi de la MACHINE (ne pas poser CUDA_VISIBLE_DEVICES
+        # sur le process du service — le doctor le signale ; le confinement GPU se fait
+        # dans les scripts moteurs).
         "llm_vram_mb": 60000,
         "llm_gpu_indices": None,
         # Cartes hétérogènes / tensor-split inégal : part RÉELLE par GPU (liste alignée

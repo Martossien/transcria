@@ -371,7 +371,8 @@ gpu:
   # se fait PAR GPU (total ÷ nb de cartes). llm_gpu_indices absent = tous les GPU visibles.
   # ⚠ llm_gpu_indices DOIT refléter le script réel (le doctor compare au --tensor-split) :
   # en déclarer moins laisse d'autres modèles se poser sur les cartes manquantes →
-  # segfault OOM au lancement (vécu 2026-07-30).
+  # segfault OOM au lancement (vécu 2026-07-30). Référentiel : index nvidia-smi de la
+  # machine — ne posez PAS CUDA_VISIBLE_DEVICES sur le service (le doctor le signale).
   llm_vram_mb: 60000
   # llm_gpu_indices: [0, 1, 2]
   # Cartes HÉTÉROGÈNES (8/12/16/24/48 Go…) ou --tensor-split inégal : part réelle par

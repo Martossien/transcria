@@ -9,9 +9,8 @@ import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
-from pathlib import Path
 
-from transcria.gpu import inventory
+from transcria.gpu import inventory, pid_registry
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
@@ -19,6 +18,7 @@ from transcria.gpu.cuda_visible import (
 )
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.opencode_setup import is_remote_arbitrage
+from transcria.gpu.stt_instance_planner import llm_shares
 from transcria.gpu.vram_release import release_idle_vram
 
 logger = logging.getLogger(__name__)
@@ -47,20 +47,15 @@ class GPUAllocator:
     def __init__(self, config: dict):
         self.config = config
         gpu_cfg = config.get("gpu", {}) or {}
-        scheduling_cfg = config.get("workflow", {}).get("scheduling", {}) or {}
 
         self.min_free_mb = int(gpu_cfg.get("min_free_vram_mb", 4000))
         self.preferred_gpu = self._resolve_preferred_gpu()
         # Patterns de préemption : l'UNIQUE construction de l'arbre (B3).
         self._kill_patterns = kill_patterns_from_config(config)
 
-        default_pid_file = Path(
-            config.get("storage", {}).get("jobs_dir", ".")
-        ) / ".transcria_pids"
-        pid_file = scheduling_cfg.get("pid_file") or str(default_pid_file)
-        self._pid_file = Path(pid_file)
-        if not self._pid_file.is_absolute():
-            self._pid_file = Path.cwd() / self._pid_file
+        # Dérivation du chemin PARTAGÉE avec la préemption (gpu/pid_registry) : deux
+        # dérivations divergentes feraient tuer nos propres processus (P1.a).
+        self._pid_file = pid_registry.pid_file_path(config)
 
         self._gpu_reservations: dict[int, list[Reservation]] = {}
         self._alloc_lock = threading.RLock()
@@ -265,23 +260,13 @@ class GPUAllocator:
                 indices.append(idx)
         return sorted(indices)
 
-    @staticmethod
-    def _llm_per_gpu_mb(total_mb: int, gpu_count: int) -> int:
-        return -(-int(total_mb) // max(1, gpu_count))  # plafond (ceil)
-
     def _llm_shares(self, total_mb: int, indices: list[int]) -> dict[int, int]:
-        """Part de VRAM par GPU du placement LLM.
-
-        Cartes HÉTÉROGÈNES (8/12/16/24/48 Go…) ou `--tensor-split` inégal :
-        `gpu.llm_vram_mb_per_gpu` (liste alignée sur `llm_gpu_indices`) déclare la part
-        réelle de chaque carte. À défaut : répartition égale (split homogène)."""
+        """Part de VRAM par GPU du placement LLM — délégation à L'ARITHMÉTIQUE UNIQUE
+        (`stt_instance_planner.llm_shares`, P1.b : quatre calculs divergents à l'audit
+        du 2026-07-30). Le total reste DYNAMIQUE (passé par l'appelant : admission du
+        scheduler, recalibrage en mémoire), seul le `per_gpu` vient de la config."""
         per_gpu = (self.config.get("gpu", {}) or {}).get("llm_vram_mb_per_gpu")
-        if isinstance(per_gpu, list) and len(per_gpu) == len(indices) and all(
-            isinstance(mb, (int, float)) and mb > 0 for mb in per_gpu
-        ):
-            return {idx: int(mb) for idx, mb in zip(indices, per_gpu)}
-        share = self._llm_per_gpu_mb(total_mb, len(indices))
-        return {idx: share for idx in indices}
+        return llm_shares(indices, total_mb, per_gpu)
 
     def can_host_llm(self, total_mb: int) -> bool:
         """Chaque GPU du placement LLM a-t-il SA part requise (+ marge) de libre ?"""

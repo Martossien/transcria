@@ -10,11 +10,14 @@ Faits mesurés qui fondent la politique (réunions réelles, 2026-07-18) :
 - le gain plafonne vite (×1,66 à 2, ×1,83 à 3) → plafond par défaut à 3.
 
 Le précédent architectural est `gpu/llm_placement.py` (pur, consommé par un
-script de plan et par l'UI).
+script de plan et par l'UI). Seule entorse à la pureté : `is_remote_arbitrage`
+(lecture config + env) pour tenir la promesse « LLM distante → rien à réserver ».
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from transcria.gpu.opencode_setup import is_remote_arbitrage
 
 DEFAULT_INSTANCE_VRAM_MB = 6500   # empreinte mesurée qwen3asr servi (~6,2 Go) + arrondi
 DEFAULT_SAFETY_MARGIN_MB = 1500   # même marge OOM que le placement LLM
@@ -50,23 +53,51 @@ class InstancePlan:
     free_after_mb: dict[int, int] = field(default_factory=dict)  # par carte, après plan
 
 
+def llm_shares(indices: list[int], total_mb: int, per_gpu: list | None) -> dict[int, int]:
+    """Part de VRAM PAR CARTE du placement LLM — L'ARITHMÉTIQUE UNIQUE (P1.b).
+
+    L'audit du 2026-07-30 a compté QUATRE calculs divergents pour ce concept
+    (plafond ici, plancher ailleurs) : l'admission de l'allocateur et le préflight du
+    lancement pouvaient répondre différemment sur la même config, à l'arrondi près —
+    la classe de bug de l'incident fc268816. Règles, désormais uniques :
+    - `per_gpu` aligné sur `indices` et strictement positif → parts déclarées telles
+      quelles (cartes hétérogènes, tensor-split inégal) ;
+    - sinon partage égal du total en PLAFOND (ceil) : l'admission doit exiger AU MOINS
+      ce que le moteur prendra, jamais 1 Mo de moins.
+
+    N.B. distinct des calculateurs de SPLIT DE SCRIPT (`llm_placement._split_shares`,
+    installeur Ollama) : eux PROPOSENT une répartition à écrire dans un script, ici on
+    JUGE l'admission d'un placement déjà décidé.
+    """
+    if not indices:
+        return {}
+    if (isinstance(per_gpu, list) and len(per_gpu) == len(indices)
+            and all(isinstance(mb, (int, float)) and mb > 0 for mb in per_gpu)):
+        return {int(i): int(mb) for i, mb in zip(indices, per_gpu)}
+    total_mb = int(total_mb)
+    if total_mb <= 0:
+        return {}
+    share = -(-total_mb // len(indices))               # plafond (ceil)
+    return {int(i): share for i in indices}
+
+
 def llm_reserved_by_gpu(config: dict) -> dict[int, int]:
     """Réservation LLM déclarée par carte (gpu.llm_gpu_indices / llm_vram_mb_per_gpu).
 
     Repli : `llm_vram_mb` réparti uniformément sur les indices déclarés. Vide si la
     LLM d'arbitrage n'est pas locale (distante ou désactivée → rien à réserver)."""
+    # P1.e (audit 2026-07-30) : la promesse ci-dessus n'était PAS tenue — le code ne
+    # testait ni « distante » ni « désactivée », et sur une frontale à GPU (STT local +
+    # LLM sur un nœud) le budget STT se voyait amputé d'une LLM absente.
+    workflow = config.get("workflow", {}) or {}
+    llm_enabled = bool((workflow.get("summary_llm", {}) or {}).get("enabled")
+                       or (workflow.get("arbitration_llm", {}) or {}).get("enabled"))
+    if not llm_enabled or is_remote_arbitrage(config):
+        return {}
     gpu_cfg = config.get("gpu", {}) or {}
-    indices = gpu_cfg.get("llm_gpu_indices") or []
-    if not indices:
-        return {}
-    per_gpu = gpu_cfg.get("llm_vram_mb_per_gpu") or []
-    if len(per_gpu) == len(indices):
-        return {int(i): int(v) for i, v in zip(indices, per_gpu)}
-    total = int(gpu_cfg.get("llm_vram_mb") or 0)
-    if total <= 0:
-        return {}
-    share = total // len(indices)
-    return {int(i): share for i in indices}
+    indices = [int(i) for i in (gpu_cfg.get("llm_gpu_indices") or [])]
+    return llm_shares(indices, int(gpu_cfg.get("llm_vram_mb") or 0),
+                      gpu_cfg.get("llm_vram_mb_per_gpu"))
 
 
 def plan_stt_instances(

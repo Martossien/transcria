@@ -22,7 +22,9 @@ def test_pc_upgrade_propose_le_plan_applicable():
 
 
 def test_machine_saturee_par_la_llm_reste_ok():
-    cfg = {**_CFG_SERVED, "gpu": {"llm_gpu_indices": [0, 1], "llm_vram_mb_per_gpu": [26000, 23000]}}
+    cfg = {**_CFG_SERVED, "gpu": {"llm_gpu_indices": [0, 1], "llm_vram_mb_per_gpu": [26000, 23000]},
+           # LLM LOCALE active — sans quoi la garde P1.e vide la réservation (voulu).
+           "workflow": {"summary_llm": {"enabled": True}}}
     card = stt_instances_card(cfg, {0: 32607, 1: 32607})
     assert card is not None and card.status == "ok" and not card.applicable
 

@@ -85,6 +85,16 @@ def check_llm_placement_declaration(
             _t("place_mismatch", cards=cards, declared=len(indices), indices=list(indices)),
             hint=_t("place_mismatch_hint"),
         )
+    # P1.c (audit 2026-07-30) : `llm_gpu_indices` est déclaré dans le référentiel
+    # nvidia-smi de la MACHINE. Un CUDA_VISIBLE_DEVICES non trivial sur le process du
+    # service ferait diverger ce référentiel de celui des phases (`cuda:N` visibles) —
+    # divergence DORMANTE tant que personne ne le pose : on la rend visible ici.
+    cvd = (os.environ.get("CUDA_VISIBLE_DEVICES") or "").strip()
+    if cvd:
+        return CheckResult(
+            name, WARN, _t("place_cvd_set", cvd=cvd, indices=list(indices)),
+            hint=_t("place_cvd_set_hint"),
+        )
     return CheckResult(name, OK, _t("place_ok", cards=cards, indices=list(indices)))
 
 def check_arbitrage_llm(

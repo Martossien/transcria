@@ -262,6 +262,43 @@ class SttEngineSupervisor:
             logger.warning("[stt-sup] %s — échec de l'arrêt (idle-stop)", spec.name)
         return ok
 
+    def stop_idle_engines_on(self, gpu_indices: set[int], specs: list[EngineSpec],
+                             *, min_idle_s: float = 5.0) -> bool:
+        """Arrête les moteurs servis INACTIFS posés sur `gpu_indices` — libère leurs
+        cartes pour la LLM (miroir de `reap_idle`, ciblé par CARTE et non par durée).
+
+        API PUBLIQUE du superviseur (P1.a, audit 2026-07-30) : la boucle vivait dans
+        `workflow/gpu_phase.py` en piochant dans `_health`/`_last_used_for` — l'état
+        d'usage des moteurs appartient au superviseur, lui seul décide qui est arrêtable.
+
+        Prudence héritée du vécu 2026-07-19 : seuls les moteurs VIVANTS sont touchés, et
+        un moteur utilisé il y a moins de `min_idle_s` (job concurrent) est protégé —
+        garde PAR INSTANCE de superviseur, donc best-effort (la vraie sécurité pour un
+        job concurrent est en aval : retries de l'AsrClient + relance à la demande,
+        cycle A/B/C). Rend True si au moins un moteur a été arrêté (l'appelant
+        retente UNE fois sa réservation).
+        """
+        wanted = {int(i) for i in gpu_indices}
+        stopped_any = False
+        for spec in specs:
+            if spec.gpu not in wanted:
+                continue
+            try:
+                if not probe_engine_health(self._health, spec):
+                    continue                     # pas vivant → rien à libérer
+                last = self._last_used_for(spec.name)
+                if last is not None and (self._clock() - last) < min_idle_s:
+                    continue                     # utilisé à l'instant → protégé
+                if self.stop_engine(spec):
+                    stopped_any = True
+                    logger.info(
+                        "[stt-sup] moteur '%s' arrêté pour libérer le GPU %d à la LLM "
+                        "(relancé à la demande au prochain besoin)", spec.name, spec.gpu,
+                    )
+            except Exception:  # noqa: BLE001 — best-effort par moteur
+                continue
+        return stopped_any
+
     def reap_idle(self, specs: list[EngineSpec], *, now: float | None = None) -> list[str]:
         """Arrête les moteurs inactifs (déclarés avec idle_timeout_s > 0, up, et dont
         le dernier usage connu dépasse le timeout). Non intrusif : on ne touche QUE

@@ -6,8 +6,8 @@ import time
 from typing import IO
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
-from transcria.gpu import inventory
-from transcria.gpu._port_utils import generation_confirmed
+from transcria.gpu import inventory, pid_registry
+from transcria.gpu._port_utils import generation_confirmed, kill_port_listeners
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
@@ -17,10 +17,14 @@ from transcria.gpu.cuda_visible import (
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
-from transcria.gpu.stt_instance_planner import llm_reserved_by_gpu
+from transcria.gpu.stt_instance_planner import llm_reserved_by_gpu, llm_shares
 from transcria.gpu.vram_release import release_idle_vram
 
 logger = logging.getLogger(__name__)
+
+# Seuil de préemption (Mo) : en dessous, c'est un contexte CUDA ou un reliquat — un kill
+# ne rendrait presque rien et toucherait des processus qui ne gênent pas le placement.
+_PREEMPT_MIN_VRAM_MB = 4000
 
 
 def should_recalibrate(current_mb: int, measured_mb: int, *, threshold_pct: float = 0.15) -> bool:
@@ -134,7 +138,9 @@ class VRAMManager:
                 "(mesure %d Mo gardée en mémoire uniquement, %s intact)", vram_mb, config_path,
             )
             return
-        per_gpu = [vram_mb // len(indices)] * len(indices)
+        # Parts persistées via L'ARITHMÉTIQUE UNIQUE (P1.b — le plancher local divergeait
+        # du plafond de l'admission : la config écrite contredisait le juge).
+        per_gpu = [llm_shares(indices, vram_mb, None)[int(i)] for i in indices]
         try:
             apply_gpu_calibration(config_path, vram_mb=vram_mb, gpu_indices=indices, vram_mb_per_gpu=per_gpu)
             logger.warning(
@@ -253,8 +259,38 @@ class VRAMManager:
         return best_after
 
     def _free_memory(self, gpu_index: int) -> None:
-        """Tente de libérer la VRAM en tuant les processus GPU > 4 Go."""
+        """Préempte les processus GPU matchant `workflow.scheduling.kill_patterns` sur
+        UNE carte — SIGTERM, puis SIGKILL pour les survivants après un délai de grâce.
+
+        Gardes (P1.a, audit 2026-07-30) : les PID TRACKÉS — nos propres lancements,
+        LLM d'arbitrage en tête — sont EXCLUS, comme dans `GPUAllocator.force_free_gpu`
+        (les deux préemptions partagent désormais la même frontière). Les patterns
+        restent le consentement de l'exploitant (« owner ou pas ») et Ollama n'est
+        jamais tué (NEVER_KILL). Historiquement, deux boucles quasi identiques sans
+        exclusion pouvaient tuer notre propre serveur fraîchement lancé.
+        """
         import signal as _sig
+
+        protected = pid_registry.tracked_pids(self.config)
+        for sig, grace_s in ((_sig.SIGTERM, 2.0), (_sig.SIGKILL, 0.0)):
+            victims = self._preemptable_processes(gpu_index, protected)
+            if not victims:
+                return
+            for pid, name, vram_mb in victims:
+                try:
+                    logger.warning("Libération VRAM: %s → PID %d (%s, %d Mo)",
+                                   sig.name, pid, name, vram_mb)
+                    os.kill(pid, sig)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            if grace_s:
+                time.sleep(grace_s)
+
+    def _preemptable_processes(self, gpu_index: int,
+                               protected: set[int]) -> list[tuple[int, str, int]]:
+        """Processus préemptables `(pid, nom, Mo)` d'une carte : au-dessus du seuil
+        (les petits contextes CUDA ne valent pas un kill), matchant les patterns,
+        ni PID système ni PID tracké."""
         nvidia_gpu_index = to_nvidia_smi_gpu_index(gpu_index)
         try:
             result = subprocess.run(
@@ -263,47 +299,23 @@ class VRAMManager:
                  "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, timeout=10,
             )
-            for line in result.stdout.strip().split("\n"):
-                parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 3:
-                    try:
-                        vram_mb = float(parts[2])
-                        pid = int(parts[0])
-                        process_name = parts[1]
-                        if (
-                            vram_mb > 4000
-                            and pid > 1
-                            and self._matches_kill_pattern(process_name)
-                        ):
-                            logger.warning("Libération VRAM: kill PID %s (%s, %d Mo)", parts[0], parts[1], int(vram_mb))
-                            os.kill(pid, _sig.SIGTERM)
-                    except (ValueError, ProcessLookupError, PermissionError):
-                        pass
-            time.sleep(2)
-            result2 = subprocess.run(
-                ["nvidia-smi", "-i", str(nvidia_gpu_index),
-                 "--query-compute-apps=pid,process_name,used_gpu_memory",
-                 "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=10,
-            )
-            for line in result2.stdout.strip().split("\n"):
-                parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 3:
-                    try:
-                        vram_mb = float(parts[2])
-                        pid = int(parts[0])
-                        process_name = parts[1]
-                        if (
-                            vram_mb > 4000
-                            and pid > 1
-                            and self._matches_kill_pattern(process_name)
-                        ):
-                            logger.warning("SIGKILL PID %s (%d Mo)", parts[0], int(vram_mb))
-                            os.kill(pid, _sig.SIGKILL)
-                    except (ValueError, ProcessLookupError, PermissionError):
-                        pass
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — sonde best-effort, jamais bloquante
+            return []
+        victims: list[tuple[int, str, int]] = []
+        for line in result.stdout.strip().split("\n"):
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 3:
+                continue
+            try:
+                pid, name, vram_mb = int(parts[0]), parts[1], int(float(parts[2]))
+            except ValueError:
+                continue
+            if pid <= 1 or pid in protected:
+                continue
+            if vram_mb <= _PREEMPT_MIN_VRAM_MB or not self._matches_kill_pattern(name):
+                continue
+            victims.append((pid, name, vram_mb))
+        return victims
 
     def _matches_kill_pattern(self, process_name: str) -> bool:
         # Délégation à l'unique correspondance de l'arbre (B3) — protection Ollama incluse.
@@ -378,36 +390,9 @@ class VRAMManager:
             return "inconnu"
 
     def _kill_port(self, port: int) -> bool:
-        """Tue uniquement le processus qui écoute sur ce port (LISTEN)."""
-        import signal
-        try:
-            result = subprocess.run(
-                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=5
-            )
-            pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip().isdigit()]
-            if not pids:
-                return True
-            for pid in pids:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                    logger.info("SIGTERM → PID %d (LISTEN port %d)", pid, port)
-                except (ProcessLookupError, PermissionError):
-                    pass
-            time.sleep(3)
-            result2 = subprocess.run(
-                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=5
-            )
-            survivors = [int(p) for p in result2.stdout.strip().split("\n") if p.strip().isdigit()]
-            for pid in survivors:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                    logger.info("SIGKILL → PID %d (LISTEN port %d)", pid, port)
-                except (ProcessLookupError, PermissionError):
-                    pass
-            return True
-        except Exception as exc:
-            logger.warning("Échec kill port %d: %s", port, exc)
-            return False
+        """Tue le(s) processus qui écoutent sur ce port — source unique protégée
+        (`kill_port_listeners`, NEVER_KILL respecté, cf. P1.a)."""
+        return kill_port_listeners(port, log=logger)
 
     def stop_cleanup_llm_ports(self) -> bool:
         """Libère les ports de backends LLM concurrents configurés."""
@@ -433,6 +418,25 @@ class VRAMManager:
         2026-07-30 : une première version dupliquait la règle ici — deux sources de vérité,
         la classe de bug de l'incident). Vide si le placement n'est pas déclaré."""
         return llm_reserved_by_gpu(self.config)
+
+    def _stop_idle_stt_engines_on(self, gpu_indices: list[int]) -> bool:
+        """Arrêt superviseur des moteurs STT servis inactifs sur ces cartes — best-effort,
+        jamais bloquant pour un lancement de LLM. Rend True si au moins un moteur est tombé
+        (l'appelant remesure)."""
+        try:
+            # Différé : cycle d'import assumé (stt_engine_supervisor construit un
+            # VRAMManager) — même patron que gpu_phase.reclaim_idle_stt_engines_for_llm.
+            from transcria.gpu.stt_engine_supervisor import (
+                build_stt_supervisor,
+                engine_specs_from_config,
+            )
+
+            supervisor = build_stt_supervisor(self.config)
+            return supervisor.stop_idle_engines_on(
+                set(gpu_indices), engine_specs_from_config(self.config))
+        except Exception:  # noqa: BLE001
+            logger.debug("arrêt superviseur des moteurs STT indisponible", exc_info=True)
+            return False
 
     def _preflight_llm_vram(self) -> bool:
         """Vérifie la VRAM RÉELLEMENT libre des cartes du placement AVANT d'exécuter le script.
@@ -461,10 +465,17 @@ class VRAMManager:
             release_idle_vram()  # 1) nos modèles inactifs (façade…) — rechargés à la demande
             short = _deficits()
         if short:
-            # 2) Préemption CONFIGURÉE (« owner ou pas », décision utilisateur 2026-07-30) :
+            # 2) Nos moteurs STT SERVIS inactifs sur les cartes en manque — arrêt PROPRE
+            # par le superviseur (stop_stt.sh, relance à la demande par le cycle A/B/C),
+            # jamais un signal brut sur nos propres processus (P1.a — sur un nœud/hybride,
+            # un vLLM STT matcherait les kill_patterns alors qu'il a un arrêt géré).
+            if self._stop_idle_stt_engines_on([idx for idx, _f, _s in short]):
+                short = _deficits()
+        if short:
+            # 3) Préemption CONFIGURÉE (« owner ou pas », décision utilisateur 2026-07-30) :
             # seuls les processus matchant workflow.scheduling.kill_patterns (serveurs LLM
-            # connus, jamais Ollama) sont arrêtés — un process étranger hors patterns n'est
-            # JAMAIS tué. Ce qui est à nous se relance tout seul à la demande (ensure).
+            # connus, jamais Ollama, jamais nos PID trackés) sont signalés — un process
+            # étranger hors patterns n'est JAMAIS tué.
             for idx, _free, _share in short:
                 self._free_memory(idx)
             short = _deficits()
@@ -485,6 +496,11 @@ class VRAMManager:
         if self._backend_is_ollama():
             # Ollama : pas de script à lancer — le démon est persistant. « Lancer » =
             # s'assurer que le modèle est chargé en VRAM (délégué au backend).
+            # Le PRÉFLIGHT VRAM ne s'applique VOLONTAIREMENT pas ici (P1.f, revue
+            # 2026-07-30) : Ollama place lui-même ses modèles, échoue PROPREMENT en cas
+            # de manque (erreur API, pas de segfault façon script), et son empreinte
+            # réelle se recale par /api/ps — les trois raisons d'être du préflight
+            # n'existent que pour le lancement par script.
             ready = self._arbitrage_backend().ensure_available()
             if ready:
                 # Modèle résident → recalage VRAM sur la mesure réelle (vérif au 1ᵉʳ load).

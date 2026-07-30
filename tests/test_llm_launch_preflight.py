@@ -22,7 +22,10 @@ from transcria.gpu.vram_manager import VRAMManager
 
 
 def _manager(gpu_cfg: dict, free_by_gpu: dict[int, int], monkeypatch) -> VRAMManager:
-    mgr = VRAMManager({"gpu": {"min_free_vram_mb": 1000, **gpu_cfg}})
+    mgr = VRAMManager({"gpu": {"min_free_vram_mb": 1000, **gpu_cfg},
+                       # LLM locale ACTIVE : le scénario modélisé par ces tests
+                       # (P1.e : distante/désactivée → parts vides, garde testée à part)
+                       "workflow": {"summary_llm": {"enabled": True}}})
     monkeypatch.setattr(mgr, "get_free_vram_mb", lambda idx=0: free_by_gpu.get(idx, 0))
     return mgr
 
@@ -185,4 +188,29 @@ class TestCheckLlmPlacementDeclaration:
     def test_sans_script_sans_objet(self):
         res = check_llm_placement_declaration(
             self._cfg([0]), is_file=lambda p: False)
+        assert res.status == OK
+
+
+class TestCheckCudaVisibleDivergence:
+    """P1.c (audit 2026-07-30) : `llm_gpu_indices` vit dans le référentiel nvidia-smi de
+    la machine ; un CUDA_VISIBLE_DEVICES posé sur le SERVICE ferait diverger les index
+    entre modules — divergence dormante rendue VISIBLE par le doctor (la conversion
+    automatique de référentiel est reportée en P2)."""
+
+    def _cfg(self):
+        return {"services": {"arbitrage_script": "/x/launch.sh"},
+                "gpu": {"llm_gpu_indices": [0, 1, 2]}}
+
+    def test_cvd_pose_sur_le_service_denonce(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,3,4")
+        res = check_llm_placement_declaration(
+            self._cfg(), is_file=lambda p: True,
+            read_text=lambda p: "--tensor-split 1,1,1")
+        assert res.status == WARN and "CUDA_VISIBLE_DEVICES" in res.detail
+
+    def test_sans_cvd_alignement_ok(self, monkeypatch):
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        res = check_llm_placement_declaration(
+            self._cfg(), is_file=lambda p: True,
+            read_text=lambda p: "--tensor-split 1,1,1")
         assert res.status == OK

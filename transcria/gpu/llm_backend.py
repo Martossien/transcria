@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
+from transcria.gpu._port_utils import kill_port_listeners
 
 logger = logging.getLogger(__name__)
 
@@ -318,39 +319,9 @@ class ScriptLLMBackend(LLMBackend):
 
     @staticmethod
     def _kill_port(port: int) -> bool:
-        import os as _os
-        import signal
-
-        try:
-            result = subprocess.run(
-                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
-                capture_output=True, text=True, timeout=5,
-            )
-            pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip().isdigit()]
-            if not pids:
-                return True
-            for pid in pids:
-                try:
-                    _os.kill(pid, signal.SIGTERM)
-                    logger.debug("SIGTERM → PID %d (LISTEN port %d)", pid, port)
-                except (ProcessLookupError, PermissionError):
-                    pass
-            time.sleep(3)
-            result2 = subprocess.run(
-                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
-                capture_output=True, text=True, timeout=5,
-            )
-            survivors = [int(p) for p in result2.stdout.strip().split("\n") if p.strip().isdigit()]
-            for pid in survivors:
-                try:
-                    _os.kill(pid, signal.SIGKILL)
-                    logger.debug("SIGKILL → PID %d (LISTEN port %d)", pid, port)
-                except (ProcessLookupError, PermissionError):
-                    pass
-            return True
-        except Exception as exc:
-            logger.warning("Échec kill port %d: %s", port, exc)
-            return False
+        """Source unique protégée (`kill_port_listeners`, NEVER_KILL respecté — P1.a) :
+        la copie locale historique était identique à celle de `vram_manager`."""
+        return kill_port_listeners(port, log=logger)
 
 
 class OllamaLLMBackend(LLMBackend):

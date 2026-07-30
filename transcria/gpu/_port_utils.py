@@ -108,3 +108,77 @@ def wait_for_port(port: int, timeout: int = 300) -> bool:
         time.sleep(5)
     logger.error("Timeout attente port %d après %ds (modèle non générant)", port, timeout)
     return False
+
+
+def _process_name(pid: int) -> str:
+    """Nom court du processus (`/proc/<pid>/comm`) — vide s'il a déjà disparu."""
+    try:
+        with open(f"/proc/{pid}/comm", encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+def _listening_pids(port: int) -> list[int]:
+    import subprocess
+
+    result = subprocess.run(
+        ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+        capture_output=True, text=True, timeout=5,
+    )
+    return [int(p) for p in result.stdout.strip().split("\n") if p.strip().isdigit()]
+
+
+def kill_port_listeners(port: int, *, log: logging.Logger | None = None) -> bool:
+    """Tue les processus qui ÉCOUTENT sur `port` — SIGTERM, délai de grâce, puis SIGKILL
+    pour les survivants. Rend True si le port est (ou était) libérable.
+
+    SOURCE UNIQUE (P1.a, audit 2026-07-30) : deux copies identiques vivaient dans
+    `vram_manager` et `llm_backend`. Un port configuré nous appartient par CONTRAT —
+    son occupant, même inconnu, est donc légitime à évincer — MAIS les démons protégés
+    (`NEVER_KILL`, ex. Ollama) ne sont JAMAIS signalés : systemd les relancerait, et
+    leur VRAM se libère par déchargement HTTP, pas par kill. Historiquement, cette
+    protection n'existait que sur les kills par pattern.
+    """
+    import os
+    import signal
+
+    from transcria.gpu.kill_patterns import NEVER_KILL
+
+    out = log or logger
+
+    def _actionable(pids: list[int]) -> list[int]:
+        keep: list[int] = []
+        for pid in pids:
+            name = _process_name(pid)
+            if any(protected in name.lower() for protected in NEVER_KILL):
+                out.error(
+                    "Port %d occupé par le démon protégé « %s » (PID %d) — jamais tué "
+                    "par TranscrIA : libérer son modèle (déchargement HTTP) ou changer "
+                    "le port en config.", port, name, pid,
+                )
+                continue
+            keep.append(pid)
+        return keep
+
+    try:
+        pids = _actionable(_listening_pids(port))
+        if not pids:
+            return True
+        for pid in pids:
+            try:
+                out.info("SIGTERM → PID %d (LISTEN port %d)", pid, port)
+                os.kill(pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+        time.sleep(3)
+        for pid in _actionable(_listening_pids(port)):
+            try:
+                out.info("SIGKILL → PID %d (LISTEN port %d)", pid, port)
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        return True
+    except Exception as exc:  # noqa: BLE001 — l'appelant décide, jamais d'exception
+        out.warning("Échec kill port %d: %s", port, exc)
+        return False
