@@ -61,11 +61,12 @@
   // doit d'abord PROUVER qu'elle porte du son ; la première qui le prouve prend la place du
   // participant, les autres sont abandonnées. Rien n'est émis tant que la preuve n'est pas
   // faite (le silence de tête n'a de toute façon aucune valeur pour la transcription).
-  function pipeTrack(track, trackId, participantId, participantName, onEnded) {
+  function pipeTrack(track, trackId, meta, onEnded) {
     if (!("MediaStreamTrackProcessor" in window)) return; // WebCodecs requis
     attachSink(track);                                    // OBLIGATOIRE (voir ci-dessus)
     const processor = new window.MediaStreamTrackProcessor({ track });
     const reader = processor.readable.getReader();
+    const participantId = meta.id;
     let owns = false;
     (async function pump() {
       for (;;) {
@@ -99,7 +100,7 @@
           if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
               participant_id: participantId,
-              participant_name: participantName || "",
+              participant_name: meta.name || "",
               pcm: floatToPcm16Base64(buf),
               sample_rate_hz: frame.sampleRate || TARGET_RATE,
               channels: 1,
@@ -138,6 +139,8 @@
   // retombe sur l'identifiant de flux (dégradé mais jamais bloquant).
   const IDENTITY_TIMEOUT_MS = OPTS.identity_timeout_ms || 2500;
   const IDENTITY_POLL_MS = OPTS.identity_poll_ms || 250;
+  // Cadence de la QUÊTE DU NOM d'une piste identifiée mais anonyme (cf. plus bas).
+  const NAME_REFRESH_MS = OPTS.name_refresh_ms || 5000;
   // Noms d'emplacements récepteurs génériques (`remote-audio-1`…) : ils ne désignent aucun
   // locuteur en propre. Cf. la politique de repli plus bas.
   const PLACEHOLDER_ID = /^remote-(audio|video)(-\d+)*$/;
@@ -178,11 +181,10 @@
         piped.add(trackId);
 
         resolveIdentity(track, streamId).then((identity) => {
-          let pid;
-          let name = "";
+          const meta = { id: "", name: "" };
           if (identity && identity.id) {
-            pid = identity.id;
-            name = identity.name || "";
+            meta.id = identity.id;
+            meta.name = identity.name || "";
             anyIdentityResolved = true;
           } else {
             const fallback = streamId || trackId;
@@ -191,11 +193,27 @@
             // Garde-fou : on ne l'écarte que si la plateforme a su identifier au moins une
             // piste — sinon (aucun résolveur) mieux vaut capter en dégradé que rien du tout.
             if (anyIdentityResolved && PLACEHOLDER_ID.test(fallback)) return;
-            pid = fallback;
+            meta.id = fallback;
           }
+          // Le NOM peut arriver APRÈS la piste (participant qui se nomme en cours de
+          // réunion, état applicatif en retard) : tant qu'il manque, on ré-interroge le
+          // résolveur — l'identifiant, lui, reste FIGÉ (le changer scinderait le
+          // participant). Le registre côté runner retient « le dernier nom connu ».
+          if (identity && identity.id && !meta.name) {
+            const nameTimer = setInterval(() => {
+              try {
+                const again = window.__TRANSCRIA_RESOLVE_IDENTITY__(track, streamId);
+                if (again && again.id === meta.id && again.name) {
+                  meta.name = again.name;
+                  clearInterval(nameTimer);
+                }
+              } catch (e) { /* jamais bloquant */ }
+            }, NAME_REFRESH_MS);
+          }
+          const pid = meta.id;
           // La place du participant est prise à la PREUVE de voix (cf. pipeTrack), pas ici :
           // l'ordre d'arrivée des pistes n'est pas fiable.
-          pipeTrack(track, trackId, pid, name, () => {
+          pipeTrack(track, trackId, meta, () => {
             if (activeByParticipant.get(pid) === trackId) activeByParticipant.delete(pid);
           });
         });

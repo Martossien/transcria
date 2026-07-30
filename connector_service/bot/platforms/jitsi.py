@@ -56,6 +56,19 @@ def _muted_url(meeting_url: str) -> str:
     return f"{meeting_url}#{_SILENT_JOIN_CONFIG}"
 
 
+def _join_url(base: str, display_name: str) -> str:
+    """URL du rechargement « pose le nom » : config muette ET nom, dans le MÊME fragment.
+
+    Le fragment est un seul espace de paramètres liés par `&` (syntaxe documentée du
+    handbook, même canal que Jibri, l'enregistreur officiel de Jitsi). Recharger avec le nom
+    SEUL avait écrasé toute la config muette — bip du périphérique factice et mire verte
+    diffusés aux participants, p2p réactivé (régression vécue au gate du 2026-07-30).
+    """
+    from urllib.parse import quote
+
+    return f'{base}#{_SILENT_JOIN_CONFIG}&userInfo.displayName="{quote(display_name)}"'
+
+
 class JitsiDriver:
     """`BrowserDriver` Jitsi. Lance Chromium (Playwright), injecte le payload de capture (avec
     l'URL du pont), rejoint la salle, et suit la présence pour détecter la fin. Le durcissement
@@ -123,14 +136,14 @@ class JitsiDriver:
         # CEINTURE + BRETELLES pour le nom affiché (vécu : le bot apparaissait « Fellow
         # Jitster », le nom d'invité aléatoire de Jitsi — le champ prejoin n'avait pas pris).
         # 1) l'API de config par URL est le canal FIABLE de Jitsi : recharger la page avec
-        #    #userInfo.displayName="…" pose le nom quel que soit l'état du prejoin ;
+        #    userInfo.displayName="…" pose le nom quel que soit l'état du prejoin ;
         # 2) le champ prejoin reste rempli en repli (instances au fragment désactivé).
+        # ⚠ Le rechargement passe par `_join_url` : config muette ET nom dans le même
+        # fragment (le nom seul écraserait la config — cf. docstring de `_join_url`).
         if display_name:
-            from urllib.parse import quote
-
             with contextlib.suppress(Exception):
                 base = (page.url or "").split("#")[0]
-                await page.goto(f'{base}#userInfo.displayName="{quote(display_name)}"')
+                await page.goto(_join_url(base, display_name))
         # Attend le rendu (React) du prejoin avant les count() instantanés (toléré absent).
         name_box = page.get_by_placeholder("Enter your name")
         with contextlib.suppress(Exception):

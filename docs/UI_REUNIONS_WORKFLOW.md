@@ -21,7 +21,19 @@
 > sessions re-claimables ; in_meeting muet > 8 h → échec honnête), phase installeur
 > `connectors` + `install.sh --with-meeting-bots` + unité systemd + `create-runner-token`,
 > images bot publiées sur GHCR à chaque tag (job matrix léger). Reste vague 5 (pistes
-> séparées + panneau live + câblage LiveConnectorSession). Plan rédigé le
+> séparées + panneau live + câblage LiveConnectorSession).
+> **Leçons du gate Jitsi du 2026-07-30** (mesures : DNSMOS 1,19, bande 99 % 2,5 kHz) :
+> (1) le fragment d'URL Jitsi est UN SEUL espace de paramètres — recharger avec
+> `userInfo.displayName` seul écrasait toute la config muette (bip + mire du périphérique
+> factice rediffusés, p2p réactivé) → `_join_url` recompose config + nom, verrouillé par
+> test, aligné sur Jibri (l'enregistreur officiel utilise la même liste d'options, nous
+> excluons volontairement son `iAmRecorder` : notre bot doit rester VISIBLE et nommé) ;
+> (2) le mixeur plaçait les frames à leur instant d'ARRIVÉE — la gigue WebSocket créait
+> chevauchements/trous au niveau échantillon (filtrage en peigne) → placement par CONTINUITÉ
+> de flux par participant, l'horloge n'ancre que le début et resynchronise après une vraie
+> coupure ; le registre des fenêtres suit l'instant PLACÉ (même timeline que le mixage) ;
+> (3) un participant sans nom côté Jitsi (« me ») donne légitimement `PISTE_<id>` — le nom
+> est désormais ré-interrogé en continu s'il arrive en cours de réunion. Plan rédigé le
 > 2026-07-29 (v2, approfondie) après audit
 > complet du dépôt : parcours wizard, chemin d'ingestion, déploiement des bots, modèle de
 > permissions, formulaire de config, gestion du temps. Ce plan prolonge

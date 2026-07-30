@@ -69,9 +69,17 @@
         {% if manifest_rooms %}
         <div class="alert alert-info py-2 mb-2">
           <i class="bi bi-building"></i>
-          {% for room, spk in manifest_rooms.items() %}
+          {% for room, info in manifest_rooms.items() %}
+          {% set spk = info.speakers %}
           <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if info.named %}
             <span>{{ _('Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez.', room=room, n=spk|length, speakers=spk|join(', ')) }}</span>
+            {% else %}
+            {# Participant SANS nom côté plateforme (affiché « me » dans Jitsi) : l'étiquette
+               est un identifiant brut — dire POURQUOI, et quoi faire, au lieu de le montrer
+               comme un nom de salle (incompris au gate réel). #}
+            <span>{{ _('Piste de réunion sans nom (participant « %(room)s ») : cette personne n\'avait pas défini son nom dans la plateforme — %(n)s voix détectée(s) (%(speakers)s), nommez-les ci-dessous.', room=room, n=spk|length, speakers=spk|join(', ')) }}</span>
+            {% endif %}
             {# La diarisation peut SUR-découper une voix unique (vécu : 1 personne → 2 voix).
                L'inverse de la prudence « piste ≠ personne » : dire en UN clic « c'est moi seul ». #}
             <button type="button" class="btn btn-sm btn-outline-secondary"

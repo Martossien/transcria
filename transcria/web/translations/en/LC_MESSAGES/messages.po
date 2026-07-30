@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-29 22:14+0200\n"
+"POT-Creation-Date: 2026-07-30 11:19+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -388,9 +388,9 @@ msgid "Finalisation…"
 msgstr "Finalizing…"
 
 #: transcria/i18n/js_catalog.py:60
-#: transcria/web/templates/wizard/_step_participants.html:107
-#: transcria/web/templates/wizard/_step_participants.html:132
-#: transcria/web/templates/wizard/_step_participants.html:155
+#: transcria/web/templates/wizard/_step_participants.html:115
+#: transcria/web/templates/wizard/_step_participants.html:140
+#: transcria/web/templates/wizard/_step_participants.html:163
 msgid "Fonction"
 msgstr "Role"
 
@@ -460,9 +460,9 @@ msgstr "Central glossary: %(name)s"
 #: transcria/web/templates/central_lexicons.html:18
 #: transcria/web/templates/schedule.html:139
 #: transcria/web/templates/schedule.html:195
-#: transcria/web/templates/wizard/_step_participants.html:101
-#: transcria/web/templates/wizard/_step_participants.html:131
-#: transcria/web/templates/wizard/_step_participants.html:154
+#: transcria/web/templates/wizard/_step_participants.html:109
+#: transcria/web/templates/wizard/_step_participants.html:139
+#: transcria/web/templates/wizard/_step_participants.html:162
 msgid "Nom"
 msgstr "Name"
 
@@ -529,7 +529,7 @@ msgid "Réponse serveur invalide."
 msgstr "Invalid server response."
 
 #: transcria/i18n/js_catalog.py:89
-#: transcria/web/templates/wizard/_step_participants.html:108
+#: transcria/web/templates/wizard/_step_participants.html:116
 msgid "Rôle dans la réunion"
 msgstr "Role in the meeting"
 
@@ -2424,11 +2424,11 @@ msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(ba
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Telephone-type bandwidth detected (codec)."
 
-#: transcria/web/pages_routes.py:533
+#: transcria/web/pages_routes.py:539
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:789
+#: transcria/web/pages_routes.py:795
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -4802,8 +4802,8 @@ msgstr "Email"
 
 #: transcria/web/templates/user_form.html:24
 #: transcria/web/templates/users.html:13
-#: transcria/web/templates/wizard/_step_participants.html:133
-#: transcria/web/templates/wizard/_step_participants.html:156
+#: transcria/web/templates/wizard/_step_participants.html:141
+#: transcria/web/templates/wizard/_step_participants.html:164
 msgid "Rôle"
 msgstr "Role"
 
@@ -5137,7 +5137,7 @@ msgstr "Analyze the file"
 
 #: transcria/web/templates/wizard/_step_analysis.html:131
 #: transcria/web/templates/wizard/_step_context.html:190
-#: transcria/web/templates/wizard/_step_participants.html:173
+#: transcria/web/templates/wizard/_step_participants.html:181
 #: transcria/web/templates/wizard/_step_summary.html:110
 msgid "Étapes optionnelles pour ce profil"
 msgstr "Optional steps for this profile"
@@ -5512,84 +5512,89 @@ msgstr "male voice dominant"
 msgid "voix féminine dominante"
 msgstr "female voice dominant"
 
-#: transcria/web/templates/wizard/_step_participants.html:74
+#: transcria/web/templates/wizard/_step_participants.html:76
 #, fuzzy, python-format
 msgid "Micro partagé « %(room)s » : %(n)s voix distinctes détectées (%(speakers)s) — nommez-les ou ajustez."
 msgstr "Shared microphone “%(room)s”: %(n)s distinct voices detected (%(speakers)s) — name them or adjust."
 
-#: transcria/web/templates/wizard/_step_participants.html:79
+#: transcria/web/templates/wizard/_step_participants.html:81
+#, python-format
+msgid "Piste de réunion sans nom (participant « %(room)s ») : cette personne n'avait pas défini son nom dans la plateforme — %(n)s voix détectée(s) (%(speakers)s), nommez-les ci-dessous."
+msgstr "Unnamed meeting track (participant “%(room)s”): this person had not set a display name in the platform — %(n)s voice(s) detected (%(speakers)s), name them below."
+
+#: transcria/web/templates/wizard/_step_participants.html:87
 msgid "Si ces voix sont en réalité une seule personne : un seul nom, appliqué à toutes."
 msgstr "If these voices are actually one person: one name, applied to all of them."
 
-#: transcria/web/templates/wizard/_step_participants.html:80
+#: transcria/web/templates/wizard/_step_participants.html:88
 #, fuzzy
 msgid "Une seule personne ?"
 msgstr "Person name"
 
-#: transcria/web/templates/wizard/_step_participants.html:87
+#: transcria/web/templates/wizard/_step_participants.html:95
 #, python-format
 msgid "%(done)s locuteur(s) nommés par la réunion, %(rest)s à valider — la validation reste obligatoire."
 msgstr "%(done)s speaker(s) named by the meeting, %(rest)s left to validate — validation remains required."
 
-#: transcria/web/templates/wizard/_step_participants.html:98
+#: transcria/web/templates/wizard/_step_participants.html:106
 #, python-format
 msgid "%(s)ss, %(n)s interventions"
 msgstr "%(s)ss, %(n)s turns"
 
-#: transcria/web/templates/wizard/_step_participants.html:100
+#: transcria/web/templates/wizard/_step_participants.html:108
 msgid "Écouter des extraits de ce locuteur"
 msgstr "Listen to excerpts of this speaker"
 
-#: transcria/web/templates/wizard/_step_participants.html:104
+#: transcria/web/templates/wizard/_step_participants.html:112
 msgid "Nom proposé par la plateforme de réunion — vérifiez puis validez"
 msgstr "Name suggested by the meeting platform — check then validate"
 
-#: transcria/web/templates/wizard/_step_participants.html:105
+#: transcria/web/templates/wizard/_step_participants.html:113
 #, fuzzy
 msgid "suggéré par la réunion"
 msgstr "Role in the meeting"
 
-#: transcria/web/templates/wizard/_step_participants.html:109
+#: transcria/web/templates/wizard/_step_participants.html:117
 msgid "Genre vocal (modifiable)"
 msgstr "Vocal gender (editable)"
 
-#: transcria/web/templates/wizard/_step_participants.html:110
+#: transcria/web/templates/wizard/_step_participants.html:118
 msgid "Non déterminé"
 msgstr "Undetermined"
 
-#: transcria/web/templates/wizard/_step_participants.html:111
+#: transcria/web/templates/wizard/_step_participants.html:119
 msgid "Féminin ♀"
 msgstr "Female ♀"
 
-#: transcria/web/templates/wizard/_step_participants.html:112
+#: transcria/web/templates/wizard/_step_participants.html:120
 msgid "Masculin ♂"
 msgstr "Male ♂"
 
-#: transcria/web/templates/wizard/_step_participants.html:117
+#: transcria/web/templates/wizard/_step_participants.html:125
 msgid "Suggestion issue des voix enregistrées"
 msgstr "Suggestion from enrolled voices"
 
-#: transcria/web/templates/wizard/_step_participants.html:130
+#: transcria/web/templates/wizard/_step_participants.html:138
 msgid "participant"
 msgstr "participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:134
+#: transcria/web/templates/wizard/_step_participants.html:142
 msgid "Animateur"
 msgstr "Facilitator"
 
-#: transcria/web/templates/wizard/_step_participants.html:153
+#: transcria/web/templates/wizard/_step_participants.html:161
 msgid "suggéré"
 msgstr "suggested"
 
-#: transcria/web/templates/wizard/_step_participants.html:164
+#: transcria/web/templates/wizard/_step_participants.html:172
 msgid "+ Ajouter un participant"
 msgstr "+ Add a participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:166
+#: transcria/web/templates/wizard/_step_participants.html:174
 msgid "Valider participants & locuteurs"
 msgstr "Validate participants & speakers"
 
-#: transcria/web/templates/wizard/_step_participants.html:167
+#: transcria/web/templates/wizard/_step_participants.html:175
 msgid "Validé"
 msgstr "Validated"
 

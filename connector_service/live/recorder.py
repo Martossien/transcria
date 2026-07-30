@@ -36,9 +36,19 @@ class MeetingMixer:
     sont donc préservés, et la conversation reste intelligible pour la diarisation.
     """
 
-    def __init__(self, sample_rate_hz: int = 48000) -> None:
+    def __init__(self, sample_rate_hz: int = 48000, *, resync_gap_s: float = 0.5) -> None:
         self._rate = max(int(sample_rate_hz), 1)
         self._samples = array.array("i")          # accumulateur 32 bits (évite l'écrêtage précoce)
+        # Curseur de CONTINUITÉ par flux — leçon du gate Jitsi du 2026-07-30 : les frames
+        # WebRTC (10 ms) traversent une WebSocket, donc arrivent avec de la GIGUE (rafales,
+        # retards). Placées à leur instant d'arrivée, deux frames consécutives d'une même voix
+        # se chevauchent ou se trouent au niveau échantillon → filtrage en peigne (mesuré sur
+        # un enregistrement réel : bande passante 99 % effondrée à 2,5 kHz, STOI 0,43, STT
+        # ruiné). Chaque frame se place donc À LA SUITE de la précédente de SON flux ;
+        # l'horloge d'arrivée n'ancre que le début, et resynchronise après une vraie
+        # interruption (micro coupé puis rendu) au-delà de `resync_gap_s`.
+        self._resync_samples = max(int(float(resync_gap_s) * self._rate), 0)
+        self._cursors: dict[str, int] = {}
 
     @property
     def sample_rate_hz(self) -> int:
@@ -48,18 +58,32 @@ class MeetingMixer:
     def duration_s(self) -> float:
         return len(self._samples) / self._rate
 
-    def add(self, pcm: bytes, at_s: float) -> None:
-        """Ajoute une frame PCM `s16le` mono à l'instant `at_s` (secondes depuis le début)."""
+    def add(self, pcm: bytes, at_s: float, *, stream_id: str = "") -> float:
+        """Ajoute une frame PCM `s16le` mono et rend l'instant où elle a RÉELLEMENT été
+        placée (secondes) — le registre des fenêtres de parole doit vivre sur la même
+        timeline que le mixage, condition de validité de la projection aval.
+
+        `at_s` = instant d'arrivée depuis le début de la réunion ; `stream_id` identifie le
+        flux (un par participant) dont la continuité d'échantillons est garantie.
+        """
+        placed = max(float(at_s), 0.0)
         if not pcm:
-            return
+            return placed
         incoming = array.array("h")
         incoming.frombytes(pcm[: len(pcm) // 2 * 2])
-        start = max(int(at_s * self._rate), 0)
+        arrival = max(int(at_s * self._rate), 0)
+        cursor = self._cursors.get(stream_id)
+        if cursor is not None and abs(arrival - cursor) <= self._resync_samples:
+            start = cursor                        # continuité : la gigue ne déplace pas l'audio
+        else:
+            start = arrival                       # ancrage initial, ou reprise après coupure
         needed = start + len(incoming)
         if needed > len(self._samples):           # étend la timeline avec du silence
             self._samples.extend([0] * (needed - len(self._samples)))
         for i, value in enumerate(incoming):      # somme : plusieurs voix simultanées
             self._samples[start + i] += value
+        self._cursors[stream_id] = needed
+        return start / self._rate
 
     def to_pcm(self, *, headroom: float = 0.95) -> bytes:
         """Rend le mixage en PCM `s16le`, NORMALISÉ si la somme dépasse l'échelle 16 bits.
@@ -178,12 +202,15 @@ class RecordingTee:
                 if self._t0 is None:
                     self._t0 = time.monotonic()
                 at_s = time.monotonic() - self._t0
-                self.mixer.add(frame.payload, at_s)
+                # L'instant retenu pour le registre est celui où le mixeur a PLACÉ la frame
+                # (continuité par flux) : fenêtres de parole et audio restent alignés.
+                placed_s = self.mixer.add(frame.payload, at_s,
+                                          stream_id=str(frame.participant_id or ""))
                 rate = getattr(frame, "sample_rate_hz", 48000) or 48000
                 self.ledger.note(
                     frame.participant_id,
                     getattr(frame, "participant_display_name", "") or "",
-                    at_s, len(frame.payload) / 2.0 / rate,
+                    placed_s, len(frame.payload) / 2.0 / rate,
                     pcm=frame.payload)
                 yield frame
         return self._inner.stream(_tee())

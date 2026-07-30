@@ -421,7 +421,13 @@ def _apply_manifest_suggestions(fs, manifest_raw: dict, speakers_data: dict,
         if suggestion and suggestion.name:
             s["suggested_name"] = suggestion.name
             s["suggested_source"] = manifest.source or "meeting"
-    return {name: list(spk) for name, spk in result.rooms.items()}
+    # `named` distingue une salle au NOM connu d'une piste ANONYME (participant sans nom
+    # côté plateforme, étiquette = identifiant brut) : l'encadré de l'étape 5 doit expliquer
+    # d'où sort « PISTE_xxx » au lieu de l'afficher comme un nom de salle (vécu au gate du
+    # 2026-07-30 : l'utilisateur ne comprenait pas pourquoi son nom avait disparu).
+    named_participants = {p.name for p in manifest.participants if p.name}
+    return {label: {"speakers": list(spk), "named": label in named_participants}
+            for label, spk in result.rooms.items()}
 
 
 def _fill_missing_speaker_genders(
