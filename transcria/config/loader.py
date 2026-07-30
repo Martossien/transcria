@@ -150,6 +150,11 @@ _DEFAULT_CONFIG = {
             # relais d'états, rattachement d'audio). Attribution NOMINATIVE — jamais par rôle
             # (la référence de réunion déchiffrée passe par ce canal). Cf. revue sécurité.
             "runner_usernames": [],
+            # Pistes SÉPARÉES (vague 5) : gardes d'ingestion des parts `track_<id>` —
+            # au-delà, les pistes sont rejetées EN BLOC et l'ingestion continue en mode
+            # mix (le manifeste l'annonce). Le bot a son propre plafond local (16).
+            "max_tracks": 16,
+            "max_track_mb": 512,
         },
     },
     "live": {

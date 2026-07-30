@@ -1028,3 +1028,5 @@ inference:
 #   meetings:
 #     enabled: true
 #     runner_usernames: [svc-runner]   # comptes de SERVICE du meeting-runner (nominatif)
+#     max_tracks: 16                   # pistes séparées max par réunion (au-delà : mode mix)
+#     max_track_mb: 512                # taille max d'une piste (au-delà : mode mix, annoncé)

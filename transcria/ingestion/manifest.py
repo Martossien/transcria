@@ -18,7 +18,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 MANIFEST_VERSION = 1
+# v2 (vague 5, lot A — cadrage VAGUE5_PISTES_SEPAREES.md D5.2) : chaque participant peut
+# référencer SA piste audio séparée (`"track": "track_<id>"`, le nom de la part multipart).
+# Tout le reste est identique — un manifeste v1 reste pleinement valide.
+MANIFEST_VERSIONS = (1, 2)
 VALID_KINDS = ("solo", "room", "unknown")
+_TRACK_REF = __import__("re").compile(r"^track_[A-Za-z0-9_-]{1,64}$")
 # Bornes de santé : un manifeste est un PETIT document de contrôle, pas un flux de données.
 MAX_PARTICIPANTS = 200
 MAX_WINDOWS_PER_PARTICIPANT = 2000
@@ -31,6 +36,7 @@ class ManifestParticipant:
     name: str
     kind: str                                  # solo | room | unknown
     speech_windows: tuple[tuple[float, float], ...]
+    track: str = ""                            # v2 : nom de la part multipart de SA piste
 
     @property
     def speech_total_s(self) -> float:
@@ -65,8 +71,9 @@ def parse_participants_manifest(raw: object) -> tuple[ParticipantsManifest | Non
     """
     if not isinstance(raw, dict):
         return None, "manifeste : objet JSON attendu"
-    if raw.get("version") != MANIFEST_VERSION:
-        return None, f"manifeste : version {raw.get('version')!r} non gérée (attendu {MANIFEST_VERSION})"
+    version = raw.get("version")
+    if version not in MANIFEST_VERSIONS:
+        return None, f"manifeste : version {version!r} non gérée (attendu {'/'.join(map(str, MANIFEST_VERSIONS))})"
     participants_raw = raw.get("participants")
     if not isinstance(participants_raw, list) or not participants_raw:
         return None, "manifeste : liste 'participants' vide ou absente"
@@ -75,6 +82,7 @@ def parse_participants_manifest(raw: object) -> tuple[ParticipantsManifest | Non
 
     parsed: list[ManifestParticipant] = []
     seen_ids: set[str] = set()
+    seen_tracks: set[str] = set()
     for i, p in enumerate(participants_raw):
         if not isinstance(p, dict):
             return None, f"manifeste : participants[{i}] n'est pas un objet"
@@ -106,7 +114,16 @@ def parse_participants_manifest(raw: object) -> tuple[ParticipantsManifest | Non
             if start < 0 or end <= start:
                 return None, f"manifeste : fenêtre incohérente [{start}, {end}] pour {pid!r}"
             windows.append((start, end))
-        parsed.append(ManifestParticipant(id=pid, name=name, kind=kind,
+        track = str(p.get("track") or "").strip()
+        if track:
+            if version != 2:
+                return None, f"manifeste : 'track' de {pid!r} exige la version 2"
+            if not _TRACK_REF.match(track):
+                return None, f"manifeste : référence de piste invalide pour {pid!r}"
+            if track in seen_tracks:
+                return None, f"manifeste : référence de piste dupliquée {track!r}"
+            seen_tracks.add(track)
+        parsed.append(ManifestParticipant(id=pid, name=name, kind=kind, track=track,
                                           speech_windows=tuple(sorted(windows))))
     return ParticipantsManifest(source=str(raw.get("source") or ""),
                                 participants=tuple(parsed)), ""

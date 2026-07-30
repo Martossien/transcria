@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import BinaryIO, Protocol
 
 
 class Transport(Protocol):
@@ -47,7 +47,7 @@ class JobsApiBridge:
 
     async def ingest_recording(
         self,
-        audio: bytes,
+        audio: "bytes | BinaryIO",
         filename: str,
         *,
         idempotency_key: str,
@@ -56,6 +56,7 @@ class JobsApiBridge:
         mode: str | None = None,
         participants_manifest: dict | None = None,
         job_id: str | None = None,
+        track_files: dict | None = None,
     ) -> IngestResult:
         """POST /v1/audio/ingest. `idempotency_key` porte l'idempotence côté serveur :
         deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`).
@@ -78,7 +79,13 @@ class JobsApiBridge:
             # Rattachement D4 (vague 3) : l'audio rejoint le job PLANIFIÉ au lieu d'en créer
             # un second — réservé au compte de service runner côté serveur.
             data["job_id"] = job_id
+        # `audio` : bytes (petits extraits, tests) OU objet-fichier — un enregistrement
+        # complet part en FLUX, jamais chargé en RAM (vague 5, lot A).
         files: dict = {"file": (filename, audio)}
+        for ref, (track_name, payload) in (track_files or {}).items():
+            # Pistes séparées (manifeste v2) : une part par piste, nommée `track_<id>` —
+            # le serveur croise STRICTEMENT parts ↔ références du manifeste.
+            files[ref] = (track_name, payload)
         if participants_manifest is not None:
             # Vague 2 (D5 niveau 1) : le manifeste voyage en part multipart dédiée — le
             # serveur le valide STRICTEMENT et ingère SANS lui s'il est douteux.

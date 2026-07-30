@@ -210,26 +210,44 @@ async def run(args: argparse.Namespace) -> int:
 async def _ingest_recording(args, occurrence, recording, job_id: str) -> None:
     """Rattache l'enregistrement au job planifié — best-effort JOURNALISÉ : un échec ici ne
     change pas le code de sortie (la réunion a bien eu lieu), mais il se voit."""
+    import contextlib as _ctx
+
     from connector_service.bridge import JobsApiBridge
     from connector_service.transports import RequestsTransport
 
     if os.environ.get("BOT_EVENTS") == "json":
         print(json.dumps({"bot_event": "ingesting"}), flush=True)
+    provider = os.environ.get("TRANSCRIA_PROVIDER") or "bot"
+    opened: list = []
     try:
+        # Tout part en FLUX depuis le disque (vague 5, lot A) : le mix normalisé ET une
+        # part par piste séparée — jamais un enregistrement complet en RAM.
+        mix_path = recording.mixer.to_wav_file()
+        track_parts = {}
+        for ref, path in recording.track_files().items():
+            fh = open(path, "rb")
+            opened.append(fh)
+            track_parts[ref] = (f"{ref}.wav", fh)
+        mix_fh = open(mix_path, "rb")
+        opened.append(mix_fh)
         bridge = JobsApiBridge(args.transcria_url, args.token or "", RequestsTransport())
         result = await bridge.ingest_recording(
-            recording.mixer.to_wav(),
+            mix_fh,
             f"{occurrence.external_occurrence_id}.wav",
             idempotency_key=f"bot|{occurrence.external_occurrence_id}|{job_id}",
-            provider=os.environ.get("TRANSCRIA_PROVIDER") or "bot",
+            provider=provider,
             external_meeting_id=occurrence.external_occurrence_id,
-            participants_manifest=recording.ledger.to_manifest(
-                os.environ.get("TRANSCRIA_PROVIDER") or "bot"),
-            job_id=job_id)
-        logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio)",
-                    job_id, result.status_code, recording.mixer.duration_s)
+            participants_manifest=recording.to_manifest(provider),
+            job_id=job_id,
+            track_files=track_parts or None)
+        logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio, %d piste(s))",
+                    job_id, result.status_code, recording.mixer.duration_s, len(track_parts))
     except Exception:  # noqa: BLE001
         logger.exception("rattachement de l'enregistrement impossible (job %s)", job_id)
+    finally:
+        for fh in opened:
+            with _ctx.suppress(OSError):
+                fh.close()
 
 
 def main(argv: list[str] | None = None) -> int:

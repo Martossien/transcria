@@ -31,6 +31,8 @@ exposed:
 - i18n.default_locale
 - connectors.meetings.enabled
 - connectors.meetings.runner_usernames
+- connectors.meetings.max_tracks
+- connectors.meetings.max_track_mb
 - live.facade.enabled
 - models.diarization_backend
 - models.live_stt_backend

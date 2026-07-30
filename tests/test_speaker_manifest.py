@@ -43,7 +43,7 @@ class TestParse:
 
     def test_rejets_en_bloc(self):
         cas = [
-            ({"version": 2, "participants": [SOLO_A]}, "version"),
+            ({"version": 3, "participants": [SOLO_A]}, "version"),   # v2 = pistes séparées (vague 5)
             (_manifest([]), "vide"),
             (_manifest([dict(SOLO_A, id="")]), "id"),
             (_manifest([SOLO_A, dict(SOLO_B, id="p1")]), "dupliqué"),
@@ -182,3 +182,46 @@ class TestTurnsFromManifest:
         from transcria.ingestion.manifest_turns import turns_from_manifest
         m, _ = parse_participants_manifest(_manifest([dict(SOLO_A, name="")]))
         assert turns_from_manifest(m)["speakers"] == ["PISTE_p1"]
+
+
+class TestManifesteV2Pistes:
+    """Vague 5, lot A (D5.2) : la v2 référence les pistes séparées — validation STRICTE
+    (référence malformée, dupliquée, ou posée sur une v1 → rejet EN BLOC, comme toujours)."""
+
+    def test_v2_avec_references_de_pistes(self):
+        m, err = parse_participants_manifest({
+            "version": 2, "source": "jitsi",
+            "participants": [
+                {"id": "p1", "name": "Alice", "kind": "solo",
+                 "speech_windows": [[0.0, 5.0]], "track": "track_p1"},
+                {"id": "p2", "name": "", "kind": "unknown",
+                 "speech_windows": [[1.0, 3.0]]},          # piste facultative par participant
+            ]})
+        assert err == "" and m is not None
+        assert m.participants[0].track == "track_p1"
+        assert m.participants[1].track == ""
+
+    def test_track_exige_la_v2(self):
+        m, err = parse_participants_manifest({
+            "version": 1, "source": "jitsi",
+            "participants": [{"id": "p1", "name": "A", "kind": "solo",
+                              "speech_windows": [[0.0, 1.0]], "track": "track_p1"}]})
+        assert m is None and "version 2" in err
+
+    def test_reference_malformee_rejetee(self):
+        m, err = parse_participants_manifest({
+            "version": 2, "source": "jitsi",
+            "participants": [{"id": "p1", "name": "A", "kind": "solo",
+                              "speech_windows": [[0.0, 1.0]], "track": "../evil"}]})
+        assert m is None and "invalide" in err
+
+    def test_reference_dupliquee_rejetee(self):
+        m, err = parse_participants_manifest({
+            "version": 2, "source": "jitsi",
+            "participants": [
+                {"id": "p1", "name": "A", "kind": "solo",
+                 "speech_windows": [[0.0, 1.0]], "track": "track_x"},
+                {"id": "p2", "name": "B", "kind": "solo",
+                 "speech_windows": [[2.0, 3.0]], "track": "track_x"},
+            ]})
+        assert m is None and "dupliquée" in err

@@ -1,6 +1,7 @@
 # Vague 5 — Pistes séparées, suivi en direct, et le sort de `LiveConnectorSession`
 
-> **Statut : CADRAGE (2026-07-30), en attente de validation utilisateur.**
+> **Statut : VALIDÉ par l'utilisateur le 2026-07-30 (y compris D5.6). Lot A EN COURS**
+> (capture/livraison des pistes codée + testée — gate Jitsi réel restant).
 > Spécification dédiée exigée par le plan directeur
 > ([`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md), vague 5) : elle plie dans la
 > conception les leçons des gates réels de juillet — pistes sur DISQUE (jamais en RAM),

@@ -494,3 +494,108 @@ class TestSalleProtegee:
         intents = [i for i in r.get_json()["sessions"]
                    if str(i["meeting_ref"]).endswith("claim-ouverte")]
         assert intents and intents[0]["meeting_passcode"] == ""
+
+
+class TestIngestPistesSeparees:
+    """Vague 5, lot A (D5.2) : parts `track_<id>` + manifeste v2 — validation STRICTE
+    tout-ou-rien. Toute incohérence rejette LES PISTES EN BLOC : l'ingestion continue en
+    mode mix, le manifeste dégradé l'annonce (`tracks_degraded`), jamais un état à moitié."""
+
+    def _manifest_v2(self, refs=("track_p1",)):
+        parts = [{"id": f"p{i+1}", "name": f"Personne {i+1}", "kind": "unknown",
+                  "speech_windows": [[float(i), float(i) + 2.0]], "track": ref}
+                 for i, ref in enumerate(refs)]
+        return {"version": 2, "source": "jitsi", "mix": "timeline_common",
+                "participants": parts}
+
+    def _post_attach(self, client, runner_token, job_id, manifest, tracks):
+        import io
+        import json as _json
+        data = {"file": (io.BytesIO(b"RIFF0000WAVE"), "r.wav"), "job_id": job_id,
+                "participants_manifest": (
+                    io.BytesIO(_json.dumps(manifest).encode()), "participants_manifest.json")}
+        for ref, payload in tracks.items():
+            data[ref] = (io.BytesIO(payload), f"{ref}.wav")
+        return client.post("/v1/audio/ingest", headers=_auth(runner_token), data=data,
+                           content_type="multipart/form-data")
+
+    def _setup(self, client, admin_client, runner_token, app, monkeypatch, ref):
+        from transcria.config import get_config
+        with app.app_context():
+            get_config().setdefault("live", {}).setdefault("facade", {})["enabled"] = True
+        _heartbeat(client, runner_token)
+        job_id = _create(client, admin_client, ref=ref).get_json()["job_id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token), json={"runner": "runner-1"})
+        from transcria.web import facade_api
+        monkeypatch.setattr(facade_api.JobService, "upload",
+                            staticmethod(lambda *a, **k: {"ok": True}))
+        monkeypatch.setattr(facade_api.JobService, "analyze",
+                            staticmethod(lambda *a, **k: {"ok": True}))
+        return job_id
+
+    def _stored(self, app, job_id):
+        from pathlib import Path
+
+        from transcria.config import get_config
+        with app.app_context():
+            base = Path(get_config()["storage"]["jobs_dir"]) / job_id
+        tracks = sorted(p.name for p in (base / "input" / "tracks").glob("*.wav")) \
+            if (base / "input" / "tracks").exists() else []
+        import json as _json
+        mpath = base / "metadata" / "participants_manifest.json"
+        manifest = _json.loads(mpath.read_text()) if mpath.exists() else None
+        return tracks, manifest
+
+    def test_pistes_stockees_et_manifeste_v2_conserve(self, meetings_on, client, admin_client,
+                                                      runner_token, app, monkeypatch):
+        job_id = self._setup(client, admin_client, runner_token, app, monkeypatch,
+                             "https://meet.jit.si/tracks-ok")
+        r = self._post_attach(client, runner_token, job_id,
+                              self._manifest_v2(("track_p1", "track_p2")),
+                              {"track_p1": b"WAV1", "track_p2": b"WAV2"})
+        assert r.status_code == 202, r.get_json()
+        tracks, manifest = self._stored(app, job_id)
+        assert tracks == ["p1.wav", "p2.wav"]
+        assert manifest["version"] == 2
+        assert manifest["participants"][0]["track"] == "track_p1"
+
+    def test_part_orpheline_rejette_tout_en_bloc(self, meetings_on, client, admin_client,
+                                                 runner_token, app, monkeypatch):
+        """Une part sans référence = incohérence bot : mode mix, dégradation ANNONCÉE."""
+        job_id = self._setup(client, admin_client, runner_token, app, monkeypatch,
+                             "https://meet.jit.si/tracks-orphan")
+        r = self._post_attach(client, runner_token, job_id, self._manifest_v2(("track_p1",)),
+                              {"track_p1": b"WAV1", "track_intrus": b"WAVX"})
+        assert r.status_code == 202
+        tracks, manifest = self._stored(app, job_id)
+        assert tracks == []                        # tout-ou-rien : AUCUNE piste stockée
+        assert manifest["version"] == 1
+        assert manifest["tracks_degraded"] is True
+        assert "track" not in manifest["participants"][0]
+
+    def test_piste_trop_grosse_rejette_tout(self, meetings_on, client, admin_client,
+                                            runner_token, app, monkeypatch):
+        from transcria.config import get_config
+        with app.app_context():
+            get_config().setdefault("connectors", {}).setdefault("meetings", {})["max_track_mb"] = 0
+        job_id = self._setup(client, admin_client, runner_token, app, monkeypatch,
+                             "https://meet.jit.si/tracks-big")
+        r = self._post_attach(client, runner_token, job_id, self._manifest_v2(("track_p1",)),
+                              {"track_p1": b"X" * 1024})
+        assert r.status_code == 202
+        tracks, manifest = self._stored(app, job_id)
+        assert tracks == [] and manifest["tracks_degraded"] is True
+
+    def test_sans_pistes_comportement_historique(self, meetings_on, client, admin_client,
+                                                 runner_token, app, monkeypatch):
+        """Règle D5.2 : sans parts de piste, rien ne change — bots anciens et connecteurs
+        post-réunion restent intacts."""
+        job_id = self._setup(client, admin_client, runner_token, app, monkeypatch,
+                             "https://meet.jit.si/tracks-none")
+        v1 = {"version": 1, "source": "jitsi", "mix": "timeline_common",
+              "participants": [{"id": "p1", "name": "Ana", "kind": "solo",
+                                "speech_windows": [[0.0, 2.0]]}]}
+        r = self._post_attach(client, runner_token, job_id, v1, {})
+        assert r.status_code == 202
+        tracks, manifest = self._stored(app, job_id)
+        assert tracks == [] and manifest == v1

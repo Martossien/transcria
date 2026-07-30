@@ -150,3 +150,100 @@ class TestLedgerEnergyThreshold:
         led = ParticipantLedger()
         led.note("p1", "Alice", 0.0, 0.5)                     # pas de PCM = pas de jugement
         assert led.to_manifest("jitsi") is not None
+
+
+class TestRecordingTeePistesSeparees:
+    """Vague 5, lot A : l'enregistreur écrit le MIX et une piste PAR participant, sur
+    disque, alignées par CONSTRUCTION (le mixeur décide du placement, la piste du même
+    flux écrit à la même position). Les incohérences deviennent des dégradations
+    ANNONCÉES au manifeste — jamais un état à moitié."""
+
+    class _Frame:
+        def __init__(self, pid, payload, name=""):
+            self.participant_id = pid
+            self.payload = payload
+            self.participant_display_name = name
+            self.sample_rate_hz = RATE
+
+    class _Inner:
+        uses_local_agreement = False
+
+        def stream(self, frames):
+            return frames
+
+    def _run(self, tee, frames):
+        import asyncio
+
+        async def _consume():
+            async def _gen():
+                for f in frames:
+                    yield f
+            async for _ in tee.stream(_gen()):
+                pass
+        asyncio.run(_consume())
+
+    def _tee(self, tmp_path, **kw):
+        from connector_service.live.recorder import RecordingTee
+        return RecordingTee(self._Inner(), sample_rate_hz=RATE,
+                            workdir=tmp_path / "rec", **kw)
+
+    def test_mix_et_pistes_alignes_par_construction(self, tmp_path):
+        tee = self._tee(tmp_path)
+        n = RATE // 10
+        self._run(tee, [
+            self._Frame("alice", _tone(1000, n), "Alice"),
+            self._Frame("bob", _tone(500, n), "Bob"),      # même instant : chevauchement
+        ])
+        files = tee.track_files()
+        assert set(files) == {"track_alice", "track_bob"}
+        alice = _read(files["track_alice"].read_bytes())
+        bob = _read(files["track_bob"].read_bytes())
+        # Chaque voix INTACTE sur sa piste (l'horloge réelle décale les débuts de quelques
+        # échantillons : on juge le CONTENU, pas l'octet zéro).
+        assert set(alice) - {0} == {1000} and set(bob) - {0} == {500}
+        mix = _read(tee.mixer.to_wav())
+        assert max(mix) == 1500                            # le mix, lui, SOMME le chevauchement
+
+    def test_manifeste_v2_references_coherentes(self, tmp_path):
+        tee = self._tee(tmp_path)
+        self._run(tee, [self._Frame("alice", _tone(1000, RATE // 10), "Alice")])
+        manifest = tee.to_manifest("jitsi")
+        assert manifest["version"] == 2
+        assert manifest["participants"][0]["track"] == "track_alice"
+
+    def test_micro_coupe_pas_de_part_orpheline(self, tmp_path):
+        """Un participant sous le seuil d'énergie (bruit de confort) n'a AUCUNE fenêtre au
+        registre : sa piste n'est NI référencée NI embarquée — sinon le serveur rejetterait
+        tout en bloc (règle tout-ou-rien de D5.2)."""
+        tee = self._tee(tmp_path)
+        self._run(tee, [
+            self._Frame("alice", _tone(1000, RATE // 10), "Alice"),
+            self._Frame("muet", _tone(10, RATE // 10), "Muet"),   # crête 10 << seuil 300
+        ])
+        assert set(tee.track_files()) == {"track_alice"}
+        manifest = tee.to_manifest("jitsi")
+        assert [p["id"] for p in manifest["participants"]] == ["alice"]
+
+    def test_plafond_de_pistes_annonce_le_debordement(self, tmp_path):
+        tee = self._tee(tmp_path, max_tracks=1)
+        n = RATE // 10
+        self._run(tee, [self._Frame("alice", _tone(1000, n)),
+                        self._Frame("bob", _tone(900, n))])
+        assert set(tee.track_files()) == {"track_alice"}
+        manifest = tee.to_manifest("jitsi")
+        assert manifest["track_overflow"] is True
+        assert manifest["version"] == 2                    # la piste d'alice reste servie
+        mix = _read(tee.mixer.to_wav())
+        assert max(mix) == 1900                            # bob est COUVERT par le mix
+
+    def test_panne_disque_bascule_en_mode_mix_annonce(self, tmp_path, monkeypatch):
+        from connector_service.live import recorder as rec
+        tee = self._tee(tmp_path)
+        monkeypatch.setattr(rec.TrackFileWriter, "write_at",
+                            lambda self, start, pcm: (_ for _ in ()).throw(OSError("disque plein")))
+        self._run(tee, [self._Frame("alice", _tone(1000, RATE // 10), "Alice")])
+        assert tee.tracks_degraded is True
+        manifest = tee.to_manifest("jitsi")
+        assert manifest["version"] == 1                    # mode mix : v1, sans références
+        assert manifest["tracks_degraded"] is True
+        assert _read(tee.mixer.to_wav())[0] == 1000        # le MIX n'a rien perdu

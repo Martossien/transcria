@@ -292,6 +292,63 @@ def _remote_transcribe(inference_url: str, audio_path: Path, language: str,
 
 
 
+def _store_track_parts(cfg: dict, job_id: str, manifest_raw: dict | None) -> dict | None:
+    """Pistes SÉPARÉES (vague 5, lot A — D5.2) : valide STRICTEMENT parts ↔ manifeste v2,
+    stocke `input/tracks/<ref>.wav`, et rend le manifeste à semer.
+
+    Tout-ou-rien : la moindre incohérence (part orpheline, référence sans part, taille ou
+    nombre au-delà des gardes) REJETTE l'ensemble des pistes — le manifeste est DÉGRADÉ en
+    v1 (références retirées) et l'ingestion continue en mode mix, journalisée. Jamais un
+    état à moitié : des pistes partielles produiraient un SRT partiel pire que le mix.
+    """
+    parts = {name: storage for name, storage in request.files.items()
+             if name.startswith("track_")}
+    refs = set()
+    if isinstance(manifest_raw, dict):
+        refs = {str(p.get("track")) for p in manifest_raw.get("participants", [])
+                if isinstance(p, dict) and p.get("track")}
+    if not parts and not refs:
+        return manifest_raw                       # chemin historique : rien à faire
+
+    meetings_cfg = (cfg.get("connectors", {}) or {}).get("meetings", {}) or {}
+    max_tracks = int(meetings_cfg.get("max_tracks", 16))
+    max_bytes = int(meetings_cfg.get("max_track_mb", 512)) * 1024 * 1024
+
+    def _degrade(reason: str) -> dict | None:
+        logger.warning("[façade] pistes séparées REJETÉES (%s) — ingestion en mode mix",
+                       reason)
+        if not isinstance(manifest_raw, dict):
+            return manifest_raw
+        downgraded = dict(manifest_raw)
+        downgraded["version"] = 1
+        downgraded["tracks_degraded"] = True
+        downgraded["participants"] = [
+            {k: v for k, v in p.items() if k != "track"} if isinstance(p, dict) else p
+            for p in manifest_raw.get("participants", [])
+        ]
+        return downgraded
+
+    if parts.keys() != refs:
+        return _degrade(f"parts {sorted(parts)} != références du manifeste {sorted(refs)}")
+    if len(parts) > max_tracks:
+        return _degrade(f"{len(parts)} pistes > connectors.meetings.max_tracks={max_tracks}")
+
+    tracks_dir = Path(cfg["storage"]["jobs_dir"]) / job_id / "input" / "tracks"
+    tracks_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for ref, storage in parts.items():
+        dest = tracks_dir / (ref.removeprefix("track_") + ".wav")
+        storage.save(dest)                        # FileStorage.save écrit en FLUX
+        written.append(dest)
+        if dest.stat().st_size > max_bytes:
+            for path in written:
+                path.unlink(missing_ok=True)
+            return _degrade(f"piste {ref} dépasse connectors.meetings.max_track_mb")
+    logger.info("[façade] %d piste(s) séparée(s) stockée(s) pour le job %s",
+                len(written), job_id)
+    return manifest_raw
+
+
 def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict | None):
     """Rattache l'enregistrement d'une réunion au job PLANIFIÉ (D4). Rend une réponse
     d'erreur Flask, ou None si le job est déposé + mis en file.
@@ -310,6 +367,7 @@ def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict
         return jsonify({"error": "Ce job ne porte aucune session de réunion"}), 409
 
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+    manifest_raw = _store_track_parts(cfg, job_id, manifest_raw)
     if manifest_raw is not None:
         _seed_from_manifest(cfg, job_id, manifest_raw)
     analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
@@ -407,6 +465,7 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
     job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
 
+    participants_manifest_raw = _store_track_parts(cfg, job_id, participants_manifest_raw)
     if participants_manifest_raw is not None:
         _seed_from_manifest(cfg, job_id, participants_manifest_raw)
 
