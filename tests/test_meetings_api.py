@@ -14,6 +14,7 @@ import uuid
 import pytest
 from cryptography.fernet import Fernet
 
+
 @pytest.fixture(autouse=True)
 def _force_feature_baseline(app):
     """Leçon 0.3.5 : les tests gatés par config FORCENT leur baseline — sans quoi le

@@ -30,6 +30,16 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "chk_rn_engines": "Nœud de ressources (moteurs STT)",
         "chk_rn_ports": "Nœud de ressources (ports STT)",
         "chk_config": "Configuration",
+        # check_web_gpu_statefulness
+        "chk_web_gpu_state": "Tier web × charges GPU à état",
+        "wgs_not_web": "sans objet (profil non web)",
+        "wgs_no_gpu": "aucun GPU sur cette machine — tier web réellement sans état",
+        "wgs_gpu_stateless": "{count} GPU présent(s) mais aucune charge GPU à état activée côté web",
+        "wgs_stateful": "façade STT live ACTIVE sur un tier web à {count} GPU — chaque worker gunicorn "
+                        "chargerait SA copie du modèle (VRAM × N) avec des réservations aveugles entre elles",
+        "wgs_stateful_hint": "Un seul process PROPRIÉTAIRE du GPU par machine : fixer --workers 1, ou router "
+                             "live.facade.inference_url vers un nœud de ressources (même règle que "
+                             "transcria-inference.service : « workers > 1 = VRAM × N »).",
         # Diff de schéma
         "diff_add_table": "table absente de la base : {name}",
         "diff_remove_table": "table en trop dans la base : {name}",
@@ -315,6 +325,15 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "enc_other": "PostgreSQL in {encoding} (UTF8 expected) — text stored without encoding validation",
         "enc_other_hint": "Migrate the database (dump → CREATE DATABASE … ENCODING 'UTF8' TEMPLATE template0 → restore), "
                           "see docs/INSTALL.md § Encoding. The app forces client_encoding=utf8 meanwhile.",
+        "chk_web_gpu_state": "Web tier × stateful GPU workloads",
+        "wgs_not_web": "not applicable (non-web profile)",
+        "wgs_no_gpu": "no GPU on this machine — web tier genuinely stateless",
+        "wgs_gpu_stateless": "{count} GPU(s) present but no stateful GPU workload enabled web-side",
+        "wgs_stateful": "live STT facade ENABLED on a web tier with {count} GPU(s) — each gunicorn worker "
+                        "would load ITS OWN model copy (VRAM × N) with mutually blind reservations",
+        "wgs_stateful_hint": "One GPU-OWNING process per machine: set --workers 1, or route "
+                             "live.facade.inference_url to a resource node (same rule as "
+                             "transcria-inference.service: “workers > 1 = VRAM × N”).",
         "arbs_none": "no script configured (services.arbitrage_script empty)",
         "arbs_none_hint": "Set services.arbitrage_script, or use an already-running backend.",
         "arbs_missing": "not found: {script}",

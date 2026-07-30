@@ -10,8 +10,8 @@ import io
 from pathlib import Path
 
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file
-from transcria.installer.opencode_lib import OpencodeDetection
 from transcria.installer.console import Console
+from transcria.installer.opencode_lib import OpencodeDetection
 from transcria.installer.opencode_phase import OpencodePlan, apply_opencode
 
 _BIN_KEY = "workflow.arbitration_llm.opencode_bin"

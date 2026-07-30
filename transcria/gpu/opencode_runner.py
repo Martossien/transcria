@@ -3,6 +3,10 @@
 
 Utilise opencode (déjà configuré dans ~/.config/opencode/opencode.json)
 avec le provider configurable.
+
+⚠ RANGEMENT (audit 2026-07-30) : rien de GPU ici — orchestration CLI opencode.
+Destination cible : transcria/llm_tools/ (avec llm_parsing, prompt_locator,
+llama_runtime). Déplacement OPPORTUNISTE (quand le fichier bouge), pas en chantier.
 """
 
 import json

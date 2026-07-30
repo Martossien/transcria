@@ -144,9 +144,11 @@ class TestSummaryNotificationGolden:
             job = JobStore.create_job(owner_id, "Golden notification")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
 
             from transcria.stt.summary import SummaryGenerator
 

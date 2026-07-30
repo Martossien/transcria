@@ -68,7 +68,6 @@ class TestVRAMManagerInstantiation:
         mgr = VRAMManager(config=cfg)
         assert mgr.arbitrage_llm_port == 9999
         assert mgr.llm_cleanup_ports == [8888]
-        assert mgr.vllm_port == 8888
 
     def test_script_paths_from_config(self):
         cfg = _default_config()
@@ -86,46 +85,8 @@ class TestVRAMManagerInstantiation:
     def test_vram_defaults(self):
         cfg = {}
         mgr = VRAMManager(config=cfg)
-        assert mgr.cohere_vram_mb > 0
         assert mgr.pyannote_vram_mb > 0
         assert mgr.min_free_mb > 0
-
-
-class TestVRAMManagerTracking:
-    def test_track_model_stores_info(self):
-        mgr = VRAMManager(config=_default_config())
-        mgr.track_model("cohere", 0, 6000)
-        assert "cohere" in mgr._loaded_models
-        info = mgr._loaded_models["cohere"]
-        assert info["gpu"] == 0
-        assert info["vram_mb"] == 6000
-        assert "loaded_at" in info
-
-    def test_untrack_model_removes(self):
-        mgr = VRAMManager(config=_default_config())
-        mgr.track_model("cohere", 0, 6000)
-        mgr.untrack_model("cohere")
-        assert "cohere" not in mgr._loaded_models
-
-    def test_untrack_nonexistent_model_is_noop(self):
-        mgr = VRAMManager(config=_default_config())
-        mgr.untrack_model("nonexistent")
-        assert len(mgr._loaded_models) == 0
-
-    def test_multiple_models_tracked(self):
-        mgr = VRAMManager(config=_default_config())
-        mgr.track_model("m1", 0, 1000)
-        mgr.track_model("m2", 1, 2000)
-        assert len(mgr._loaded_models) == 2
-        assert mgr._loaded_models["m1"]["gpu"] == 0
-        assert mgr._loaded_models["m2"]["gpu"] == 1
-
-    def test_offload_all_clears_models(self):
-        mgr = VRAMManager(config=_default_config())
-        mgr.track_model("m1", 0, 1000)
-        mgr.track_model("m2", 1, 2000)
-        mgr.offload_all()
-        assert len(mgr._loaded_models) == 0
 
 
 class TestVRAMManagerGetGpuInfo:
@@ -178,117 +139,6 @@ class TestVRAMManagerGetFreeVram:
         monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [])
         free = mgr.get_free_vram_mb(0)
         assert free == 0
-
-
-class TestVRAMManagerGetBestGpu:
-    def test_get_best_gpu_with_enough_vram(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 5.0, "total": 24.0, "used": 19.0}},
-            {"id": 1, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
-        ])
-        best = mgr.get_best_gpu(10000)
-        assert best == 1
-
-    def test_get_best_gpu_none_available(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 0.5, "total": 24.0, "used": 23.5}},
-            {"id": 1, "memory": {"free": 1.0, "total": 24.0, "used": 23.0}},
-        ])
-        best = mgr.get_best_gpu(10000)
-        assert best is None
-
-    def test_get_best_gpu_selects_highest_free(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 15.0, "total": 24.0, "used": 9.0}},
-            {"id": 1, "memory": {"free": 20.0, "total": 24.0, "used": 4.0}},
-        ])
-        best = mgr.get_best_gpu(10000)
-        assert best == 1
-
-    def test_get_best_gpu_respects_cuda_visible_devices_physical_ids(self, monkeypatch):
-        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 10.0, "total": 24.0, "used": 14.0}},
-            {"id": 1, "memory": {"free": 23.0, "total": 24.0, "used": 1.0}},
-            {"id": 2, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
-            {"id": 3, "memory": {"free": 24.0, "total": 24.0, "used": 0.0}},
-        ])
-        assert mgr.get_best_gpu(10000) == 1
-
-    def test_get_best_gpu_returns_none_when_cuda_hidden(self, monkeypatch):
-        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 24.0, "total": 24.0, "used": 0.0}},
-        ])
-        assert mgr.get_best_gpu(10000) is None
-
-
-class TestVRAMManagerEnsureFree:
-    def test_ensure_free_gpu_already_available(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 20.0, "total": 24.0, "used": 4.0}},
-        ])
-        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
-        assert result == 0
-
-    def test_ensure_free_prefers_alternative_gpu(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
-            {"id": 0, "memory": {"free": 0.5, "total": 24.0, "used": 23.5}},
-            {"id": 1, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
-        ])
-        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
-        assert result == 1
-
-    def test_ensure_free_returns_none_when_no_gpu(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        call_count = {"n": 0}
-        gpus_empty = [
-            {"id": 0, "memory": {"free": 0.1, "total": 24.0, "used": 23.9}},
-        ]
-        gpus_still_full = [
-            {"id": 0, "memory": {"free": 0.1, "total": 24.0, "used": 23.9}},
-        ]
-
-        def fake_gpu_info(self):
-            if call_count["n"] < 2:
-                call_count["n"] += 1
-                return gpus_empty
-            return gpus_still_full
-
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", fake_gpu_info)
-        monkeypatch.setattr(VRAMManager, "_free_memory", lambda self, gpu_index: None)
-        monkeypatch.setattr(time, "sleep", lambda s: None)
-        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
-        assert result is None
-
-    def test_ensure_free_tries_free_memory_then_retry(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        call_count = {"n": 0}
-        gpus_full = [
-            {"id": 0, "memory": {"free": 0.5, "total": 24.0, "used": 23.5}},
-        ]
-        gpus_freed = [
-            {"id": 0, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
-        ]
-
-        def fake_gpu_info(self):
-            call_count["n"] += 1
-            if call_count["n"] <= 1:
-                return gpus_full
-            return gpus_freed
-
-        monkeypatch.setattr(VRAMManager, "get_gpu_info", fake_gpu_info)
-        monkeypatch.setattr(VRAMManager, "_free_memory", lambda self, gpu_index: None)
-        monkeypatch.setattr(time, "sleep", lambda s: None)
-        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
-        assert result == 0
 
 
 class TestVRAMManagerFreeMemory:
@@ -863,39 +713,6 @@ class TestVRAMManagerStopCleanupLlmPorts:
         result = mgr.stop_cleanup_llm_ports()
         assert result is True
 
-    def test_legacy_stop_vllm_alias_uses_cleanup_ports(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(llm_cleanup_ports=[12345]))
-        monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: port == 12345)
-        result = mgr.stop_vllm_port_8000()
-        assert result is True
-
-
-class TestVRAMManagerFreeAllGpus:
-    def test_free_all_gpus_calls_cleanup_ports_and_arbitrage(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        calls = {"cleanup": False, "arbitrage": False}
-
-        monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: calls.__setitem__("cleanup", True) or True)
-        monkeypatch.setattr(mgr, "stop_arbitrage_llm", lambda: calls.__setitem__("arbitrage", True) or True)
-        monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
-        monkeypatch.setattr(time, "sleep", lambda s: None)
-
-        result = mgr.free_all_gpus()
-        assert calls["cleanup"] is True
-        assert calls["arbitrage"] is True
-        assert result is True
-
-    def test_free_all_gpus_returns_false_if_stop_fails(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: False)
-        monkeypatch.setattr(mgr, "stop_arbitrage_llm", lambda: False)
-        monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
-        monkeypatch.setattr(time, "sleep", lambda s: None)
-
-        result = mgr.free_all_gpus()
-        assert result is False
-
-
 class TestEnsureArbitrageLlmHealthProbe:
     """Sonde de santé compatible modèles « reasoning » (incident du 11/06/2026).
 
@@ -908,7 +725,6 @@ class TestEnsureArbitrageLlmHealthProbe:
         restarted = {"called": False}
         monkeypatch.setattr(vm, "launch_arbitrage_llm", lambda: restarted.update(called=True) or True)
         monkeypatch.setattr(vm, "stop_arbitrage_llm", lambda: True)
-        monkeypatch.setattr(vm, "free_all_gpus", lambda: True)
         monkeypatch.setattr(vm, "_get_port_pid", lambda port: "1234")
 
         import requests as _requests

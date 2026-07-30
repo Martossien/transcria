@@ -8,7 +8,7 @@ import signal
 import subprocess
 import threading
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from transcria.gpu import inventory, pid_registry
 from transcria.gpu.cuda_visible import (
@@ -113,6 +113,9 @@ class GPUAllocator:
         return total
 
     def get_available_vram_mb(self, gpu_index: int) -> int:
+        """Lecture publique thread-safe de la disponibilité (réel − réservations).
+        API de LECTURE conservée à la purge P2 (« testé mais 0 prod ≠ à supprimer ») :
+        les tests et diagnostics s'en servent, et elle n'ouvre aucune voie d'écriture."""
         with self._alloc_lock:
             return self._get_available_vram_mb_locked(gpu_index)
 
@@ -351,19 +354,6 @@ class GPUAllocator:
         )
         return False
 
-    def reserve(self, job_id: str, gpu_index: int, vram_mb: int, phase: str = "stt") -> bool:
-        with self._alloc_lock:
-            existing = self._find_reservation_locked(job_id, phase)
-            if existing is not None:
-                return existing.gpu_index == gpu_index
-            available = self._get_available_vram_mb_locked(gpu_index)
-            if available < int(vram_mb) + self.min_free_mb:
-                return False
-            self._gpu_reservations.setdefault(gpu_index, []).append(
-                Reservation(job_id, gpu_index, int(vram_mb), phase, time.monotonic())
-            )
-            return True
-
     def release_phase(self, job_id: str, phase: str) -> None:
         released = 0
         with self._alloc_lock:
@@ -571,39 +561,3 @@ class GPUAllocator:
         # Délégation à l'unique correspondance de l'arbre (B3). L'allocateur gagne la
         # protection Ollama que seul le manager portait — unification au sens protecteur.
         return matches_kill_pattern(process_name, self._kill_patterns)
-
-    def get_snapshot(self) -> dict:
-        with self._alloc_lock:
-            reservations_by_gpu = {
-                gpu: [asdict(reservation) for reservation in reservations]
-                for gpu, reservations in self._gpu_reservations.items()
-            }
-            gpus = []
-            visible_devices = parse_cuda_visible_devices()
-            for gpu in self.get_gpu_info():
-                visible_gpu = to_visible_device_index(
-                    gpu.get("id", 0),
-                    visible_devices,
-                    allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
-                )
-                if visible_gpu is None:
-                    continue
-                reserved = self._reserved_vram_mb_locked(visible_gpu)
-                free = self._get_available_vram_mb_locked(visible_gpu)
-                gpus.append(
-                    {
-                        "id": visible_gpu,
-                        "name": gpu.get("name", "inconnu"),
-                        "reserved_vram_mb": reserved,
-                        "free_vram_mb": free,
-                        "reservations": reservations_by_gpu.get(visible_gpu, []),
-                    }
-                )
-            with self._llm_owner_lock:
-                llm_owner = self._llm_owner
-            return {
-                "gpus": gpus,
-                "llm_locked": llm_owner is not None,
-                "llm_owner": llm_owner,
-                "tracked_pids": len(self._tracked_pids),
-            }

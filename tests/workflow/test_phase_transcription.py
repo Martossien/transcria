@@ -1,4 +1,6 @@
 """Tests de la phase TRANSCRIPTION (workflow/phases/transcription.py) — migrés de test_workflow_runner.py (B1 lot 2)."""
+from types import SimpleNamespace
+
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.workflow.runner import WorkflowRunner
@@ -58,8 +60,11 @@ class TestWorkflowRunnerRunTranscription:
             job = JobStore.create_job(owner_id, "Transcript OK")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "track_model", lambda name, gpu, mb: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
 
             from transcria.stt.transcription import Transcriber
 
@@ -74,30 +79,24 @@ class TestWorkflowRunnerRunTranscription:
             assert result["segment_count"] == 1
             assert result["transcript_text"] == "[0s->5s] Bonjour"
 
-    def test_run_transcription_exception_offloads(self, app, owner_id, monkeypatch, tmp_path):
-        """Sur exception STT, _release_gpu_phase appelle offload_all (chemin VRAMManager).
+    def test_run_transcription_exception_releases_reservation(self, app, owner_id, monkeypatch, tmp_path):
+        """Sur exception STT, la RÉSERVATION allocateur de la phase est libérée.
 
-        managed_by_allocator=False force le chemin offload_all dans _release_gpu_phase,
-        car en présence d'un GPU réel l'allocateur réussit et prendrait le chemin
-        release_phase (qui n'appelle pas offload_all).
+        P2 (audit 2026-07-30) : l'ancien test vérifiait `offload_all` sur le chemin
+        VRAMManager sans comptabilité — chemin fermé (l'offload vidait un cache CUDA
+        dans le mauvais process). L'invariant qui reste : jamais de réservation qui
+        fuit après un crash de phase.
         """
-        from types import SimpleNamespace
-
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Transcript Crash")
             runner = WorkflowRunner(JobStore, cfg)
 
-            # managed_by_allocator=False → _release_gpu_phase appellera offload_all
-            monkeypatch.setattr(
-                runner, "_reserve_gpu_phase",
-                lambda job, required_mb, phase: (SimpleNamespace(gpu_index=0), False),
-            )
-
-            offload_called = {"v": False}
-            def fake_offload():
-                offload_called["v"] = True
-            monkeypatch.setattr(runner.vram, "offload_all", fake_offload)
+            released = {"v": False}
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase",
+                                lambda job_id, phase: released.__setitem__("v", True))
 
             from transcria.stt.transcription import Transcriber
 
@@ -105,7 +104,7 @@ class TestWorkflowRunnerRunTranscription:
 
             result = runner.run_transcription(job, "/tmp/fake.wav", cfg)
             assert "error" in result
-            assert offload_called["v"] is True, "offload_all doit être appelé sur exception (chemin VRAMManager)"
+            assert released["v"] is True, "la réservation doit être libérée sur exception"
 
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.FAILED.value

@@ -30,6 +30,15 @@ def _allocator(tmp_path, free_mb=24000, total_mb=24000):
     return alloc
 
 
+
+def _reserved_mb(alloc, gpu):
+    """Inspection directe des livres (P2 : get_snapshot — vestige dashboard — supprimé)."""
+    return sum(r.vram_mb for r in alloc._gpu_reservations.get(gpu, []))
+
+
+def _phases_on(alloc, gpu):
+    return {(r.job_id, r.phase) for r in alloc._gpu_reservations.get(gpu, [])}
+
 def test_try_reserve_is_atomic_under_contention(tmp_path):
     alloc = _allocator(tmp_path, free_mb=7000, total_mb=8000)
     results = []
@@ -47,8 +56,7 @@ def test_try_reserve_is_atomic_under_contention(tmp_path):
     t2.join()
 
     assert sum(item is not None for item in results) == 1
-    snapshot = alloc.get_snapshot()
-    assert snapshot["gpus"][0]["reserved_vram_mb"] == 5000
+    assert _reserved_mb(alloc, 0) == 5000
 
 
 def test_allocator_maps_physical_cuda_visible_devices(tmp_path, monkeypatch):
@@ -76,10 +84,7 @@ def test_allocator_maps_physical_cuda_visible_devices(tmp_path, monkeypatch):
 
     assert reservation is not None
     assert reservation.gpu_index == 1
-    snapshot = alloc.get_snapshot()
-    assert [gpu["id"] for gpu in snapshot["gpus"]] == [0, 1]
-    assert snapshot["gpus"][1]["name"] == "GPU 2"
-    assert snapshot["gpus"][1]["reserved_vram_mb"] == 10000
+    assert _reserved_mb(alloc, 1) == 10000       # la 2e carte VISIBLE porte la réservation
 
 
 def test_allocator_uses_remapped_torch_gpu_ids(tmp_path, monkeypatch):
@@ -114,13 +119,8 @@ def test_release_phase_only_releases_matching_job_phase(tmp_path):
 
     alloc.release_phase("job-a", "stt")
 
-    snapshot = alloc.get_snapshot()
-    phases = {
-        (reservation["job_id"], reservation["phase"])
-        for reservation in snapshot["gpus"][0]["reservations"]
-    }
-    assert phases == {("job-a", "diarization"), ("job-b", "stt")}
-    assert snapshot["gpus"][0]["reserved_vram_mb"] == 5000
+    assert _phases_on(alloc, 0) == {("job-a", "diarization"), ("job-b", "stt")}
+    assert _reserved_mb(alloc, 0) == 5000
 
 
 def test_release_reservations_frees_only_target_job_and_returns_mb(tmp_path):
@@ -134,9 +134,7 @@ def test_release_reservations_frees_only_target_job_and_returns_mb(tmp_path):
     reclaimed = alloc.release_reservations("job-a")
 
     assert reclaimed == 6000  # 4000 + 2000, les deux phases de job-a
-    snapshot = alloc.get_snapshot()
-    remaining = {(r["job_id"], r["phase"]) for r in snapshot["gpus"][0]["reservations"]}
-    assert remaining == {("job-b", "stt")}
+    assert _phases_on(alloc, 0) == {("job-b", "stt")}
 
 
 def test_release_reservations_is_idempotent_noop(tmp_path):
@@ -169,7 +167,7 @@ def test_release_still_frees_reservations_and_llm(tmp_path):
 
     alloc.release("job-a")
 
-    assert alloc.get_snapshot()["gpus"][0]["reserved_vram_mb"] == 0
+    assert _reserved_mb(alloc, 0) == 0
     assert alloc.try_acquire_llm("job-b") is True   # verrou LLM bien libéré
 
 
@@ -179,13 +177,9 @@ def test_gpu_session_releases_only_its_phase(tmp_path):
 
     with GPUSession(alloc, "pyannote", 2000, job_id="job-a", phase="diarization") as session:
         assert session.gpu_index == 0
-        assert alloc.get_snapshot()["gpus"][0]["reserved_vram_mb"] == 5000
+        assert _reserved_mb(alloc, 0) == 5000
 
-    snapshot = alloc.get_snapshot()
-    reservations = snapshot["gpus"][0]["reservations"]
-    assert len(reservations) == 1
-    assert reservations[0]["job_id"] == "job-b"
-    assert reservations[0]["phase"] == "stt"
+    assert _phases_on(alloc, 0) == {("job-b", "stt")}
 
 
 def test_llm_lock_is_exclusive(tmp_path):
@@ -234,7 +228,6 @@ def test_pid_tracking_persists_and_reloads_alive_process(tmp_path):
     alloc.register_pid(os.getpid(), "test-process")
 
     reloaded = _allocator(tmp_path)
-    snapshot = reloaded.get_snapshot()
 
-    assert snapshot["tracked_pids"] == 1
+    assert len(reloaded._tracked_pids) == 1
     reloaded.unregister_pid(os.getpid())

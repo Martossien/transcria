@@ -314,3 +314,48 @@ def check_resource_node_ports(
     if occupied_by_engine:
         details.append(_t("rnp_active", list=", ".join(occupied_by_engine)))
     return CheckResult(name, OK, "; ".join(details) if details else _t("rnp_ok"))
+
+
+def _nvidia_gpu_count() -> int:
+    """Nombre de GPU vus par nvidia-smi — sonde LÉGÈRE (pas d'import torch au doctor)."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return len([line for line in result.stdout.strip().splitlines() if line.strip()])
+    except Exception:  # noqa: BLE001 — pas de nvidia-smi = pas de GPU
+        return 0
+
+
+def check_web_gpu_statefulness(
+    cfg: dict,
+    *,
+    profile: str | None = None,
+    gpu_counter: Callable[[], int] | None = None,
+) -> CheckResult:
+    """Le tier WEB (gunicorn N workers, déclaré SANS ÉTAT) héberge-t-il une charge GPU
+    à état ?
+
+    P2 (audit 2026-07-30) : les réservations GPU et la façade STT live vivent PAR
+    PROCESS. Le nœud d'inférence a tranché par contrainte (« workers > 1 = VRAM × N.
+    Restons à 1 », transcria-inference.service) ; le tier web n'avait AUCUNE garde alors
+    que la façade y charge ~12 Go et y réserve — chaque worker aurait sa copie et ses
+    livres, aveugles les uns aux autres. Règle gravée ici : un seul process PROPRIÉTAIRE
+    du GPU par machine — sinon router la charge vers un nœud de ressources.
+    """
+    name = _t("chk_web_gpu_state")
+    if profile != "web":
+        return CheckResult(name, OK, _t("wgs_not_web"))
+    count = (gpu_counter or _nvidia_gpu_count)()
+    if count <= 0:
+        return CheckResult(name, OK, _t("wgs_no_gpu"))
+    facade_on = bool(((cfg.get("live", {}) or {}).get("facade", {}) or {}).get("enabled"))
+    if facade_on:
+        return CheckResult(
+            name, WARN, _t("wgs_stateful", count=count),
+            hint=_t("wgs_stateful_hint"),
+        )
+    return CheckResult(name, OK, _t("wgs_gpu_stateless", count=count))

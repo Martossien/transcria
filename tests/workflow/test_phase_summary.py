@@ -4,6 +4,8 @@ Les tests traversent la façade ``WorkflowRunner`` : les coutures historiques
 (``runner._gpu_session``, ``runner.vram.*``, ``runner._should_reserve_llm_vram``…)
 restent les points de substitution.
 """
+from types import SimpleNamespace
+
 import pytest  # noqa: F401 — parité d'environnement avec test_workflow_runner.py
 
 from transcria.jobs.filesystem import JobFilesystem
@@ -58,8 +60,6 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             )
             job = JobStore.create_job(owner_id, "Summary Model Config")
             runner = WorkflowRunner(JobStore, cfg)
-
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
@@ -135,9 +135,11 @@ class TestWorkflowRunnerRunSummary:
 
             fs = _JFS(cfg["storage"]["jobs_dir"], job.id)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
 
             from transcria.stt.summary import SummaryGenerator
 
@@ -174,7 +176,10 @@ class TestWorkflowRunnerRunSummary:
             captured = {}
 
             class FakeSession:
-                def __init__(self, vram, model_name, required_mb):
+                # Contrat UNIQUE de GPUSession (P2, audit 2026-07-30) : allocateur +
+                # job/phase — le fake historique à 3 paramètres vivait de la compat
+                # TypeError supprimée avec la voie sans comptabilité.
+                def __init__(self, allocator, model_name, required_mb, job_id=None, phase=None):
                     captured["model_name"] = model_name
                     captured["required_mb"] = required_mb
                     self.gpu_index = 4
@@ -216,10 +221,11 @@ class TestWorkflowRunnerRunSummary:
             runner = WorkflowRunner(JobStore, cfg)
 
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
@@ -286,8 +292,11 @@ class TestWorkflowRunnerRunSummary:
         from transcria.stt.speaker_detection import SpeakerDetector
         from transcria.stt.summary import SummaryGenerator
 
-        monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-        monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+        # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+        # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+        monkeypatch.setattr(runner.allocator, "try_reserve",
+                            lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+        monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
         monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
         monkeypatch.setattr(SummaryGenerator, "generate_quick_summary", lambda *a, **kw: {
             "transcript_text": "[0s->60s] Discussion", "transcript_short": "Discussion",
@@ -380,8 +389,11 @@ class TestWorkflowRunnerRunSummary:
             job = JobStore.create_job(owner_id, "Summary Crash")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             from transcria.stt.summary import SummaryGenerator
@@ -403,8 +415,11 @@ class TestWorkflowRunnerRunSummary:
             job = JobStore.create_job(owner_id, "Summary STT Error Dict")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
 
             from transcria.stt.summary import SummaryGenerator
 
@@ -431,9 +446,11 @@ class TestWorkflowRunnerRunSummary:
 
             from transcria.jobs.filesystem import JobFilesystem as _JFS
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
 
             from transcria.stt.speaker_detection import SpeakerDetector
             from transcria.stt.summary import SummaryGenerator

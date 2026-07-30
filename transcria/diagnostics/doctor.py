@@ -53,6 +53,7 @@ from transcria.diagnostics.checks.deployment import (  # noqa: F401 — façade
     check_resource_node_engines,
     check_resource_node_ports,
     check_systemd_profile,
+    check_web_gpu_statefulness,
 )
 from transcria.diagnostics.checks.identity import (  # noqa: F401 — façade
     check_identity_backend,
@@ -190,6 +191,7 @@ def run_doctor(
     if profile:
         results.append(check_deployment_profile(cfg, profile=profile))
         results.append(check_systemd_profile(cfg, profile=profile))
+        results.append(check_web_gpu_statefulness(cfg, profile=profile))
     checks = _checks_for_profile(profile)
     checks = (*checks, check_opencode_smoke) if llm_smoke else checks
     for check in checks:

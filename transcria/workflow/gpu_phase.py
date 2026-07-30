@@ -65,20 +65,17 @@ class GpuPhaseSession:
             # Backend CPU pur (ex. kroko) : rien à réserver (marcherait aussi sans GPU).
             logger.info("Phase %s sur CPU (0 Mo VRAM) — session GPU sans réservation", phase)
             return _NoReservationSession(None)
-        if not self.allocator.get_gpu_info():
-            return GPUSession(self.vram, model_name, required_mb)
-        try:
-            return GPUSession(
-                self.allocator,
-                model_name,
-                required_mb,
-                job_id=job.id,
-                phase=phase,
-            )
-        except TypeError:
-            # Compatibilité avec certains tests qui remplacent GPUSession par
-            # un fake historique à trois paramètres.
-            return GPUSession(self.vram, model_name, required_mb)
+        # P2 (audit 2026-07-30) : l'allocateur est l'UNIQUE porte — la branche sans
+        # comptabilité (GPUSession sur VRAMManager, compat « fakes historiques ») plaçait
+        # des modèles invisibles des autres phases. Machine sans GPU : try_reserve refuse
+        # et la phase bascule CPU/attente, comme avant.
+        return GPUSession(
+            self.allocator,
+            model_name,
+            required_mb,
+            job_id=job.id,
+            phase=phase,
+        )
 
     def reserve_phase(self, job: Job, required_mb: int, phase: str):
         if self.phase_runs_remotely(phase):
@@ -92,21 +89,16 @@ class GpuPhaseSession:
         reservation = self.allocator.try_reserve(job.id, required_mb, phase)
         if reservation is not None:
             return reservation, True
-
-        # Les tests unitaires historiques mockent VRAMManager.ensure_free()
-        # plutôt que l'allocateur. En production, ce fallback retourne None si
-        # aucun GPU réel n'est visible.
-        gpu = self.vram.ensure_free(required_mb)
-        if gpu is None:
-            return None, False
-
-        return SimpleNamespace(gpu_index=gpu), False
+        # P2 (audit 2026-07-30) : plus de repli `ensure_free` sans comptabilité — un refus
+        # de l'allocateur signifie « pas de place », la phase attend/bascule (vram_wait).
+        return None, False
 
     def release_phase(self, job: Job, phase: str, managed_by_allocator: bool) -> None:
         if managed_by_allocator:
             self.allocator.release_phase(job.id, phase)
-        else:
-            self.vram.offload_all()
+        # Sinon : session sans réservation (distante/CPU) — rien à libérer. L'ancien
+        # `offload_all()` vidait un cache CUDA dans le MAUVAIS process (geste sans effet,
+        # entretenant l'illusion d'une libération — audit 2026-07-30).
 
     def should_reserve_llm_vram(self) -> bool:
         """Faut-il réserver la VRAM LLM LOCALEMENT ? Non sans GPU, et non si l'arbitrage

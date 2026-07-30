@@ -42,8 +42,7 @@ def should_recalibrate(current_mb: int, measured_mb: int, *, threshold_pct: floa
 class VRAMManager:
     """Cycle de vie GPU : libère, lance, utilise, arrête les modèles."""
 
-    def __init__(self, config: dict, dashboard_url: str | None = None):
-        # dashboard_url : paramètre OBSOLÈTE (projet externe retiré — C2.3), ignoré.
+    def __init__(self, config: dict):
         self.config = config
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
@@ -57,8 +56,6 @@ class VRAMManager:
         self.llm_cleanup_ports: list[int] = list(
             services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
         )
-        self.vllm_port: int = self.llm_cleanup_ports[0] if self.llm_cleanup_ports else services.get("vllm_port", 8000)
-        self.cohere_vram_mb: int = gpu_cfg.get("cohere_vram_mb", 6000)
         self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
         self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
@@ -79,7 +76,6 @@ class VRAMManager:
         self.arbitrage_log_path: str = services.get("arbitrage_log_path") or (
             f"/tmp/arbitrage_llm_{self.arbitrage_llm_port}.log"
         )
-        self._loaded_models: dict[str, dict] = {}
         self._arbitrage_llm_pid: int | None = None
         # Backend LLM construit à la demande : sert à DÉLÉGUER le cycle de vie des moteurs
         # dont la sémantique diffère de « lancer/tuer un process » (Ollama = démon persistant,
@@ -167,97 +163,6 @@ class VRAMManager:
                 return int(g.get("memory", {}).get("free", 0) * 1024)
         return 0
 
-    def get_best_gpu(self, required_mb: int) -> int | None:
-        visible_devices = parse_cuda_visible_devices()
-        best_idx, best_free = None, 0
-        for g in self.get_gpu_info():
-            visible_gpu = to_visible_device_index(
-                g.get("id", 0),
-                visible_devices,
-                allow_remapped_ordinal=bool(g.get("cuda_visible_remapped")),
-            )
-            if visible_gpu is None:
-                continue
-            free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
-            if free_mb >= required_mb + self.min_free_mb and free_mb > best_free:
-                best_free, best_idx = free_mb, visible_gpu
-        return best_idx
-
-    def _log_all_gpus(self, label: str = "") -> None:
-        """Logue la VRAM libre de chaque GPU — utile pour le débogage des basculements."""
-        gpus = self.get_gpu_info()
-        prefix = f"[{label}] " if label else ""
-        for g in gpus:
-            free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
-            used_mb = int(g.get("memory", {}).get("used", 0) * 1024)
-            total_mb = int(g.get("memory", {}).get("total", 0) * 1024)
-            logger.info(
-                "%sGPU %d — libre: %d Mo / total: %d Mo (utilisé: %d Mo) [%s]",
-                prefix, g.get("id", "?"), free_mb, total_mb, used_mb,
-                g.get("name", "inconnu"),
-            )
-
-    def ensure_free(self, required_mb: int, preferred_gpu: int | None = None) -> int | None:
-        if preferred_gpu is None:
-            preferred_gpu = self.preferred_gpu
-        free = self.get_free_vram_mb(preferred_gpu)
-        logger.info(
-            "VRAM GPU %d: %d Mo libre, besoin %d Mo",
-            preferred_gpu, free, required_mb,
-        )
-        if free >= required_mb + self.min_free_mb:
-            logger.info("GPU %d sélectionné (%d Mo disponibles)", preferred_gpu, free)
-            return preferred_gpu
-
-        # GPU préféré insuffisant — état de tous les GPUs avant basculement
-        logger.info(
-            "GPU %d insuffisant (%d Mo < besoin %d Mo) — scan de tous les GPUs",
-            preferred_gpu, free, required_mb + self.min_free_mb,
-        )
-        self._log_all_gpus(label="scan")
-
-        best = self.get_best_gpu(required_mb)
-        if best is not None:
-            best_free = self.get_free_vram_mb(best)
-            logger.info(
-                "Basculement GPU %d → GPU %d (%d Mo libre)",
-                preferred_gpu, best, best_free,
-            )
-            return best
-
-        logger.warning(
-            "Aucun GPU avec %d Mo libre — tentative libération VRAM sur GPU %d",
-            required_mb, preferred_gpu,
-        )
-        self._free_memory(preferred_gpu)
-        gc.collect()
-        try:
-            import torch
-            torch.cuda.empty_cache()
-        except ImportError:
-            pass
-        time.sleep(1)
-        free_after = self.get_free_vram_mb(preferred_gpu)
-        logger.info("GPU %d après libération: %d Mo libre", preferred_gpu, free_after)
-        if free_after >= required_mb + self.min_free_mb:
-            logger.info("GPU %d sélectionné après libération", preferred_gpu)
-            return preferred_gpu
-
-        best_after = self.get_best_gpu(required_mb)
-        if best_after is not None:
-            best_after_free = self.get_free_vram_mb(best_after)
-            logger.info(
-                "Basculement GPU %d → GPU %d après libération (%d Mo libre)",
-                preferred_gpu, best_after, best_after_free,
-            )
-        else:
-            logger.error(
-                "Aucun GPU disponible avec %d Mo après libération — état final:",
-                required_mb,
-            )
-            self._log_all_gpus(label="échec")
-        return best_after
-
     def _free_memory(self, gpu_index: int) -> None:
         """Préempte les processus GPU matchant `workflow.scheduling.kill_patterns` sur
         UNE carte — SIGTERM, puis SIGKILL pour les survivants après un délai de grâce.
@@ -320,25 +225,6 @@ class VRAMManager:
     def _matches_kill_pattern(self, process_name: str) -> bool:
         # Délégation à l'unique correspondance de l'arbre (B3) — protection Ollama incluse.
         return matches_kill_pattern(process_name, self._kill_patterns)
-
-    # ── Model tracking ────────────────────────────────────
-
-    def track_model(self, name: str, gpu: int, vram_mb: int) -> None:
-        self._loaded_models[name] = {"gpu": gpu, "vram_mb": vram_mb, "loaded_at": time.time()}
-        logger.info("Modèle %s chargé sur GPU %d (~%d Mo)", name, gpu, vram_mb)
-
-    def untrack_model(self, name: str) -> None:
-        self._loaded_models.pop(name, None)
-
-    def offload_all(self) -> None:
-        self._loaded_models.clear()
-        gc.collect()
-        try:
-            import torch
-            torch.cuda.empty_cache()
-        except ImportError:
-            pass
-        logger.info("Cache CUDA vidé")
 
     # ── Service lifecycle ─────────────────────────────────
 
@@ -407,10 +293,6 @@ class VRAMManager:
         except ImportError:
             pass
         return ok
-
-    def stop_vllm_port_8000(self) -> bool:
-        """Alias compatibilité : utiliser stop_cleanup_llm_ports()."""
-        return self.stop_cleanup_llm_ports()
 
     def _llm_launch_shares(self) -> dict[int, int]:
         """Part de VRAM attendue PAR carte du placement LLM — DÉLÉGUÉE à la source unique
@@ -760,20 +642,6 @@ class VRAMManager:
         except ImportError:
             pass
         return port_ok
-
-    def free_all_gpus(self) -> bool:
-        """Libère tous les GPUs visibles : arrête tout modèle chargé."""
-        n = len(self.get_gpu_info())
-        logger.info("Libération de %d GPU(s) visible(s)...", n)
-        ok1 = self.stop_cleanup_llm_ports()
-        ok2 = self.stop_arbitrage_llm()
-        self.offload_all()
-        time.sleep(2)
-        gpus = self.get_gpu_info()
-        for g in gpus:
-            free = int(g["memory"]["free"] * 1024)
-            logger.info("GPU %d: %d Mo libre après libération", g["id"], free)
-        return ok1 and ok2
 
     @staticmethod
     def is_port_open(port: int) -> bool:

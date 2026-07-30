@@ -57,7 +57,6 @@ class TestWorkflowRunnerBuildExport:
 
             fake_result = {"zip_path": "/tmp/test.zip", "zip_name": "test.zip", "size_mb": 1.0}
             monkeypatch.setattr(PackageBuilder, "build_package", lambda self, job: fake_result)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
 
             result = runner.build_export(job, cfg)
             assert "zip_path" in result

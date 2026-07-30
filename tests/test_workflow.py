@@ -1,4 +1,6 @@
 
+from types import SimpleNamespace
+
 from transcria.jobs.models import JobState
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.states import StepStatus, WorkflowState
@@ -203,8 +205,11 @@ class TestWorkflowRunner:
             job = JobStore.create_job(owner_id, "Summary Failure")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+            # P2 (audit 2026-07-30) : la voie sans comptabilité est fermée — on simule
+            # désormais la VRAIE porte (allocateur), plus VRAMManager.ensure_free.
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             def raise_summary(*args, **kwargs):
@@ -269,7 +274,6 @@ class TestWorkflowRunner:
             cfg = get_config()
             job = JobStore.create_job(owner_id, "Export Failure")
             runner = WorkflowRunner(JobStore, cfg)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
             monkeypatch.setattr(PackageBuilder, "build_package", lambda self, job: {"error": "zip boom"})
 
             result = runner.build_export(job, cfg)

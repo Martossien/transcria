@@ -279,7 +279,13 @@ class TestLiberationSousPressionHorsVerrou:
         vram_release.register_releaser(
             lambda: alloc.release_reservations("facade-live"))
         # La façade occupe (comptablement) 12,5 Go sur la carte 2 → part LLM refusée…
-        assert alloc.reserve("facade-live", 2, 12500, "live_stt_cohere") is True
+        # (réservation posée directement dans les livres : l'API `reserve` ciblée,
+        # morte en prod, a été purgée — P2 audit 2026-07-30)
+        import time as _time
+
+        from transcria.queue.allocator import Reservation
+        alloc._gpu_reservations.setdefault(2, []).append(
+            Reservation("facade-live", 2, 12500, "live_stt_cohere", _time.monotonic()))
         # …mais la libération sous pression la décharge, et la LLM se réserve.
         assert alloc.try_reserve_llm("job-1", 45000, "summary_llm") is True
         parts = {r.gpu_index for gpu in alloc._gpu_reservations.values() for r in gpu}

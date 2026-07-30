@@ -57,7 +57,6 @@ class TestWorkflowRunnerRunCorrectionPrompting:
 
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
@@ -99,7 +98,6 @@ class TestWorkflowRunnerRunCorrectionPrompting:
         fs.save_text("context/session_lexicon.json", "[]\n")
         monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
         monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
-        monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
         monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
         monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
         return cfg, job, runner, fs
@@ -207,8 +205,6 @@ class TestWorkflowRunnerRunCorrection:
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Correction OK")
             runner = WorkflowRunner(JobStore, cfg)
-
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)

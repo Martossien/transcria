@@ -2408,7 +2408,11 @@ def main() -> int:
 
             from transcria.maintenance.backup import (
                 create_backup as _create_backup,
+            )
+            from transcria.maintenance.backup import (
                 read_manifest as _read_manifest,
+            )
+            from transcria.maintenance.backup import (
                 verify_backup as _verify_backup,
             )
 

@@ -10,6 +10,11 @@ d'erreurs récurrentes (cf. AGENTS.md « Pièges connus ») :
 Ce module centralise les deux, de façon **idempotente** (ne casse pas une config
 opencode existante : il ne (re)définit que `provider.local`). Toutes les E/S sont
 injectables → testable sans système réel.
+
+⚠ RANGEMENT (audit 2026-07-30) : module MIXTE — resolve_arbitrage_endpoint/
+is_remote_arbitrage sont de VRAIES dépendances GPU (vram_manager, allocator) et
+resteraient ici ; le provisioning opencode.json partirait vers transcria/llm_tools/.
+Déplacement opportuniste, pas en chantier.
 """
 from __future__ import annotations
 
