@@ -7,6 +7,7 @@ import numpy as np
 
 from transcria.audio.vad import SileroVAD
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
+from transcria.ingestion.manifest import parse_participants_manifest
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.jobs.store import JobStore
@@ -133,8 +134,14 @@ class Transcriber:
         preflight_flags = preflight.get("flags") or []
         force_30s_on_weak = "audio_tres_faible" in preflight_flags
 
+        # Mode PAR PISTE d'abord (vague 5) : locuteurs exacts par construction, mots des
+        # chevauchements récupérés. Repli automatique sur l'échelle historique sinon.
+        per_track_segments = self._transcribe_per_track(fs, lang, sl)
+        if per_track_segments is not None:
+            segments = per_track_segments
+            chunking_mode = "per_track"
         # Choisir le mode de chunking selon la disponibilité des exclusive_turns
-        if speaker_turns and speaker_turns.get("exclusive_turns") and not force_30s_on_weak:
+        elif speaker_turns and speaker_turns.get("exclusive_turns") and not force_30s_on_weak:
             # Chunking par tours pyannote : charger l'audio une seule fois en mémoire,
             # passer des numpy arrays à chaque chunk → pas de fichiers WAV temporaires.
             audio, sr = librosa.load(str(audio_path), sr=_SR, mono=True)
@@ -176,12 +183,16 @@ class Transcriber:
                 segments = self._apply_speakers(segments, speaker_turns, speaker_mapping)
             chunking_mode = "30s_fallback"
 
-        segments = self._apply_forced_alignment_if_enabled(
-            audio_path, segments, lang, backend, sl
-        )
-        segments = self._apply_speaker_realignment(
-            segments, speaker_turns, speaker_mapping, sl
-        )
+        if chunking_mode != "per_track":
+            # Alignement forcé et réalignement raisonnent sur le MIX et les tours
+            # GLOBAUX : en mode par piste, les locuteurs sont exacts par construction —
+            # les repasser dessus ne pourrait que les corrompre.
+            segments = self._apply_forced_alignment_if_enabled(
+                audio_path, segments, lang, backend, sl
+            )
+            segments = self._apply_speaker_realignment(
+                segments, speaker_turns, speaker_mapping, sl
+            )
         segments = self._cleanup_transcription_segments(segments, sl, language=lang)
         segments = self._score_segment_reliability(segments, fs, sl)
         # Couture 1 : le pipeline batch est la RÉFÉRENCE → provenance canonical
@@ -610,6 +621,65 @@ class Transcriber:
             smoothed.append(current)
 
         return smoothed
+
+    def _transcribe_per_track(self, fs: JobFilesystem, lang: str, sl) -> list[dict] | None:
+        """Mode PAR PISTE (vague 5, lot B — `docs/VAGUE5_PISTES_SEPAREES.md` D5.3).
+
+        Quand le job porte des pistes séparées (manifeste v2 + `input/tracks/`), chaque
+        piste est transcrite SEULE, découpée par ses fenêtres de parole (levier de coût :
+        2 h de réunion où quelqu'un a parlé 10 min = ~10 min de STT sur sa piste), le
+        locuteur étant CONNU par construction — ni pyannote ni attribution par
+        recouvrement. La fusion est un TRI (les pistes sont alignées sur la timeline
+        commune dès la capture) : les mots des CHEVAUCHEMENTS existent, chacun sous son
+        nom — dans le mix, deux voix simultanées étaient une bouillie.
+
+        Rend `None` pour retomber sur le chemin historique (mix) : manifeste absent/v1,
+        piste manquante, ou zéro segment — le repli est TOUJOURS possible, jamais un
+        échec (le mix couvre tout).
+        """
+        # Différé : transcria.workflow.__init__ tire le runner → cycle stt↔workflow ;
+        # le module lui-même est PUR, seul le paquet pose problème.
+        from transcria.workflow.track_fusion import fuse_track_segments, merge_windows
+
+        raw = fs.load_json("metadata/participants_manifest.json")
+        if not isinstance(raw, dict) or raw.get("version") != 2:
+            return None
+        manifest, _reason = parse_participants_manifest(raw)
+        if manifest is None:
+            return None
+        tracked = [p for p in manifest.participants if p.track]
+        if not tracked:
+            return None
+        tracks_dir = Path(fs.job_dir) / "input" / "tracks"
+        paths: dict[str, Path] = {}
+        for p in tracked:
+            path = tracks_dir / (p.track.removeprefix("track_") + ".wav")
+            if not path.is_file():
+                sl.warning("Mode par piste indisponible (piste absente: %s) — repli mix",
+                           path.name)
+                return None
+            paths[p.id] = path
+
+        import librosa
+
+        per_track: list[list[dict]] = []
+        for p in tracked:
+            speaker = p.name or f"PISTE_{p.id}"
+            audio, _sr = librosa.load(str(paths[p.id]), sr=_SR, mono=True)
+            windows = merge_windows(p.speech_windows, max_end_s=len(audio) / _SR)
+            if not windows:
+                continue
+            chunks = [self._make_chunk(audio, start, end, speaker)
+                      for start, end in windows]
+            segs = self._transcribe_by_chunks(chunks, lang, None, sl)
+            sl.info("Piste transcrite", piste=speaker, fenetres=len(windows),
+                    segments=len(segs))
+            per_track.append(segs)
+        segments = fuse_track_segments(per_track)
+        if not segments:
+            sl.warning("Mode par piste : aucun segment produit — repli mix")
+            return None
+        return segments
 
     @staticmethod
     def _make_chunk(audio: np.ndarray, start: float, end: float, speaker: str) -> dict:

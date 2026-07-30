@@ -18,6 +18,7 @@ from transcria.workflow.multi_stt_review import (
     texts_equivalent,
 )
 from transcria.workflow.refine_llm import chat_completion
+from transcria.workflow.track_fusion import overlapping_indices
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,18 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
             max_segments=int(ms_cfg.get("max_segments", 20)),
             min_duration_s=float(ms_cfg.get("min_segment_s", 0.8)),
         )
+        # Mode PAR PISTE (vague 5) : sur une zone de CHEVAUCHEMENT, le mix est une
+        # bouillie — re-transcrire cette zone depuis le mix et arbitrer contre le texte
+        # de piste reviendrait à DÉFAIRE le gain de la vague. Ces segments sont exclus :
+        # leur texte de piste fait foi.
+        meta = fs.load_json("metadata/transcription_metadata.json") or {}
+        if candidates and meta.get("chunking_mode") == "per_track":
+            protected = overlapping_indices(segments)
+            skipped = [c for c in candidates if c["index"] in protected]
+            candidates = [c for c in candidates if c["index"] not in protected]
+            if skipped:
+                logger.info("multi_stt: %d segment(s) de chevauchement protégés "
+                            "(texte de piste conservé)", len(skipped))
         if not candidates:
             return {"success": True, "skipped": True, "reason": "no_degraded_segments"}
 

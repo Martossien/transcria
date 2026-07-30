@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 195,
- "deferred_internal_imports": 91,
+ "deferred_internal_imports": 93,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -175,7 +175,7 @@
   "transcria.stt.speaker_detection": 5,
   "transcria.stt.summary": 7,
   "transcria.stt.transcriber_factory": 5,
-  "transcria.stt.transcription": 13,
+  "transcria.stt.transcription": 15,
   "transcria.stt.voxtral_transcriber": 5,
   "transcria.stt.whisper_transcriber": 4,
   "transcria.voice": 1,
@@ -217,7 +217,7 @@
   "transcria.workflow.phases.diarization": 6,
   "transcria.workflow.phases.export": 4,
   "transcria.workflow.phases.final_review": 6,
-  "transcria.workflow.phases.multi_stt_review": 5,
+  "transcria.workflow.phases.multi_stt_review": 6,
   "transcria.workflow.phases.quality": 7,
   "transcria.workflow.phases.refine": 8,
   "transcria.workflow.phases.summary": 12,

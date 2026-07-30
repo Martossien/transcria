@@ -1,7 +1,14 @@
 # Vague 5 — Pistes séparées, suivi en direct, et le sort de `LiveConnectorSession`
 
-> **Statut : VALIDÉ par l'utilisateur le 2026-07-30 (y compris D5.6). Lot A EN COURS**
-> (capture/livraison des pistes codée + testée — gate Jitsi réel restant).
+> **Statut : VALIDÉ par l'utilisateur le 2026-07-30 (y compris D5.6). Lot A LIVRÉ**
+> (56a085d) **et GATE RÉEL RÉUSSI le soir même** : job `1ea75400`, 2 participants, 2
+> pistes nommées dans `input/tracks/`, manifeste v2 sans dégradation, et **7,91 s de
+> chevauchement réel** entre les deux voix — le corpus de validation du lot B. **Lot B1
+> LIVRÉ le soir même** (STT par piste + fusion) et **prouvé sur ce corpus avec Cohere
+> réel** : l'interruption croisée à 30 s (« C'était où la ferme ? » PENDANT le récit de
+> l'autre, réponse comprise) est captée DES DEUX CÔTÉS, chacun sous son nom — 7 segments
+> de chevauchement intacts, protégés de l'arbitrage multi-STT. Reste B2 (sous-diarisation
+> pyannote des pistes salle → `PISTE_<pid>_S1`), puis lots C et D.
 > Spécification dédiée exigée par le plan directeur
 > ([`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md), vague 5) : elle plie dans la
 > conception les leçons des gates réels de juillet — pistes sur DISQUE (jamais en RAM),
