@@ -435,3 +435,62 @@ class TestReschedule:
         client.post(f"/v1/meetings/{sid}/result", headers=_auth(runner_token),
                     json={"runner": "runner-1", "exit_code": 0})
         assert admin_client.post(f"/api/meetings/{sid}/reschedule").status_code == 409
+
+
+def _stored_passcode(app, session_id):
+    """Lit le code STOCKÉ (chiffré) — nécessite le contexte applicatif."""
+    from transcria.ingestion.session_store import MeetingSessionStore
+
+    with app.app_context():
+        return MeetingSessionStore.get(session_id).meeting_passcode_encrypted
+
+
+class TestSalleProtegee:
+    """Code d'accès d'une salle (« mot de passe » Jitsi) — trou trouvé à la revue de
+    complétude du 2026-07-30 : le bot DÉTECTAIT `password_required` sans qu'aucun chemin
+    ne permette de fournir le code. Contrat : SECRET (chiffré au repos, jamais réaffiché,
+    déchiffré au SEUL claim du runner) et FACULTATIF (salle ouverte = cas courant)."""
+
+    @staticmethod
+    def _create(admin_client, ref, passcode=None):
+        body = {"provider": "jitsi", "meeting_ref": ref, "title": "Protégée", "language": "fr"}
+        if passcode is not None:
+            body["passcode"] = passcode
+        return admin_client.post("/api/meetings", json=body)
+
+    def test_code_chiffre_au_repos_et_absent_des_reponses(self, app, meetings_on, client,
+                                                          admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        r = self._create(admin_client, "https://meet.jit.si/salle-protegee", "s3cr3t-de-salle")
+        assert r.status_code == 201
+        assert "s3cr3t" not in str(r.get_json())      # jamais renvoyé
+
+        stored = _stored_passcode(app, r.get_json()["session"]["id"])
+        assert stored and stored.startswith("enc1:")         # chiffré au repos
+        assert "s3cr3t-de-salle" not in stored
+
+    def test_salle_ouverte_aucun_code_stocke(self, app, meetings_on, client, admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        r = self._create(admin_client, "https://meet.jit.si/salle-ouverte")
+        assert r.status_code == 201
+        assert _stored_passcode(app, r.get_json()["session"]["id"]) is None  # NULL ≠ code vide
+
+    def test_le_runner_recoit_le_code_dechiffre_au_claim(self, meetings_on, client,
+                                                         admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        self._create(admin_client, "https://meet.jit.si/claim-protegee", "abc-123")
+        r = client.post("/v1/meetings/claim", headers=_auth(runner_token),
+                        json={"runner": "runner-1", "max": 5})
+        assert r.status_code == 200
+        intents = [i for i in r.get_json()["sessions"]
+                   if str(i["meeting_ref"]).endswith("claim-protegee")]
+        assert intents and intents[0]["meeting_passcode"] == "abc-123"
+
+    def test_salle_ouverte_code_vide_au_claim(self, meetings_on, client, admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        self._create(admin_client, "https://meet.jit.si/claim-ouverte")
+        r = client.post("/v1/meetings/claim", headers=_auth(runner_token),
+                        json={"runner": "runner-1", "max": 5})
+        intents = [i for i in r.get_json()["sessions"]
+                   if str(i["meeting_ref"]).endswith("claim-ouverte")]
+        assert intents and intents[0]["meeting_passcode"] == ""

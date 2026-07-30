@@ -12,6 +12,8 @@ TranscrIA.scheduleMeeting = function () {
     meeting_ref: document.getElementById("meeting-ref").value.trim(),
     title: document.getElementById("meeting-title").value.trim(),
     scheduled_at: document.getElementById("meeting-when").value || "",
+    // Salle protégée : envoyé une seule fois, chiffré au repos, jamais réaffiché.
+    passcode: document.getElementById("meeting-passcode").value,
   };
   fetch("/api/meetings", {
     method: "POST",

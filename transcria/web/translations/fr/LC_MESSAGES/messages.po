@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-30 11:19+0200\n"
+"POT-Creation-Date: 2026-07-30 18:38+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -265,7 +265,7 @@ msgstr "Ajouter cette forme validée à un lexique central, partagé et réutili
 
 #: transcria/i18n/js_catalog.py:34
 #: transcria/web/templates/change_password.html:24
-#: transcria/web/templates/index.html:77
+#: transcria/web/templates/index.html:86
 #: transcria/web/templates/meeting_types.html:141
 #: transcria/web/templates/queue.html:173
 #: transcria/web/templates/srt_editor.html:105
@@ -3552,7 +3552,7 @@ msgid "Supprimer cette entrée ?"
 msgstr "Supprimer cette entrée ?"
 
 #: transcria/web/templates/central_lexicon_detail.html:220
-#: transcria/web/templates/index.html:93
+#: transcria/web/templates/index.html:102
 #: transcria/web/templates/schedule.html:223
 #: transcria/web/templates/srt_editor.html:104
 msgid "Supprimer"
@@ -3597,7 +3597,7 @@ msgid "dernier %(d)s"
 msgstr "dernier %(d)s"
 
 #: transcria/web/templates/central_lexicons.html:61
-#: transcria/web/templates/index.html:84 transcria/web/templates/voices.html:45
+#: transcria/web/templates/index.html:93 transcria/web/templates/voices.html:45
 msgid "Ouvrir"
 msgstr "Ouvrir"
 
@@ -3859,63 +3859,75 @@ msgstr "Nom de la réunion"
 msgid "Titre"
 msgstr "Titre"
 
-#: transcria/web/templates/index.html:36
+#: transcria/web/templates/index.html:38
+msgid "Code d'accès"
+msgstr "Code d'accès"
+
+#: transcria/web/templates/index.html:41
+msgid "facultatif"
+msgstr "Actif"
+
+#: transcria/web/templates/index.html:42
+msgid "Uniquement si la salle est protégée par un mot de passe"
+msgstr "Uniquement si la salle est protégée par un mot de passe"
+
+#: transcria/web/templates/index.html:45
 #, fuzzy
 msgid "Quand"
 msgstr "lundi"
 
-#: transcria/web/templates/index.html:39
+#: transcria/web/templates/index.html:48
 #, fuzzy
 msgid "Vide = dès que possible"
 msgstr "dès que possible"
 
-#: transcria/web/templates/index.html:41
+#: transcria/web/templates/index.html:50
 #, fuzzy
 msgid "Dès que possible"
 msgstr "dès que possible"
 
-#: transcria/web/templates/index.html:41
+#: transcria/web/templates/index.html:50
 #, fuzzy
 msgid "Maintenant"
 msgstr "Maintenance"
 
-#: transcria/web/templates/index.html:46
+#: transcria/web/templates/index.html:55
 #, fuzzy
 msgid "Planifier"
 msgstr "Planification"
 
-#: transcria/web/templates/index.html:50
+#: transcria/web/templates/index.html:59
 msgid "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 msgstr "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 
-#: transcria/web/templates/index.html:64
+#: transcria/web/templates/index.html:73
 #, python-format
 msgid "Partagé par %(name)s"
 msgstr "Partagé par %(name)s"
 
-#: transcria/web/templates/index.html:72
+#: transcria/web/templates/index.html:81
 #: transcria/web/templates/job_wizard.html:21
 msgid "Incident technique — nouvel essai prévu"
 msgstr "Incident technique — nouvel essai prévu"
 
-#: transcria/web/templates/index.html:86
+#: transcria/web/templates/index.html:95
 #: transcria/web/templates/srt_editor.html:10
 msgid "Résultats"
 msgstr "Résultats"
 
-#: transcria/web/templates/index.html:88
+#: transcria/web/templates/index.html:97
 msgid "Package"
 msgstr "Package"
 
-#: transcria/web/templates/index.html:92
+#: transcria/web/templates/index.html:101
 msgid "Supprimer ce traitement ? Cette action est irréversible."
 msgstr "Supprimer ce traitement ? Cette action est irréversible."
 
-#: transcria/web/templates/index.html:105
+#: transcria/web/templates/index.html:114
 msgid "Aucun traitement pour le moment."
 msgstr "Aucun traitement pour le moment."
 
-#: transcria/web/templates/index.html:106
+#: transcria/web/templates/index.html:115
 msgid "Créez votre premier traitement pour transcrire une réunion."
 msgstr "Créez votre premier traitement pour transcrire une réunion."
 

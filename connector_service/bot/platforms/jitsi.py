@@ -69,6 +69,28 @@ def _join_url(base: str, display_name: str) -> str:
     return f'{base}#{_SILENT_JOIN_CONFIG}&userInfo.displayName="{quote(display_name)}"'
 
 
+def _local_storage_url(base: str, values: dict[str, str]) -> str:
+    """URL qui SEME le localStorage de la page avant que Jitsi ne se connecte.
+
+    Canal officiel de Jibri (l'enregistreur de Jitsi) : `config.useHostPageLocalStorage=true`
+    + `appData.localStorageContent=<json>`. On s'en sert pour le CODE DE SALLE
+    (`xmpp_conference_password_override`) : jitsi-meet l'envoie alors à prosody et
+    **court-circuite l'invite de mot de passe** — pas de dialogue à piloter, donc pas de
+    sélecteur à suivre de version en version.
+
+    ⚠ « jitsi-meet parse deux fois » (constat de Jibri, reproduit ici) : le JSON est
+    sérialisé, puis re-sérialisé en chaîne JSON, puis encodé pour l'URL.
+    """
+    import json
+    from urllib.parse import quote
+
+    inner = json.dumps(values, ensure_ascii=False)
+    outer = json.dumps(inner, ensure_ascii=False)      # double sérialisation VOULUE
+    return (f"{base}#{_SILENT_JOIN_CONFIG}"
+            f"&config.useHostPageLocalStorage=true"
+            f"&appData.localStorageContent={quote(outer, safe='')}")
+
+
 class JitsiDriver:
     """`BrowserDriver` Jitsi. Lance Chromium (Playwright), injecte le payload de capture (avec
     l'URL du pont), rejoint la salle, et suit la présence pour détecter la fin. Le durcissement
@@ -79,7 +101,19 @@ class JitsiDriver:
                  ice_timeout_s: float = 30.0, max_duration_s: float = 4 * 3600,
                  ignore_https_errors: bool = False, prejoin_timeout_ms: int = 15000,
                  admission_poll_s: float = 1.0,
-                 capture_options: dict | None = None) -> None:
+                 capture_options: dict | None = None,
+                 room_passcode: str = "",
+                 xmpp_user: str = "", xmpp_password: str = "") -> None:
+        # Code d'accès d'une salle PROTÉGÉE (vide = salle ouverte). Jamais journalisé —
+        # ni ici, ni dans les motifs d'admission remontés au portail.
+        self._room_passcode = str(room_passcode or "")
+        # Compte de l'instance, pour les seules instances AUTO-HÉBERGÉES qui exigent une
+        # connexion pour démarrer une réunion (« auth_required »). Vide partout ailleurs
+        # (meet.jit.si, instance ouverte) : aucune configuration, aucun champ, ce chemin
+        # ne s'exécute jamais. Fourni par l'ENVIRONNEMENT, jamais saisi par l'utilisateur.
+        self._xmpp_user = str(xmpp_user or "")
+        self._xmpp_password = str(xmpp_password or "")
+        self._xmpp_domain = ""                    # renseigné à l'ouverture (hôte de l'URL)
         self._bridge_url = bridge_url
         self._headless = headless
         # Instance auto-hébergée à certificat auto-signé (bancs d'essai) : accepté au niveau
@@ -111,12 +145,39 @@ class JitsiDriver:
         Appelée avant `open()` — le payload de capture est injecté avec cette URL."""
         self._bridge_url = bridge_url
 
+    def _local_storage_seed(self, display_name: str = "") -> dict[str, str]:
+        """Valeurs à semer dans le localStorage — vide si la salle est ouverte ET l'instance
+        publique (cas courant : on garde alors l'URL muette historique).
+
+        Mêmes clés que Jibri (l'enregistreur officiel) : `xmpp_conference_password_override`
+        pour le code de salle, `xmpp_username_override`/`xmpp_password_override` pour le
+        compte d'une instance auto-hébergée."""
+        seed: dict[str, str] = {}
+        if display_name:
+            seed["displayname"] = display_name
+        if self._room_passcode:
+            seed["xmpp_conference_password_override"] = self._room_passcode
+        if self._xmpp_user and self._xmpp_password:
+            # Jibri compose `utilisateur@domaine` ; le domaine se déduit de l'URL de la
+            # salle quand l'exploitant ne l'a pas fourni explicitement.
+            user = self._xmpp_user if "@" in self._xmpp_user else f"{self._xmpp_user}@{self._xmpp_domain}"
+            seed["xmpp_username_override"] = user
+            seed["xmpp_password_override"] = self._xmpp_password
+        # Un seed qui ne porterait QUE le nom n'a pas lieu d'être : `_join_url` fait déjà
+        # mieux (config muette + nom), sans dépendre du localStorage.
+        return seed if (self._room_passcode or (self._xmpp_user and self._xmpp_password)) else {}
+
     async def open(self, meeting_url: str) -> None:
         from playwright.async_api import async_playwright  # dép opt-in
 
         # Nom de salle retenu pour distinguer « salle close » (l'URL a navigué ailleurs)
         # d'une vraie perte de navigateur (cf. run_until_ended).
         self._room_name = meeting_url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
+        # Domaine de l'instance : sert à composer `utilisateur@domaine` pour une instance
+        # auto-hébergée authentifiée (cf. `_local_storage_seed`).
+        from urllib.parse import urlparse
+
+        self._xmpp_domain = urlparse(meeting_url).hostname or ""
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(
             headless=self._headless, args=list(CHROMIUM_ARGS))
@@ -129,7 +190,12 @@ class JitsiDriver:
             f"window.__TRANSCRIA_CAPTURE__ = {_json.dumps(self._capture_options)};")
         await self._page.add_init_script(path=str(_IDENTITY_JS))
         await self._page.add_init_script(path=str(_CAPTURE_JS))
-        await self._page.goto(_muted_url(meeting_url))
+        # Salle PROTÉGÉE : le code est semé dans le localStorage dès la première visite —
+        # jitsi-meet l'envoie à prosody et l'invite de mot de passe ne s'affiche jamais
+        # (canal de Jibri ; cf. `_local_storage_url`). Sans code : URL muette habituelle.
+        base = meeting_url.split("#")[0]
+        seed = self._local_storage_seed()
+        await self._page.goto(_local_storage_url(base, seed) if seed else _muted_url(meeting_url))
 
     async def request_join(self, display_name: str) -> None:
         page = self._page
@@ -140,10 +206,16 @@ class JitsiDriver:
         # 2) le champ prejoin reste rempli en repli (instances au fragment désactivé).
         # ⚠ Le rechargement passe par `_join_url` : config muette ET nom dans le même
         # fragment (le nom seul écraserait la config — cf. docstring de `_join_url`).
+        # ⚠ Salle PROTÉGÉE : le rechargement doit RE-SEMER le code en même temps que le nom
+        # (comme Jibri, qui met `displayname` et le passcode dans le MÊME localStorage) —
+        # recharger avec le nom seul écraserait le code et ferait réapparaître l'invite.
+        # Le prejoin étant désactivé, ce rechargement est le SEUL canal du nom.
         if display_name:
             with contextlib.suppress(Exception):
                 base = (page.url or "").split("#")[0]
-                await page.goto(_join_url(base, display_name))
+                seed = self._local_storage_seed(display_name)
+                await page.goto(_local_storage_url(base, seed) if seed
+                                else _join_url(base, display_name))
         # Attend le rendu (React) du prejoin avant les count() instantanés (toléré absent).
         name_box = page.get_by_placeholder("Enter your name")
         with contextlib.suppress(Exception):

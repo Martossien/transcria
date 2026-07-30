@@ -95,6 +95,10 @@ def api_meetings_create():
     meeting_ref = str(body.get("meeting_ref") or "").strip()
     title = str(body.get("title") or "").strip() or "Réunion planifiée"
     language = str(body.get("language") or "fr").strip()[:8]
+    # Code d'accès d'une salle protégée (facultatif) : SECRET — chiffré au repos comme la
+    # référence, jamais renvoyé par l'API, jamais journalisé. Borné : un « code » de plus de
+    # 128 caractères est une saisie erronée, pas un mot de passe de salle.
+    passcode = str(body.get("passcode") or "").strip()[:128]
     if not provider or provider not in {p["id"] for p in _ready_providers()}:
         return jsonify({"error": "Plateforme indisponible ou non prête"}), 400
     if not meeting_ref:
@@ -130,7 +134,8 @@ def api_meetings_create():
         **extra, "source": "meeting", "provider": provider})
     session = MeetingSessionStore.create(
         owner_id=current_user.id, job_id=job_id, provider=provider,
-        meeting_ref=meeting_ref, title=title, language=language, scheduled_at=scheduled_at)
+        meeting_ref=meeting_ref, title=title, language=language, scheduled_at=scheduled_at,
+        passcode=passcode)
     JobStore.update_extra_data(job_id, lambda extra: {**extra, "meeting_session_id": session.id})
     # Étape 4 pré-remplie dès la planification (demande utilisateur) : titre, date de la
     # réunion, langue — l'utilisateur complète le reste AVANT la réunion s'il veut.

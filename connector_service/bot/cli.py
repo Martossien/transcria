@@ -95,6 +95,16 @@ def build_parser() -> argparse.ArgumentParser:
                              "affiché désigne l'initiateur et la fonction)")
     parser.add_argument("--language", default=os.environ.get("BOT_LANGUAGE") or None,
                         help="langue de transcription (ex. fr)")
+    parser.add_argument("--xmpp-user", default=os.environ.get("JITSI_XMPP_USER", ""),
+                        help="compte d'une instance Jitsi AUTO-HÉBERGÉE qui exige une "
+                             "connexion (ou JITSI_XMPP_USER) — inutile sur meet.jit.si")
+    parser.add_argument("--xmpp-password", default=os.environ.get("JITSI_XMPP_PASSWORD", ""),
+                        help="mot de passe du compte d'instance (ou JITSI_XMPP_PASSWORD) — "
+                             "à passer par l'ENVIRONNEMENT en exploitation")
+    parser.add_argument("--room-passcode", default=os.environ.get("BOT_ROOM_PASSCODE", ""),
+                        help="code d'accès d'une salle protégée (ou BOT_ROOM_PASSCODE) — "
+                             "à passer par l'ENVIRONNEMENT en exploitation, jamais en argument "
+                             "(argv est visible de tout `ps`)")
     parser.add_argument("--max-duration-s", type=float,
                         default=_env_float("BOT_MAX_DURATION_S", 4 * 3600),
                         help="durée maximale de présence en réunion")
@@ -159,7 +169,9 @@ async def run(args: argparse.Namespace) -> int:
         external_occurrence_id=args.meeting_url.rstrip("/").rsplit("/", 1)[-1])
     driver = JitsiDriver("", headless=True, ignore_https_errors=args.insecure,
                          alone_timeout_s=args.alone_timeout_s,
-                         max_duration_s=args.max_duration_s)
+                         max_duration_s=args.max_duration_s,
+                         room_passcode=args.room_passcode,
+                         xmpp_user=args.xmpp_user, xmpp_password=args.xmpp_password)
     transcriber = build_transcriber(args.transcria_url, args.token, args.language)
 
     # Parcours 100 % interface (vécu au premier test UI : le bot captait sans jamais

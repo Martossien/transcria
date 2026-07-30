@@ -7,6 +7,7 @@ quel — aucune décision au moment du lancement.
 """
 from __future__ import annotations
 
+import os
 from urllib.parse import urlsplit
 
 DEFAULT_IMAGES = {
@@ -40,6 +41,17 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
         "BOT_INITIATOR": str(intent.get("owner_name") or ""),
         "BOT_EVENTS": "json",
     }
+    # Code d'accès d'une salle PROTÉGÉE : par l'ENV uniquement — un secret n'apparaît
+    # JAMAIS dans argv (visible de tout `ps` de la machine), même discipline que le jeton.
+    passcode = str(intent.get("meeting_passcode") or "")
+    if passcode:
+        env["BOT_ROOM_PASSCODE"] = passcode
+    # Compte d'une instance auto-hébergée exigeant une connexion : propriété de la MACHINE
+    # (posé dans l'environnement du runner), jamais une saisie utilisateur — absent partout
+    # ailleurs, donc rien à configurer pour meet.jit.si ou une instance ouverte.
+    for name in ("JITSI_XMPP_USER", "JITSI_XMPP_PASSWORD"):
+        if os.environ.get(name):
+            env[name] = os.environ[name]
     argv = ["docker", "run", "--rm"]
     if _portal_is_local(portal_url):
         argv += ["--network", "host"]      # sinon le loopback du conteneur n'est pas l'hôte

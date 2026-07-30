@@ -21,7 +21,9 @@
 > sessions re-claimables ; in_meeting muet > 8 h → échec honnête), phase installeur
 > `connectors` + `install.sh --with-meeting-bots` + unité systemd + `create-runner-token`,
 > images bot publiées sur GHCR à chaque tag (job matrix léger). Reste vague 5 (pistes
-> séparées + panneau live + câblage LiveConnectorSession).
+> séparées + panneau live) — **cadrage dédié rédigé le 2026-07-30 :
+> [`VAGUE5_PISTES_SEPAREES.md`](VAGUE5_PISTES_SEPAREES.md)** (lots A-D ; le « câblage
+> LiveConnectorSession » y est re-tranché : contrat des connecteurs plateforme, pas du bot).
 > **Leçons du gate Jitsi du 2026-07-30** (mesures : DNSMOS 1,19, bande 99 % 2,5 kHz) :
 > (1) le fragment d'URL Jitsi est UN SEUL espace de paramètres — recharger avec
 > `userInfo.displayName` seul écrasait toute la config muette (bip + mire du périphérique
@@ -32,6 +34,28 @@
 > chevauchements/trous au niveau échantillon (filtrage en peigne) → placement par CONTINUITÉ
 > de flux par participant, l'horloge n'ancre que le début et resynchronise après une vraie
 > coupure ; le registre des fenêtres suit l'instant PLACÉ (même timeline que le mixage) ;
+> **Revue de COMPLÉTUDE Jitsi du 2026-07-30** (avant de passer à la plateforme suivante) :
+> test utilisateur validé (job `7b35b6bc` : DNSMOS 2,97 vs 1,19 la veille, locuteur nommé
+> depuis la piste, bande étroite = normal pour de la voix Opus → profil `degrade`, bon
+> comportement). **Un trou trouvé et comblé** : le bot DÉTECTAIT une salle verrouillée
+> (`password_required`) mais aucun chemin ne permettait de fournir le code — une réunion
+> protégée par mot de passe (un clic dans Jitsi) était inaccessible sans recours. Livré de
+> bout en bout : champ « Code d'accès » (facultatif) → colonne CHIFFRÉE
+> `meeting_passcode_encrypted` (mêmes règles que `meeting_ref` : jamais réaffiché, jamais
+> journalisé, déchiffré au SEUL claim) → env `BOT_ROOM_PASSCODE` (jamais dans argv) →
+> `localStorage` semé par l'URL (`xmpp_conference_password_override`, canal de Jibri : le
+> passcode part à prosody et l'invite ne s'affiche jamais — aucun sélecteur à suivre) ;
+> piège : sur salle protégée, le rechargement « pose le nom » doit RE-SEMER le code
+> (sinon l'invite réapparaît). Message d'échec « non admis » rendu actionnable. Restent
+> connus : le lobby (déjà géré : on patiente jusqu'au délai). **Compte d'instance
+> auto-hébergée** (`auth_required`, l'écran « admin + mot de passe » de prosody) : capacité
+> AJOUTÉE le même jour, mêmes clés que Jibri (`xmpp_username_override`/
+> `xmpp_password_override`), mais **surface NULLE** — décision produit : aucun champ, aucune
+> config sur une instance publique ; l'exploitant pose `JITSI_XMPP_USER`/
+> `JITSI_XMPP_PASSWORD` dans l'environnement du runner le jour où il en a besoin, et le
+> message d'échec « non admis » le lui dit ALORS (et seulement alors). Règle générale à
+> retenir : ce qui change par réunion se demande à l'utilisateur (le code de salle), ce qui
+> appartient à l'instance se pose une fois dans l'environnement — jamais l'inverse.
 > (3) un participant sans nom côté Jitsi (« me ») donne légitimement `PISTE_<id>` — le nom
 > est désormais ré-interrogé en continu s'il arrive en cours de réunion. Plan rédigé le
 > 2026-07-29 (v2, approfondie) après audit

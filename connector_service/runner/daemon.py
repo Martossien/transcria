@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger("connector_service.runner")
@@ -118,6 +119,19 @@ class MeetingRunnerDaemon:
         if int(exit_code) in (125, 126, 127):
             category, message = "docker", ("image de bot absente ou démon Docker indisponible "
                                            "— vérifier la check-list /admin/connecteurs")
+        elif int(exit_code) == 1:
+            # « Non admis » : la cause est presque toujours ACTIONNABLE — on la dit au lieu
+            # d'un « code 1 » (revue de complétude 2026-07-30 ; le motif fin
+            # — password_required / auth_required / lobby_waiting — reste dans les logs).
+            # Le compte d'instance n'est mentionné QUE s'il manque : sur meet.jit.si ou une
+            # instance ouverte il n'a pas lieu d'être, et l'évoquer égarerait l'utilisateur.
+            message = ("le bot n'a pas été admis — salle protégée par un code d'accès non "
+                       "fourni, ou personne ne l'a admis depuis la salle d'attente")
+            if not os.environ.get("JITSI_XMPP_USER"):
+                message += (" ; si cette instance Jitsi exige de se connecter pour démarrer "
+                            "une réunion (auto-hébergée), poser JITSI_XMPP_USER et "
+                            "JITSI_XMPP_PASSWORD dans l'environnement du runner")
+            category = "bot"
         else:
             category, message = "bot", f"code {exit_code}"
         await self._post(f"/v1/meetings/{sid}/result",

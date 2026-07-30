@@ -52,12 +52,15 @@ class MeetingSessionStore:
     @staticmethod
     def create(*, owner_id: str, job_id: str, provider: str, meeting_ref: str,
                title: str = "", language: str = "fr",
-               scheduled_at: datetime | None = None) -> MeetingSession:
+               scheduled_at: datetime | None = None,
+               passcode: str = "") -> MeetingSession:
         session = MeetingSession(
             owner_id=owner_id, job_id=job_id, provider=provider,
             meeting_ref_encrypted=encrypt_meeting_ref(meeting_ref),
             ref_fingerprint=MeetingSessionStore.ref_fingerprint(meeting_ref),
             meeting_title=title, language=language, scheduled_at=scheduled_at,
+            # Même traitement que la référence (secret) ; absent = salle sans code.
+            meeting_passcode_encrypted=encrypt_meeting_ref(passcode) if passcode else None,
         )
         db.session.add(session)
         db.session.commit()
@@ -121,6 +124,10 @@ class MeetingSessionStore:
                 "job_id": session.job_id,
                 "provider": session.provider,
                 "meeting_ref": decrypt_meeting_ref(session.meeting_ref_encrypted),
+                # Déchiffré ICI et nulle part ailleurs (même règle que la référence) :
+                # le runner en a besoin pour que le bot franchisse une salle protégée.
+                "meeting_passcode": (decrypt_meeting_ref(session.meeting_passcode_encrypted)
+                                     if session.meeting_passcode_encrypted else ""),
                 "meeting_title": session.meeting_title,
                 "language": session.language,
                 "attempt": session.attempt_count,

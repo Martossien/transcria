@@ -33,6 +33,15 @@
         <input type="text" id="meeting-title" class="form-control form-control-sm">
       </div>
       <div class="col-auto">
+        {# Salle protégée : sans ce code, le bot est refusé à la porte sans recours
+           (trou trouvé à la revue de complétude Jitsi, 2026-07-30). #}
+        <label class="form-label small mb-1">{{ _('Code d\'accès') }}</label>
+        <input type="password" id="meeting-passcode" class="form-control form-control-sm"
+               autocomplete="off" style="max-width:130px;"
+               placeholder="{{ _('facultatif') }}"
+               title="{{ _('Uniquement si la salle est protégée par un mot de passe') }}">
+      </div>
+      <div class="col-auto">
         <label class="form-label small mb-1">{{ _('Quand') }}</label>
         <div class="input-group input-group-sm">
           <input type="datetime-local" id="meeting-when" class="form-control form-control-sm"

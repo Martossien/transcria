@@ -32,6 +32,10 @@ class MeetingSession(db.Model):
     # Empreinte NON réversible (sha256) de la référence normalisée — sert UNIQUEMENT à
     # détecter « cette réunion est déjà planifiée » sans jamais déchiffrer ni stocker en clair.
     ref_fingerprint = db.Column(db.String(64), nullable=False, index=True)
+    # Code d'accès de la salle (« mot de passe » Jitsi / passcode), CHIFFRÉ comme la
+    # référence et soumis aux mêmes règles : jamais affiché, jamais journalisé, déchiffré
+    # au SEUL claim du runner. NULL = salle sans code (cas courant).
+    meeting_passcode_encrypted = db.Column(db.Text, nullable=True)
     meeting_title = db.Column(db.String(255), nullable=False, default="", server_default="")
     language = db.Column(db.String(8), nullable=False, default="fr", server_default="fr")
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)  # NULL = dès que possible
