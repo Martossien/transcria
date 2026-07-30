@@ -106,3 +106,58 @@ class TestSpeakerStats:
     def test_chunks_sans_locuteur_agreges(self):
         stats = compute_speaker_stats(parse_srt_chunks(REAL_SHAPE_SRT))
         assert any(s["speaker_id"] == "—" for s in stats["speakers"])
+
+
+class TestPrefixePistesSeparees:
+    """Vague 5 (pistes séparées) : l'identifiant de locuteur EST le nom du participant —
+    espaces et accents compris. Bug vécu à l'éditeur (2026-07-30) : « Alice
+    Dupont(Alice Dupont): » doublé à l'émission, et « 0 locuteurs » car le parseur
+    n'acceptait que SPEAKER_nn. Contrat : forme forte `Id(Nom):` toujours reconnue,
+    identifiant LIBRE `Nom: …` reconnu SEULEMENT s'il est CONNU du job — jamais de
+    locuteur fantôme depuis une phrase à deux-points."""
+
+    def test_nom_connu_reconnu(self):
+        spk, name, rest = split_speaker_prefix(
+            "Alice Dupont: C'était où la ferme ?", known_ids={"Alice Dupont"})
+        assert (spk, name, rest) == ("Alice Dupont", None, "C'était où la ferme ?")
+
+    def test_phrase_a_deux_points_jamais_un_locuteur(self):
+        spk, name, rest = split_speaker_prefix(
+            "Attention: il pleut", known_ids={"Alice Dupont"})
+        assert spk is None and rest == "Attention: il pleut"
+
+    def test_forme_forte_reconnue_meme_inconnue(self):
+        spk, name, _ = split_speaker_prefix("Alice Dupont(Le Président): Bonjour")
+        assert (spk, name) == ("Alice Dupont", "Le Président")
+
+    def test_piste_anonyme_motif_machine(self):
+        spk, _, _ = split_speaker_prefix("PISTE_e369f088: Bonjour")
+        assert spk == "PISTE_e369f088"
+
+    def test_join_ne_double_jamais_le_nom(self):
+        assert join_speaker_prefix("Alice Dupont", "Alice Dupont", "Bonjour") \
+            == "Alice Dupont: Bonjour"
+        assert join_speaker_prefix("SPEAKER_01", "Alice", "Bonjour") \
+            == "SPEAKER_01(Alice): Bonjour"
+
+    def test_round_trip_srt_par_piste(self):
+        srt = ("1\n00:00:00,000 --> 00:00:12,000\nAlice Dupont: Asie.\n\n"
+               "2\n00:00:00,160 --> 00:00:30,160\nBob Morane: Et après, on avait soif.\n")
+        chunks = parse_srt_chunks(srt, known_speaker_ids={"Alice Dupont", "Bob Morane"})
+        assert [c["speaker_id"] for c in chunks] == ["Alice Dupont", "Bob Morane"]
+        assert serialize_chunks(chunks).strip() == srt.strip()
+
+
+class TestEmissionSansDoublon:
+    def test_segments_to_srt_id_egal_nom(self):
+        from transcria.stt.base_transcriber import BaseTranscriber
+
+        class _T:                                   # duck-type minimal, sans ABC
+            segments_to_srt = BaseTranscriber.segments_to_srt
+            _seconds_to_srt_time = staticmethod(BaseTranscriber._seconds_to_srt_time)
+
+        srt = _T().segments_to_srt(
+            [{"start": 0.0, "end": 2.0, "text": "Bonjour", "speaker": "Alice Dupont"}],
+            {"Alice Dupont": {"name": "Alice Dupont"}})
+        assert "Alice Dupont: Bonjour" in srt
+        assert "Alice Dupont(Alice Dupont)" not in srt

@@ -57,7 +57,11 @@ class BaseTranscriber(ABC):
                             else spk_info
                         )
                         if spk_name == speaker:
-                            prefix = f"{spk_id}({speaker}): "
+                            # Mode par piste (vague 5) : l'identifiant EST déjà le nom —
+                            # « Alice Dupont(Alice Dupont): » doublait le préfixe
+                            # (bug vu à l'éditeur, 2026-07-30).
+                            prefix = (f"{speaker}: " if spk_id == speaker
+                                      else f"{spk_id}({speaker}): ")
                             break
                 if not prefix:
                     prefix = f"{speaker}: "

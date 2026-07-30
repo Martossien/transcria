@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 _NON_LATIN_RE = re.compile(r"[\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]")
 # Marqueur de segment étranger, FR (« [ÉTRANGER] ») ou EN (« [FOREIGN] », prompt EN Axe B).
 _FOREIGN_MARKER_RE = re.compile(r"\[(?:ÉTRANGER|FOREIGN)(?::[^\]]+)?\]", re.IGNORECASE)
-_SPEAKER_PREFIX_RE = re.compile(r"^(SPEAKER_\d+)\(([^)]*)\):")
+# Forme FORTE `Id(Nom):` uniquement — l'identifiant peut être libre depuis la vague 5
+# (pistes séparées : « Alice Dupont(Autre Nom): »), mais sans parenthèses il n'y a
+# rien à confronter (le nom EST l'identifiant), donc rien à vérifier ici.
+_SPEAKER_PREFIX_RE = re.compile(r"^([^():\n]{1,64}?)\(([^)]*)\):")
 
 # Chaînes du rapport qualité complet, par langue des livrables (Axe B ; fr = historique).
 _QR_STRINGS: dict[str, dict[str, str]] = {

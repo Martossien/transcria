@@ -16,9 +16,13 @@
 
   function interpolate(template, params) {
     if (!params) return template;
-    return template.replace(/%\(([^)]+)\)s/g, function (match, name) {
-      return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
-    });
+    // Convention gettext : « %% » = « % » littéral, replié à l'application des paramètres
+    // (même sémantique que le %-formatting Python côté serveur).
+    return template
+      .replace(/%\(([^)]+)\)s/g, function (match, name) {
+        return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
+      })
+      .replace(/%%/g, "%");
   }
 
   window.t = function (key, params) {

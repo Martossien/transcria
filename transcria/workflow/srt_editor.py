@@ -20,10 +20,18 @@ from __future__ import annotations
 
 import re
 
-# Préfixe locuteur observé dans les SRT réels : `SPEAKER_01(Vendeur / fromager): texte`
-# ou `SPEAKER_01: texte`. Le nom entre parenthèses peut contenir tout sauf une
+# Préfixe locuteur observé dans les SRT réels : `SPEAKER_01(Vendeur / fromager): texte`,
+# `SPEAKER_01: texte`, et depuis la vague 5 (pistes séparées) `Alice Dupont: texte` —
+# l'identifiant EST le nom du participant, espaces et accents compris. Un identifiant
+# LIBRE suivi de `:` est ambigu (« Attention: il pleut ») : il n'est reconnu comme
+# locuteur QUE s'il porte des parenthèses (forme forte `Id(Nom):`), ou s'il matche les
+# motifs machine historiques (SPEAKER_nn / PISTE_…), ou s'il figure parmi les locuteurs
+# CONNUS du job (stats + mapping) passés par l'appelant.
+# Le nom entre parenthèses peut contenir tout sauf une
 # parenthèse fermante finale ; l'espace après `:` est optionnel.
-_SPEAKER_PREFIX = re.compile(r"^(?P<id>SPEAKER_\d+)(?:\((?P<name>[^)]*)\))?:\s?(?P<rest>.*)$", re.DOTALL)
+_SPEAKER_PREFIX = re.compile(
+    r"^(?P<id>[^():\n]{1,64}?)(?:\((?P<name>[^)]*)\))?:\s?(?P<rest>.*)$", re.DOTALL)
+_MACHINE_ID = re.compile(r"^(?:SPEAKER_\d+|PISTE_\S+)$")
 
 _TIMESTAMP = re.compile(
     r"^(?P<h1>\d{2}):(?P<m1>\d{2}):(?P<s1>\d{2}),(?P<ms1>\d{3})"
@@ -48,24 +56,34 @@ def _fmt_ms(total_ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def split_speaker_prefix(text: str) -> tuple[str | None, str | None, str]:
-    """``SPEAKER_01(Nom): reste`` → ``("SPEAKER_01", "Nom", "reste")`` ; tolérant."""
+def split_speaker_prefix(text: str,
+                         known_ids: set[str] | None = None) -> tuple[str | None, str | None, str]:
+    """``SPEAKER_01(Nom): reste`` → ``("SPEAKER_01", "Nom", "reste")`` ; tolérant.
+
+    Un identifiant LIBRE (`Nom: reste`, vague 5) n'est reconnu que s'il est CONNU
+    (`known_ids`) — sinon la ligne reste du texte : « Attention: il pleut » ne doit
+    jamais fabriquer un locuteur fantôme."""
     match = _SPEAKER_PREFIX.match(text)
     if not match:
         return None, None, text
+    spk_id = match.group("id").strip()
     name = match.group("name")
-    return match.group("id"), (name if name else None), match.group("rest")
+    strong = name is not None or _MACHINE_ID.match(spk_id)
+    if not strong and not (known_ids and spk_id in known_ids):
+        return None, None, text
+    return spk_id, (name if name else None), match.group("rest")
 
 
 def join_speaker_prefix(speaker_id: str | None, speaker_name: str | None, text: str) -> str:
     if not speaker_id:
         return text
-    if speaker_name:
+    if speaker_name and speaker_name != speaker_id:
         return f"{speaker_id}({speaker_name}): {text}"
+    # identifiant = nom (pistes séparées) : ne jamais doubler « Nom(Nom): ».
     return f"{speaker_id}: {text}"
 
 
-def parse_srt_chunks(srt_text: str) -> list[dict]:
+def parse_srt_chunks(srt_text: str, known_speaker_ids: set[str] | None = None) -> list[dict]:
     """SRT → liste de chunks. Blocs malformés ISOLÉS ignorés (comptés nulle part :
     l'éditeur montre ce qui est lisible) ; un fichier sans AUCUN bloc lisible mais
     non vide lève :class:`SrtParseError`."""
@@ -86,7 +104,7 @@ def parse_srt_chunks(srt_text: str) -> list[dict]:
         if not ts:
             continue
         text = "\n".join(lines[offset + 1:])
-        speaker_id, speaker_name, rest = split_speaker_prefix(text)
+        speaker_id, speaker_name, rest = split_speaker_prefix(text, known_speaker_ids)
         chunks.append({
             "start_ms": _to_ms(ts["h1"], ts["m1"], ts["s1"], ts["ms1"]),
             "end_ms": _to_ms(ts["h2"], ts["m2"], ts["s2"], ts["ms2"]),

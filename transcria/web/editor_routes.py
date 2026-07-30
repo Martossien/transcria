@@ -147,6 +147,26 @@ def editor_page(job_id: str):
     return render_template("srt_editor.html", job=job)
 
 
+def _known_speaker_ids(fs) -> set[str]:
+    """Locuteurs CONNUS du job (stats + mapping) — la référence qui permet au parseur
+    SRT de reconnaître un préfixe libre `Nom: …` (pistes séparées, vague 5) sans jamais
+    fabriquer un locuteur fantôme depuis une phrase à deux-points."""
+    known: set[str] = set()
+    stats = fs.load_json("speakers/speaker_stats.json") or {}
+    for entry in stats.get("speakers", []) or []:
+        for key in ("speaker_id", "label", "mapped_name"):
+            value = str((entry or {}).get(key) or "").strip()
+            if value:
+                known.add(value)
+    mapping = (fs.load_json("speakers/speaker_mapping.json") or {}).get("mapping") or {}
+    for spk_id, info in mapping.items():
+        known.add(str(spk_id))
+        name = (info or {}).get("name") if isinstance(info, dict) else info
+        if name:
+            known.add(str(name))
+    return known
+
+
 # ── État ──────────────────────────────────────────────────────────────────────
 
 @editor_bp.route("/api/jobs/<job_id>/editor/state", methods=["GET"])
@@ -160,7 +180,7 @@ def editor_state(job_id: str):
     if srt_text is None:
         return jsonify({"error": "Aucune transcription à éditer."}), 404
     try:
-        chunks = parse_srt_chunks(srt_text)
+        chunks = parse_srt_chunks(srt_text, _known_speaker_ids(fs))
     except SrtParseError as exc:
         return jsonify({"error": f"Transcription illisible : {exc}"}), 422
 
@@ -286,7 +306,7 @@ def editor_save(job_id: str):
     # produit sait relire (l'humain a le droit de tout réécrire — pas de garde de
     # volume comme pour la correction LLM).
     try:
-        parse_srt_chunks(new_srt)
+        parse_srt_chunks(new_srt, _known_speaker_ids(fs))
     except SrtParseError as exc:  # défense en profondeur — inatteignable en théorie
         return jsonify({"error": f"SRT produit invalide : {exc}"}), 422
 
