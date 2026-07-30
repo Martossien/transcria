@@ -1940,24 +1940,42 @@ sudo systemctl start transcria        # ou ./start.sh
 
 ## 13 bis. Réunions planifiées (opt-in `--with-meeting-bots`)
 
-Chaîne complète (vague 4 du plan [UI_REUNIONS_WORKFLOW.md](UI_REUNIONS_WORKFLOW.md)) — un
-utilisateur planifie une réunion, un bot la rejoint, l'audio devient un job diarisé :
+Le parcours complet — un utilisateur planifie une réunion, un bot la rejoint, l'audio
+devient un job diarisé — tient en **une option d'installation puis un clic admin**
+(décision : « l'admin ne touche que l'interface ») :
 
 ```bash
-./install.sh --with-meeting-bots          # dépendances connecteurs + squelette runner.yaml
-# puis, dans l'ordre :
-#  1. Administration → Configuration : activer « Réunions en ligne » ET la façade temps réel ;
-#  2. .env : poser TRANSCRIA_MEETING_REF_KEY (cf. .env.example — chiffrement des références) ;
-#  3. venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner --out runner_token.txt
-#  4. config.yaml : connectors.meetings.runner_usernames: [svc-runner]
-#  5. compléter runner.yaml (token_file) puis :
-#     TRANSCRIA_RUNNER_CONFIG=runner.yaml venv/bin/python -m connector_service.runner
-#     (ou : venv/bin/python -m transcria.installer.cli connectors --systemd  # unité systemd)
+./install.sh --with-meeting-bots
 ```
 
+Cette option pose tout en DORMANT : dépendances connecteurs, clé de chiffrement des
+références (`TRANSCRIA_MEETING_REF_KEY` dans `.env`), squelette `runner.yaml`, et l'unité
+systemd `transcria-meeting-runner` qui patiente tant que rien n'est activé.
+
+Ensuite, dans le portail :
+
+1. **Administration → Connecteurs → bouton « Activer »** — le portail auto-provisionne
+   TOUT : compte de service `svc-runner`, jeton d'exécutant (déposé en 0600), activation de
+   la fonctionnalité et de la façade temps réel. Le runner dormant se réveille au poll
+   suivant.
+2. **La check-list de la même page passe au vert toute seule** — chaque prérequis affiche
+   son verdict ET son remède en une phrase (exécutant vivant, image de bot présente :
+   elle se télécharge/construit sans intervention).
+3. **Page d'accueil → carte « Réunion »** : coller le lien (Jitsi), le code d'accès si la
+   salle en a un (chiffré au repos, jamais réaffiché), choisir « Maintenant » ou une
+   date. Le bot rejoint, la page du job affiche le **suivi en direct (provisoire)**, et à
+   la fin le wizard reprend la main avec l'audio, les locuteurs par piste et les noms
+   pré-remplis — la validation humaine reste souveraine.
+
+**Exécutant sur une AUTRE machine** (celle qui a Docker/le réseau) : même page →
+« Exécutant distant » → télécharger le kit, le lancer en root là-bas —
+[RUNNER_DISTANT_KIT.md](RUNNER_DISTANT_KIT.md). ⚠ le kit contient un jeton : canal sûr.
+
 `venv/bin/python scripts/doctor.py` vérifie la chaîne (« Réunions planifiées (bots) ») ;
-la carte « Depuis une réunion » n'apparaît aux utilisateurs que quand un runner est vivant.
-Exploitation des bots : [BOT_REUNION.md](BOT_REUNION.md).
+la carte « Réunion » n'apparaît aux utilisateurs que quand un exécutant est vivant.
+Instance Jitsi auto-hébergée exigeant un compte : poser `JITSI_XMPP_USER`/`JITSI_XMPP_PASSWORD`
+dans l'environnement du runner (propriété de la machine, jamais une saisie utilisateur).
+Exploitation fine des bots (lancement manuel, diagnostic) : [BOT_REUNION.md](BOT_REUNION.md).
 
 ## 14. Reprendre le projet sur une AUTRE machine — ce que git ne transporte pas
 

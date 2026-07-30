@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
-from flask import abort, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Response, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_babel import gettext as _
 from flask_login import login_required
 
@@ -23,6 +23,12 @@ from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
+from transcria.ingestion.runner_kit import (
+    build_kit_script,
+    mint_remote_runner_token,
+    repo_pin,
+    valid_runner_name,
+)
 from transcria.ingestion.runner_provisioning import (
     disable_meetings,
     meetings_checklist,
@@ -351,6 +357,40 @@ def admin_meetings_toggle():
               target_id="connectors.meetings", target_label="réunions en ligne",
               details={"enabled": enable, "ok": ok})
     return redirect("/admin/connecteurs")
+
+
+@web_bp.route("/admin/connecteurs/runners/kit", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_runner_kit():
+    """Génère le kit « exécutant distant » (docs/RUNNER_DISTANT_KIT.md) : un script
+    autonome à lancer en root sur l'autre machine — jeton FRAIS étiqueté par exécutant
+    (révocable nominativement), dépôt épinglé sur le commit du portail. Audité.
+    ⚠ Le fichier contient le jeton : volet couvert par la revue sécurité."""
+    cfg = ConfigService.get_singleton()
+    if not ((cfg.get("connectors") or {}).get("meetings") or {}).get("enabled", False):
+        flash(_("Activez d'abord la fonctionnalité (bouton « Activer »)."), "error")
+        return redirect("/admin/connecteurs")
+    name = str(request.form.get("runner_name") or "").strip()
+    portal_url = str(request.form.get("portal_url") or "").strip()
+    if not valid_runner_name(name):
+        flash(_("Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."), "error")
+        return redirect("/admin/connecteurs")
+    if not portal_url.startswith(("http://", "https://")):
+        flash(_("URL du portail invalide — celle que la machine DISTANTE peut joindre."), "error")
+        return redirect("/admin/connecteurs")
+    token = mint_remote_runner_token(name)
+    if token is None:
+        flash(_("Compte de service absent — utilisez d'abord le bouton « Activer »."), "error")
+        return redirect("/admin/connecteurs")
+    script = build_kit_script(portal_url=portal_url, token=token,
+                              runner_name=name, pin_commit=repo_pin())
+    audit_log(action=AuditAction.MEETING_RUNNER_KIT, target_type="meeting_runner",
+              target_id=name, target_label=name,
+              details={"portal_url": portal_url})       # jamais le jeton
+    return Response(
+        script, mimetype="text/x-shellscript",
+        headers={"Content-Disposition": f"attachment; filename=transcria-runner-{name}.sh"})
 
 
 @web_bp.route("/admin/connecteurs/runners/<name>/revoke", methods=["POST"])

@@ -54,6 +54,29 @@
       </tbody>
     </table>
     {% endif %}
+    {% if meetings_enabled %}
+    {# Kit « exécutant distant » (docs/RUNNER_DISTANT_KIT.md) : un script autonome à
+       lancer en root sur l'autre machine. Il CONTIENT un jeton — transfert sûr exigé. #}
+    <h3 class="h6 mt-3">{{ _('Exécutant distant') }}</h3>
+    <form method="POST" action="/admin/connecteurs/runners/kit" class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small mb-0" for="kit-runner-name">{{ _('Nom (unique)') }}</label>
+        <input class="form-control form-control-sm" id="kit-runner-name" name="runner_name"
+               value="meeting-runner-2" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}" required>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0" for="kit-portal-url">{{ _('URL du portail vue de la machine distante') }}</label>
+        <input class="form-control form-control-sm" id="kit-portal-url" name="portal_url"
+               value="{{ request.host_url.rstrip('/') }}" required>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-outline-primary btn-sm">{{ _('Télécharger le kit') }}</button>
+      </div>
+      <div class="form-text small">
+        {{ _('Le script s\'exécute en root sur l\'autre machine (git + Docker + python3 requis). Il contient un jeton : transférez-le par un canal sûr (scp) et supprimez-le après usage.') }}
+      </div>
+    </form>
+    {% endif %}
   </div>
 </div>
 

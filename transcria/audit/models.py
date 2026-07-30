@@ -27,6 +27,7 @@ class AuditAction(str, enum.Enum):
     MEETING_CANCEL = "meeting_cancel"
     MEETING_FEATURE_TOGGLE = "meeting_feature_toggle"   # interrupteur admin réunions en ligne
     MEETING_RUNNER_REVOKE = "meeting_runner_revoke"
+    MEETING_RUNNER_KIT = "meeting_runner_kit"     # génération du kit exécutant distant
     JOB_DEQUEUE = "job_dequeue"
     JOB_REFINE_REQUEST = "job_refine_request"
     JOB_REFINE_REVERT = "job_refine_revert"

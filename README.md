@@ -359,6 +359,7 @@ Full documentation lives in [`docs/`](docs/README.md) (French). A few entry poin
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, database
 - [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) — complete `config.yaml` reference
 - [docs/EXTERNAL_STT_RUNTIMES.md](docs/EXTERNAL_STT_RUNTIMES.md) — plugging external C++ STT servers (audio.cpp, parakeet.cpp), configuration only
+- [docs/INSTALL.md § 13 bis](docs/INSTALL.md#13-bis-réunions-planifiées-opt-in---with-meeting-bots) — **live meeting capture**: install with `--with-meeting-bots`, one admin click, schedule from the home page — a bot joins, per-participant tracks, live provisional feed, then the usual wizard
 
 ## License
 

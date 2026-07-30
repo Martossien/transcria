@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-30 23:13+0200\n"
+"POT-Creation-Date: 2026-07-30 23:49+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -1667,57 +1667,73 @@ msgstr "Restore started. The service will stop, restore, then restart — sign b
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:363
+#: transcria/web/admin_routes.py:370
+msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
+msgstr "Enable the feature first (“Enable” button)."
+
+#: transcria/web/admin_routes.py:375
+msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
+msgstr "Invalid runner name (letters/digits/._-, 64 max)."
+
+#: transcria/web/admin_routes.py:378
+msgid "URL du portail invalide — celle que la machine DISTANTE peut joindre."
+msgstr "Invalid portal URL — use the one the REMOTE machine can reach."
+
+#: transcria/web/admin_routes.py:382
+msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
+msgstr "Service account missing — use the “Enable” button first."
+
+#: transcria/web/admin_routes.py:401
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Runner “%(name)s” revoked."
 
-#: transcria/web/admin_routes.py:380
+#: transcria/web/admin_routes.py:418
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:385
+#: transcria/web/admin_routes.py:423
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:388
+#: transcria/web/admin_routes.py:426
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:402
+#: transcria/web/admin_routes.py:440
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:411
+#: transcria/web/admin_routes.py:449
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:414
+#: transcria/web/admin_routes.py:452
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:416
+#: transcria/web/admin_routes.py:454
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:439
+#: transcria/web/admin_routes.py:477
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:473
+#: transcria/web/admin_routes.py:511
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:478
+#: transcria/web/admin_routes.py:516
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:484
+#: transcria/web/admin_routes.py:522
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2845,80 +2861,100 @@ msgstr "Platform webhook"
 msgid "Révoquer cet exécutant ? Son jeton sera invalidé."
 msgstr "Revoke this runner? Its token will be invalidated."
 
-#: transcria/web/templates/admin_connectors.html:61
+#: transcria/web/templates/admin_connectors.html:60
+msgid "Exécutant distant"
+msgstr "Remote runner"
+
+#: transcria/web/templates/admin_connectors.html:63
+msgid "Nom (unique)"
+msgstr "Name (unique)"
+
+#: transcria/web/templates/admin_connectors.html:68
+msgid "URL du portail vue de la machine distante"
+msgstr "Portal URL as seen from the remote machine"
+
+#: transcria/web/templates/admin_connectors.html:73
+msgid "Télécharger le kit"
+msgstr "Download the kit"
+
+#: transcria/web/templates/admin_connectors.html:76
+msgid "Le script s'exécute en root sur l'autre machine (git + Docker + python3 requis). Il contient un jeton : transférez-le par un canal sûr (scp) et supprimez-le après usage."
+msgstr The script runs as root on the other machine (git + Docker + python3 required). It contains a token: transfer it over a safe channel (scp) and delete it after use."
+
+#: transcria/web/templates/admin_connectors.html:84
 msgid ""
 "Les fiches ci-dessous décrivent chaque plateforme (état vérifié, identifiants requis\n"
 "  côté exécutant — jamais stockés ici)."
 msgstr "The cards below describe each platform (verified status, credentials required on the runner side — never stored here)."
 
-#: transcria/web/templates/admin_connectors.html:77
+#: transcria/web/templates/admin_connectors.html:100
 #, fuzzy
 msgid "Éprouvé"
 msgstr "Private"
 
-#: transcria/web/templates/admin_connectors.html:79
+#: transcria/web/templates/admin_connectors.html:102
 msgid "Jamais exécuté en réel"
 msgstr "Never run for real"
 
-#: transcria/web/templates/admin_connectors.html:81
+#: transcria/web/templates/admin_connectors.html:104
 #, fuzzy
 msgid "À venir"
 msgstr "to monitor"
 
-#: transcria/web/templates/admin_connectors.html:89
+#: transcria/web/templates/admin_connectors.html:112
 msgid "Bot participant"
 msgstr "Participant bot"
 
-#: transcria/web/templates/admin_connectors.html:91
+#: transcria/web/templates/admin_connectors.html:114
 msgid "Transport natif"
 msgstr "Native transport"
 
-#: transcria/web/templates/admin_connectors.html:93
+#: transcria/web/templates/admin_connectors.html:116
 msgid "File interrogée"
 msgstr "Polled queue"
 
-#: transcria/web/templates/admin_connectors.html:95
+#: transcria/web/templates/admin_connectors.html:118
 msgid "Webhook plateforme"
 msgstr "Platform webhook"
 
-#: transcria/web/templates/admin_connectors.html:99
+#: transcria/web/templates/admin_connectors.html:122
 msgid "Ouverture de pare-feu requise"
 msgstr "Firewall opening required"
 
-#: transcria/web/templates/admin_connectors.html:103
+#: transcria/web/templates/admin_connectors.html:126
 msgid "Sortant uniquement"
 msgstr "Outbound only"
 
-#: transcria/web/templates/admin_connectors.html:110
+#: transcria/web/templates/admin_connectors.html:133
 msgid ""
 "Le code existe et passe les tests, mais n'a jamais été exécuté contre la vraie\n"
 "          plateforme. À éprouver avant tout usage sérieux."
 msgstr "The code exists and passes the tests, but has never been run against the real platform. To be proven before any serious use."
 
-#: transcria/web/templates/admin_connectors.html:119
+#: transcria/web/templates/admin_connectors.html:142
 msgid "Tous les renseignements sont fournis"
 msgstr "All details provided"
 
-#: transcria/web/templates/admin_connectors.html:124
+#: transcria/web/templates/admin_connectors.html:147
 #, fuzzy
 msgid "Manque :"
 msgstr "Disk:"
 
-#: transcria/web/templates/admin_connectors.html:133
+#: transcria/web/templates/admin_connectors.html:156
 msgid "Secret : ne jamais commiter"
 msgstr "Secret: never commit"
 
-#: transcria/web/templates/admin_connectors.html:140
+#: transcria/web/templates/admin_connectors.html:163
 #, fuzzy
 msgid "Aucun identifiant nécessaire"
 msgstr "Identifier"
 
-#: transcria/web/templates/admin_connectors.html:146
+#: transcria/web/templates/admin_connectors.html:169
 #, fuzzy
 msgid "Marche à suivre"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_connectors.html:161
+#: transcria/web/templates/admin_connectors.html:184
 #, fuzzy
 msgid "Documentation"
 msgstr "Administration"

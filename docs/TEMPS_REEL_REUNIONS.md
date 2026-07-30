@@ -104,14 +104,18 @@ chantiers :
 - Et au-delà des L : pistes séparées + STT par piste + sous-diarisation des pistes salle +
   **suivi en direct provisoire** sur la page du job (vague 5, lots A-C).
 
+**Fait depuis (2026-07-31)** : **L2** — parcours documenté de bout en bout
+(`INSTALL.md § 13 bis` réécrit au réel : une option d'install, un clic admin, planifier
+depuis l'accueil ; pointeur README) ; **kit « exécutant distant »**
+([RUNNER_DISTANT_KIT.md](RUNNER_DISTANT_KIT.md)) — poser un meeting-runner sur une autre
+machine en un script téléchargé depuis `/admin/connecteurs`.
+
 **Reste sans rien acheter** :
 
-1. **L2 — parcours documenté de bout en bout** dans `README`/`INSTALL` (aujourd'hui :
-   activer par le menu → planifier depuis la page d'accueil). Rend le chantier **testable
-   par quelqu'un d'autre que son auteur**. Coût S.
-2. **Sous-salles Zoom** : codées, jamais exécutées. Ne demande qu'une salle ouverte.
-3. **Revue sécurité (Opus 5)** avant mise en service réelle : crypto meeting_ref/passcode,
-   jetons `tia_`, endpoints `/v1` (ingest v2 pistes, `/captions`), runner.
+1. **Sous-salles Zoom** : codées, jamais exécutées. Ne demande qu'une salle ouverte.
+2. **Revue sécurité (Opus 5)** avant mise en service réelle : crypto meeting_ref/passcode,
+   jetons `tia_`, endpoints `/v1` (ingest v2 pistes, `/captions`), runner, **kit distant
+   (jeton dans le fichier)**.
 
 **Une fois les comptes achetés** : brancher les appels réseau derrière les points d'injection
 déjà spécifiés (cf. §7-quinquies) — `LiveConnectorSession` est leur contrat d'orchestration
