@@ -549,6 +549,22 @@ Quelques paragraphes de texte sans autres champs structurés.
             "role": "décrit une action observée",
         }
 
+    def test_parse_speaker_roles_sous_voix_de_piste(self):
+        """Lot B2 : les sous-voix `PISTE_<pid>_Sn` d'une piste salle sont des ids machine
+        au même titre que SPEAKER_XX — un nom libre (« Alice : … ») ne matche jamais."""
+        text = """## Participants probables
+
+- PISTE_p2_S1 : Fonction A — anime la réunion
+- Alice Durand : prend des notes
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        assert result["speaker_roles"]["PISTE_p2_S1"] == {
+            "label": "Fonction A",
+            "role": "anime la réunion",
+        }
+        assert "Alice Durand" not in result["speaker_roles"]
+
     def test_parse_speaker_roles_keeps_non_identifiable_inside_role(self):
         text = """## Participants probables
 

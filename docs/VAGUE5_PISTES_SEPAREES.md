@@ -7,8 +7,15 @@
 > LIVRÉ le soir même** (STT par piste + fusion) et **prouvé sur ce corpus avec Cohere
 > réel** : l'interruption croisée à 30 s (« C'était où la ferme ? » PENDANT le récit de
 > l'autre, réponse comprise) est captée DES DEUX CÔTÉS, chacun sous son nom — 7 segments
-> de chevauchement intacts, protégés de l'arbitrage multi-STT. Reste B2 (sous-diarisation
-> pyannote des pistes salle → `PISTE_<pid>_S1`), puis lots C et D.
+> de chevauchement intacts, protégés de l'arbitrage multi-STT. **Lot B2 LIVRÉ** :
+> sous-diarisation pyannote PAR PISTE dans `SpeakerDetector` (pistes non `solo`,
+> ≥ 10 s de parole ; 2 voix et plus → `PISTE_<pid>_S1`… dans `speaker_turns.json`,
+> audit `speakers/track_diarization.json`), transcription découpée par les tours
+> exclusifs de la sous-voix, garde de phase (les tours `source: manifest` ne sont
+> JAMAIS écrasés par une re-diarisation du mix en profil qualité — trou préexistant
+> bouché), rôles LLM étendus aux ids `PISTE_…`. Une seule voix trouvée → rien ne
+> change (nom proposé, cas fluide D5.3). Gate réel « salle » (2 personnes derrière
+> UN micro) à jouer avec l'utilisateur. Restent lots C et D.
 > Spécification dédiée exigée par le plan directeur
 > ([`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md), vague 5) : elle plie dans la
 > conception les leçons des gates réels de juillet — pistes sur DISQUE (jamais en RAM),

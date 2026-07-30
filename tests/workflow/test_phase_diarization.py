@@ -212,3 +212,36 @@ class TestPyannoteProgressCallback:
             assert calls[2]["percent"] is None
             assert all(c["phase"] == "pyannote" for c in calls)
             assert "segmentation" in calls[0]["message"]
+
+
+class TestGardeToursManifeste:
+    """Lot B2 : quand les tours viennent du MANIFESTE (pistes), la phase diarisation du
+    pipeline ne re-diarise JAMAIS le mix — elle écraserait la segmentation exacte des
+    pistes (et les sous-voix PISTE_<pid>_Sn) par des SPEAKER_XX de mixage."""
+
+    def test_re_diarisation_du_mix_sautee(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Réunion pistes")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(str(tmp_path / "jobs"), job.id)
+            manifest_turns = {
+                "available": True, "source": "manifest",
+                "turns": [{"start": 0.0, "end": 5.0, "speaker": "PISTE_p2_S1"}],
+                "speakers": ["PISTE_p2_S1"], "stats": {}, "names": {"PISTE_p2_S1": ""},
+            }
+            fs.save_json("speakers/speaker_turns.json", manifest_turns)
+
+            from transcria.stt.diarization import DiarizerService
+            def _never(self, job, path):
+                raise AssertionError("diarize(mix) ne doit pas être appelé")
+            monkeypatch.setattr(DiarizerService, "diarize", _never)
+
+            audio_path = tmp_path / "mix.wav"
+            audio_path.write_text("fake")
+            result = runner.run_diarization(job, str(audio_path), cfg)
+
+            assert result["source"] == "manifest"
+            assert fs.load_json("speakers/speaker_turns.json") == manifest_turns

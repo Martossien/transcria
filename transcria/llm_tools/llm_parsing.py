@@ -302,11 +302,14 @@ def parse_participant_line(line: str) -> tuple[str | None, str, str]:
     if not text:
         return None, "", ""
 
-    match = re.match(r"^(SPEAKER_\d+)\s+\[([^\]]+)\]\s*:\s*(.+)$", text)
+    # Ids MACHINE seulement (diarisation mix ou sous-voix de piste, lot B2) — jamais un
+    # nom libre : « Alice : anime la réunion » matcherait n'importe quelle phrase à
+    # deux-points.
+    match = re.match(r"^(SPEAKER_\d+|PISTE_\S+)\s+\[([^\]]+)\]\s*:\s*(.+)$", text)
     if match:
         return match.group(1), match.group(2).strip(), match.group(3).strip()
 
-    match = re.match(r"^(SPEAKER_\d+)\s*:\s*(.+)$", text)
+    match = re.match(r"^(SPEAKER_\d+|PISTE_\S+)\s*:\s*(.+)$", text)
     if match:
         speaker_id = match.group(1)
         rest = match.group(2).strip()

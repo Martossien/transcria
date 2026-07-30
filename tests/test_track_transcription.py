@@ -139,3 +139,37 @@ class TestTranscribePerTrack:
         (tmp_path / "jobs" / "job-2").mkdir(parents=True)
         fs = JobFilesystem(str(tmp_path / "jobs"), "job-2")
         assert _transcriber(tmp_path / "jobs")._transcribe_per_track(fs, "fr", _SL()) is None
+
+
+class TestSousVoixParPiste:
+    """Lot B2 : une piste scindée par la sous-diarisation est découpée par SES tours
+    exclusifs — chaque sous-voix a ses mots ; l'autre piste garde son chemin fenêtres."""
+
+    def test_les_sous_voix_ont_chacune_leurs_segments(self, job_with_tracks):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(job_with_tracks), "job-1")
+        fs.save_json("speakers/track_diarization.json", {"version": 1, "tracks": {
+            "bob": {"clusters": 2, "speakers": ["PISTE_bob_S1", "PISTE_bob_S2"],
+                    "turns": [], "exclusive_turns": [
+                        {"start": 2.0, "end": 3.5, "speaker": "PISTE_bob_S1"},
+                        {"start": 3.5, "end": 5.0, "speaker": "PISTE_bob_S2"},
+                    ]}}, "skipped": {}})
+
+        segments = _transcriber(job_with_tracks)._transcribe_per_track(fs, "fr", _SL())
+        speakers = {s["speaker"] for s in segments}
+        assert {"PISTE_bob_S1", "PISTE_bob_S2"} <= speakers   # la salle est scindée
+        assert "Alice" in speakers                             # l'autre piste : intacte
+        assert "Bob" not in speakers
+        assert all(s["text"] for s in segments)
+
+    def test_sous_diarisation_sans_tours_repli_fenetres(self, job_with_tracks):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(job_with_tracks), "job-1")
+        fs.save_json("speakers/track_diarization.json", {"version": 1, "tracks": {
+            "bob": {"clusters": 2, "speakers": [], "turns": [], "exclusive_turns": []}},
+            "skipped": {}})
+
+        segments = _transcriber(job_with_tracks)._transcribe_per_track(fs, "fr", _SL())
+        assert {s["speaker"] for s in segments} == {"Alice", "Bob"}

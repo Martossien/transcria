@@ -225,3 +225,45 @@ class TestManifesteV2Pistes:
                  "speech_windows": [[2.0, 3.0]], "track": "track_x"},
             ]})
         assert m is None and "dupliquée" in err
+
+
+class TestToursSousDiarises:
+    """Vague 5, lot B2 : les sous-voix `PISTE_<pid>_Sn` d'une piste salle remplacent SA
+    contribution mono-locuteur — les autres pistes et les homonymes restent intacts."""
+
+    def test_sous_voix_remplacent_la_piste_salle(self):
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, ROOM]))
+        sub = {"p3": {"turns": [
+            {"start": 30.0, "end": 40.0, "speaker": "PISTE_p3_S1"},
+            {"start": 40.0, "end": 60.0, "speaker": "PISTE_p3_S2"},
+        ]}}
+        r = turns_from_manifest(m, sub_by_pid=sub)
+        assert "Salle Marengo" not in r["speakers"]      # la salle a cessé d'être UNE voix
+        assert {"PISTE_p3_S1", "PISTE_p3_S2"} <= set(r["speakers"])
+        assert r["names"]["PISTE_p3_S1"] == ""           # nommage réservé à l'étape 5
+        assert r["stats"]["Alice Durand"]["turn_count"] == 2   # les autres : intacts
+        assert r["stats"]["PISTE_p3_S2"]["speaking_time_seconds"] == 20.0
+
+    def test_homonymes_intacts_quand_une_seule_piste_est_scindee(self):
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        double = {"id": "p9", "name": "Alice Durand", "kind": "solo",
+                  "speech_windows": [[50.0, 55.0]]}      # 2e piste du même nom (rejoin)
+        m, _ = parse_participants_manifest(_manifest([SOLO_A, double]))
+        sub = {"p9": {"turns": [
+            {"start": 50.0, "end": 52.0, "speaker": "PISTE_p9_S1"},
+            {"start": 52.0, "end": 55.0, "speaker": "PISTE_p9_S2"},
+        ]}}
+        r = turns_from_manifest(m, sub_by_pid=sub)
+        # Seules les fenêtres de p1 restent sous le nom — celles de p9 sont sous-voix.
+        assert r["stats"]["Alice Durand"]["turn_count"] == 2
+        assert r["stats"]["PISTE_p9_S1"]["turn_count"] == 1
+
+    def test_piste_silencieuse_reste_inscrite(self):
+        from transcria.ingestion.manifest_turns import turns_from_manifest
+        m, _ = parse_participants_manifest(_manifest(
+            [SOLO_A, dict(SOLO_B, speech_windows=[])]))
+        r = turns_from_manifest(m)
+        # « présente, silencieuse » (catalogue des cas) : listée à l'étape 5, zéro tour.
+        assert "Benoît Marchand" in r["speakers"]
+        assert r["stats"]["Benoît Marchand"]["turn_count"] == 0

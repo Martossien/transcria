@@ -119,6 +119,27 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
         force=True,
     )
     try:
+        # Tours issus du MANIFESTE (réunion, pistes) : re-diariser le mix écraserait la
+        # segmentation exacte des pistes — et les sous-voix PISTE_<pid>_Sn du lot B2 —
+        # par des SPEAKER_XX de mixage (le checkpoint n'existe pas dans ce chemin, le
+        # cache ne protège pas). Doctrine : pyannote ne sert que sans manifeste.
+        fs = runner._get_fs(config, job.id)
+        existing_turns = fs.load_json("speakers/speaker_turns.json")
+        if isinstance(existing_turns, dict) and existing_turns.get("source") == "manifest":
+            logger.info("[diarization] tours issus du manifeste (pistes) — "
+                        "re-diarisation du mix sautée")
+            audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+            runner._inject_speaker_genders(fs, audio_scene)
+            runner.progress.update(
+                job.id,
+                step="processing",
+                phase="diarization",
+                message=progress_msg(resolve_output_language(job), "diar_done"),
+                percent=70,
+                force=True,
+            )
+            return existing_turns
+
         config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
         diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
         diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)

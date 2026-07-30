@@ -662,18 +662,32 @@ class Transcriber:
 
         import librosa
 
+        # Sous-diarisation par piste (lot B2, écrite par SpeakerDetector) : une piste
+        # salle scindée en PISTE_<pid>_S1… est découpée par SES tours exclusifs — le
+        # chunking pyannote éprouvé — au lieu des fenêtres mono-locuteur.
+        sub_tracks = (fs.load_json("speakers/track_diarization.json") or {}).get("tracks", {})
+        workflow_cfg = self.config.get("workflow", {}) or {}
+        chunk_cfg = workflow_cfg.get("pyannote_chunking", {}) or {}
+
         per_track: list[list[dict]] = []
         for p in tracked:
             speaker = p.name or f"PISTE_{p.id}"
             audio, _sr = librosa.load(str(paths[p.id]), sr=_SR, mono=True)
-            windows = merge_windows(p.speech_windows, max_end_s=len(audio) / _SR)
-            if not windows:
-                continue
-            chunks = [self._make_chunk(audio, start, end, speaker)
-                      for start, end in windows]
+            sub = sub_tracks.get(p.id) if isinstance(sub_tracks, dict) else None
+            chunks = None
+            if isinstance(sub, dict) and int(sub.get("clusters") or 0) >= 2:
+                chunks = self._build_chunks_from_turns(
+                    audio, len(audio) / _SR, sub, chunk_cfg=chunk_cfg
+                )
+            if chunks is None:
+                windows = merge_windows(p.speech_windows, max_end_s=len(audio) / _SR)
+                if not windows:
+                    continue
+                chunks = [self._make_chunk(audio, start, end, speaker)
+                          for start, end in windows]
             segs = self._transcribe_by_chunks(chunks, lang, None, sl)
-            sl.info("Piste transcrite", piste=speaker, fenetres=len(windows),
-                    segments=len(segs))
+            sl.info("Piste transcrite", piste=speaker, chunks=len(chunks),
+                    segments=len(segs), sous_voix=len((sub or {}).get("speakers") or []))
             per_track.append(segs)
         segments = fuse_track_segments(per_track)
         if not segments:
