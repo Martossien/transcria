@@ -71,6 +71,30 @@ class TestPreflightLlmVram:
         mgr = _manager({}, {0: 0}, monkeypatch)
         assert mgr._preflight_llm_vram() is True
 
+    def test_un_occupant_qui_laisse_la_place_ne_bloque_pas(self, monkeypatch):
+        """Le critère n'est PAS « un squatteur de 12 Go » mais le RESTE disponible :
+        un occupant de 7 Go sur une carte de 24 Go laisse 17 Go ≥ part 15 Go + marge 1 Go
+        → le lancement passe sans éviction (llama tient, on ne dérange personne)."""
+        released = []
+        monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram",
+                            lambda: released.append(True))
+        mgr = _manager(self.CFG, {0: 24000, 1: 24000, 2: 17000}, monkeypatch)
+        assert mgr._preflight_llm_vram() is True
+        assert released == []                    # personne n'a été dérangé
+
+    def test_cartes_heterogenes_parts_inegales(self, monkeypatch):
+        """X cartes de X/Y VRAM : le test est PAR CARTE avec SA part (ex. 24+8 Go).
+        La petite carte est jugée sur SA part de 6 Go, pas sur celle de la grande."""
+        cfg = {"llm_gpu_indices": [0, 1], "llm_vram_mb_per_gpu": [18000, 6000]}
+        monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram", lambda: None)
+        # 24 Go libre + 7,2 Go libre : chaque carte couvre SA part (+1 Go de marge) → OK
+        mgr = _manager(cfg, {0: 24000, 1: 7200}, monkeypatch)
+        assert mgr._preflight_llm_vram() is True
+        # La PETITE carte descend à 6,5 Go libres < 6000 + 1000 → refus, même si la
+        # grande carte est vide (tout-ou-rien : llama s'étale ou ne se lance pas)
+        mgr = _manager(cfg, {0: 24000, 1: 6500}, monkeypatch)
+        assert mgr._preflight_llm_vram() is False
+
     def test_launch_refuse_sans_executer_le_script(self, tmp_path, monkeypatch):
         """Le refus arrive AVANT le Popen : plus jamais de segfault aveugle."""
         script = tmp_path / "launch.sh"
