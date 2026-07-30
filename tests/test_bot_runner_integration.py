@@ -185,3 +185,39 @@ def test_deux_bots_simultanes_ne_se_marchent_pas_dessus():
     assert url_a != url_b                              # ports DISTINCTS
     assert len(seen_a) == 4 and len(seen_b) == 6       # aucun mélange de flux
     assert out_a.admitted and out_b.admitted
+
+
+def test_runner_on_final_recoit_chaque_tour_en_direct():
+    """Vague 5, lot C : chaque tour FINAL atteint l'observateur `on_final` (le CLI y branche
+    l'émission {"bot_caption": …}) — et un observateur défaillant ne casse jamais la session."""
+    port = _free_port()
+    transcriber = _CountingTranscriber()
+    driver = FakeBrowserDriver(f"ws://127.0.0.1:{port}", frame_count=3)
+    received: list = []
+
+    def observer(seg):
+        received.append(seg)
+        raise RuntimeError("observateur cassé")     # ne doit rien casser
+
+    async def _main():
+        return await asyncio.wait_for(
+            run_bot_session("https://meet.jit.si/salle-test", OCC, driver, transcriber,
+                            bridge_port=port, on_final=observer), 15)
+    outcome, segments = asyncio.run(_main())
+
+    assert outcome.admitted is True
+    assert [s.text for s in received] == ["bonjour"]
+    assert segments == received                      # même flux : le direct n'invente rien
+
+
+def test_emetteur_de_captions_json(capsys):
+    """Le CLI émet une ligne {"bot_caption": …} par tour final (BOT_EVENTS=json)."""
+    import json as _json
+
+    from connector_service.bot.cli import _json_caption_emitter
+    from connector_service.live.session import Segment
+
+    _json_caption_emitter()(Segment("Bonjour à tous", 1.234, 2.5, "final_live", "Alice"))
+    payload = _json.loads(capsys.readouterr().out.strip())
+    assert payload["bot_caption"] == {"start": 1.234, "end": 2.5,
+                                      "speaker": "Alice", "text": "Bonjour à tous"}

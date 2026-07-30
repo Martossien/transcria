@@ -15,7 +15,15 @@
 > JAMAIS écrasés par une re-diarisation du mix en profil qualité — trou préexistant
 > bouché), rôles LLM étendus aux ids `PISTE_…`. Une seule voix trouvée → rien ne
 > change (nom proposé, cas fluide D5.3). Gate réel « salle » (2 personnes derrière
-> UN micro) à jouer avec l'utilisateur. Restent lots C et D.
+> UN micro) reporté (décision utilisateur : on avance). **Lot C LIVRÉ** : le bot émet
+> `{"bot_caption": …}` par tour final (BOT_EVENTS=json), le runner les regroupe
+> (25 tours ou 2 s) et les POSTe à `/v1/meetings/<sid>/captions` (gardes de
+> `/events` : claimant + session active), le portail les APPEND dans
+> `live/captions.jsonl` plafonné (`connectors.meetings.max_caption_lines`, défaut
+> 2000, troncature de tête ANNONCÉE, numérotation monotone), la page du job
+> (état `in_meeting`) affiche « Suivi en direct — provisoire » via
+> `GET /api/meetings/<sid>/captions?after=<n>` (visibilité du job porteur) et le
+> panneau s'efface à l'ingestion (rechargement d'état existant). Reste lot D.
 > Spécification dédiée exigée par le plan directeur
 > ([`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md), vague 5) : elle plie dans la
 > conception les leçons des gates réels de juillet — pistes sur DISQUE (jamais en RAM),

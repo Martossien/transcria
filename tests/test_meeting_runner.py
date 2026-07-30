@@ -175,3 +175,44 @@ class TestDaemon:
             await daemon.run_once()
             return proc.terminated
         assert asyncio.run(scenario()) is True
+
+
+class TestCaptionRelay:
+    """Vague 5, lot C : les lignes {"bot_caption": …} partent PAR LOTS vers
+    /v1/meetings/<sid>/captions — flush à 25 tours, et TOUJOURS en fin de flux (les
+    derniers mots d'une réunion ne restent jamais dans le tampon)."""
+
+    def _run(self, lines):
+        async def scenario():
+            post, calls = _portal([[INTENT]])
+            proc = _FakeProc(exit_code=0, lines=lines)
+
+            async def launch(intent):
+                return proc
+            daemon = MeetingRunnerDaemon(_cfg(), post=post, launch=launch)
+            await daemon.run_once()
+            await asyncio.gather(*daemon._active.values())
+            return calls
+        return asyncio.run(scenario())
+
+    def test_lot_final_part_a_la_fin_du_flux(self):
+        calls = self._run((
+            b'{"bot_event": "in_meeting"}\n',
+            b'{"bot_caption": {"start": 1.0, "end": 2.0, "speaker": "Alice", "text": "Bonjour"}}\n',
+            b'{"bot_caption": {"start": 3.0, "end": 4.0, "speaker": "", "text": "Oui"}}\n',
+            b'ligne de diagnostic ordinaire\n',
+        ))
+        batches = [pl["captions"] for p, pl in calls if p.endswith("/captions")]
+        assert len(batches) == 1                               # un seul lot : flush de fin
+        assert [c["text"] for c in batches[0]] == ["Bonjour", "Oui"]
+        assert any(p.endswith("/events") and pl.get("event") == "in_meeting"
+                   for p, pl in calls)                         # les états passent toujours
+
+    def test_lot_plein_part_sans_attendre(self):
+        lines = tuple(
+            b'{"bot_caption": {"start": 0, "end": 1, "text": "tour %d"}}\n' % i
+            for i in range(26)
+        )
+        calls = self._run(lines)
+        batches = [pl["captions"] for p, pl in calls if p.endswith("/captions")]
+        assert [len(b) for b in batches] == [25, 1]            # 25 pleins + le reliquat final

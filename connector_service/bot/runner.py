@@ -39,7 +39,7 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
                           provider_name: str = "bot", display_name: str = "TranscrIA",
                           bridge_host: str = "127.0.0.1",
                           bridge_port: int = 0,
-                          on_state=None) -> tuple[BotOutcome, list]:
+                          on_state=None, on_final=None) -> tuple[BotOutcome, list]:
     """Déroule une réunion via bot : le payload JS pousse le PCM sur le pont, une `LiveSession`
     le transcrit pendant que l'orchestrateur pilote le navigateur. Retourne (issue, segments)."""
     # Le payload de capture se (re)connecte PLUSIEURS fois au cours d'une réunion : la page
@@ -79,10 +79,20 @@ async def run_bot_session(meeting_url: str, occurrence: ExternalMeetingOccurrenc
             for msg in decode_bridge_message(item):
                 yield msg
 
+    def _collect_final(seg) -> None:
+        segments.append(seg)
+        if on_final is not None:
+            # Suivi en direct (lot C) : un observateur défaillant ne casse jamais la
+            # captation — le direct est provisoire, la réunion est précieuse.
+            try:
+                on_final(seg)
+            except Exception as exc:  # noqa: BLE001
+                _log.debug("observateur on_final en échec: %r", exc)
+
     async def _transcribe() -> None:
         source = MediaBridgeFrameSource(_messages)
         provider = LiveAudioProvider(provider_name, source)
-        session = LiveSession(transcriber, on_final=segments.append)
+        session = LiveSession(transcriber, on_final=_collect_final)
         await session.run(provider, occurrence)
 
     transcribe_task = asyncio.ensure_future(_transcribe())

@@ -30,6 +30,21 @@
           {{ _('Replanifier la captation') }}</button>
         {% endif %}
       </div>
+      {% if meeting_session.state == 'in_meeting' %}
+      {# Suivi en direct (vague 5, D5.5) : PROVISOIRE par contrat — le pipeline batch
+         produit la référence, et le rechargement d'état efface ce panneau à l'ingestion. #}
+      <div id="live-captions-panel" class="card mt-2" data-session="{{ meeting_session.id }}"
+           data-truncated-label="{{ _('%(n)s premiers tours retirés (plafond du direct atteint)') }}">
+        <div class="card-header py-1 small">
+          <i class="bi bi-broadcast"></i> {{ _('Suivi en direct — provisoire') }}
+          <span class="text-muted">{{ _('la transcription de référence sera produite après la réunion') }}</span>
+        </div>
+        <div id="live-captions-list" class="card-body py-2 small"
+             style="max-height: 14rem; overflow-y: auto;">
+          <span id="live-captions-empty" class="text-muted">{{ _('En attente des premiers tours de parole…') }}</span>
+        </div>
+      </div>
+      {% endif %}
       {% endif %}
       <small class="text-muted">{{ _('Créé le %(date)s', date=job.created_at.strftime('%d/%m/%Y à %H:%M')) }}</small>
     </div>

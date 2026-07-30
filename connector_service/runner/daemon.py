@@ -138,22 +138,62 @@ class MeetingRunnerDaemon:
                          {"runner": self._cfg.runner_name, "exit_code": int(exit_code),
                           "category": category, "message": message})
 
+    # Suivi en direct (vague 5, lot C) : les tours finaux du bot partent PAR LOTS — un POST
+    # par tour saturerait le portail pour un flux qui n'est que provisoire. Un lot part dès
+    # 25 tours OU 2 s après le premier en attente (DoD : visible < 10 s après la parole).
+    _CAPTION_BATCH_MAX = 25
+    _CAPTION_FLUSH_S = 2.0
+
     async def _relay_events(self, session_id: str, proc) -> None:
-        """Relaie les lignes `{"bot_event": …}` (BOT_EVENTS=json) — toute autre sortie est
-        journalisée telle quelle (les diagnostics du bot restent visibles dans le runner)."""
+        """Relaie les lignes `{"bot_event": …}` (états) et `{"bot_caption": …}` (tours du
+        suivi en direct, par lots — BOT_EVENTS=json) ; toute autre sortie est journalisée
+        telle quelle (les diagnostics du bot restent visibles dans le runner)."""
         stdout = getattr(proc, "stdout", None)
         if stdout is None:
             return
-        while True:
-            line = await stdout.readline()
-            if not line:
+        pending: list[dict] = []
+
+        async def _flush_captions() -> None:
+            if not pending:
                 return
-            text = line.decode("utf-8", "replace").rstrip()
-            try:
-                event = json.loads(text).get("bot_event")
-            except (ValueError, AttributeError):
-                logger.info("[bot %s] %s", session_id[:8], text)
-                continue
-            if event:
-                await self._post(f"/v1/meetings/{session_id}/events",
-                                 {"runner": self._cfg.runner_name, "event": event})
+            batch, pending[:] = list(pending), []
+            # Best-effort : un refus (session close, portail indisponible) ne perd que du
+            # PROVISOIRE — le pipeline batch reste la référence, on ne rejoue pas.
+            await self._post(f"/v1/meetings/{session_id}/captions",
+                             {"runner": self._cfg.runner_name, "captions": batch})
+
+        try:
+            while True:
+                if pending:
+                    try:
+                        line = await asyncio.wait_for(stdout.readline(),
+                                                      timeout=self._CAPTION_FLUSH_S)
+                    except asyncio.TimeoutError:
+                        await _flush_captions()
+                        continue
+                else:
+                    line = await stdout.readline()
+                if not line:
+                    return
+                text = line.decode("utf-8", "replace").rstrip()
+                try:
+                    payload = json.loads(text)
+                except ValueError:
+                    logger.info("[bot %s] %s", session_id[:8], text)
+                    continue
+                if not isinstance(payload, dict):
+                    logger.info("[bot %s] %s", session_id[:8], text)
+                    continue
+                if payload.get("bot_event"):
+                    await self._post(f"/v1/meetings/{session_id}/events",
+                                     {"runner": self._cfg.runner_name,
+                                      "event": payload["bot_event"]})
+                caption = payload.get("bot_caption")
+                if isinstance(caption, dict):
+                    pending.append(caption)
+                    if len(pending) >= self._CAPTION_BATCH_MAX:
+                        await _flush_captions()
+        finally:
+            # Fin de réunion (EOF ou annulation du relais) : les derniers tours partent.
+            with contextlib.suppress(Exception):
+                await _flush_captions()

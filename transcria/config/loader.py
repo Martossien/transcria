@@ -155,6 +155,10 @@ _DEFAULT_CONFIG = {
             # mix (le manifeste l'annonce). Le bot a son propre plafond local (16).
             "max_tracks": 16,
             "max_track_mb": 512,
+            # Suivi en direct (vague 5, D5.5) : plafond du fichier `live/captions.jsonl`
+            # par job — au-delà, troncature de TÊTE annoncée dans le flux. Le direct est
+            # PROVISOIRE : le pipeline batch reste la référence (ADR-001 D5).
+            "max_caption_lines": 2000,
         },
     },
     "live": {

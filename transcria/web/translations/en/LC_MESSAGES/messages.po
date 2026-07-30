@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-30 18:38+0200\n"
+"POT-Creation-Date: 2026-07-30 23:13+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -3238,7 +3238,7 @@ msgstr "Job"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:139
+#: transcria/web/templates/job_wizard.html:154
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
@@ -3499,7 +3499,7 @@ msgstr "Add an entry"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:91
-#: transcria/web/templates/job_wizard.html:148
+#: transcria/web/templates/job_wizard.html:163
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Add"
@@ -4039,52 +4039,68 @@ msgid "Traitement"
 msgstr "Job"
 
 #: transcria/web/templates/job_wizard.html:30
-#, fuzzy
 msgid "Replanifier la captation"
-msgstr "Scheduling"
+msgstr "Reschedule the capture"
 
-#: transcria/web/templates/job_wizard.html:34
+#: transcria/web/templates/job_wizard.html:37
+#, python-format
+msgid "%(n)s premiers tours retirés (plafond du direct atteint)"
+msgstr "%(n)s earliest turns removed (live feed cap reached)"
+
+#: transcria/web/templates/job_wizard.html:39
+msgid "Suivi en direct — provisoire"
+msgstr "Live feed — provisional"
+
+#: transcria/web/templates/job_wizard.html:40
+msgid "la transcription de référence sera produite après la réunion"
+msgstr "the reference transcript will be produced after the meeting"
+
+#: transcria/web/templates/job_wizard.html:44
+msgid "En attente des premiers tours de parole…"
+msgstr "Waiting for the first speech turns…"
+
+#: transcria/web/templates/job_wizard.html:49
 #, python-format
 msgid "Créé le %(date)s"
 msgstr "Created on"
 
-#: transcria/web/templates/job_wizard.html:44
+#: transcria/web/templates/job_wizard.html:59
 msgid "Le traitement a échoué."
 msgstr "Processing failed."
 
-#: transcria/web/templates/job_wizard.html:48
+#: transcria/web/templates/job_wizard.html:63
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 msgstr "Your inputs (context, participants, glossary) are kept — you can restart processing."
 
-#: transcria/web/templates/job_wizard.html:51
+#: transcria/web/templates/job_wizard.html:66
 msgid "Relancer le traitement"
 msgstr "Restart processing"
 
-#: transcria/web/templates/job_wizard.html:121
+#: transcria/web/templates/job_wizard.html:136
 msgid "Ajouter au lexique central"
 msgstr "Add to central glossary"
 
-#: transcria/web/templates/job_wizard.html:122
+#: transcria/web/templates/job_wizard.html:137
 msgid "Fermer"
 msgstr "Close"
 
-#: transcria/web/templates/job_wizard.html:125
+#: transcria/web/templates/job_wizard.html:140
 msgid "Forme :"
 msgstr "Form:"
 
-#: transcria/web/templates/job_wizard.html:127
+#: transcria/web/templates/job_wizard.html:142
 msgid "Lexique existant"
 msgstr "Existing glossary"
 
-#: transcria/web/templates/job_wizard.html:132
+#: transcria/web/templates/job_wizard.html:147
 msgid "— Nouveau lexique… —"
 msgstr "— New glossary… —"
 
-#: transcria/web/templates/job_wizard.html:136
+#: transcria/web/templates/job_wizard.html:151
 msgid "Nom du nouveau lexique"
 msgstr "New glossary name"
 
-#: transcria/web/templates/job_wizard.html:137
+#: transcria/web/templates/job_wizard.html:152
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "E.g.: Cheese-making vocabulary"
 

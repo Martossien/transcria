@@ -147,6 +147,19 @@ def _json_event_emitter():
     return emit
 
 
+def _json_caption_emitter():
+    """Suivi en direct (vague 5, lot C) : une ligne JSON par TOUR FINAL sur stdout — le
+    meeting-runner les regroupe et les POSTe à /v1/meetings/<sid>/captions. Provisoire par
+    contrat (ADR-001 D5) : le pipeline batch reste la référence."""
+
+    def emit(seg) -> None:
+        print(json.dumps({"bot_caption": {
+            "start": round(float(seg.start), 3), "end": round(float(seg.end), 3),
+            "speaker": (seg.speaker or "")[:120], "text": seg.text[:500],
+        }}, ensure_ascii=False), flush=True)
+    return emit
+
+
 def build_transcriber(transcria_url: str | None, token: str | None, language: str | None):
     """Transcripteur réel si TranscrIA est joignable, sinon capture seule (jamais d'échec
     au lancement pour autant : un bot qui capte sans transcrire reste utile)."""
@@ -190,11 +203,12 @@ async def run(args: argparse.Namespace) -> int:
                 args.max_duration_s,
                 compose_display_name(explicit=args.name, initiator=args.initiator),
                 f" job={target_job_id}" if target_job_id else "")
-    on_state = _json_event_emitter() if os.environ.get("BOT_EVENTS") == "json" else None
+    events_json = os.environ.get("BOT_EVENTS") == "json"
     outcome, segments = await run_bot_session(
         args.meeting_url, occurrence, driver, transcriber,
         display_name=compose_display_name(explicit=args.name, initiator=args.initiator),
-        on_state=on_state)
+        on_state=_json_event_emitter() if events_json else None,
+        on_final=_json_caption_emitter() if events_json else None)
 
     logger.info("Réunion terminée | admis=%s motif=%s%s segments=%d",
                 outcome.admitted, outcome.reason,

@@ -599,3 +599,64 @@ class TestIngestPistesSeparees:
         assert r.status_code == 202
         tracks, manifest = self._stored(app, job_id)
         assert tracks == [] and manifest == v1
+
+
+class TestLiveCaptions:
+    """Vague 5, lot C (D5.5) : le runner claimant relaie les tours PROVISOIRES par lots ;
+    la page du job les lit en delta avec la visibilité du job porteur ; le plafond tronque
+    la tête EN L'ANNONÇANT. Jamais la référence : le batch la produira."""
+
+    def _in_meeting_session(self, client, admin_client, runner_token):
+        _heartbeat(client, runner_token)
+        sid = _create(client, admin_client).get_json()["session"]["id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token),
+                    json={"runner": "runner-1", "max": 1})
+        for event in ("joining", "in_meeting"):
+            client.post(f"/v1/meetings/{sid}/events", headers=_auth(runner_token),
+                        json={"runner": "runner-1", "event": event})
+        return sid
+
+    def _post_captions(self, client, runner_token, sid, captions, runner="runner-1"):
+        return client.post(f"/v1/meetings/{sid}/captions", headers=_auth(runner_token),
+                           json={"runner": runner, "captions": captions})
+
+    def test_relai_puis_lecture_en_delta(self, meetings_on, client, admin_client, runner_token):
+        sid = self._in_meeting_session(client, admin_client, runner_token)
+        r = self._post_captions(client, runner_token, sid, [
+            {"start": 1.0, "end": 2.0, "speaker": "Alice", "text": "Bonjour"},
+            {"start": 3.0, "end": 4.0, "speaker": "", "text": "Oui"},
+            {"text": "   "},                                   # douteuse : écartée, pas d'échec
+        ])
+        assert r.status_code == 200 and r.get_json()["accepted"] == 2
+
+        body = admin_client.get(f"/api/meetings/{sid}/captions?after=0").get_json()
+        assert [c["text"] for c in body["captions"]] == ["Bonjour", "Oui"]
+        assert body["state"] == "in_meeting" and body["truncated"] == 0
+        delta = admin_client.get(f"/api/meetings/{sid}/captions?after={body['next']}").get_json()
+        assert delta["captions"] == []                         # delta : rien de neuf
+
+    def test_runner_perime_et_session_close_409(self, meetings_on, client, admin_client,
+                                                runner_token):
+        sid = self._in_meeting_session(client, admin_client, runner_token)
+        r = self._post_captions(client, runner_token, sid,
+                                [{"text": "x", "start": 0, "end": 1}], runner="autre")
+        assert r.status_code == 409                            # claimée par un autre exécutant
+        client.post(f"/v1/meetings/{sid}/events", headers=_auth(runner_token),
+                    json={"runner": "runner-1", "event": "ingesting"})
+        r = self._post_captions(client, runner_token, sid, [{"text": "tard", "start": 0, "end": 1}])
+        assert r.status_code == 409                            # le direct est clos à l'ingestion
+
+    def test_visibilite_celle_du_job_porteur(self, meetings_on, client, admin_client,
+                                             runner_token, viewer_client):
+        sid = self._in_meeting_session(client, admin_client, runner_token)
+        assert viewer_client.get(f"/api/meetings/{sid}/captions").status_code == 404
+
+    def test_plafond_tronque_et_annonce(self, meetings_on, client, admin_client, runner_token):
+        from transcria.config import get_config
+        get_config()["connectors"]["meetings"]["max_caption_lines"] = 5
+        sid = self._in_meeting_session(client, admin_client, runner_token)
+        self._post_captions(client, runner_token, sid,
+                            [{"start": i, "end": i + 1, "text": f"tour {i}"} for i in range(8)])
+        body = admin_client.get(f"/api/meetings/{sid}/captions?after=0").get_json()
+        assert body["truncated"] == 3 and len(body["captions"]) == 5
+        assert body["captions"][0]["n"] == 4                   # la tête est partie, n monotone

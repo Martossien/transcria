@@ -18,6 +18,7 @@ import functools
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from flask import jsonify, request
@@ -28,6 +29,12 @@ from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
 from transcria.config import get_config
 from transcria.ingestion import session_states as st
+from transcria.ingestion.live_captions import (
+    DEFAULT_MAX_CAPTION_LINES,
+    append_captions,
+    read_captions,
+    sanitize_caption,
+)
 from transcria.ingestion.meeting_ref_crypto import decrypt_meeting_ref
 from transcria.ingestion.session_store import MeetingSessionStore
 from transcria.jobs.filesystem import JobFilesystem
@@ -273,6 +280,67 @@ def v1_meetings_event(session_id: str):
     ok, reason = MeetingSessionStore.apply_event(
         session_id, str(body.get("runner") or "").strip(), str(body.get("event") or "").strip())
     return (jsonify({"ok": True}) if ok else (jsonify({"error": reason}), 409))
+
+
+# Le direct n'a de sens que pendant la vie du bot — après (ingesting/terminal), le pipeline
+# est la référence et un runner attardé n'écrit plus rien.
+_CAPTION_STATES = frozenset({st.CLAIMED, st.JOINING, st.WAITING_ADMISSION, st.IN_MEETING})
+
+
+def _captions_path(job_id: str) -> Path:
+    storage = get_config().get("storage", {}) or {}
+    return Path(storage.get("jobs_dir", "./jobs")) / job_id / "live" / "captions.jsonl"
+
+
+@web_bp.route("/v1/meetings/<session_id>/captions", methods=["POST"])
+@meetings_enabled
+@bearer_token_required
+@_runner_guard
+def v1_meetings_captions(session_id: str):
+    """Tours de parole PROVISOIRES relayés par lots par le runner claimant (vague 5, D5.5).
+
+    Mêmes gardes que `/events` (session claimée par CE runner, et encore active) ; le
+    fichier `live/captions.jsonl` est plafonné (`connectors.meetings.max_caption_lines`,
+    troncature de tête ANNONCÉE dans le flux) — une trace, jamais la référence (ADR-001 D5).
+    """
+    body = request.get_json(silent=True) or {}
+    session = MeetingSessionStore.get(session_id)
+    if session is None:
+        return jsonify({"error": "session inconnue"}), 404
+    if session.claimed_by != str(body.get("runner") or "").strip():
+        return jsonify({"error": "session claimée par un autre exécutant"}), 409
+    if session.state not in _CAPTION_STATES:
+        return jsonify({"error": f"session {session.state} — le direct est clos"}), 409
+    raw = body.get("captions")
+    if not isinstance(raw, list):
+        return jsonify({"error": "captions : liste requise"}), 400
+    captions = [c for c in (sanitize_caption(item) for item in raw[:200]) if c]
+    if captions:
+        max_lines = int(_meetings_cfg(get_config()).get("max_caption_lines")
+                        or DEFAULT_MAX_CAPTION_LINES)
+        append_captions(_captions_path(session.job_id), captions, max_lines=max_lines)
+    return jsonify({"ok": True, "accepted": len(captions)})
+
+
+@web_bp.route("/api/meetings/<session_id>/captions", methods=["GET"])
+@meetings_enabled
+@login_required
+def api_meetings_captions(session_id: str):
+    """Delta du suivi en direct pour la page du job (`?after=<n>`) — visibilité = celle du
+    job porteur, comme partout. Marqué PROVISOIRE côté UI ; le batch reste la référence."""
+    session = MeetingSessionStore.get(session_id)
+    if session is None:
+        return jsonify({"error": "Session inconnue"}), 404
+    job = JobStore.get_by_id(session.job_id)
+    if job is None or not can_access_job(job, current_user):
+        return jsonify({"error": "Session inconnue"}), 404
+    try:
+        after = max(int(request.args.get("after") or 0), 0)
+    except ValueError:
+        after = 0
+    captions, next_cursor, truncated = read_captions(_captions_path(session.job_id), after)
+    return jsonify({"captions": captions, "next": next_cursor,
+                    "truncated": truncated, "state": session.state})
 
 
 @web_bp.route("/v1/meetings/<session_id>/result", methods=["POST"])
