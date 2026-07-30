@@ -220,11 +220,12 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         # Différés §8.3(c) : point d'entrée best-effort — un échec d'import (image slim,
         # dépendance absente) produit le WARN lisible ci-dessous, jamais un crash du rôle.
         from transcria.config import load_config
-        from transcria.gpu import opencode_setup
+        from transcria.gpu import arbitrage_endpoint
+        from transcria.llm_tools import opencode_setup
         from transcria.workflow import agent_workspace
 
         cfg = load_config()
-        base_url = opencode_setup.default_base_url(cfg)
+        base_url = arbitrage_endpoint.default_base_url(cfg)
         llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
         model = llm.get("model_id") or "arbitrage"
         if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"

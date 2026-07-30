@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from transcria.gpu.opencode_setup import is_remote_arbitrage
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
 
 DEFAULT_INSTANCE_VRAM_MB = 6500   # empreinte mesurée qwen3asr servi (~6,2 Go) + arrondi
 DEFAULT_SAFETY_MARGIN_MB = 1500   # même marge OOM que le placement LLM

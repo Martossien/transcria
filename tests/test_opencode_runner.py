@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from transcria.gpu.opencode_runner import OpenCodeRunner, _get_prompts_dir
+from transcria.llm_tools.opencode_runner import OpenCodeRunner, _get_prompts_dir
 
 
 def _make_runner(tmp_path, **kwargs):
@@ -1202,7 +1202,7 @@ class TestStripRoleGender:
 
 class TestBuildHarmonizationGlossary:
     def test_names_and_terms_with_variants(self):
-        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        from transcria.llm_tools.opencode_runner import build_harmonization_glossary
         g = build_harmonization_glossary(
             [{"name": "Jean Dupont"}, {"name": "Marie Martin"}],
             [{"term": "ACRO", "variants": ["AKRO"]},
@@ -1215,17 +1215,17 @@ class TestBuildHarmonizationGlossary:
         assert "- ProWeb ← pro-web, ProWebs" in g
 
     def test_replace_by_takes_precedence_over_term(self):
-        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        from transcria.llm_tools.opencode_runner import build_harmonization_glossary
         g = build_harmonization_glossary([], [{"term": "tikeo", "replace_by": "Tickéo", "variants": []}])
         assert "- Tickéo" in g and "tikeo" not in g
 
     def test_empty_inputs_return_empty(self):
-        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        from transcria.llm_tools.opencode_runner import build_harmonization_glossary
         assert build_harmonization_glossary([], []) == ""
         assert build_harmonization_glossary(None, None) == ""
 
     def test_dedup_names(self):
-        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        from transcria.llm_tools.opencode_runner import build_harmonization_glossary
         g = build_harmonization_glossary([{"name": "Jean Dupont"}, {"name": "Jean Dupont"}], [])
         assert g.count("- Jean Dupont") == 1
 

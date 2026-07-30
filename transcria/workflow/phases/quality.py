@@ -6,8 +6,8 @@ possible seulement ici — le SRT corrigé est définitif après relecture final
 """
 import logging
 
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.quality.light_report import run_light_quality
 from transcria.quality.quality_report import QualityReporter
 from transcria.stt.corpus import enrich_corpus_with_quality, parse_srt_blocks, summarize_corpus

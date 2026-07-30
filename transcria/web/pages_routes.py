@@ -27,13 +27,13 @@ from transcria.context.meeting_type_catalog import localized_type_display, meeti
 from transcria.context.meeting_type_store import MeetingTypeStore
 from transcria.context.participants import ParticipantsManager
 from transcria.diagnostics.system_status import get_system_status
-from transcria.gpu.opencode_runner import _SUMMARY_MARKERS, OpenCodeRunner, resolve_output_language, summary_markers
 from transcria.i18n import select_locale
 from transcria.ingestion.manifest import parse_participants_manifest
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
+from transcria.llm_tools.opencode_runner import _SUMMARY_MARKERS, OpenCodeRunner, resolve_output_language, summary_markers
 from transcria.services.job_service import JobService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import require_job_access

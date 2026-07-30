@@ -47,7 +47,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             job = JobStore.create_job(owner_id, "Correction Partial Timeout")
             runner = WorkflowRunner(JobStore, cfg)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             from transcria.jobs.filesystem import JobFilesystem
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
@@ -108,7 +108,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
         corrigé). Désormais : retry ≤ 3 puis échec EXPLICITE relançable."""
         with app.app_context():
             cfg, job, runner, fs = self._correction_setup(app, owner_id, monkeypatch, tmp_path, "Correction 0 texte")
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             calls = {"n": 0}
 
             def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None, **_kw):
@@ -126,7 +126,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
     def test_run_correction_recovers_on_second_attempt(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg, job, runner, fs = self._correction_setup(app, owner_id, monkeypatch, tmp_path, "Correction retry OK")
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             calls = {"n": 0}
 
             def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None, **_kw):
@@ -158,7 +158,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             job = JobStore.create_job(owner_id, "Correction Lexicon Filter")
             runner = WorkflowRunner(JobStore, cfg)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nLe denes répond à l'API.\n")
@@ -210,7 +210,7 @@ class TestWorkflowRunnerRunCorrection:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             def fake_run_correction(self_runner, srt_path, context_path, lexicon_path, invite_path=None, **_kw):
                 return {
@@ -293,7 +293,7 @@ class TestWorkflowRunnerRunCorrection:
                 stop_called["v"] = True
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", fake_stop)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             monkeypatch.setattr(
                 OpenCodeRunner,
                 "run_correction",
@@ -328,7 +328,7 @@ class TestWorkflowRunnerRunCorrection:
             stop_called = {"v": False}
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: stop_called.__setitem__("v", True))
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             monkeypatch.setattr(
                 OpenCodeRunner,
                 "run_correction",
@@ -395,7 +395,7 @@ class TestCorrectedSrtIntegrityGuard:
             src = self._src(40)
             fs.save_text("metadata/transcription.srt", src)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             truncated = self._src(10)
             monkeypatch.setattr(
                 OpenCodeRunner, "run_correction",

@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import logging
 
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.quality.review_points import ReviewPoints as _RP
 
 logger = logging.getLogger(__name__)

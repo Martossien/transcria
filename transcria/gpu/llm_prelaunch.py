@@ -16,7 +16,7 @@ import logging
 import threading
 
 from transcria.config.views import GpuView
-from transcria.gpu.opencode_setup import is_remote_arbitrage
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.queue.allocator import GPUAllocator
 

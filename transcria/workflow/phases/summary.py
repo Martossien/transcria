@@ -11,9 +11,9 @@ import time
 from pathlib import Path
 
 from transcria.audio.scene_analyzer import AudioSceneAnalyzer
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.logging_setup import get_structured_logger
 from transcria.notifications.job_facts import notify_summary_ready
 from transcria.quality.audio_quality import AudioQualityEvaluator

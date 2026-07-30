@@ -9,6 +9,7 @@ from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.gpu import inventory, pid_registry
 from transcria.gpu._port_utils import generation_confirmed, kill_port_listeners
 from transcria.gpu._port_utils import is_port_open as _check_port_open
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
@@ -16,7 +17,6 @@ from transcria.gpu.cuda_visible import (
 )
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
-from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.gpu.stt_instance_planner import llm_reserved_by_gpu, llm_shares
 from transcria.gpu.vram_release import release_idle_vram
 

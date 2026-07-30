@@ -3,10 +3,6 @@
 
 Utilise opencode (déjà configuré dans ~/.config/opencode/opencode.json)
 avec le provider configurable.
-
-⚠ RANGEMENT (audit 2026-07-30) : rien de GPU ici — orchestration CLI opencode.
-Destination cible : transcria/llm_tools/ (avec llm_parsing, prompt_locator,
-llama_runtime). Déplacement OPPORTUNISTE (quand le fichier bouge), pas en chantier.
 """
 
 import json
@@ -19,13 +15,14 @@ import time
 from pathlib import Path
 
 from transcria.context.meeting_type_prompts import substitute_placeholders
-from transcria.gpu import llm_parsing
-from transcria.gpu.opencode_setup import find_opencode_binary, resolve_arbitrage_endpoint
+from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
+from transcria.llm_tools import llm_parsing
+from transcria.llm_tools.opencode_setup import find_opencode_binary
 
 # Politique de langue et résolution des prompts extraites vers gpu/prompt_locator.py
 # (vague C2). Ré-exportées ici : les consommateurs historiques (phases, web, exports,
 # quality, tests) importent depuis opencode_runner.
-from transcria.gpu.prompt_locator import (  # noqa: F401
+from transcria.llm_tools.prompt_locator import (  # noqa: F401
     _SUMMARY_MARKERS,
     _get_prompts_dir,
     build_harmonization_glossary,

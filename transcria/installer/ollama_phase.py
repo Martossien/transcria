@@ -10,7 +10,7 @@ d'arbitrage sans compilation ni token HF —
   3. ``ollama pull`` le modèle du palier (registre Ollama) ;
   4. écrire la config backend (``services.backend=ollama`` + endpoint + modèle) et le
      ``model_id`` opencode (``local/<modèle>``) — la résolution d'endpoint backend-aware
-     (:func:`transcria.gpu.opencode_setup.resolve_arbitrage_endpoint`) fait le reste.
+     (:func:`transcria.gpu.arbitrage_endpoint.resolve_arbitrage_endpoint`) fait le reste.
 
 Le cycle de vie runtime (démon persistant, chargement/déchargement VRAM) est porté par
 :class:`transcria.gpu.llm_backend.OllamaLLMBackend` et la délégation dans ``VRAMManager``.

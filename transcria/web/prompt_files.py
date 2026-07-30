@@ -19,7 +19,7 @@ from pathlib import Path
 from flask_babel import gettext as _
 from flask_babel import lazy_gettext as _l
 
-from transcria.gpu.opencode_runner import _get_prompts_dir
+from transcria.llm_tools.opencode_runner import _get_prompts_dir
 
 # Prompts éditables — liste FERMÉE (le nom vient du formulaire, jamais le chemin).
 # `label`/`help` marqués `lazy_gettext` (résolus dans la locale de l'interface au rendu).

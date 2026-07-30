@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from transcria.gpu.opencode_setup import (  # noqa: E402
-    default_base_url,
+from transcria.gpu.arbitrage_endpoint import default_base_url  # noqa: E402
+from transcria.llm_tools.opencode_setup import (  # noqa: E402
     ensure_agent_permissions,
     ensure_local_provider,
     find_opencode_binary,

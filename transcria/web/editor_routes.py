@@ -29,8 +29,8 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.config import get_config
 from transcria.exports.package_builder import PackageBuilder
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
 from transcria.web.job_access import get_job_for_api
 from transcria.web.refine_shared import refine_running

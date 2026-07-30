@@ -65,7 +65,7 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             from transcria.jobs.filesystem import JobFilesystem
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
@@ -231,7 +231,7 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             from transcria.stt.speaker_detection import SpeakerDetector
             from transcria.stt.summary import SummaryGenerator
 

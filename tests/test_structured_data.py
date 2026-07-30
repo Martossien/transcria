@@ -4,7 +4,7 @@ import pytest
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _parse(text: str):
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     return OpenCodeRunner._parse_structured_data(text)
 
 
@@ -113,7 +113,7 @@ def test_section_presente_json_illisible_retourne_failed():
 # ── Normalisation ─────────────────────────────────────────────────────────────
 
 def test_normalize_structured_data():
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     raw = {
         "decisions": ["  Budget validé  ", ""],
         "actions": ["Bob : rapport"],
@@ -130,7 +130,7 @@ def test_normalize_structured_data():
 # ── Intégration avec _parse_structured_summary ────────────────────────────────
 
 def test_parse_structured_summary_inclut_structured_data():
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     summary = (
         "# Résumé de contrôle\n\n"
         "## Informations sur la réunion\n"
@@ -156,7 +156,7 @@ def test_parse_structured_summary_inclut_structured_data():
 
 
 def test_parse_structured_summary_sans_section_retourne_missing():
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     summary = (
         "# Résumé de contrôle\n\n"
         "## Informations sur la réunion\n"
@@ -314,7 +314,7 @@ class TestClesExtractionPersonnalisees:
     """Lot D : les extract_fields d'un type personnalisé traversent le parseur."""
 
     def test_niveau_1_conserve_les_cles_du_type(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         text = ('## Données structurées\n```json\n'
                 '{"decisions": ["D1"], "budgets_evoques": ["10 k€ pour le projet A"]}\n```')
         sd, status, _ = OpenCodeRunner._parse_structured_data(text, ("budgets_evoques",))
@@ -324,7 +324,7 @@ class TestClesExtractionPersonnalisees:
         assert "budgets_evoques" not in sd2
 
     def test_niveau_2_regex_couvre_les_cles_du_type(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         text = ('## Données structurées\n```json\n'
                 '{"decisions": ["D1"], "budgets_evoques": ["10 k€"],}\n```')  # virgule finale → json.loads échoue
         sd, status, _ = OpenCodeRunner._parse_structured_data(text, ("budgets_evoques",))
@@ -335,7 +335,7 @@ class TestMaterialisationPrompt:
     """Lot D : le prompt résolu (placeholders substitués) est écrit dans le scratch."""
 
     def test_substitue_et_ecrit_dans_le_scratch(self, tmp_path):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         prompt = tmp_path / "summary_prompt.txt"
         prompt.write_text("Types : [{{TYPES_REUNION}}]\n{{INDICES_TYPES}}\n{{CHAMPS_EXTRACTION_TYPE}}",
                           encoding="utf-8")
@@ -350,7 +350,7 @@ class TestMaterialisationPrompt:
         assert "COMEX Société X" in text and "{{" not in text
 
     def test_sans_placeholder_fichier_original(self, tmp_path):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         prompt = tmp_path / "summary_prompt.txt"
         prompt.write_text("Prompt maison sans placeholder.", encoding="utf-8")
         runner = OpenCodeRunner(str(tmp_path), model="local/fake-model")

@@ -57,7 +57,7 @@ class MeetingContextManager:
         if not effective:
             return raw
         # Différé : cycle d'__init__ de paquets — gpu/ importe context/ en tête (prompts du runner LLM).
-        from transcria.gpu.opencode_runner import summary_markers
+        from transcria.llm_tools.opencode_runner import summary_markers
 
         # Marqueur de la section synthèse selon la langue des livrables (Axe B ; défaut « ## Synthèse »).
         marker = summary_markers(meeting_ctx.get("language"))["summary_heading"]

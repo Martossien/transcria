@@ -11,13 +11,13 @@ import time
 from dataclasses import dataclass
 
 from transcria.gpu import inventory, pid_registry
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
-from transcria.gpu.opencode_setup import is_remote_arbitrage
 from transcria.gpu.stt_instance_planner import llm_shares
 from transcria.gpu.vram_release import release_idle_vram
 

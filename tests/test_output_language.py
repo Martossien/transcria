@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.gpu.opencode_runner import (
+from transcria.llm_tools.opencode_runner import (
     language_directive,
     resolve_output_language,
     resolve_prompt_file,
@@ -99,7 +99,7 @@ mot1, mot2
 
 
 def _to_english(md: str) -> str:
-    from transcria.gpu.opencode_runner import summary_markers
+    from transcria.llm_tools.opencode_runner import summary_markers
     fr, en = summary_markers("fr"), summary_markers("en")
     for key in ("title", "type", "subject", "objective", "notes", "keywords",
                 "participant_count", "participants_heading", "summary_heading"):
@@ -111,7 +111,7 @@ def _to_english(md: str) -> str:
 
 def test_summary_parser_fr_unchanged():
     """Non-régression : le résumé français parse comme avant (défaut fr)."""
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     p = OpenCodeRunner._parse_structured_summary(_FR_SUMMARY)  # défaut language="fr"
     assert p["title_suggere"] == "Titre Alpha"
     assert p["type_suggere"] == "CSE"
@@ -126,7 +126,7 @@ def test_summary_parser_fr_unchanged():
 
 def test_summary_parser_en_markers_extract_same_fields():
     """Le même contenu avec marqueurs anglais parse identiquement en mode en."""
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     en_md = _to_english(_FR_SUMMARY)
     p = OpenCodeRunner._parse_structured_summary(en_md, (), "en")
     assert p["title_suggere"] == "Titre Alpha"      # les VALEURS ne changent pas dans ce test
@@ -138,7 +138,7 @@ def test_summary_parser_en_markers_extract_same_fields():
 
 def test_en_markers_not_found_in_fr_mode():
     """Garde-fou : les marqueurs EN ne sont PAS lus en mode fr (isolation des chemins)."""
-    from transcria.gpu.opencode_runner import OpenCodeRunner
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
     en_md = _to_english(_FR_SUMMARY)
     p_fr = OpenCodeRunner._parse_structured_summary(en_md, (), "fr")  # marqueurs EN, parser FR
     assert p_fr["title_suggere"] == ""              # le parser FR ne trouve pas "Suggested title"

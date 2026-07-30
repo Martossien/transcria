@@ -3,15 +3,8 @@ from __future__ import annotations
 
 import json
 
-from transcria.gpu.opencode_setup import (
-    default_base_url,
-    ensure_agent_permissions,
-    ensure_local_provider,
-    find_opencode_binary,
-    is_remote_arbitrage,
-    local_provider_block,
-    resolve_arbitrage_endpoint,
-)
+from transcria.gpu.arbitrage_endpoint import default_base_url, is_remote_arbitrage, resolve_arbitrage_endpoint
+from transcria.llm_tools.opencode_setup import ensure_agent_permissions, ensure_local_provider, find_opencode_binary, local_provider_block
 
 # ── find_opencode_binary ──────────────────────────────────────────────────────
 

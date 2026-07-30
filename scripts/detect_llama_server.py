@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Détecte et QUALIFIE le binaire llama-server (runtime de la LLM d'arbitrage).
 
-Couche E/S autour de ``transcria.gpu.llama_runtime`` (logique pure, testée) :
+Couche E/S autour de ``transcria.llm_tools.llama_runtime`` (logique pure, testée) :
   - recherche élargie des binaires (env, PATH, ~/llama.cpp, ~/ik_llama.cpp, /opt,
     /usr/local, envs conda) ;
   - collecte les faits : ``--version``, ``git describe`` dans l'arbre source si
@@ -27,7 +27,7 @@ from pathlib import Path
 # Permet l'exécution directe (`python scripts/detect_llama_server.py`) hors PYTHONPATH.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from transcria.gpu.llama_runtime import (  # noqa: E402
+from transcria.llm_tools.llama_runtime import (  # noqa: E402
     MIN_BUILD,
     RuntimeReport,
     detect_cuda,

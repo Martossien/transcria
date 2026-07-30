@@ -3,9 +3,6 @@
 Corps extraits d'``opencode_runner`` : fonctions pures de (config, job, langue) —
 aucun sous-processus, aucun état. ``opencode_runner`` les ré-exporte (les
 consommateurs historiques — phases, web, exports, quality — importent chez lui).
-
-⚠ RANGEMENT (audit 2026-07-30) : rien de GPU ici — politique de langue des livrables.
-Destination cible : transcria/llm_tools/. Déplacement opportuniste, pas en chantier.
 """
 import os
 

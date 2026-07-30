@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 
 from transcria.gpu.gpu_session import GPUSessionError
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.workflow.progress import progress_msg

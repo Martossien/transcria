@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 from types import SimpleNamespace
 
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
 from transcria.gpu.gpu_session import GPUSession
-from transcria.gpu.opencode_setup import is_remote_arbitrage
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.jobs.models import Job

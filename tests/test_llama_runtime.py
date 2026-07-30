@@ -1,7 +1,7 @@
 """Tests purs de la qualification du binaire llama-server (sans binaire ni GPU)."""
 from __future__ import annotations
 
-from transcria.gpu.llama_runtime import (
+from transcria.llm_tools.llama_runtime import (
     MIN_BUILD,
     detect_cuda,
     evaluate_runtime,

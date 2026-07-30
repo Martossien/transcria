@@ -167,7 +167,7 @@ def job_cse(admin_client, app):
 
 class TestParserToContext:
     def test_parse_complet_produit_tous_les_champs(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         summary = _make_summary_with_json(json.dumps(_SD_COMPLET))
         fields = OpenCodeRunner._parse_structured_summary(summary)
 
@@ -178,7 +178,7 @@ class TestParserToContext:
         assert fields["structured_data"]["prochaine_date"] == "05/06/2026"
 
     def test_parse_cse_extrait_votes_et_resolutions(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         summary = _make_summary_with_json(json.dumps(_SD_CSE))
         fields = OpenCodeRunner._parse_structured_summary(summary)
 
@@ -188,7 +188,7 @@ class TestParserToContext:
         assert len(fields["structured_data"]["points_odj"]) == 2
 
     def test_parse_listes_vides_status_ok(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         sd_vide = {k: [] if k != "prochaine_date" else "" for k in _SD_COMPLET}
         summary = _make_summary_with_json(json.dumps(sd_vide))
         fields = OpenCodeRunner._parse_structured_summary(summary)
@@ -196,7 +196,7 @@ class TestParserToContext:
         assert fields["structured_data"]["decisions"] == []
 
     def test_parse_json_malformed_retourne_partial_ou_failed(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         summary = (
             "# Résumé\n\n## Synthèse\nBlah.\n\n"
             "## Termes douteux à valider\n(aucun)\n\n"
@@ -206,7 +206,7 @@ class TestParserToContext:
         assert fields["structured_data_parse_status"] in ("partial", "failed")
 
     def test_parse_section_absente_status_missing(self):
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         summary = (
             "# Résumé de contrôle\n\n## Synthèse\nBlah.\n\n"
             "## Termes douteux à valider\n(aucun terme suspect détecté)\n"
@@ -217,7 +217,7 @@ class TestParserToContext:
 
     def test_apply_llm_suggestions_stocke_structured_data(self, tmp_path):
         """Vérifie que runner._apply_llm_suggestions écrit structured_data dans meeting_context."""
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.workflow.runner import WorkflowRunner
 

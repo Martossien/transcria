@@ -8,12 +8,12 @@ classe du runner) — couture substituée par les tests d'incident.
 import json
 import logging
 
-from transcria.gpu.opencode_runner import (
+from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import (
     OpenCodeRunner,
     build_harmonization_glossary,
     resolve_output_language,
 )
-from transcria.jobs.models import Job
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.progress import progress_msg
 from transcria.workflow.refine_llm import chat_completion

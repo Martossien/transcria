@@ -9,9 +9,9 @@ import logging
 
 from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES, _sanitize_render_options
 from transcria.exports.package_builder import PackageBuilder
-from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language, resolve_prompt_file
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language, resolve_prompt_file
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.refine_llm import build_discuss_messages, chat_completion, compute_transcript_budget_chars, truncate_transcript
 from transcria.workflow.refine_store import RefineStore, extract_proposal

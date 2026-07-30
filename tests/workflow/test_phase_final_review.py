@@ -133,7 +133,7 @@ class TestRunFinalReview:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             reviewed = "1\n00:00:00,000 --> 00:00:05,000\nBonjour à toutes\n"
 
@@ -167,7 +167,7 @@ class TestRunFinalReview:
             stopped = {"v": False}
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: stopped.update(v=True))
 
-            from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             monkeypatch.setattr(
                 OpenCodeRunner, "run_final_review",

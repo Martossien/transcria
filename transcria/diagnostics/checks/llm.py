@@ -147,7 +147,7 @@ def check_opencode(
     config_bin = workflow.get("arbitration_llm", {}).get("opencode_bin")
     if finder is None:
         # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
-        from transcria.gpu.opencode_setup import find_opencode_binary
+        from transcria.llm_tools.opencode_setup import find_opencode_binary
 
         finder = find_opencode_binary
     resolved = finder(config_bin=config_bin)
@@ -285,7 +285,7 @@ def check_opencode_smoke(
 
     if runner_factory is None:
         # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
         runner_factory = OpenCodeRunner
 

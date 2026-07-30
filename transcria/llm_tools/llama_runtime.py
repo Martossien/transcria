@@ -23,9 +23,6 @@ Ce module est **pur** (aucune E/S, aucun subprocess) : il prend des CHAÎNES dé
 collectées (sortie ``--version``, ``git describe``, ``ldd``) et rend un verdict.
 Toute la collecte vit dans ``scripts/detect_llama_server.py``. La logique est ainsi
 entièrement testable sans binaire ni GPU (cf. ``tests/test_llama_runtime.py``).
-
-⚠ RANGEMENT (audit 2026-07-30) : rien de GPU ici — qualification d'un binaire llama.cpp.
-Destination cible : transcria/llm_tools/. Déplacement opportuniste, pas en chantier.
 """
 from __future__ import annotations
 

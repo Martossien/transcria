@@ -9,9 +9,9 @@ anti-gel opencode, garde déterministe d'intégrité. Les coutures runner
 import logging
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
-from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
-from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.progress import progress_msg
 

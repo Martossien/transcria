@@ -7,8 +7,8 @@ GPU/LLM, via les coutures du runner.
 """
 import logging
 
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
 from transcria.workflow.multi_stt_review import (
     apply_secondary_texts,

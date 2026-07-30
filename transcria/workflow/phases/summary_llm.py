@@ -11,9 +11,9 @@ import logging
 from transcria.auth.store import UserStore
 from transcria.context.invite_parser import render_invite_markdown
 from transcria.context.meeting_type_prompts import build_prompt_substitutions
-from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
-from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
+from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
 logger = logging.getLogger(__name__)

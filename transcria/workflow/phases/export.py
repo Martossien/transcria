@@ -5,8 +5,8 @@ Corps extrait de ``WorkflowRunner.build_export``.
 import logging
 
 from transcria.exports.package_builder import PackageBuilder
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)

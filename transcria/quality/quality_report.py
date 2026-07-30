@@ -2,9 +2,9 @@ import logging
 import re
 from typing import Any
 
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.quality.lexicon_checks import LexiconChecker
 from transcria.quality.review_points import ReviewPoints as _RP
 from transcria.quality.srt_checks import SRTChecker

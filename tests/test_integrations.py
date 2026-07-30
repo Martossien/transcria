@@ -1,5 +1,5 @@
 
-from transcria.gpu.opencode_runner import OpenCodeRunner
+from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
 
 class TestOpenCodeRunner:

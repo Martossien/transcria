@@ -5,15 +5,12 @@ participants, termes suspects, données structurées) et lecture des métriques
 vLLM. Aucun sous-processus, aucun fichier — testables sans mock de processus.
 ``OpenCodeRunner`` conserve des délégateurs ``staticmethod`` : les appelants
 historiques et les tests passent par la classe.
-
-⚠ RANGEMENT (audit 2026-07-30) : rien de GPU ici — parsing de réponses LLM.
-Destination cible : transcria/llm_tools/. Déplacement opportuniste, pas en chantier.
 """
 import json
 import logging
 import re
 
-from transcria.gpu.prompt_locator import summary_markers
+from transcria.llm_tools.prompt_locator import summary_markers
 
 logger = logging.getLogger(__name__)
 

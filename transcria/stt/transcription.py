@@ -7,10 +7,10 @@ import numpy as np
 
 from transcria.audio.vad import SileroVAD
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.jobs.store import JobStore
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.logging_setup import get_structured_logger
 from transcria.stt.corpus import build_segment_corpus, summarize_corpus
 from transcria.stt.forced_alignment import ForcedAlignmentService

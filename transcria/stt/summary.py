@@ -4,9 +4,9 @@ from pathlib import Path
 
 from transcria.audio.vad import SileroVAD
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.logging_setup import get_structured_logger
 from transcria.stt.transcriber_factory import create_transcriber, summary_backend
 

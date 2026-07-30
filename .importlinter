@@ -57,6 +57,7 @@ source_modules =
     transcria.stt
     transcria.audio
     transcria.gpu
+    transcria.llm_tools
     transcria.exports
     transcria.quality
     transcria.notifications

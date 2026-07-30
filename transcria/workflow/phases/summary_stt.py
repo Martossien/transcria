@@ -7,9 +7,9 @@ split, cf. docs/SERVICE_RESSOURCES_GPU.md §9 et §7.2-bis).
 from pathlib import Path
 
 from transcria.gpu.gpu_session import GPUSessionError
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.inference.resource_gate import prepare_remote_resources
 from transcria.jobs.models import Job, JobState
+from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.summary import SummaryGenerator
 from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backend
 from transcria.workflow.progress import progress_msg

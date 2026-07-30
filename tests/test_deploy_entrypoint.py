@@ -317,7 +317,7 @@ def test_provision_opencode_writes_provider_from_mounted_config(tmp_path, monkey
         lambda: {"services": {"arbitrage_llm_host": "vllm-arbitrage", "arbitrage_llm_port": 8080}},
     )
     monkeypatch.setattr(
-        "transcria.gpu.opencode_setup.ensure_local_provider",
+        "transcria.llm_tools.opencode_setup.ensure_local_provider",
         lambda path, base_url, model, **kw: captured.update(path=str(path), base_url=base_url, model=model),
     )
     oc = tmp_path / "oc.json"

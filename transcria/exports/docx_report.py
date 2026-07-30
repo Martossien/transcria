@@ -55,8 +55,8 @@ from transcria.exports.docx_style import (  # noqa: F401 — façade
     _table_thin_borders,
     _theme_from_definition,
 )
-from transcria.gpu.opencode_runner import summary_markers
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.llm_tools.opencode_runner import summary_markers
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 _CSE_TYPES: frozenset[str] = quorum_types()
