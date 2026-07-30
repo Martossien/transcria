@@ -125,10 +125,18 @@ class LiveSession:
 
 
 class LiveConnectorSession:
-    """Réunion LIVE de bout en bout (ADR-001 D5) : le SUIVI en direct (segments
-    `final_live`) PUIS, à la fin de réunion, l'ingestion de l'enregistrement complet via
-    le pont → le pipeline batch produit le `canonical` de référence. Le direct ne remplace
-    jamais le batch : il le précède.
+    """Contrat d'orchestration des CONNECTEURS PLATEFORME (ADR-001 D5) : le SUIVI en
+    direct (segments `final_live`) PUIS, à la fin de réunion, la récupération de
+    l'ARTEFACT d'enregistrement de la plateforme et son ingestion via le pont → le
+    pipeline batch produit le `canonical` de référence. Le direct ne remplace jamais le
+    batch : il le précède.
+
+    **Sort tranché (vague 5, D5.6, validé 2026-07-30)** : cette classe est réservée aux
+    connecteurs post-réunion des plateformes (Zoom RTMS + Cloud Recording…,
+    `TEMPS_REEL_REUNIONS.md` §5) — le BOT n'y passe PAS : il est sa propre source
+    d'enregistrement et suit un chemin plus riche (mixage disque, pistes séparées,
+    manifeste v2), éprouvé par les gates réels. La câbler dans le bot serait de
+    l'abstraction pour l'abstraction.
 
     `recording_supplier()` fournit l'audio complet en fin de réunion (artefact post-réunion
     de la plateforme) ; `dedup_key` porte l'idempotence serveur (rejeu → même job).

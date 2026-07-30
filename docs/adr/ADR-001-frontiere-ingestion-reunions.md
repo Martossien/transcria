@@ -99,6 +99,17 @@ Le pipeline batch ne « remplace » pas le live en place. À la fin du batch, la
 les frontières de segments diffèrent, alignement coûteux et faible valeur). Champ
 `provenance` conservé + identifiant de révision.
 
+**Révision 2026-07-30 (vague 5, lot C) — niveau 2 RÉALISÉ.** La forme livrée est plus
+simple que la lettre initiale, même esprit : la révision live est le fichier
+`live/captions.jsonl` du job (tours `final_live` relayés par lots via
+`/v1/meetings/<sid>/captions`, plafonné par `connectors.meetings.max_caption_lines`,
+troncature de tête annoncée dans le flux) ; la page du job l'affiche « Suivi en
+direct — provisoire » pendant l'état `in_meeting` et le panneau s'efface à
+l'ingestion. Le batch produit le canonical (`transcription_segments.json` estampillé
+`provenance: canonical`) ; `captions.jsonl` est CONSERVÉ comme trace **non-référence**
+— jamais affiché comme résultat, jamais fusionné avec le canonical. Pas de websocket
+ni SSE (rejeté : le poll 5 s existant suffit à un suivi de réunion).
+
 ### D6 — Provenance : stabilité selon le moteur
 
 `local-agreement` **seulement** pour les backends à fenêtre glissante. Un moteur au

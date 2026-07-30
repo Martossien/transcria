@@ -678,10 +678,13 @@ sécurité avant activation par défaut ; `AGENTS.md` tenu à jour.
   commande manuelle ; runner coupé/relancé en cours de route → la session survit ou échoue
   PROPREMENT ; doctor OK ; images tirées de GHCR par digest.
 
-### Vague 5 — pistes séparées + live. Coût XL. *Après retours d'usage des vagues 1–4.*
-- D5 niveau 2 (ingest multipiste, STT par piste, fusion) ; panneau « réunion en direct »
-  (captions par participant, bandeau règle d'or) ; câbler `LiveConnectorSession` ; révisions
-  live/canonical (ADR-001 D5). Sera re-spécifiée à son tour — ce plan n'en fixe que la place.
+### Vague 5 — pistes séparées + live. Coût XL. **LIVRÉE (juillet 2026).**
+- Spécifiée puis livrée par [`VAGUE5_PISTES_SEPAREES.md`](VAGUE5_PISTES_SEPAREES.md)
+  (lots A-D) : capture par piste sur disque + manifeste v2 + ingest multipiste ; STT par
+  piste + fusion par tri + sous-diarisation des pistes salle (`PISTE_<pid>_Sn`) ; panneau
+  « Suivi en direct — provisoire » (`/captions`, poll delta). « Câbler
+  `LiveConnectorSession` » a été RE-TRANCHÉ (D5.6) : contrat des connecteurs plateforme,
+  pas du bot ; révision ADR-001 D5 écrite (niveau 2 réalisé).
 
 ---
 

@@ -6,6 +6,39 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [Non publié]
+
+### Ajouté
+
+- **Réunions — pistes séparées** (vague 5, `docs/VAGUE5_PISTES_SEPAREES.md`) : le bot
+  conserve l'audio de CHAQUE participant sur disque (timeline commune, RAM constante),
+  l'ingestion v2 les stocke à côté du mix (validation stricte tout-ou-rien, gardes
+  `connectors.meetings.max_tracks`/`max_track_mb`), et le pipeline transcrit **piste par
+  piste** puis fusionne par timestamps : les mots des CHEVAUCHEMENTS existent, chacun
+  sous son nom. Les pistes « salle » sont sous-diarisées (`PISTE_<pid>_S1`…) — une salle
+  cesse d'être un locuteur unique. Sans pistes, comportement d'avant à l'octet près.
+- **Réunions — suivi en direct** : pendant la réunion, la page du job affiche les tours
+  de parole au fil de l'eau, marqués « provisoires » (`/v1/meetings/<sid>/captions`
+  relayé par lots par le runner, `live/captions.jsonl` plafonné par
+  `connectors.meetings.max_caption_lines`, troncature annoncée). La transcription de
+  référence reste celle du pipeline (ADR-001 D5, révision écrite).
+- **Réunions — salle protégée + instance à compte** : champ « code de la réunion »
+  (chiffré au repos, déchiffré au seul claim du runner) ; compte d'instance Jitsi
+  auto-hébergée par l'environnement du runner (`JITSI_XMPP_USER`/`_PASSWORD`), zéro
+  saisie utilisateur quand il ne sert pas.
+- **Éditeur SRT** : les identifiants de locuteur issus des pistes (noms avec espaces)
+  sont reconnus partout (grammaire généralisée + contrat `known_ids` — jamais de
+  locuteur fantôme depuis une phrase à deux-points).
+
+### Corrigé
+
+- **Cœur GPU/VRAM** (audit + tests métal) : préflight de l'arbitrage LLM mesuré et
+  générique (X cartes, VRAM hétérogène), escalade « owner » configurable (arrêt de ce
+  qui est sur le chemin, moteurs relancés à la demande), correction d'un interblocage
+  potentiel (release sous verrou d'allocation), refus lisibles.
+- La phase diarisation d'un profil qualité n'écrase plus les tours issus du manifeste
+  de réunion (la segmentation exacte des pistes est préservée).
+
 ## [0.3.9.1] — 2026-07-21
 
 Durcissement de sécurité (tout **opt-in**, défaut inchangé) et correctif de

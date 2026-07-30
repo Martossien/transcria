@@ -23,7 +23,12 @@
 > 2000, troncature de tête ANNONCÉE, numérotation monotone), la page du job
 > (état `in_meeting`) affiche « Suivi en direct — provisoire » via
 > `GET /api/meetings/<sid>/captions?after=<n>` (visibilité du job porteur) et le
-> panneau s'efface à l'ingestion (rechargement d'état existant). Reste lot D.
+> panneau s'efface à l'ingestion (rechargement d'état existant). **Lot D LIVRÉ** :
+> révision ADR-001 D5 écrite (niveau 2 réalisé, captions.jsonl = trace non-référence),
+> sort de `LiveConnectorSession` documenté à la classe (contrat des connecteurs, pas du
+> bot), REPRISE de `TEMPS_REEL_REUNIONS.md` toilettée (L1/L3/L4 absorbés par les vagues
+> 3-5), CHANGELOG. **LA VAGUE 5 EST CLOSE côté code** — restent les gates réels
+> « salle » et « suivi live » avec l'utilisateur, et la revue sécurité Opus 5.
 > Spécification dédiée exigée par le plan directeur
 > ([`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md), vague 5) : elle plie dans la
 > conception les leçons des gates réels de juillet — pistes sur DISQUE (jamais en RAM),

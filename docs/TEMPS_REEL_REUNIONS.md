@@ -26,7 +26,7 @@
 > .NET — la lib média `Microsoft.Skype.Bots.Media` est Windows-only, .NET lui-même tourne sous
 > Linux). Tout en commits ; le gate réel (E2E par plateforme) reste à faire ensemble.
 
-## 0. REPRISE — où on en est, et par quoi continuer (à jour du 2026-07-29)
+## 0. REPRISE — où on en est, et par quoi continuer (à jour du 2026-07-30)
 
 > **Lisez cette section en premier.** Elle existe pour qu'on puisse reprendre le chantier depuis
 > une autre machine sans relire les 1 300 lignes qui suivent. Les détails vivent plus bas ; ici,
@@ -90,21 +90,33 @@ Aucune des deux ne produit d'erreur : le code semble marcher et rien n'arrive ja
 
 ### Ordre de travail recommandé
 
-**Sans rien acheter** (par rapport valeur/effort décroissant) :
+**Absorbé par les vagues 3-5 du chantier UI réunions** (`UI_REUNIONS_WORKFLOW.md` +
+`VAGUE5_PISTES_SEPAREES.md`, livrées juillet 2026) — ces anciens items ne sont plus des
+chantiers :
 
-1. **L2 — parcours documenté de bout en bout** dans `README`/`INSTALL` (activer la façade →
-   créer un jeton → image → `scripts/bot.sh`). C'est ce qui rend le chantier **testable par
-   quelqu'un d'autre que son auteur**. Coût S. *Le meilleur choix aujourd'hui.*
-2. **L1 — question à l'installation** (« transcrire des réunions en direct ? »). Coût S.
-3. **L3 — publier les images de bot sur GHCR**. Supprime Docker de l'expérience utilisateur —
-   plus rien à construire côté client. Coût M.
-4. **Sous-salles Zoom** : codées, jamais exécutées. Ne demande qu'une salle ouverte.
+- **L1** (question à l'installation) → `install.sh --with-meeting-bots`, unité systemd du
+  runner posée, activation par MENU + bouton « Activer » 1-clic sur `/admin/connecteurs`
+  (auto-provisionnement complet, check-list vivante).
+- **L3** (images de bot publiées) → job matrix GHCR des images de bot en CI (vague 4).
+- **L4** (écran « Rejoindre une réunion ») → TRANCHÉ par D1 : jamais de droits Docker au
+  portail — l'écran livré est « Planifier une réunion » (vague 3), exécuté par le
+  **meeting-runner** séparé qui TIRE les intentions.
+- Et au-delà des L : pistes séparées + STT par piste + sous-diarisation des pistes salle +
+  **suivi en direct provisoire** sur la page du job (vague 5, lots A-C).
+
+**Reste sans rien acheter** :
+
+1. **L2 — parcours documenté de bout en bout** dans `README`/`INSTALL` (aujourd'hui :
+   activer par le menu → planifier depuis la page d'accueil). Rend le chantier **testable
+   par quelqu'un d'autre que son auteur**. Coût S.
+2. **Sous-salles Zoom** : codées, jamais exécutées. Ne demande qu'une salle ouverte.
+3. **Revue sécurité (Opus 5)** avant mise en service réelle : crypto meeting_ref/passcode,
+   jetons `tia_`, endpoints `/v1` (ingest v2 pistes, `/captions`), runner.
 
 **Une fois les comptes achetés** : brancher les appels réseau derrière les points d'injection
-déjà spécifiés (cf. §7-quinquies), puis le branchement sur l'ingestion, puis l'E2E réel.
-
-**À trancher explicitement, pas en passant** : **L4** (écran « Rejoindre une réunion ») suppose
-de donner au portail des droits sur Docker — surface d'attaque, droits du démon, isolation.
+déjà spécifiés (cf. §7-quinquies) — `LiveConnectorSession` est leur contrat d'orchestration
+(sort tranché D5.6 : le bot n'y passe pas) — puis le branchement sur l'ingestion, puis
+l'E2E réel.
 
 ### Où trouver le reste
 
