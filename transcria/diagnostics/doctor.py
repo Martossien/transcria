@@ -61,6 +61,7 @@ from transcria.diagnostics.checks.identity import (  # noqa: F401 — façade
 from transcria.diagnostics.checks.llm import (  # noqa: F401 — façade
     check_arbitrage_llm,
     check_arbitrage_script,
+    check_llm_placement_declaration,
     check_opencode,
     check_opencode_model_resolution,
     check_opencode_smoke,
@@ -112,6 +113,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_database,
     check_database_encoding,
     check_arbitrage_script,
+    check_llm_placement_declaration,
     check_arbitrage_llm,
     check_opencode,
     check_opencode_model_resolution,

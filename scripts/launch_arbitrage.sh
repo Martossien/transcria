@@ -9,6 +9,10 @@
 #   servant un modèle dont l'alias correspond à `services.arbitrage_api_model_id`.
 #   Pointez `services.arbitrage_script` vers VOTRE script.
 #   (Idem pour le STT : voir scripts/launch_stt_*.sh, eux paramétrables par env.)
+#   ⚠ `gpu.llm_gpu_indices` (config) DOIT refléter les cartes de CE script
+#   (--tensor-split/CUDA_VISIBLE_DEVICES) — le doctor le vérifie. Divergence vécue le
+#   2026-07-30 : split 3 cartes, config [0] → façade posée sur une carte du split,
+#   segfault OOM au lancement.
 # Binaire llama.cpp recompilé en CUDA 13.1 ; il embarque déjà un RPATH vers ses
 # libs (~/.conda/envs/ik_build/lib) → la résolution ne dépend pas de ces exports.
 # CUDA_HOME pointe sur la CUDA réelle de la machine (outils annexes, fallback lib).

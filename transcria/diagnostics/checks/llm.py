@@ -31,6 +31,62 @@ def check_arbitrage_script(
                            hint=f"chmod +x {script}")
     return CheckResult(name, OK, _t("arbs_ok", script=script))
 
+def _tensor_split_card_count(script_text: str) -> int | None:
+    """Nombre de cartes NON NULLES déclarées par le `--tensor-split` du script (None si
+    absent — un script mono-GPU ne le passe pas, et llama.cpp sans ce flag s'étale par
+    défaut sur toutes les cartes visibles : indécidable statiquement)."""
+    import re
+
+    m = re.search(r"--tensor-split[=\s]+([0-9][0-9.,\s]*)", script_text)
+    if not m:
+        return None
+    values = [v for v in re.split(r"[,\s]+", m.group(1).strip()) if v]
+    try:
+        count = sum(1 for v in values if float(v) > 0)
+    except ValueError:
+        return None
+    return count or None
+
+def check_llm_placement_declaration(
+    cfg: dict,
+    *,
+    is_file: Callable[[str], bool] = os.path.isfile,
+    read_text: Callable[[str], str] | None = None,
+) -> CheckResult:
+    """La config déclare-t-elle le MÊME placement LLM que le script de lancement ?
+
+    Incident du 2026-07-30 (job fc268816) : script en `--tensor-split 1,1,1` (3 cartes)
+    mais `gpu.llm_gpu_indices: [0]` — l'allocateur ne protégeait qu'une carte, une façade
+    STT s'est posée sur une carte du split, et llama-server a segfaulté (cudaMalloc OOM).
+    La divergence était SILENCIEUSE ; ce contrôle statique la rend visible au doctor.
+    """
+    name = _t("chk_llm_placement")
+    services = cfg.get("services", {})
+    script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
+    if not script or not is_file(script):
+        return CheckResult(name, OK, _t("place_no_script"))
+    reader = read_text or (lambda p: Path(p).read_text(encoding="utf-8", errors="replace"))
+    try:
+        text = reader(script)
+    except OSError:
+        return CheckResult(name, OK, _t("place_unreadable"))
+    cards = _tensor_split_card_count(text)
+    if cards is None:
+        return CheckResult(name, OK, _t("place_no_split"))
+    indices = (cfg.get("gpu", {}) or {}).get("llm_gpu_indices") or []
+    if not indices:
+        return CheckResult(
+            name, WARN, _t("place_undeclared", cards=cards),
+            hint=_t("place_undeclared_hint"),
+        )
+    if len(indices) != cards:
+        return CheckResult(
+            name, WARN,
+            _t("place_mismatch", cards=cards, declared=len(indices), indices=list(indices)),
+            hint=_t("place_mismatch_hint"),
+        )
+    return CheckResult(name, OK, _t("place_ok", cards=cards, indices=list(indices)))
+
 def check_arbitrage_llm(
     cfg: dict,
     *,

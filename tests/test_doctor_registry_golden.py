@@ -18,6 +18,9 @@ GOLDEN_ALL_CHECKS = [
     "check_database",
     "check_database_encoding",
     "check_arbitrage_script",
+    # Ajout 2026-07-30 : cohérence script ↔ gpu.llm_gpu_indices (incident fc268816 —
+    # tensor-split 3 cartes, config 1 carte → segfault llama-server au lancement).
+    "check_llm_placement_declaration",
     "check_arbitrage_llm",
     "check_opencode",
     "check_opencode_model_resolution",

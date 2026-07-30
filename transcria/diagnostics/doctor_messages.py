@@ -65,6 +65,20 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "arbl_mismatch_hint": "Aligner services.arbitrage_api_model_id sur l'alias réellement servi.",
         "arbl_ok": "répond sur le port {port}",
         "arbl_ok_model": " (modèle « {active} »)",
+        # check_llm_placement_declaration
+        "chk_llm_placement": "Cohérence placement LLM (script ↔ config)",
+        "place_no_script": "sans objet (pas de script de lancement local)",
+        "place_unreadable": "script illisible — cohérence non vérifiée",
+        "place_no_split": "pas de --tensor-split dans le script — cohérence non vérifiable statiquement",
+        "place_undeclared": "le script répartit la LLM sur {cards} carte(s) mais gpu.llm_gpu_indices est ABSENT — "
+                            "l'allocateur ne protège aucune carte",
+        "place_undeclared_hint": "Déclarer gpu.llm_gpu_indices (+ llm_vram_mb_per_gpu) d'après le script — sinon une phase STT "
+                                 "peut se poser sur une carte du split et faire segfaulter llama-server (vécu 2026-07-30).",
+        "place_mismatch": "le script répartit la LLM sur {cards} carte(s) mais gpu.llm_gpu_indices en déclare "
+                          "{declared} ({indices}) — l'admission VRAM raisonne sur un placement FAUX",
+        "place_mismatch_hint": "Aligner gpu.llm_gpu_indices/llm_vram_mb_per_gpu sur le --tensor-split réel du script "
+                               "(vécu 2026-07-30 : segfault OOM au lancement).",
+        "place_ok": "script et config alignés ({cards} carte(s) : {indices})",
         # check_opencode
         "oc_disabled": "phases LLM désactivées — opencode non requis",
         "oc_missing": "opencode introuvable (PATH, TRANSCRIA_OPENCODE_BIN, chemins connus)",
@@ -309,6 +323,19 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "arbl_mismatch_hint": "Align services.arbitrage_api_model_id with the alias actually served.",
         "arbl_ok": "responds on port {port}",
         "arbl_ok_model": " (model “{active}”)",
+        "chk_llm_placement": "LLM placement coherence (script ↔ config)",
+        "place_no_script": "not applicable (no local launch script)",
+        "place_unreadable": "script unreadable — coherence not verified",
+        "place_no_split": "no --tensor-split in the script — coherence not statically verifiable",
+        "place_undeclared": "the script spreads the LLM over {cards} card(s) but gpu.llm_gpu_indices is MISSING — "
+                            "the allocator protects no card",
+        "place_undeclared_hint": "Declare gpu.llm_gpu_indices (+ llm_vram_mb_per_gpu) to match the script — otherwise an STT "
+                                 "phase can land on a split card and segfault llama-server (seen 2026-07-30).",
+        "place_mismatch": "the script spreads the LLM over {cards} card(s) but gpu.llm_gpu_indices declares "
+                          "{declared} ({indices}) — VRAM admission reasons on a WRONG placement",
+        "place_mismatch_hint": "Align gpu.llm_gpu_indices/llm_vram_mb_per_gpu with the script's actual --tensor-split "
+                               "(seen 2026-07-30: OOM segfault at launch).",
+        "place_ok": "script and config aligned ({cards} card(s): {indices})",
         "oc_disabled": "LLM phases disabled — opencode not required",
         "oc_missing": "opencode not found (PATH, TRANSCRIA_OPENCODE_BIN, known paths)",
         "oc_missing_hint": "Install opencode and/or set TRANSCRIA_OPENCODE_BIN — see docs/INSTALL.md.",

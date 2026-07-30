@@ -17,6 +17,7 @@ from transcria.gpu.cuda_visible import (
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
+from transcria.gpu.vram_release import release_idle_vram
 
 logger = logging.getLogger(__name__)
 
@@ -425,6 +426,63 @@ class VRAMManager:
         """Alias compatibilité : utiliser stop_cleanup_llm_ports()."""
         return self.stop_cleanup_llm_ports()
 
+    def _llm_launch_shares(self) -> dict[int, int]:
+        """Part de VRAM attendue PAR carte du placement LLM (mêmes règles que l'allocateur :
+        `gpu.llm_vram_mb_per_gpu` aligné sur `llm_gpu_indices`, sinon partage égal du total).
+        Vide si le placement n'est pas déclaré — on n'INVENTE jamais un placement."""
+        gpu_cfg = self.config.get("gpu", {}) or {}
+        indices_raw = gpu_cfg.get("llm_gpu_indices")
+        if not isinstance(indices_raw, list) or not indices_raw:
+            return {}
+        indices = [int(i) for i in indices_raw]
+        per_gpu = gpu_cfg.get("llm_vram_mb_per_gpu")
+        if isinstance(per_gpu, list) and len(per_gpu) == len(indices) and all(
+            isinstance(mb, (int, float)) and mb > 0 for mb in per_gpu
+        ):
+            return {idx: int(mb) for idx, mb in zip(indices, per_gpu)}
+        total = int(gpu_cfg.get("llm_vram_mb") or self.llm_vram_mb or 0)
+        if total <= 0:
+            return {}
+        share = -(-total // len(indices))                  # plafond (ceil)
+        return {idx: share for idx in indices}
+
+    def _preflight_llm_vram(self) -> bool:
+        """Vérifie la VRAM RÉELLEMENT libre des cartes du placement AVANT d'exécuter le script.
+
+        Leçon du 2026-07-30 (job fc268816) : lancé en aveugle alors qu'une façade STT
+        occupait 12 Go sur une carte du `--tensor-split`, llama-server a SEGFAULTÉ
+        (cudaMalloc OOM, code 139) — panne muette, diagnostiquée au core dump. Ce préflight
+        transforme ce crash en refus LISIBLE, après avoir demandé la libération des modèles
+        inactifs (registre `vram_release`, l'occupant légitime est presque toujours une
+        façade en attente de sa minuterie d'inactivité).
+        """
+        shares = self._llm_launch_shares()
+        if not shares:
+            return True          # placement non déclaré : comportement historique, sans garde
+
+        def _deficits() -> list[tuple[int, int, int]]:
+            out = []
+            for idx, share in sorted(shares.items()):
+                free = self.get_free_vram_mb(idx)
+                if free < share + self.min_free_mb:
+                    out.append((idx, free, share))
+            return out
+
+        short = _deficits()
+        if short:
+            release_idle_vram()  # libération sous pression, puis UNE remesure
+            short = _deficits()
+        if not short:
+            return True
+        for idx, free, share in short:
+            logger.error(
+                "Préflight VRAM LLM : GPU %d n'a que %d Mo libres pour une part de %d Mo "
+                "(+ marge %d Mo) — lancement REFUSÉ (un lancement aveugle segfaulte). "
+                "Identifier l'occupant : nvidia-smi ; placement déclaré : gpu.llm_gpu_indices.",
+                idx, free, share, self.min_free_mb,
+            )
+        return False
+
     def launch_arbitrage_llm(self) -> bool:
         """Lance la LLM d'arbitrage via le script configuré."""
         if self._backend_is_ollama():
@@ -457,6 +515,9 @@ class VRAMManager:
                             self.arbitrage_llm_port)
                 self._kill_port(self.arbitrage_llm_port)
                 time.sleep(3)
+
+        if not self._preflight_llm_vram():
+            return False
 
         logger.info(
             "Lancement LLM d'arbitrage via %s (sortie → %s)...",

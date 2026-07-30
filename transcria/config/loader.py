@@ -83,6 +83,10 @@ _DEFAULT_CONFIG = {
         # Empreinte TOTALE de la LLM d'arbitrage (tous GPU confondus) et cartes utilisées
         # par son script de lancement (CUDA_VISIBLE_DEVICES/tensor-split). None = tous les
         # GPU visibles. La vérification/réservation se fait PAR GPU (total ÷ nb cartes).
+        # ⚠ llm_gpu_indices DOIT refléter le script réel (le doctor compare au
+        # --tensor-split) : déclarer moins de cartes que le split laisse l'allocateur
+        # poser d'autres modèles sur les cartes manquantes → segfault OOM au lancement
+        # (vécu 2026-07-30 : split 3 cartes, config [0], façade STT sur la carte 2).
         "llm_vram_mb": 60000,
         "llm_gpu_indices": None,
         # Cartes hétérogènes / tensor-split inégal : part RÉELLE par GPU (liste alignée
