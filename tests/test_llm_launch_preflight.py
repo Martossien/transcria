@@ -51,10 +51,37 @@ class TestPreflightLlmVram:
         assert mgr._preflight_llm_vram() is True
 
     def test_refus_lisible_quand_une_carte_du_split_est_occupee(self, monkeypatch):
-        """Le scénario EXACT de l'incident : 12 Go squattés sur la carte 2."""
+        """Le scénario EXACT de l'incident : 12 Go squattés sur la carte 2 par un process
+        HORS kill_patterns (ex. entraînement d'un tiers) — préemption tentée, sans effet,
+        refus lisible. On ne tue JAMAIS ce que l'exploitant n'a pas déclaré préemptable."""
         mgr = _manager(self.CFG, {0: 24000, 1: 24000, 2: 12300}, monkeypatch)
         monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram", lambda: None)
+        freed = []
+        monkeypatch.setattr(mgr, "_free_memory", lambda idx: freed.append(idx))
         assert mgr._preflight_llm_vram() is False
+        assert freed == [2]                      # préemption tentée sur LA carte déficitaire
+
+    def test_preemption_configuree_libere_la_carte(self, monkeypatch):
+        """Escalade « owner ou pas » (décision utilisateur 2026-07-30) : un serveur LLM
+        matchant kill_patterns squatte la carte → _free_memory le préempte → feu vert.
+        Ce qui est à nous se relancera à la demande (ensure) — rien à re-piloter ici."""
+        free = {0: 24000, 1: 24000, 2: 5000}
+        monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram", lambda: None)
+        mgr = _manager(self.CFG, free, monkeypatch)
+        monkeypatch.setattr(mgr, "_free_memory",
+                            lambda idx: free.__setitem__(idx, 24000))
+        assert mgr._preflight_llm_vram() is True
+
+    def test_escalade_dans_l_ordre_releasers_puis_preemption(self, monkeypatch):
+        """L'éviction DOUCE (nos modèles inactifs) passe avant la préemption par kill :
+        si elle suffit, personne n'est tué."""
+        free = {0: 24000, 1: 24000, 2: 12300}
+        monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram",
+                            lambda: free.__setitem__(2, 24000))
+        mgr = _manager(self.CFG, free, monkeypatch)
+        monkeypatch.setattr(mgr, "_free_memory",
+                            lambda idx: pytest.fail("préemption alors que la libération douce suffisait"))
+        assert mgr._preflight_llm_vram() is True
 
     def test_liberation_sous_pression_puis_lancement(self, monkeypatch):
         """L'occupant est une façade inactive : la libération la décharge → feu vert."""
@@ -102,6 +129,7 @@ class TestPreflightLlmVram:
         mgr = _manager(self.CFG, {0: 24000, 1: 24000, 2: 0}, monkeypatch)
         mgr.arbitrage_script = str(script)
         monkeypatch.setattr(mgr, "is_port_open", lambda port: False)
+        monkeypatch.setattr(mgr, "_free_memory", lambda idx: None)
         monkeypatch.setattr("transcria.gpu.vram_manager.release_idle_vram", lambda: None)
 
         def _no_popen(*a, **k):  # pragma: no cover — ne doit JAMAIS être atteint

@@ -84,7 +84,7 @@
   "transcria.gpu.llm_prelaunch": 4,
   "transcria.gpu.opencode_runner": 4,
   "transcria.gpu.stt_engine_supervisor": 2,
-  "transcria.gpu.vram_manager": 9,
+  "transcria.gpu.vram_manager": 10,
   "transcria.i18n": 2,
   "transcria.i18n.locale": 2,
   "transcria.inference": 1,
