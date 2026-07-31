@@ -22,6 +22,7 @@ _BROWSER_PLATFORMS = frozenset({"jitsi"})
 _MACHINE_ENV = (
     "JITSI_XMPP_USER", "JITSI_XMPP_PASSWORD",
     "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
+    "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET",       # app Meeting SDK (propriété machine)
 )
 
 

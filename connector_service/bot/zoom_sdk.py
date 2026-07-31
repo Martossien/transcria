@@ -26,6 +26,11 @@ import os
 import sys
 from urllib.parse import parse_qs, urlsplit
 
+from connector_service.bot._workflow import (
+    ingest_recording,
+    json_caption_emitter,
+    json_event_emitter,
+)
 from connector_service.bot.cli import (
     EXIT_CONFIG,
     EXIT_NOT_ADMITTED,
@@ -37,6 +42,7 @@ from connector_service.bot.cli import (
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live._demux import DemuxFrameSource
 from connector_service.live.media import LiveAudioProvider
+from connector_service.live.recorder import RecordingTee
 from connector_service.live.session import LiveSession
 from connector_service.live.zoom_sdk_state import ZoomSdkPhase
 from connector_service.live.zoom_sdk_transport import (
@@ -168,8 +174,10 @@ def resolve_passcode(explicit: str | None, from_link: str, ambient: str) -> tupl
 
 async def run(args: argparse.Namespace, client_secret: str) -> int:
     meeting_number, invite_passcode = parse_zoom_invite(args.meeting)
-    passcode, avertissement = resolve_passcode(args.passcode, invite_passcode,
-                                               os.environ.get("ZOOM_PASSCODE", ""))
+    # Code ambiant : ZOOM_PASSCODE (configuration machine) d'abord, sinon le canal STANDARD
+    # du runner (BOT_ROOM_PASSCODE — champ « code de la réunion » saisi à la planification).
+    ambient = os.environ.get("ZOOM_PASSCODE", "") or os.environ.get("BOT_ROOM_PASSCODE", "")
+    passcode, avertissement = resolve_passcode(args.passcode, invite_passcode, ambient)
     if avertissement:
         logger.warning("Zoom : %s", avertissement)
 
@@ -180,10 +188,21 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
     # La phase la PLUS AVANCÉE atteinte détermine le code de retour : « jamais entré » et
     # « entré puis sorti » ne se rejouent pas de la même façon.
     reached: dict[str, ZoomSdkPhase] = {"phase": ZoomSdkPhase.CONNECTING}
+    events_json = os.environ.get("BOT_EVENTS") == "json"
+    emit_state = json_event_emitter() if events_json else (lambda _s: None)
+    emit_caption = json_caption_emitter() if events_json else None
+    # Phases SDK → états du portail (mêmes cartes de job que les autres bots).
+    _STATES = {ZoomSdkPhase.CONNECTING: "joining",
+               ZoomSdkPhase.WAITING_FOR_HOST: "waiting_admission",
+               ZoomSdkPhase.IN_WAITING_ROOM: "waiting_admission",
+               ZoomSdkPhase.ACTIVE: "active"}
 
     def _on_phase(phase: ZoomSdkPhase) -> None:
         if phase is ZoomSdkPhase.ACTIVE:
             reached["phase"] = phase
+        state = _STATES.get(phase)
+        if state:
+            emit_state(state)
 
     source = DemuxFrameSource(zoom_sdk_demux_source(
         args.client_id, client_secret, meeting_number,
@@ -197,8 +216,23 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
     provider = LiveAudioProvider("zoom", source)
     transcriber = build_transcriber(args.transcria_url, args.token, args.language)
 
+    # Parcours complet (lot V2) : une session PLANIFIÉE porte un job cible → le bot
+    # enregistre (mix + pistes par participant, le SDK les livre démultiplexées) et
+    # rattache le tout au job en fin de réunion — même plomberie que Jitsi et Visio.
+    target_job_id = (os.environ.get("TRANSCRIA_JOB_ID") or "").strip() or None
+    recording = None
+    if target_job_id and args.transcria_url:
+        recording = RecordingTee(transcriber, sample_rate_hz=args.sampling_rate_hz)
+        transcriber = recording
+
     segments: list = []
-    session = LiveSession(transcriber, on_final=segments.append)
+
+    def _on_final(seg) -> None:
+        segments.append(seg)
+        if emit_caption is not None:
+            emit_caption(seg)
+
+    session = LiveSession(transcriber, on_final=_on_final)
 
     logger.info("Bot Zoom en route | réunion=%s durée_max=%.0fs",
                 meeting_number, args.max_duration_s)
@@ -225,6 +259,9 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
 
     if reached["phase"] is not ZoomSdkPhase.ACTIVE:
         return EXIT_NOT_ADMITTED
+    if recording is not None and target_job_id and recording.mixer.duration_s > 0:
+        await ingest_recording(args.transcria_url, args.token or "", occurrence,
+                               recording, target_job_id)
     return EXIT_OK
 
 

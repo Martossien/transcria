@@ -270,3 +270,86 @@ def test_le_nom_reste_court_pour_la_liste_des_participants():
     from connector_service.bot.cli import compose_display_name
 
     assert len(compose_display_name(initiator="Jean-Baptiste de La Tour d'Auvergne")) < 64
+
+
+# --------------------------------------------------------------------------- #
+#  Parcours COMPLET (lot V2, docs/VISIO_ZOOM_RUNNER.md) — pistes + états + ingestion
+# --------------------------------------------------------------------------- #
+def test_parcours_complet_pistes_et_ingestion(monkeypatch, capsys):
+    """Le bot Zoom planifié capte PAR PARTICIPANT, émet états et captions
+    (BOT_EVENTS=json) et rattache mix + pistes v2 au job — même plomberie que les
+    autres bots (socle V0)."""
+    import asyncio
+
+    from connector_service.bot import zoom_sdk as cli
+    from connector_service.live._demux import DemuxedFrame
+    from connector_service.live.zoom_sdk_state import ZoomSdkPhase
+
+    def fake_source(*_a, on_phase=None, **_k):
+        def _factory(_occurrence):
+            async def _gen():
+                if on_phase is not None:
+                    on_phase(ZoomSdkPhase.IN_WAITING_ROOM)
+                    on_phase(ZoomSdkPhase.ACTIVE)
+                for pid, name in (("u1", "Alice"), ("u2", "Bob"), ("u1", "Alice")):
+                    yield DemuxedFrame(participant_id=pid, payload=b"\x01\x02" * 320,
+                                       sample_rate_hz=32000, participant_name=name)
+            return _gen()
+        return _factory
+
+    monkeypatch.setattr(cli, "zoom_sdk_demux_source", fake_source)
+    monkeypatch.setattr(cli, "build_transcriber", lambda *a, **k: _InertTranscriber())
+    monkeypatch.setenv("BOT_EVENTS", "json")
+    monkeypatch.setenv("TRANSCRIA_JOB_ID", "job-77")
+    ingested = {}
+
+    async def fake_ingest(url, token, occurrence, recording, job_id):
+        ingested.update(job=job_id, tracks=len(recording.track_files()),
+                        manifest=recording.to_manifest("zoom"))
+    monkeypatch.setattr(cli, "ingest_recording", fake_ingest)
+
+    code = asyncio.run(cli.run(_args(transcria_url="http://portail"), "secret"))
+
+    assert code == 0
+    assert ingested["job"] == "job-77" and ingested["tracks"] == 2   # une piste par voix
+    assert ingested["manifest"]["version"] == 2
+    out = capsys.readouterr().out
+    assert '{"bot_event": "waiting_admission"}' in out
+    assert '{"bot_event": "in_meeting"}' in out
+
+
+def test_code_de_reunion_planifie_vaut_code_ambiant(monkeypatch):
+    """Le champ « code de la réunion » de la planification voyage en BOT_ROOM_PASSCODE
+    (canal STANDARD du runner) : le bot Zoom l'accepte comme code ambiant — ZOOM_PASSCODE
+    (configuration machine) reste prioritaire."""
+    import asyncio
+
+    from connector_service.bot import zoom_sdk as cli
+    from connector_service.live.zoom_sdk_state import ZoomSdkPhase
+
+    seen = {}
+
+    def fake_source(*_a, passcode="", on_phase=None, **_k):
+        seen["passcode"] = passcode
+
+        def _factory(_occurrence):
+            async def _gen():
+                if on_phase is not None:
+                    on_phase(ZoomSdkPhase.ACTIVE)
+                return
+                yield  # pragma: no cover
+            return _gen()
+        return _factory
+
+    monkeypatch.setattr(cli, "zoom_sdk_demux_source", fake_source)
+    monkeypatch.setattr(cli, "build_transcriber", lambda *a, **k: _InertTranscriber())
+    monkeypatch.delenv("ZOOM_PASSCODE", raising=False)
+    monkeypatch.delenv("TRANSCRIA_JOB_ID", raising=False)
+    monkeypatch.setenv("BOT_ROOM_PASSCODE", "code-planifie")
+
+    asyncio.run(cli.run(_args(), "secret"))
+    assert seen["passcode"] == "code-planifie"
+
+    monkeypatch.setenv("ZOOM_PASSCODE", "code-machine")
+    asyncio.run(cli.run(_args(), "secret"))
+    assert seen["passcode"] == "code-machine"

@@ -33,6 +33,12 @@ connectors:
         secret: true
     testable: true                # un vrai appel d'authentification est possible
     steps:
+      - >-
+        Pour la planification depuis le portail : poser ZOOM_CLIENT_ID et
+        ZOOM_CLIENT_SECRET dans l'environnement du meeting-runner (app Meeting SDK,
+        propriété de la MACHINE) et ajouter `zoom-sdk` à `platforms:` dans runner.yaml.
+        Le champ « code de la réunion » de la planification est transmis au bot.
+        Compte gratuit : réunions limitées à 40 min.
       - Se connecter à marketplace.zoom.us avec un compte ADMIN de l'organisation.
       - Volet en bas à gauche → Developer → Build an app → General app → Create.
       - Basic Info → relever Client ID et Client Secret (jeu « Development »).

@@ -1,6 +1,9 @@
 # Visio puis Zoom sur le parcours complet — cadrage (lots V1/V2)
 
-> **Statut : validé par l'utilisateur le 2026-07-31** (« Visio, puis Zoom en gratuit »).
+> **Statut : validé par l'utilisateur le 2026-07-31 — LOTS V0, V1 ET V2 LIVRÉS le jour
+> même** (V0+V1 : 598ca74 ; V2 : commit suivant). Restent les GATES RÉELS avec
+> l'utilisateur : Visio (accès exploitant LiveKit — URL + clé/secret), Zoom compte
+> gratuit (app Meeting SDK, réunions 40 min). DoD des gates au tableau des lots.
 > Les TRANSPORTS des deux plateformes sont ÉPROUVÉS en réel (catalogue `status: validated` :
 > Visio/LiveKit natif 2026-07-26 ; Zoom Meeting SDK compte gratuit — 9 879 trames, locuteur
 > nommé). Ce chantier ne refait pas les transports : il les branche sur le parcours COMPLET
