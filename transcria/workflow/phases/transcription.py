@@ -11,6 +11,7 @@ from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.transcriber_factory import get_backend_vram_mb
 from transcria.stt.transcription import Transcriber
+from transcria.workflow.phases import diarization as diarization_phase
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,23 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         percent=35,
         force=True,
     )
+
+    # RÉUNION à pistes : la SOUS-DIARISATION des pistes salle (vague 5, B2) doit avoir
+    # eu lieu AVANT de transcrire — sinon les sous-voix PISTE_<pid>_Sn n'existent pas et
+    # une salle partagée est transcrite d'un bloc sous le nom de la piste. Le wizard la
+    # déclenche à l'étape 5 ; un job traité DIRECTEMENT (banc, relance) ne passe pas par
+    # là — trouvé par le banc Jitsi salle, où la transcription précède la diarisation
+    # dans la séquence du pipeline. Best-effort : un échec ici laisse le chemin nominal.
+    fs_pre = runner._get_fs(config, job.id)
+    if (fs_pre.load_json("metadata/participants_manifest.json")
+            and not fs_pre.load_json("speakers/speaker_turns.json")):
+        logger.info("[transcription] manifeste présent sans tours — détection des "
+                    "locuteurs (pistes + sous-diarisation) avant de transcrire")
+        try:
+            diarization_phase.run_speaker_detection(runner, job, audio_path, config,
+                                                    update_state=False)
+        except Exception:  # noqa: BLE001 — best-effort, la transcription continue
+            logger.exception("[transcription] détection préalable impossible")
 
     # Différé : la factory STT tire la chaîne config+catalogues (~0,6 s).
 

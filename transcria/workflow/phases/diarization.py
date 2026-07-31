@@ -10,7 +10,6 @@ from pathlib import Path
 
 from transcria.gpu.gpu_session import GPUSessionError
 from transcria.ingestion.manifest import parse_participants_manifest
-from transcria.ingestion.manifest_turns import turns_from_manifest
 from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
@@ -135,12 +134,25 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
             raw = fs.load_json("metadata/participants_manifest.json")
             manifest = parse_participants_manifest(raw)[0] if raw else None
             if manifest is not None:
-                rebuilt = turns_from_manifest(manifest)
-                if rebuilt.get("available"):
-                    fs.save_json("speakers/speaker_turns.json", rebuilt)
+                # Par le DÉTECTEUR, pas par turns_from_manifest brut : lui seul fait la
+                # SOUS-DIARISATION des pistes salle (B2). Trouvé par le banc Jitsi :
+                # reconstruire à plat donnait « Salle Jitsi » d'un bloc là où le même
+                # audio à 2 voix produit S1/S2 par le chemin normal.
+                detector = SpeakerDetector(config)
+                if runner._cuda_available():
+                    with runner._gpu_session(job, "pyannote", runner.vram.pyannote_vram_mb,
+                                             "diarization") as gpu:
+                        runner._detect_speakers(detector, job, Path(audio_path),
+                                                device=f"cuda:{gpu.gpu_index}",
+                                                progress_callback=None)
+                else:
+                    runner._detect_speakers(detector, job, Path(audio_path), device="cpu",
+                                            progress_callback=None)
+                rebuilt = fs.load_json("speakers/speaker_turns.json")
+                if isinstance(rebuilt, dict) and rebuilt.get("available"):
                     existing_turns = rebuilt
-                    logger.info("[diarization] tours RECONSTRUITS depuis le manifeste "
-                                "(fichier dérivé absent)")
+                    logger.info("[diarization] tours RECONSTRUITS par le détecteur "
+                                "(manifeste + sous-diarisation des pistes salle)")
         if isinstance(existing_turns, dict) and existing_turns.get("source") == "manifest":
             logger.info("[diarization] tours issus du manifeste (pistes) — "
                         "re-diarisation du mix sautée")

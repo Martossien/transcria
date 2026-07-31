@@ -268,3 +268,36 @@ class TestGardeToursManifeste:
             result = runner.run_diarization(job, str(audio), cfg)
             assert result["source"] == "manifest"
             assert result["speakers"] == ["meet@meet.world"]
+
+    def test_reconstruction_passe_par_le_detecteur_donc_sous_diarise(self, app, owner_id,
+                                                                     monkeypatch, tmp_path):
+        """Trouvé par le banc Jitsi : reconstruire les tours À PLAT perdait la scission
+        des micros partagés (S1/S2). La reconstruction doit passer par le DÉTECTEUR."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Salle partagée")
+            runner = WorkflowRunner(JobStore, cfg)
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(str(tmp_path / "jobs"), job.id)
+            fs.save_json("metadata/participants_manifest.json", {
+                "version": 1, "source": "jitsi", "mix": "timeline_common",
+                "participants": [{"id": "p1", "name": "Salle", "kind": "unknown",
+                                  "speech_windows": [[0.0, 30.0]]}]})
+            appels = {}
+
+            def _fake_detect(detector, job_, audio_path, *, device, progress_callback):
+                appels["detecteur"] = True
+                JobFilesystem(str(tmp_path / "jobs"), job_.id).save_json(
+                    "speakers/speaker_turns.json",
+                    {"available": True, "source": "manifest",
+                     "turns": [{"start": 0.0, "end": 10.0, "speaker": "PISTE_p1_S1"},
+                               {"start": 10.0, "end": 30.0, "speaker": "PISTE_p1_S2"}],
+                     "speakers": ["PISTE_p1_S1", "PISTE_p1_S2"], "stats": {}, "names": {}})
+                return {"available": True, "speakers": []}
+
+            monkeypatch.setattr(WorkflowRunner, "_detect_speakers", staticmethod(_fake_detect))
+            monkeypatch.setattr(WorkflowRunner, "_cuda_available", lambda self: False)
+            audio = tmp_path / "mix.wav"; audio.write_text("x")
+            result = runner.run_diarization(job, str(audio), cfg)
+            assert appels.get("detecteur"), "la reconstruction doit passer par le détecteur"
+            assert result["speakers"] == ["PISTE_p1_S1", "PISTE_p1_S2"]
