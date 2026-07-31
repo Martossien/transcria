@@ -59,9 +59,12 @@ async def publish(room_name: str, identity: str, audio_path: str) -> None:
     print(f"[{identity}] connecté à {room_name} — {len(pcm)//2//SAMPLE_RATE}s d'audio",
           flush=True)
     step = SAMPLES * 2
-    for i in range(0, len(pcm) - step, step):
-        frame = rtc.AudioFrame(pcm[i:i + step], SAMPLE_RATE, 1, SAMPLES)
-        await source.capture_frame(frame)          # cadence tenue par la file interne
+    loops = int(os.environ.get("GATE_LOOPS", "1"))
+    for n in range(loops):                          # rejouer N fois : laisse au runner le
+        for i in range(0, len(pcm) - step, step):   # temps de claim (cycle 30 s) et au bot
+            frame = rtc.AudioFrame(pcm[i:i + step], SAMPLE_RATE, 1, SAMPLES)
+            await source.capture_frame(frame)       # cadence tenue par la file interne
+        print(f"[{identity}] passage {n + 1}/{loops} joué", flush=True)
     await asyncio.sleep(1.0)
     print(f"[{identity}] audio terminé — départ de la salle", flush=True)
     await room.disconnect()
