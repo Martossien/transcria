@@ -48,8 +48,9 @@ class _FakeDiarizer:
         self.calls: list[str] = []
         self.offloaded = False
 
-    def diarize_audio(self, path):
+    def diarize_audio(self, path, *, speaker_params=None):
         self.calls.append(path.name)
+        self.speaker_params = speaker_params
         return self.by_file[path.name]
 
     def offload(self):
@@ -197,3 +198,17 @@ class TestRegleDominance:
         det = _detector(monkeypatch, tmp_path, _FakeDiarizer({"p2.wav": _bleedy()}))
         det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
         assert "PISTE_p2_S1" in fs.load_json("speakers/speaker_turns.json")["speakers"]
+
+
+def test_la_fourchette_reunion_ne_force_jamais_une_piste(tmp_path, monkeypatch):
+    """Cause racine du gate Zoom 2026-07-31 : hint {min:2,max:2} (RÉUNION) hérité par la
+    diarisation PAR PISTE → chaque piste mono-voix scindée de force. La sous-diarisation
+    passe speaker_params={} explicite : pyannote reste LIBRE sur chaque piste."""
+    _job_with_tracks(tmp_path, [ROOM_P2])
+    fake = _FakeDiarizer({"p2.wav": _one_voice()})
+    monkeypatch.setattr("transcria.stt.speaker_detection.create_diarizer",
+                        lambda cfg, device=None, progress_callback=None: fake)
+    det = SpeakerDetector({"storage": {"jobs_dir": str(tmp_path / "jobs")},
+                           "diarization": {"min_speakers": 2, "max_speakers": 2}})
+    det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+    assert fake.speaker_params == {}                     # jamais la fourchette réunion

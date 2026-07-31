@@ -145,7 +145,12 @@ class SpeakerDetector:
         bleed: dict[str, list] = {}
         try:
             for p, path in candidates:
-                res = diarize_audio(path)
+                # ⚠ speaker_params={} EXPLICITE : la fourchette de locuteurs du JOB
+                # décrit la RÉUNION entière — appliquée à une piste individuelle, elle
+                # FORCE pyannote à y trouver min_speakers voix (cause racine du gate
+                # Zoom 2026-07-31 : hint {min:2,max:2} → chaque piste mono-voix scindée
+                # en S1/S2, la repisse servant de matière au cluster forcé).
+                res = diarize_audio(path, speaker_params={})
                 if not res.get("available"):
                     skipped[p.id] = res.get("error") or res.get("message") or "échec"
                     continue
