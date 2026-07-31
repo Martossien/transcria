@@ -171,13 +171,18 @@ class TestRegleDominance:
     une piste NOMMÉE à voix dominante garde son NOM, la repisse est écartée du STT."""
 
     def test_voix_dominante_garde_le_nom_et_note_la_repisse(self, tmp_path, monkeypatch):
-        fs = _job_with_tracks(tmp_path, [ROOM_P2])
-        det = _detector(monkeypatch, tmp_path, _FakeDiarizer({"p2.wav": _bleedy()}))
+        # La minorité (80..92) coïncide avec la parole d'un AUTRE participant → repisse.
+        other = {"id": "p9", "name": "Alice", "kind": "unknown",
+                 "speech_windows": [[78.0, 95.0]], "track": "track_p9"}
+        fs = _job_with_tracks(tmp_path, [ROOM_P2, other])
+        det = _detector(monkeypatch, tmp_path, _FakeDiarizer(
+            {"p2.wav": _bleedy(), "p9.wav": _one_voice()}))
 
         det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
 
         turns = fs.load_json("speakers/speaker_turns.json")
-        assert turns["speakers"] == ["Salle B"]           # le NOM survit (87 % dominant)
+        assert "Salle B" in turns["speakers"]             # le NOM survit (87 % dominant)
+        assert "PISTE_p2_S2" not in turns["speakers"]
         audit = fs.load_json("speakers/track_diarization.json")
         assert audit["bleed"]["p2"] == [[80.0, 92.0]]     # la repisse, relisible
         assert "dominante" in audit["skipped"]["p2"]
@@ -212,3 +217,46 @@ def test_la_fourchette_reunion_ne_force_jamais_une_piste(tmp_path, monkeypatch):
                            "diarization": {"min_speakers": 2, "max_speakers": 2}})
     det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
     assert fake.speaker_params == {}                     # jamais la fourchette réunion
+
+
+def test_personne_discrete_jamais_prise_pour_de_la_repisse(tmp_path, monkeypatch):
+    """Le discriminateur : la REPISSE ne sonne que quand un AUTRE participant parle ; une
+    vraie personne discrète (15 % du temps) parle aussi dans leurs SILENCES → la piste
+    est scindée, ses mots ne sont jamais jetés."""
+    other = {"id": "p9", "name": "Alice", "kind": "unknown",
+             "speech_windows": [[0.0, 10.0]], "track": "track_p9"}   # Alice parle 0..10
+    room = dict(ROOM_P2, speech_windows=[[2.0, 100.0]])
+    _job_with_tracks(tmp_path, [room, other])
+    # Voix minoritaire de p2 à 80..92 : PERSONNE d'autre ne parle à ce moment-là.
+    fake = _FakeDiarizer({"p2.wav": _bleedy(dom=(2.0, 80.0), minor=(80.0, 92.0)),
+                          "p9.wav": _one_voice()})
+    monkeypatch.setattr("transcria.stt.speaker_detection.create_diarizer",
+                        lambda cfg, device=None, progress_callback=None: fake)
+    det = SpeakerDetector({"storage": {"jobs_dir": str(tmp_path / "jobs")}})
+    fs = JobFilesystem(str(tmp_path / "jobs"), "job-1")
+
+    det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+
+    turns = fs.load_json("speakers/speaker_turns.json")
+    assert {"PISTE_p2_S1", "PISTE_p2_S2"} <= set(turns["speakers"])  # scindée, rien de perdu
+
+
+def test_repisse_confirmee_par_la_parole_des_autres(tmp_path, monkeypatch):
+    """Inverse : la voix minoritaire coïncide avec la parole d'un autre participant →
+    repisse confirmée, le nom survit."""
+    other = {"id": "p9", "name": "Alice", "kind": "unknown",
+             "speech_windows": [[78.0, 95.0]], "track": "track_p9"}  # Alice parle 78..95
+    room = dict(ROOM_P2, speech_windows=[[2.0, 100.0]])
+    _job_with_tracks(tmp_path, [room, other])
+    fake = _FakeDiarizer({"p2.wav": _bleedy(dom=(2.0, 80.0), minor=(80.0, 92.0)),
+                          "p9.wav": _one_voice()})
+    monkeypatch.setattr("transcria.stt.speaker_detection.create_diarizer",
+                        lambda cfg, device=None, progress_callback=None: fake)
+    det = SpeakerDetector({"storage": {"jobs_dir": str(tmp_path / "jobs")}})
+    fs = JobFilesystem(str(tmp_path / "jobs"), "job-1")
+
+    det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+
+    turns = fs.load_json("speakers/speaker_turns.json")
+    assert "Salle B" in turns["speakers"]                # le nom survit
+    assert "PISTE_p2_S2" not in turns["speakers"]

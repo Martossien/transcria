@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 195,
- "deferred_internal_imports": 95,
+ "deferred_internal_imports": 96,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -173,7 +173,7 @@
   "transcria.stt.remote_diarizer": 5,
   "transcria.stt.remote_transcriber": 6,
   "transcria.stt.sortformer_diarizer": 3,
-  "transcria.stt.speaker_detection": 5,
+  "transcria.stt.speaker_detection": 6,
   "transcria.stt.summary": 7,
   "transcria.stt.transcriber_factory": 5,
   "transcria.stt.transcription": 15,

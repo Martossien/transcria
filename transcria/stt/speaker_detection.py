@@ -175,7 +175,12 @@ class SpeakerDetector:
                 total = sum(by_cluster.values()) or 1.0
                 dominant = max(by_cluster, key=lambda spk: by_cluster[spk])
                 ratio = by_cluster[dominant] / total
-                if p.name and ratio >= self._SUBDIAR_DOMINANT_RATIO:
+                minority = [
+                    (float(t_["start"]), float(t_["end"]))
+                    for t_ in res.get("turns", [])
+                    if str(t_.get("speaker")) != dominant]
+                if (p.name and ratio >= self._SUBDIAR_DOMINANT_RATIO
+                        and self._minority_is_bleed(minority, p, manifest)):
                     bleed[p.id] = [
                         [round(float(t_["start"]), 3), round(float(t_["end"]), 3)]
                         for t_ in res.get("turns", [])
@@ -198,6 +203,27 @@ class SpeakerDetector:
                      {"version": 1, "tracks": sub_by_pid, "bleed": bleed,
                       "skipped": skipped})
         return sub_by_pid
+
+    # Part du temps de la voix minoritaire qui doit coïncider avec la parole des AUTRES
+    # participants pour être de la repisse. Une vraie personne discrète (qui n'intervient
+    # qu'une fois) parle aussi dans leurs silences → la piste reste scindée, rien n'est perdu.
+    _SUBDIAR_BLEED_OVERLAP = 0.5
+
+    def _minority_is_bleed(self, minority, participant, manifest) -> bool:
+        from transcria.workflow.track_fusion import overlap_seconds
+
+        total = sum(b - a for a, b in minority)
+        if total <= 0:
+            return True
+        others = [w for p_ in manifest.participants if p_.id != participant.id
+                  for w in p_.speech_windows]
+        covered = overlap_seconds(minority, others)
+        is_bleed = covered / total >= self._SUBDIAR_BLEED_OVERLAP
+        if not is_bleed:
+            logger.info("Piste %s : voix minoritaire qui parle HORS de la parole des "
+                        "autres (%.0f%% de recouvrement) — vraie personne, piste scindée",
+                        participant.id, 100 * covered / total)
+        return is_bleed
 
     @staticmethod
     def _rename_turns(turns: list[dict], rename: dict[str, str]) -> list[dict]:

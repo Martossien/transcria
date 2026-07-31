@@ -120,3 +120,20 @@ def subtract_intervals(windows, holes) -> list[tuple[float, float]]:
         if end > start:
             result.append((round(start, 3), round(end, 3)))
     return [(round(a, 3), round(b, 3)) for a, b in result]
+
+
+def overlap_seconds(intervals, windows) -> float:
+    """Recouvrement total (s) entre des intervalles et des fenêtres. Sert au discriminateur
+    repisse/vraie personne discrète (lot B2) : la REPISSE ne sonne que quand un AUTRE
+    participant parle — une vraie personne parle aussi dans leurs silences."""
+    spans = sorted((float(a), float(b)) for a, b in (windows or ()) if float(b) > float(a))
+    total = 0.0
+    for start, end in intervals or ():
+        start, end = float(start), float(end)
+        for w_start, w_end in spans:
+            if w_start >= end:
+                break
+            lo, hi = max(start, w_start), min(end, w_end)
+            if hi > lo:
+                total += hi - lo
+    return round(total, 3)
