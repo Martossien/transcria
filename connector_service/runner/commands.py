@@ -23,6 +23,9 @@ _MACHINE_ENV = (
     "JITSI_XMPP_USER", "JITSI_XMPP_PASSWORD",
     "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
     "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET",       # app Meeting SDK (propriété machine)
+    "VISIO_API_BASE", "BOT_HIDDEN",               # visio : API séparée (dev) / bot invisible (opt-in)
+    "BOT_IDLE_TIMEOUT_S", "BOT_MAX_DURATION_S",   # réglages génériques des bots (vécu : posés
+                                                  # au runner mais jamais relayés au conteneur)
 )
 
 

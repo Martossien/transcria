@@ -179,8 +179,15 @@ class SpeakerDetector:
                     (float(t_["start"]), float(t_["end"]))
                     for t_ in res.get("turns", [])
                     if str(t_.get("speaker")) != dominant]
-                if (p.name and ratio >= self._SUBDIAR_DOMINANT_RATIO
-                        and self._minority_is_bleed(minority, p, manifest)):
+                verdict = (self._minority_is_bleed(minority, p, manifest)
+                           if p.name and ratio >= self._SUBDIAR_DOMINANT_RATIO else False)
+                if verdict is None:
+                    # Aucun AUTRE participant : pas de source de repisse possible — la
+                    # minorité est un SUR-DÉCOUPAGE pyannote de la même voix (vécu gate
+                    # Visio solo). Une seule voix, TOUS les mots gardés sous le nom.
+                    skipped[p.id] = f"voix dominante {ratio:.0%} (solo — sur-découpage fusionné)"
+                    continue
+                if verdict:
                     bleed[p.id] = [
                         [round(float(t_["start"]), 3), round(float(t_["end"]), 3)]
                         for t_ in res.get("turns", [])
@@ -209,7 +216,7 @@ class SpeakerDetector:
     # qu'une fois) parle aussi dans leurs silences → la piste reste scindée, rien n'est perdu.
     _SUBDIAR_BLEED_OVERLAP = 0.5
 
-    def _minority_is_bleed(self, minority, participant, manifest) -> bool:
+    def _minority_is_bleed(self, minority, participant, manifest) -> bool | None:
         from transcria.workflow.track_fusion import overlap_seconds
 
         total = sum(b - a for a, b in minority)
@@ -217,6 +224,8 @@ class SpeakerDetector:
             return True
         others = [w for p_ in manifest.participants if p_.id != participant.id
                   for w in p_.speech_windows]
+        if not others:
+            return None                      # solo : rien pour corréler → sur-découpage
         covered = overlap_seconds(minority, others)
         is_bleed = covered / total >= self._SUBDIAR_BLEED_OVERLAP
         if not is_bleed:

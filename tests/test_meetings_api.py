@@ -720,3 +720,19 @@ class TestPageJobEnReunion:
         r = admin_client.get(f"/jobs/{job_id}")
         assert r.status_code == 200, r.get_data(as_text=True)[-800:]
         assert b"live-captions-panel" in r.data
+
+
+class TestCoherenceLienPlateforme:
+    def test_url_visio_avec_zoom_selectionne_refusee(self, meetings_on, client,
+                                                     admin_client, runner_token):
+        """Vécu au gate Visio : URL Visio planifiée avec « Zoom » → bot Zoom code 3 en
+        bout de chaîne. Le refus doit arriver À LA PLANIFICATION, corrigeable."""
+        _heartbeat(client, runner_token, platforms=("zoom-sdk", "visio"))
+        r = admin_client.post("/api/meetings", json={
+            "provider": "zoom-sdk", "meeting_ref": "http://localhost:3000/dxj-sssq-ewr",
+            "title": "T", "language": "fr"})
+        assert r.status_code == 400 and "Zoom" in r.get_json()["error"]
+        r = admin_client.post("/api/meetings", json={
+            "provider": "visio", "meeting_ref": "https://us05web.zoom.us/j/82333940563",
+            "title": "T", "language": "fr"})
+        assert r.status_code == 400

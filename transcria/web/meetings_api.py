@@ -111,6 +111,16 @@ def api_meetings_create():
         return jsonify({"error": "Plateforme indisponible ou non prête"}), 400
     if not meeting_ref:
         return jsonify({"error": "Lien ou numéro de réunion requis"}), 400
+    # Garde de COHÉRENCE lien↔plateforme (vécu au gate Visio : une URL Visio planifiée
+    # avec « Zoom » sélectionné → bot Zoom code 3, erreur découverte en fin de chaîne).
+    # Heuristique légère, refus EXPLICITE au moment où l'utilisateur peut corriger.
+    import re as _re
+    if provider == "zoom-sdk" and not _re.search(r"\d{9,11}", meeting_ref.replace(" ", "")):
+        return jsonify({"error": "Ce lien ne ressemble pas à une réunion Zoom "
+                                 "(aucun numéro de réunion) — plateforme mal choisie ?"}), 400
+    if provider in ("jitsi", "visio") and _re.search(r"zoom\.us/", meeting_ref):
+        return jsonify({"error": "Ce lien est une réunion Zoom — choisir la plateforme "
+                                 "Zoom dans le menu"}), 400
 
     scheduled_at = None
     raw_when = str(body.get("scheduled_at") or "").strip()

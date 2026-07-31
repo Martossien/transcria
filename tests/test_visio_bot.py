@@ -142,3 +142,14 @@ class TestResolveLivekitRoom:
             raise OSError("down")
         assert resolve_livekit_room("https://visio.exemple/ma-salle", dead) == "ma-salle"
         assert resolve_livekit_room("nom-brut", dead) == "nom-brut"
+
+
+def test_api_base_surchargee_pour_la_stack_dev(monkeypatch):
+    from connector_service.bot.visio import resolve_livekit_room
+    monkeypatch.setenv("VISIO_API_BASE", "http://localhost:8071")
+    seen = {}
+    def opener(url):
+        seen["url"] = url
+        return 200, '{"livekit": {"room": "uuid-1"}}'
+    assert resolve_livekit_room("http://localhost:3000/ma-salle", opener) == "uuid-1"
+    assert seen["url"] == "http://localhost:8071/api/v1.0/rooms/ma-salle/"

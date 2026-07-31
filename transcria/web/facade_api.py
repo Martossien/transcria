@@ -368,6 +368,9 @@ def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict
 
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
     manifest_raw = _store_track_parts(cfg, job_id, manifest_raw)
+    # L'ARRIVÉE de l'enregistrement prouve la fin de réunion — clore la session sans
+    # dépendre du /result du runner (vécu : session orpheline « en réunion »).
+    MeetingSessionStore.close_on_ingest(job_id)
     if manifest_raw is not None:
         _seed_from_manifest(cfg, job_id, manifest_raw)
     analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)

@@ -269,6 +269,22 @@ class MeetingSessionStore:
         return True, ""
 
     @staticmethod
+    def close_on_ingest(job_id: str) -> None:
+        """L'ARRIVÉE de l'enregistrement PROUVE la fin de réunion : clore la session sans
+        dépendre du rapport du runner (vécu au gate Visio : runner redémarré entre la
+        sortie du bot et son /result → session orpheline « en réunion » jusqu'au bail 8 h).
+        Suit les transitions LÉGALES (in_meeting→ingesting→done) ; no-op sinon."""
+        session = MeetingSessionStore.for_job(job_id)
+        if session is None or session.state in st.TERMINAL_STATES:
+            return
+        for target in (st.INGESTING, st.DONE):
+            if st.can_transition(session.state, target):
+                session.state = target
+        if session.state == st.DONE:
+            session.ended_at = _utcnow()
+            db.session.commit()
+
+    @staticmethod
     def for_job(job_id: str) -> MeetingSession | None:
         stmt = (db.select(MeetingSession).where(MeetingSession.job_id == job_id)
                 .order_by(MeetingSession.created_at.desc()).limit(1))

@@ -148,6 +148,16 @@ def livekit_demux_source(url: str, token: str, *, target_sample_rate_hz: int = 1
             def _on_disconnected(*_args: Any) -> None:
                 fan.stop()
 
+            # FIN DE RÉUNION DÉTERMINISTE (vécu au gate Visio 2026-07-31 : « le bot est
+            # resté après mon départ ») : dernier participant DISTANT parti = réunion
+            # finie — on clôt tout de suite, sans attendre la garde d'inactivité (qui
+            # reste le filet pour les salles muettes).
+            @room.on("participant_disconnected")
+            def _on_participant_left(*_args: Any) -> None:
+                if not room.remote_participants:
+                    logger.info("Dernier participant parti — fin de réunion, sortie du bot")
+                    fan.stop()
+
             await room.connect(url, token)
 
             # RATTRAPAGE : le bot arrive presque toujours APRÈS les participants (dispatch à

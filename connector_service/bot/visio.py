@@ -89,7 +89,10 @@ def resolve_livekit_room(meeting_ref: str, opener=None) -> str:
     if "://" not in (meeting_ref or ""):
         return slug
     parts = urlsplit(meeting_ref)
-    api = f"{parts.scheme}://{parts.netloc}/api/v1.0/rooms/{slug}/"
+    # VISIO_API_BASE : stack de DEV officielle = front (3000) et API Django (8071) sur des
+    # ports distincts — les vraies instances servent tout sur le même hôte (défaut).
+    base = os.environ.get("VISIO_API_BASE", "").rstrip("/") or f"{parts.scheme}://{parts.netloc}"
+    api = f"{base}/api/v1.0/rooms/{slug}/"
 
     def _default(url):
         with urllib.request.urlopen(url, timeout=10) as resp:
@@ -174,9 +177,13 @@ async def run(args: argparse.Namespace, api_key: str, api_secret: str) -> int:
     emit_state = json_event_emitter() if events_json else (lambda _s: None)
     emit_caption = json_caption_emitter() if events_json else None
 
+    # TRANSPARENCE (demande utilisateur, gate 2026-07-31) : le bot est VISIBLE par
+    # défaut — les participants DOIVENT savoir qu'une captation a lieu (le nom dit qui
+    # l'a demandée). BOT_HIDDEN=1 = opt-in explicite de l'exploitant, assumé par lui.
     access = livekit_access_token(
         api_key, api_secret, room,
-        name=compose_display_name(explicit=args.name, initiator=args.initiator))
+        name=compose_display_name(explicit=args.name, initiator=args.initiator),
+        hidden=os.environ.get("BOT_HIDDEN") == "1")
     reached = {"in_meeting": False}
 
     def _on_first_frame() -> None:
