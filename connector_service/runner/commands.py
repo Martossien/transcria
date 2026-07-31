@@ -71,5 +71,14 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
         argv += ["--shm-size=1g"]          # Chromium sature les 64 Mo par défaut
     for name in env:
         argv += ["-e", name]               # valeur héritée de l'environnement, pas d'argv
+    # Référence de réunion : positionnelle pour les bots qui la prennent ainsi (jitsi,
+    # visio) ; par l'ENVIRONNEMENT pour Zoom (son parser n'a pas de positionnel — vécu au
+    # premier gate runner : « unrecognized arguments » en boucle) — et un lien Zoom porte
+    # un ?pwd= qui n'a rien à faire dans argv (visible de tout `ps`).
+    ref_env = {"zoom-sdk": "ZOOM_MEETING"}.get(provider)
+    if ref_env:
+        env[ref_env] = str(intent["meeting_ref"])
+        argv += ["-e", ref_env, image]
+        return argv, env
     argv += [image, str(intent["meeting_ref"])]
     return argv, env

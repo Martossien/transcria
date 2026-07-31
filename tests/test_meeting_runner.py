@@ -225,3 +225,15 @@ class TestPlatformEnvDuClaim:
         assert env["ZOOM_CLIENT_ID"] == "abc" and env["ZOOM_CLIENT_SECRET"] == "s3cret"
         assert "s3cret" not in " ".join(argv)      # argv ne porte que `-e NOM`
         assert "-e" in argv and "ZOOM_CLIENT_SECRET" in argv
+
+
+def test_zoom_meeting_ref_par_env_jamais_argv():
+    """Vécu au premier gate Zoom via runner : le bot SDK n'a pas de positionnel
+    (« unrecognized arguments » en boucle) — et le lien porte un ?pwd= qui ne doit
+    jamais apparaître dans `ps`."""
+    intent = dict(INTENT, provider="zoom-sdk",
+                  meeting_ref="https://us05web.zoom.us/j/123?pwd=SECRET.1")
+    argv, env = docker_argv(intent, portal_url="http://127.0.0.1:7870", token="tia_x")
+    assert env["ZOOM_MEETING"] == "https://us05web.zoom.us/j/123?pwd=SECRET.1"
+    assert not any("zoom.us" in a for a in argv)      # jamais le lien dans argv
+    assert argv[-1] == "transcria-zoom-sdk:latest"    # l'image reste le dernier argument
