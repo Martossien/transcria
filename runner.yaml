@@ -7,6 +7,6 @@ token_file: /home/admin_ia/transcria/instance/meeting_runner_token.txt
 runner_name: meeting-runner-1
 capacity: 2
 poll_interval_s: 30
-platforms: [jitsi, zoom-sdk]
+platforms: [jitsi, zoom-sdk, visio]
 # images:                     # digests GHCR épinglés — défauts : images locales bot.sh
 #   jitsi: ghcr.io/<owner>/transcria-bot@sha256:…

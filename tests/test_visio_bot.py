@@ -123,3 +123,22 @@ class TestRunWiring:
         monkeypatch.setattr("connector_service.bot.visio.livekit_demux_source", boom)
         code = asyncio.run(visio.run(self._args(tmp_path), "clef", "secret"))
         assert code == 1                          # jamais entré → non admis, pas « technique »
+
+
+class TestResolveLivekitRoom:
+    """Vérifié dans la source officielle meet : salle ENREGISTRÉE → room = UUID
+    (serializers.py:179) ; éphémère/injoignable → slug (viewsets.py:271)."""
+
+    def test_salle_enregistree_room_uuid(self):
+        from connector_service.bot.visio import resolve_livekit_room
+        def opener(url):
+            assert url == "https://visio.exemple/api/v1.0/rooms/ma-salle/"
+            return 200, '{"livekit": {"room": "0aeb8887-1234"}}'
+        assert resolve_livekit_room("https://visio.exemple/ma-salle", opener) == "0aeb8887-1234"
+
+    def test_ephemere_ou_api_morte_repli_slug(self):
+        from connector_service.bot.visio import resolve_livekit_room
+        def dead(url):
+            raise OSError("down")
+        assert resolve_livekit_room("https://visio.exemple/ma-salle", dead) == "ma-salle"
+        assert resolve_livekit_room("nom-brut", dead) == "nom-brut"

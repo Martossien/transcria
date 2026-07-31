@@ -76,6 +76,36 @@ def parse_visio_room(value: str) -> str:
     return slug
 
 
+def resolve_livekit_room(meeting_ref: str, opener=None) -> str:
+    """Nom de room LiveKit RÉEL d'un lien de salle. Vérifié dans la source officielle
+    (~/reference/meet) : une salle ENREGISTRÉE expose sa room comme l'UUID de la salle
+    (`serializers.py:179`) — le slug d'URL ne vaut que pour les salles éphémères
+    (`viewsets.py:271`). On interroge donc l'API du MÊME hôte (`/api/v1.0/rooms/<slug>/`,
+    anonyme) ; repli honnête sur le slug (salle éphémère, API indisponible, nom brut)."""
+    import json as _json
+    import urllib.request
+
+    slug = parse_visio_room(meeting_ref)
+    if "://" not in (meeting_ref or ""):
+        return slug
+    parts = urlsplit(meeting_ref)
+    api = f"{parts.scheme}://{parts.netloc}/api/v1.0/rooms/{slug}/"
+
+    def _default(url):
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8", "replace")
+    try:
+        status, body = (opener or _default)(api)
+        room = str((_json.loads(body).get("livekit") or {}).get("room") or "")
+        if status == 200 and room:
+            logger.info("Salle « %s » résolue en room LiveKit %s (salle enregistrée)",
+                        slug, room)
+            return room
+    except Exception as exc:  # noqa: BLE001 — repli slug, jamais un échec ici
+        logger.info("API rooms injoignable (%s) — room = slug « %s »", exc, slug)
+    return slug
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="connector_service.bot.visio",
@@ -136,7 +166,7 @@ def monitored_frames(factory, *, on_first=None, idle_timeout_s: float = 900.0,
 
 
 async def run(args: argparse.Namespace, api_key: str, api_secret: str) -> int:
-    room = parse_visio_room(args.meeting_ref)
+    room = resolve_livekit_room(args.meeting_ref)
     occurrence = ExternalMeetingOccurrence(
         provider="visio", provider_account_id=os.environ.get("BOT_ACCOUNT", "visio"),
         external_occurrence_id=room)
