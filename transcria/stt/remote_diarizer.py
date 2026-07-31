@@ -54,6 +54,26 @@ class RemoteDiarizer(BaseDiarizer):
 
     # ── Diarisation ─────────────────────────────────────────────────────────--
 
+    def diarize_audio(self, audio_path: Path, *, speaker_params: dict | None = None) -> dict:
+        """Calcul PUR par fichier — parité avec `DiarizerService.diarize_audio`.
+
+        Sert la sous-diarisation PAR PISTE (vague 5, lot B2) en mode SPLIT : la piste
+        part au nœud (/infer/diarize accepte n'importe quel fichier audio et rend le
+        dict canonique). Sans cette méthode, une piste salle restait UN locuteur dès
+        que la diarisation était distante — les modes doivent être équivalents.
+        Best-effort comme le local : indisponibilité → available=False, jamais une levée."""
+        if self._client is None:
+            return {"available": False, "turns": [], "speakers": [],
+                    "message": "aucun client d'inférence distant configuré"}
+        try:
+            return self._client.diarize(
+                audio_path, speaker_params if speaker_params is not None
+                else self._effective_speaker_params())
+        except InferenceUnavailable as exc:
+            logger.warning("Sous-diarisation distante indisponible (%s) : %s",
+                           audio_path.name, exc)
+            return {"available": False, "turns": [], "speakers": [], "error": str(exc)}
+
     def diarize(self, job: Job, audio_path: Path) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         cached = self._load_cached_result(fs, audio_path)
