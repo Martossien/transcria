@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 
 from transcria.gpu.gpu_session import GPUSessionError
+from transcria.ingestion.manifest import parse_participants_manifest
+from transcria.ingestion.manifest_turns import turns_from_manifest
 from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
@@ -125,6 +127,20 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
         # cache ne protège pas). Doctrine : pyannote ne sert que sans manifeste.
         fs = runner._get_fs(config, job.id)
         existing_turns = fs.load_json("speakers/speaker_turns.json")
+        if not (isinstance(existing_turns, dict) and existing_turns.get("source") == "manifest"):
+            # La garde s'appuie sur le MANIFESTE DU JOB, pas sur un fichier dérivé
+            # (vécu : tours purgés pour réparation → le retraitement a re-diarisé le
+            # MIX → SPEAKER_XX jusque dans le DOCX). Manifeste présent → tours
+            # RECONSTRUITS depuis les pistes, jamais depuis le mix.
+            raw = fs.load_json("metadata/participants_manifest.json")
+            manifest = parse_participants_manifest(raw)[0] if raw else None
+            if manifest is not None:
+                rebuilt = turns_from_manifest(manifest)
+                if rebuilt.get("available"):
+                    fs.save_json("speakers/speaker_turns.json", rebuilt)
+                    existing_turns = rebuilt
+                    logger.info("[diarization] tours RECONSTRUITS depuis le manifeste "
+                                "(fichier dérivé absent)")
         if isinstance(existing_turns, dict) and existing_turns.get("source") == "manifest":
             logger.info("[diarization] tours issus du manifeste (pistes) — "
                         "re-diarisation du mix sautée")

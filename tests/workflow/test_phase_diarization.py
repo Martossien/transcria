@@ -245,3 +245,26 @@ class TestGardeToursManifeste:
 
             assert result["source"] == "manifest"
             assert fs.load_json("speakers/speaker_turns.json") == manifest_turns
+
+    def test_tours_purges_reconstruits_du_manifeste_jamais_le_mix(self, app, owner_id,
+                                                                  monkeypatch, tmp_path):
+        """Vécu : purge de réparation des tours → le retraitement re-diarisait le MIX
+        (SPEAKER_XX jusqu'au DOCX). La garde s'appuie sur le MANIFESTE, pas le dérivé."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Réunion purgée")
+            runner = WorkflowRunner(JobStore, cfg)
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(str(tmp_path / "jobs"), job.id)
+            fs.save_json("metadata/participants_manifest.json", {
+                "version": 1, "source": "visio", "mix": "timeline_common",
+                "participants": [{"id": "p1", "name": "meet@meet.world",
+                                  "kind": "unknown", "speech_windows": [[0.0, 5.0]]}]})
+            from transcria.stt.diarization import DiarizerService
+            def _never(self, job, path):
+                raise AssertionError("le mix ne doit JAMAIS être re-diarisé")
+            monkeypatch.setattr(DiarizerService, "diarize", _never)
+            audio = tmp_path / "mix.wav"; audio.write_text("x")
+            result = runner.run_diarization(job, str(audio), cfg)
+            assert result["source"] == "manifest"
+            assert result["speakers"] == ["meet@meet.world"]

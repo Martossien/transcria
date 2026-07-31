@@ -28,7 +28,7 @@ When two rules conflict, the higher rule wins.
    THE CHARACTER: section headings, bold and colons of fields, participant line format,
    the `|`, `;` and `||` separators of doubtful terms, valid JSON block. Any deviation
    breaks the automatic import of the data.
-3. **Acoustic diarization is the authority on speakers**: number of voices, `SPEAKER_XX`
+3. **Acoustic diarization is the authority on speakers**: number of voices, speaker identifiers taken VERBATIM from the transcript (real names, `PISTE_…` or `SPEAKER_XX`)
    identifiers, roles inferred from the certain segments (section 3).
 4. **Doubtful terms ≠ glossary**: only what deserves human validation (section 6) — never
    an inventory of important terms.
@@ -58,14 +58,14 @@ Initial check, before any analysis:
 
 ## 2. Acoustic diarization (if provided)
 
-It may contain: the number of real speakers detected, a `SPEAKER_XX`-labelled
+It may contain: the number of real speakers detected, a speaker-labelled (real names when the meeting provides them, otherwise `SPEAKER_XX`)
 transcription, certain sentences per speaker, indications of what each one says.
 
 Rules:
 
 - The number of acoustically detected speakers **takes precedence** over the estimate
   drawn from the transcription, unless there is an explicit inconsistency.
-- Participants are prefixed with the `SPEAKER_XX` identifiers from the diarization.
+- Participants are prefixed with their speaker identifier: REAL NAME (captured meeting), `PISTE_…` or `SPEAKER_XX` (diarization). COPY these identifiers exactly as they appear — NEVER invent a `SPEAKER_XX` when the transcript carries names.
 - Roles are inferred primarily from what each speaker says in their **certain segments**.
   Never swap two roles based on a general intuition if the certain segments indicate the
   opposite.
@@ -93,7 +93,7 @@ The brief is **indicative, never authoritative**. If it is absent, ignore this s
 - **Diarization remains the sole judge of the number of speakers.** Invitees ≠ attendees:
   an invitee may be absent, an attendee may be missing from the invitation, some entries
   are rooms or resources to ignore.
-- **Never force a 1:1 match** between invitation names and `SPEAKER_XX`. Associate a name
+- **Never force a 1:1 match** between invitation names and transcript speaker identifiers. Associate a name
   with a voice only if the transcription justifies it (first name heard, direct address,
   role described). Create no presence.
 - **Spelling of names**: when an invitation name clearly matches a speaker, prefer the

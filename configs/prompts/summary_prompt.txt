@@ -39,7 +39,7 @@ En cas de conflit entre deux règles, la règle la plus haute gagne.
    format des lignes participants, séparateurs `|`, `;` et `||` des termes douteux,
    bloc JSON valide. Tout écart casse l'import automatique des données.
 3. **La diarisation acoustique est l'autorité sur les locuteurs** : nombre de voix,
-   identifiants `SPEAKER_XX`, rôles déduits des segments certains (section 3).
+   identifiants de locuteur REPRIS TELS QUELS de la transcription (noms réels, `PISTE_…` ou `SPEAKER_XX` selon la source), rôles déduits des segments certains (section 3).
 4. **Termes douteux ≠ glossaire** : uniquement ce qui mérite une validation humaine
    (section 6) — jamais un inventaire des termes importants.
 5. **Synthèse de haute qualité, proportionnée à la durée** : un paragraphe par grand
@@ -71,14 +71,14 @@ Vérification initiale, avant toute analyse :
 ## 2. Diarisation acoustique (si fournie)
 
 Elle peut contenir : le nombre de locuteurs réels détectés, une transcription
-labellisée `SPEAKER_XX`, des phrases certaines par locuteur, des indications sur ce
+labellisée par locuteur (noms réels quand la réunion les fournit, sinon `SPEAKER_XX`), des phrases certaines par locuteur, des indications sur ce
 que dit chacun.
 
 Règles :
 
 - Le nombre de locuteurs détectés acoustiquement **prime** sur l'estimation tirée de
   la transcription, sauf incohérence explicite.
-- Les participants sont préfixés par les identifiants `SPEAKER_XX` de la diarisation.
+- Les participants sont préfixés par leur identifiant de locuteur : NOM RÉEL (réunion captée), `PISTE_…` ou `SPEAKER_XX` (diarisation). REPRENDS ces identifiants EXACTEMENT tels quels — n'invente JAMAIS un `SPEAKER_XX` si le transcript porte des noms.
 - Les rôles se déduisent prioritairement de ce que dit chaque locuteur dans ses
   **segments certains**. Ne jamais inverser deux rôles sur la base d'une intuition
   générale si les segments certains indiquent l'inverse.
@@ -110,7 +110,7 @@ section (cas normal).
   un invité peut être absent, un présent peut manquer dans l'invitation, certaines
   entrées sont des salles ou des ressources à ignorer.
 - **Ne jamais forcer une correspondance 1:1** entre noms de l'invitation et
-  `SPEAKER_XX`. N'associer un nom à une voix que si la transcription le justifie
+  l'identifiant du transcript. N'associer un nom à une voix que si la transcription le justifie
   (prénom entendu, apostrophe directe, rôle décrit). Ne créer aucune présence.
 - **Orthographe des noms** : quand un nom de l'invitation correspond clairement à un
   locuteur, privilégier l'orthographe de la liste « Noms probables ». Le brief ne

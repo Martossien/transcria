@@ -215,7 +215,7 @@
   "transcria.workflow.multi_stt_review": 1,
   "transcria.workflow.phases": 9,
   "transcria.workflow.phases.correction": 6,
-  "transcria.workflow.phases.diarization": 6,
+  "transcria.workflow.phases.diarization": 8,
   "transcria.workflow.phases.export": 4,
   "transcria.workflow.phases.final_review": 6,
   "transcria.workflow.phases.multi_stt_review": 6,
