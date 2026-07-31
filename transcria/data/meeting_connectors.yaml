@@ -23,7 +23,7 @@ connectors:
     summary: >-
       Bot natif (Meeting SDK). L'audio arrive par participant avec le nom du locuteur.
       Aucun port entrant à ouvrir.
-    doc: docs/BOT_REUNION.md#6-bot-zoom-sdk-natif
+    doc: docs/ZOOM_GRATUIT_ADMIN.md
     requires:
       - key: ZOOM_CLIENT_ID
         label: Client ID

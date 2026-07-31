@@ -166,6 +166,11 @@
             {% endfor %}
             <button class="btn btn-sm btn-outline-primary">{{ _('Enregistrer les identités') }}</button>
           </form>
+          {% if c.testable %}
+          <form method="POST" action="/admin/connecteurs/{{ c.id }}/test" class="mb-2">
+            <button class="btn btn-sm btn-outline-secondary">{{ _('Tester la connexion') }}</button>
+          </form>
+          {% endif %}
           {% else %}
           <ul class="list-unstyled small mb-2">
             {% for champ in c.requires %}

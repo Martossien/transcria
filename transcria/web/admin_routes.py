@@ -385,6 +385,24 @@ def admin_meetings_toggle():
     return redirect("/admin/connecteurs")
 
 
+@web_bp.route("/admin/connecteurs/zoom-sdk/test", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_connector_test_zoom():
+    """Bouton « Tester la connexion » de la fiche Zoom : vérifie le couple Client
+    ID/Secret contre l'endpoint OAuth officiel (identités de l'interface d'abord,
+    environnement en repli). Verdict en clair — jamais le secret dans les logs."""
+    from transcria.web.connector_test import check_zoom_credentials
+
+    cfg = ConfigService.get_singleton()
+    penv = ((cfg.get("connectors") or {}).get("meetings") or {}).get("platform_env") or {}
+    ok, verdict = check_zoom_credentials(
+        str(penv.get("ZOOM_CLIENT_ID") or os.environ.get("ZOOM_CLIENT_ID") or ""),
+        str(penv.get("ZOOM_CLIENT_SECRET") or os.environ.get("ZOOM_CLIENT_SECRET") or ""))
+    flash(_("Test Zoom : %(verdict)s", verdict=verdict), "success" if ok else "error")
+    return redirect("/admin/connecteurs")
+
+
 @web_bp.route("/admin/connecteurs/<connector_id>/credentials", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_CONFIG)
