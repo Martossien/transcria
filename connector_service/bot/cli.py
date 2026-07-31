@@ -14,11 +14,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
 
+from connector_service.bot._workflow import (
+    ingest_recording,
+    json_caption_emitter,
+    json_event_emitter,
+)
 from connector_service.bot.platforms.jitsi import JitsiDriver
 from connector_service.bot.runner import run_bot_session
 from connector_service.contract import ExternalMeetingOccurrence
@@ -133,31 +137,11 @@ class _NullTranscriber:
         yield  # pragma: no cover — générateur sans émission
 
 
-def _json_event_emitter():
-    """BOT_EVENTS=json (vague 4) : une ligne JSON par transition d'état sur stdout — le
-    meeting-runner les relaie au portail (états « salle d'attente », « en réunion » sur la
-    carte du job) sans parser les logs. Mapping vers les événements de /v1/meetings/events."""
-    mapping = {"joining": "joining", "waiting_admission": "waiting_admission",
-               "active": "in_meeting"}
-
-    def emit(state) -> None:
-        event = mapping.get(getattr(state, "value", str(state)))
-        if event:
-            print(json.dumps({"bot_event": event}), flush=True)
-    return emit
-
-
-def _json_caption_emitter():
-    """Suivi en direct (vague 5, lot C) : une ligne JSON par TOUR FINAL sur stdout — le
-    meeting-runner les regroupe et les POSTe à /v1/meetings/<sid>/captions. Provisoire par
-    contrat (ADR-001 D5) : le pipeline batch reste la référence."""
-
-    def emit(seg) -> None:
-        print(json.dumps({"bot_caption": {
-            "start": round(float(seg.start), 3), "end": round(float(seg.end), 3),
-            "speaker": (seg.speaker or "")[:120], "text": seg.text[:500],
-        }}, ensure_ascii=False), flush=True)
-    return emit
+# Plomberie commune des bots (lot V0) : états, captions, rattachement au job — déplacée
+# dans `_workflow` pour être partagée avec les bots Zoom SDK et Visio. Alias conservés
+# (consommateurs historiques : zoom_sdk importe depuis cli, tests).
+_json_event_emitter = json_event_emitter
+_json_caption_emitter = json_caption_emitter
 
 
 def build_transcriber(transcria_url: str | None, token: str | None, language: str | None):
@@ -217,51 +201,9 @@ async def run(args: argparse.Namespace) -> int:
         print(f"[{segment.speaker or '?'}] {segment.text}", flush=True)
 
     if recording is not None and target_job_id and outcome.admitted and recording.mixer.duration_s > 0:
-        await _ingest_recording(args, occurrence, recording, target_job_id)
+        await ingest_recording(args.transcria_url, args.token or "", occurrence,
+                               recording, target_job_id)
     return exit_code_for(outcome.admitted, outcome.reason)
-
-
-async def _ingest_recording(args, occurrence, recording, job_id: str) -> None:
-    """Rattache l'enregistrement au job planifié — best-effort JOURNALISÉ : un échec ici ne
-    change pas le code de sortie (la réunion a bien eu lieu), mais il se voit."""
-    import contextlib as _ctx
-
-    from connector_service.bridge import JobsApiBridge
-    from connector_service.transports import RequestsTransport
-
-    if os.environ.get("BOT_EVENTS") == "json":
-        print(json.dumps({"bot_event": "ingesting"}), flush=True)
-    provider = os.environ.get("TRANSCRIA_PROVIDER") or "bot"
-    opened: list = []
-    try:
-        # Tout part en FLUX depuis le disque (vague 5, lot A) : le mix normalisé ET une
-        # part par piste séparée — jamais un enregistrement complet en RAM.
-        mix_path = recording.mixer.to_wav_file()
-        track_parts = {}
-        for ref, path in recording.track_files().items():
-            fh = open(path, "rb")
-            opened.append(fh)
-            track_parts[ref] = (f"{ref}.wav", fh)
-        mix_fh = open(mix_path, "rb")
-        opened.append(mix_fh)
-        bridge = JobsApiBridge(args.transcria_url, args.token or "", RequestsTransport())
-        result = await bridge.ingest_recording(
-            mix_fh,
-            f"{occurrence.external_occurrence_id}.wav",
-            idempotency_key=f"bot|{occurrence.external_occurrence_id}|{job_id}",
-            provider=provider,
-            external_meeting_id=occurrence.external_occurrence_id,
-            participants_manifest=recording.to_manifest(provider),
-            job_id=job_id,
-            track_files=track_parts or None)
-        logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio, %d piste(s))",
-                    job_id, result.status_code, recording.mixer.duration_s, len(track_parts))
-    except Exception:  # noqa: BLE001
-        logger.exception("rattachement de l'enregistrement impossible (job %s)", job_id)
-    finally:
-        for fh in opened:
-            with _ctx.suppress(OSError):
-                fh.close()
 
 
 def main(argv: list[str] | None = None) -> int:

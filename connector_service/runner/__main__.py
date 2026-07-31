@@ -66,7 +66,8 @@ def probe_local_images(images: dict) -> list[dict]:
     return out
 
 
-_DOCKERFILES = {"jitsi": "Dockerfile.bot", "zoom-sdk": "Dockerfile.zoom-sdk"}
+_DOCKERFILES = {"jitsi": "Dockerfile.bot", "zoom-sdk": "Dockerfile.zoom-sdk",
+                "visio": "Dockerfile.visio"}
 
 
 async def _image_autoheal(cfg) -> None:

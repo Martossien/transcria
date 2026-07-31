@@ -87,10 +87,22 @@ connectors:
     testable: false
     steps:
       - Obtenir l'URL du serveur LiveKit et un couple clé/secret auprès de l'exploitant.
+      - >-
+        Poser LIVEKIT_URL, LIVEKIT_API_KEY et LIVEKIT_API_SECRET dans l'environnement du
+        meeting-runner (propriété de la MACHINE, patron JITSI_XMPP_*) — le runner les
+        relaie au bot, jamais dans argv.
+      - >-
+        Ajouter `visio` à `platforms:` dans runner.yaml puis redémarrer l'exécutant — la
+        carte « Réunion » propose alors Visio (bot caché, pistes par participant natives).
     notes:
       - >-
         Le client LiveKit honore `http_proxy` mais IGNORE `no_proxy` : derrière un proxy
         d'entreprise, la connexion est rétablie par `connector_service/net_proxy.py`.
+      - >-
+        Salle publique : la room LiveKit est le SLUG de l'URL (vérifié dans la source
+        officielle suitenumerique/meet, `core/api/viewsets.py`). Le bot est un participant
+        CACHÉ : la garde BOT_IDLE_TIMEOUT_S (15 min sans audio) évite qu'il maintienne
+        ouverte une salle désertée.
 
   - id: zoom-rtms
     name: Zoom RTMS

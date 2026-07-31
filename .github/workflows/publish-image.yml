@@ -104,6 +104,7 @@ jobs:
         bot:
           - { name: transcria-bot, dockerfile: Dockerfile.bot }
           - { name: transcria-zoom-sdk, dockerfile: Dockerfile.zoom-sdk }
+          - { name: transcria-visio, dockerfile: Dockerfile.visio }
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -13,8 +13,16 @@ from urllib.parse import urlsplit
 DEFAULT_IMAGES = {
     "jitsi": "transcria-bot:latest",
     "zoom-sdk": "transcria-zoom-sdk:latest",
+    "visio": "transcria-visio:latest",
 }
 _BROWSER_PLATFORMS = frozenset({"jitsi"})
+# Identités MACHINE relayées au bot quand elles existent dans l'environnement du runner —
+# jamais une saisie utilisateur, jamais dans argv (visible de tout `ps`). Patron établi par
+# JITSI_XMPP_* ; LIVEKIT_* = exploitant de l'instance Visio (docs/VISIO_ZOOM_RUNNER.md).
+_MACHINE_ENV = (
+    "JITSI_XMPP_USER", "JITSI_XMPP_PASSWORD",
+    "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
+)
 
 
 def _portal_is_local(portal_url: str) -> bool:
@@ -46,10 +54,7 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
     passcode = str(intent.get("meeting_passcode") or "")
     if passcode:
         env["BOT_ROOM_PASSCODE"] = passcode
-    # Compte d'une instance auto-hébergée exigeant une connexion : propriété de la MACHINE
-    # (posé dans l'environnement du runner), jamais une saisie utilisateur — absent partout
-    # ailleurs, donc rien à configurer pour meet.jit.si ou une instance ouverte.
-    for name in ("JITSI_XMPP_USER", "JITSI_XMPP_PASSWORD"):
+    for name in _MACHINE_ENV:
         if os.environ.get(name):
             env[name] = os.environ[name]
     argv = ["docker", "run", "--rm"]

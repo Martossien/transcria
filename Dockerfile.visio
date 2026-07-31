@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+#
+# Image BOT VISIO (La Suite) — client LiveKit auditeur caché, SANS navigateur.
+# Cf. docs/VISIO_ZOOM_RUNNER.md (lot V1) et docs/TEMPS_REEL_REUNIONS.md.
+#
+# POURQUOI une image dédiée, bien plus légère que le bot navigateur : Visio expose LiveKit
+# nativement — le bot est un simple client `livekit-rtc` qui s'abonne aux pistes micro,
+# démultiplexées PAR PARTICIPANT (les pistes séparées v2 sont natives ici). Ni Chromium,
+# ni GPU, ni base de données : il parle à TranscrIA en HTTP.
+#
+# ISOLATION : seul `connector_service/` est copié — le connecteur ne dépend jamais du cœur.
+#
+# Build :
+#   docker build -f Dockerfile.visio -t transcria-visio:latest .
+# Lancement (une réunion) :
+#   docker run --rm \
+#     -e LIVEKIT_URL=wss://livekit.exemple -e LIVEKIT_API_KEY=… -e LIVEKIT_API_SECRET=… \
+#     -e TRANSCRIA_URL=http://hote:7870 -e TRANSCRIA_TOKEN=tia_… \
+#     transcria-visio:latest https://visio.exemple/ma-salle
+
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Dépendances du bot UNIQUEMENT (pas le cœur applicatif) :
+#  - livekit / livekit-api : client room + forge du jeton (mêmes bornes que
+#    requirements-connectors.txt — une dépendance de sécurité n'est jamais transitive) ;
+#  - requests : façade STT + rattachement au job TranscrIA.
+RUN pip install --no-cache-dir "livekit>=0.18,<2.0" "livekit-api>=0.8,<2.0" \
+        "requests>=2.31"
+
+# Code du bot. Copié APRÈS les dépendances : une modification de code ne réinstalle rien.
+COPY connector_service/ /app/connector_service/
+
+# Auditeur caché sans privilège : rien ici n'exige root.
+RUN useradd --create-home visiobot
+USER visiobot
+
+ENTRYPOINT ["python", "-m", "connector_service.bot.visio"]
