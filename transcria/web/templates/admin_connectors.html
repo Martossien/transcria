@@ -147,7 +147,7 @@
               {{ _('Manque :') }} {{ vue.missing|join(', ') }}
             </div>
           {% endif %}
-          {% if meetings_enabled %}
+          {% if meetings_enabled and c.id in claim_platforms %}
           {# Saisie par l'INTERFACE (« l'admin ne touche que l'interface ») : stockée en
              config (secrets masqués), remise aux exécutants PAR LE CLAIM — l'env machine
              du runner reste un repli. Vider un champ retire la clé. #}

@@ -356,6 +356,10 @@ def admin_connectors():
         meetings_enabled=bool(meetings_cfg.get("enabled", False)),
         meetings_checklist=meetings_checklist(cfg),
         platform_env=platform_env,
+        # Saisie par l'interface = SEULEMENT les plateformes servies par le RUNNER (la
+        # remise passe par le claim). Les connecteurs webhook (Teams/Meet/RTMS) lisent
+        # l'environnement du service connecteur — afficher un formulaire mentirait.
+        claim_platforms=("jitsi", "visio", "zoom-sdk"),
         meeting_runners=runners)
 
 
