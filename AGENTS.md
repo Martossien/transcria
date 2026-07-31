@@ -224,6 +224,9 @@ transcria/
       runner_provisioning.py # bouton « Activer » 1-clic (compte svc-runner, jeton local 0600, config) + check-list vivante
       runner_kit.py         # kit « exécutant distant » : script d'installation généré (⚠ contient un jeton — revue sécurité)
       live_captions.py      # suivi en direct PROVISOIRE (live/captions.jsonl plafonné, n monotone, troncature annoncée)
+                            # (web/connector_test.py = tests de CONNEXION des identités
+                            #  plateforme : Zoom OAuth, Entra ID, Google JWT-bearer — réseau
+                            #  injecté, verdicts qui rappellent les pannes MUETTES)
     queue/
       allocator.py          # GPUAllocator — réservations GPU atomiques par job/phase + verrou LLM + PID tracking
       store.py              # QueueStore — file persistante, priorités, pause/reprise, aging
@@ -451,6 +454,13 @@ transcria/
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
     prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription ; summary porte {{TYPES_REUNION}}/{{INDICES_TYPES}}/{{CHAMPS_EXTRACTION_TYPE}} substitués à l'exécution
+  gates/                    # BANCS DE GATES AUTOMATISÉS des bots (2026-07-31) — rejouent une
+                            #   réunion RÉELLE sur une stack auto-hébergée, sans humain :
+    gate_visio_publisher.py #   publie un fichier audio dans une room LiveKit (participant nommé)
+    gate_jitsi_publisher.py #   idem en NAVIGATEUR (Chromium + micro factice ; Jitsi headless ne
+                            #   crée aucune piste seul → createLocalTracks + useAudioStream)
+                            #   Scénarios : solo / salle (2 voix, 1 micro) / multi (parole
+                            #   simultanée) — validés jusqu'au DOCX ; cf. docs/VISIO_ZOOM_RUNNER.md
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
     doctor.py               # Préflight GPU-free (cf. transcria/diagnostics/doctor.py) — wrapper CLI mince
@@ -807,6 +817,16 @@ centralisés). Règles pour tout agent de codage :
    = contributions par PR, chaque fichier validé par un test CI.
 
 ### Connecteurs de réunion & temps réel (paquet `connector_service/`)
+
+**État au 2026-07-31.** ÉPROUVÉ EN RÉEL et complet de bout en bout (planification →
+runner → bot → pistes par participant → suivi en direct → étape 5 → DOCX) sur **Jitsi**,
+**Visio** (LiveKit) et **Zoom** (Meeting SDK, compte gratuit). Bancs de gates AUTOMATISÉS
+sur stacks auto-hébergées pour Jitsi et Visio (`gates/`, 6 scénarios validés jusqu'au
+livrable Word). **Teams / Meet / Zoom RTMS** restent `implemented` : code + CI, jamais
+exécutés en réel — bloqués par des ACHATS (M365, Workspace) et, pour Teams/RTMS, deux URL
+HTTPS publiques ; guides admin prêts (`docs/MEET_TEAMS_ADMIN.md`) et tests de connexion
+câblés. Revue SÉCURITÉ Opus 5 = passage obligé avant mise en service réelle.
+
 **👉 Point d'entrée pour reprendre le chantier : `docs/TEMPS_REEL_REUNIONS.md` § 0 « REPRISE ».**
 Elle dit en une page ce qui est ÉPROUVÉ, ce qui ne l'est pas, ce qui bloque et par quoi continuer
 — écrite pour qu'on puisse changer de machine sans relire les 1 300 lignes du plan.
@@ -1076,3 +1096,9 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/archive/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |
 | `docs/SERVICE_RESSOURCES_GPU.md` | Inférence distante v1 : topologies frontale/ressources, autonomie VRAM du STT (A/B/C), `/capabilities`, mode dégradé |
 | `docs/MIGRATION_API_SERVEUR_GPU.md` | Contrat d'API du nœud de ressources distant (implémenté ; renvois §4bis depuis `inference_service/`) |
+| `docs/UI_REUNIONS_WORKFLOW.md` | Plan directeur du parcours RÉUNIONS (vagues 0-5, toutes livrées) : planification, runner, étape 5 |
+| `docs/VAGUE5_PISTES_SEPAREES.md` | Pistes séparées, STT par piste, sous-diarisation des micros partagés, suivi en direct provisoire |
+| `docs/VISIO_ZOOM_RUNNER.md` | Bots Visio (LiveKit) et Zoom (SDK) sur le parcours complet + bancs de gates automatisés |
+| `docs/ZOOM_GRATUIT_ADMIN.md` | Guide admin Zoom : créer l'app Meeting SDK (compte gratuit ET entreprise), diagnostic |
+| `docs/MEET_TEAMS_ADMIN.md` | Guide admin Meet et Teams (connecteurs post-réunion) : permissions, pannes MUETTES, ordre conseillé |
+| `docs/RUNNER_DISTANT_KIT.md` | Poser un meeting-runner sur une AUTRE machine (script généré depuis /admin/connecteurs) |

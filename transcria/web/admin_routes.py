@@ -385,7 +385,48 @@ def admin_meetings_toggle():
     return redirect("/admin/connecteurs")
 
 
-@web_bp.route("/admin/connecteurs/zoom-sdk/test", methods=["POST"])
+_TESTABLE_CONNECTORS = ("zoom-sdk", "teams", "meet")
+
+
+@web_bp.route("/admin/connecteurs/<connector_id>/test", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_connector_test(connector_id: str):
+    """Bouton « Tester la connexion » — vérifie les identités contre l'AUTHENTIFICATION
+    officielle de la plateforme (Zoom OAuth, Entra ID, Google JWT-bearer), sans réunion
+    ni abonnement. Les verdicts rappellent ce qu'un test d'authentification NE PEUT PAS
+    prouver (permissions consenties, politique d'accès applicatif Teams, rôle Pub/Sub
+    Meet — les pannes MUETTES documentées)."""
+    from transcria.web.connector_test import (
+        check_meet_credentials,
+        check_teams_credentials,
+        check_zoom_credentials,
+    )
+
+    if connector_id not in _TESTABLE_CONNECTORS:
+        abort(404)
+    cfg = ConfigService.get_singleton()
+    penv = ((cfg.get("connectors") or {}).get("meetings") or {}).get("platform_env") or {}
+
+    def _val(key: str) -> str:
+        return str(penv.get(key) or os.environ.get(key) or "")
+
+    if connector_id == "zoom-sdk":
+        ok, verdict = check_zoom_credentials(_val("ZOOM_CLIENT_ID"),
+                                             _val("ZOOM_CLIENT_SECRET"))
+    elif connector_id == "teams":
+        ok, verdict = check_teams_credentials(_val("TEAMS_TENANT_ID"),
+                                              _val("TEAMS_CLIENT_ID"),
+                                              _val("TEAMS_CLIENT_SECRET"))
+    else:
+        ok, verdict = check_meet_credentials(_val("MEET_SERVICE_ACCOUNT_JSON"),
+                                             _val("MEET_IMPERSONATE_USER"))
+    flash(_("Test %(id)s : %(verdict)s", id=connector_id, verdict=verdict),
+          "success" if ok else "error")
+    return redirect("/admin/connecteurs")
+
+
+@web_bp.route("/admin/connecteurs/zoom-sdk/test-legacy", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_connector_test_zoom():

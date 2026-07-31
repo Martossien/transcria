@@ -164,7 +164,7 @@ connectors:
       - key: TEAMS_NOTIFICATION_URL
         label: URL publique de réception des notifications
         secret: false
-    testable: false
+    testable: true
     steps:
       - Enregistrer une application dans Entra ID (Azure AD) et créer un Client Secret.
       - >-
@@ -202,6 +202,12 @@ connectors:
       Aucun bot, et surtout AUCUN port entrant.
     doc: docs/TEMPS_REEL_REUNIONS.md#7-quater
     requires:
+      - key: MEET_SERVICE_ACCOUNT_JSON
+        label: Clé JSON du compte de service (chemin ou contenu)
+        secret: true
+      - key: MEET_IMPERSONATE_USER
+        label: Utilisateur à impersonner (organisateur)
+        secret: false
       - key: MEET_SERVICE_ACCOUNT_EMAIL
         label: Adresse du compte de service
         secret: false
@@ -214,7 +220,7 @@ connectors:
       - key: MEET_PUBSUB_SUBSCRIPTION
         label: Abonnement Pub/Sub à interroger
         secret: false
-    testable: false
+    testable: true
     steps:
       - >-
         Créer un projet Google Cloud, puis activer les API « Google Meet », « Google Workspace
