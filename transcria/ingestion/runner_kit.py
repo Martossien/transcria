@@ -128,6 +128,9 @@ token_file: $CONF_DIR/meeting_runner_token.txt
 runner_name: $RUNNER_NAME
 capacity: 2
 platforms: [jitsi]
+# Autres plateformes : ajouter l'id ET poser les identités machine dans l'environnement
+# de l'unité (visio → LIVEKIT_URL/API_KEY/API_SECRET ; zoom-sdk → ZOOM_CLIENT_ID/SECRET).
+# platforms: [jitsi, visio, zoom-sdk]
 EOF
 
 echo "── Unité systemd"

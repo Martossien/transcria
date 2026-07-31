@@ -139,21 +139,36 @@ def meetings_checklist(cfg: dict) -> list[dict]:
             covered.update(json.loads(r.platforms_json))
         except ValueError:
             pass
-    items.append({"ok": "jitsi" in covered, "label": _l("Jitsi couvert par un exécutant"),
-                  "remedy": _l("Vérifier `platforms: [jitsi]` dans runner.yaml puis redémarrer l'exécutant.")})
-    # Présence RÉELLE des images de bot, annoncée par les exécutants (vécu : « code 125 »
-    # cryptique quand l'image manquait — désormais la check-list le dit AVANT la réunion).
-    image_ok, image_seen = False, False
-    for r in runners:
-        try:
-            for img in json.loads(r.images_json or "[]"):
-                if isinstance(img, dict) and img.get("provider") == "jitsi":
-                    image_seen = True
-                    image_ok = image_ok or bool(img.get("present"))
-        except ValueError:
-            pass
-    items.append({"ok": image_ok if image_seen else not runners,
-                  "label": _l("Image de bot Jitsi présente sur l'exécutant"),
-                  "remedy": _l("Construire : docker build -f Dockerfile.bot -t transcria-bot:latest . "
-                               "(ou renseigner une image GHCR dans runner.yaml).")})
+    # Couverture et image PAR PLATEFORME (lots V1/V2 : Visio et Zoom rejoignent Jitsi).
+    # Jitsi (zéro identifiant requis) est TOUJOURS affichée — c'est l'attendu d'une
+    # installation neuve ; les autres n'apparaissent que si un exécutant les annonce :
+    # une plateforme non configurée n'est pas un échec, un ✗ permanent ferait peur à tort.
+    platform_names = {"jitsi": "Jitsi", "visio": "Visio", "zoom-sdk": "Zoom"}
+    dockerfiles = {"jitsi": "Dockerfile.bot", "visio": "Dockerfile.visio",
+                   "zoom-sdk": "Dockerfile.zoom-sdk"}
+    shown = ["jitsi"] + sorted((covered & platform_names.keys()) - {"jitsi"})
+    for platform in shown:
+        name = platform_names[platform]
+        items.append({
+            "ok": platform in covered,
+            "label": _l("%(name)s couverte par un exécutant", name=name),
+            "remedy": _l("Vérifier `platforms: [%(id)s]` dans runner.yaml puis redémarrer "
+                         "l'exécutant.", id=platform)})
+        # Présence RÉELLE de l'image de bot, annoncée par les exécutants (vécu : « code
+        # 125 » cryptique quand l'image manquait — la check-list le dit AVANT la réunion).
+        image_ok, image_seen = False, False
+        for r in runners:
+            try:
+                for img in json.loads(r.images_json or "[]"):
+                    if isinstance(img, dict) and img.get("provider") == platform:
+                        image_seen = True
+                        image_ok = image_ok or bool(img.get("present"))
+            except ValueError:
+                pass
+        items.append({
+            "ok": image_ok if image_seen else not runners,
+            "label": _l("Image de bot %(name)s présente sur l'exécutant", name=name),
+            "remedy": _l("Elle se télécharge/construit toute seule (auto-réparation) ; "
+                         "sinon : docker build -f %(dockerfile)s",
+                         dockerfile=dockerfiles[platform])})
     return items

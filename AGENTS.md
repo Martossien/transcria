@@ -214,6 +214,16 @@ transcria/
       filesystem.py         # JobFilesystem — arborescence disque par job
       artifact_store.py     # synchronisation base↔disque des fichiers de jobs (backend pg, cf. docs/STOCKAGE_PARTAGE_JOBS.md)
       timing_store.py       # JobTimingStore — historique des durées réelles (modèle de temps calibré machine)
+    ingestion/              # RÉUNIONS côté cœur (vagues 2-5 + suites) — l'autre bout de la frontière /v1/audio/ingest
+      models.py / store.py  # MeetingImport — mapping artefact externe → job, get-or-create IDEMPOTENT (ADR-001 D2)
+      manifest.py           # manifeste participants (v1 fenêtres, v2 pistes `track_<id>`) — validation STRICTE tout-ou-rien
+      manifest_turns.py     # tours de parole DEPUIS le manifeste (+ sub_by_pid lot B2 : sous-voix PISTE_<pid>_Sn)
+      session_models.py / session_store.py / session_states.py  # meeting_sessions/runners : machine d'états PURE,
+                            #   claim SKIP LOCKED (SEUL endroit où la référence sort déchiffrée), baux, backoff
+      meeting_ref_crypto.py # chiffrement Fernet enc1: des références/codes de réunion (⚠ revue sécurité Opus 5)
+      runner_provisioning.py # bouton « Activer » 1-clic (compte svc-runner, jeton local 0600, config) + check-list vivante
+      runner_kit.py         # kit « exécutant distant » : script d'installation généré (⚠ contient un jeton — revue sécurité)
+      live_captions.py      # suivi en direct PROVISOIRE (live/captions.jsonl plafonné, n monotone, troncature annoncée)
     queue/
       allocator.py          # GPUAllocator — réservations GPU atomiques par job/phase + verrou LLM + PID tracking
       store.py              # QueueStore — file persistante, priorités, pause/reprise, aging
@@ -235,6 +245,8 @@ transcria/
       profiles.py           # profils de traitement (get_profile/profile_for_job) — quelles étapes chaque profil exécute
       profile_availability.py # disponibilité des profils pour l'UI (Phase 6)
       speaker_projection.py # B1 : projection locuteurs — service PUR
+      speaker_manifest.py   # projection manifeste participants × diarisation → suggestions étape 5 (rooms « micro partagé »)
+      track_fusion.py       # vague 5 lot B : fenêtres→intervalles STT (levier de coût), fusion par tri, chevauchements protégés du multi-STT
       gpu_phase.py          # B1 : réservation/session GPU d'une phase (GPUSession, _should_use_remote_stt)
       agent_workspace.py    # scratch HORS dépôt des agents opencode (stage/write_input/verify_and_restore_sources)
       srt_editor.py         # parsing/écriture SRT de l'éditeur intégré (chunks, révisions)
@@ -416,12 +428,17 @@ transcria/
                             #   ⚠ net_proxy.py existe parce que le client LiveKit honore `http_proxy` mais IGNORE `no_proxy`
     health.py / fakes.py    # sonde de santé ; doublures utilisées par les tests
     live/                   # capture TEMPS RÉEL : transports (livekit, rtms, meet_media, teams_rtm, zoom_sdk),
-                            #   façade STT (facade_stt.py), démultiplexage par locuteur
+                            #   façade STT (facade_stt.py), démultiplexage par locuteur ;
+                            #   timeline.py (vague 5 : continuité d'échantillons par flux, écriture DISQUE mix+pistes)
+                            #   + recorder.py (RecordingTee : mixage + pistes séparées + registre → manifeste v2)
     runner/                 # meeting-runner (vague 4) : SEUL composant à voir Docker — tire les intentions
-                            #   du portail (claim/events/result), lance un conteneur par session (config, commands
-                            #   PURS + daemon testé avec portail et lanceur injectés) ; unité systemd via la phase
+                            #   du portail (claim/events/result/captions), lance un conteneur par session (config,
+                            #   commands PURS [_MACHINE_ENV : JITSI_XMPP_*/LIVEKIT_*/ZOOM_* relayés, jamais argv]
+                            #   + daemon testé avec portail et lanceur injectés) ; unité systemd via la phase
                             #   installeur `connectors` (+ maintenance.cli create-runner-token)
-    bot/                    # bot participant : navigateur headless (Jitsi/Meet) + zoom_sdk.py (SDK natif)
+    bot/                    # bots participants — cli.py (navigateur headless Jitsi), zoom_sdk.py (SDK natif),
+                            #   visio.py (client LiveKit auditeur caché, lot V1) ; _workflow.py = socle COMMUN
+                            #   (ingestion au job, BOT_EVENTS=json, captions du direct — une correction sert les 3)
     # --- Briques cloud PURES (aucun réseau ici : c'est ce qui les rend testables sans compte) ---
     teams_graph.py          # abonnements Microsoft Graph : construction, durées (max 4320 min), notifications, cycle de vie
     graph_validation.py     # identité de l'émetteur des notifications (`appid` v1 / `azp` v2)

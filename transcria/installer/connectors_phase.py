@@ -49,6 +49,11 @@ runner_name: meeting-runner-1
 capacity: 2
 poll_interval_s: 30
 platforms: [jitsi]
+# Autres plateformes (docs/VISIO_ZOOM_RUNNER.md) — ajouter l'id ET poser les identités
+# machine dans l'environnement du runner :
+#   visio     → LIVEKIT_URL + LIVEKIT_API_KEY + LIVEKIT_API_SECRET (exploitant)
+#   zoom-sdk  → ZOOM_CLIENT_ID + ZOOM_CLIENT_SECRET (app Meeting SDK ; gratuit = 40 min)
+# platforms: [jitsi, visio, zoom-sdk]
 # images:                     # digests GHCR épinglés — défauts : images locales bot.sh
 #   jitsi: ghcr.io/<owner>/transcria-bot@sha256:…
 """
