@@ -96,3 +96,27 @@ def overlapping_indices(segments) -> set[int]:
                 overlapped.add(j)
         active[i] = speaker
     return overlapped
+
+
+def subtract_intervals(windows, holes) -> list[tuple[float, float]]:
+    """Retire `holes` de `windows` (intervalles triés ou non) — sert à écarter la REPISSE
+    d'une piste nommée (lot B2, règle de dominance) : les intervalles où pyannote entend
+    la voix MINORITAIRE (l'autre participant, capté par le micro) ne sont pas transcrits
+    sur CETTE piste — leurs mots vivent sur la piste de leur propriétaire."""
+    result: list[tuple[float, float]] = []
+    cuts = sorted((float(a), float(b)) for a, b in (holes or ()) if float(b) > float(a))
+    for start, end in windows or ():
+        start, end = float(start), float(end)
+        for cut_start, cut_end in cuts:
+            if cut_start >= end:
+                break
+            if cut_end <= start:
+                continue
+            if cut_start > start:
+                result.append((start, cut_start))
+            start = max(start, cut_end)
+            if start >= end:
+                break
+        if end > start:
+            result.append((round(start, 3), round(end, 3)))
+    return [(round(a, 3), round(b, 3)) for a, b in result]

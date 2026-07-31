@@ -94,6 +94,9 @@ class SpeakerDetector:
     # Sous une poignée de secondes de parole, scinder une « salle » en plusieurs voix
     # n'est ni fiable ni utile — et chaque passe pyannote par piste a un coût réel.
     _SUBDIAR_MIN_SPEECH_S = 10.0
+    # Part du temps de parole clusterisé au-delà de laquelle une piste NOMMÉE reste UNE
+    # voix (le reste = repisse). 0.8 : un vrai co-locuteur de salle parle plus que ça.
+    _SUBDIAR_DOMINANT_RATIO = 0.8
 
     def _subdiarize_tracks(self, fs, manifest, device: str | None,
                            progress_callback) -> dict[str, dict]:
@@ -139,17 +142,41 @@ class SpeakerDetector:
                         "diarize_audio) — pistes salle = un locuteur")
             return {}
         sub_by_pid: dict[str, dict] = {}
+        bleed: dict[str, list] = {}
         try:
             for p, path in candidates:
                 res = diarize_audio(path)
                 if not res.get("available"):
                     skipped[p.id] = res.get("error") or res.get("message") or "échec"
                     continue
-                clusters = sorted({str(t.get("speaker")) for t in res.get("turns", [])})
+                by_cluster: dict[str, float] = {}
+                for turn in res.get("turns", []):
+                    spk = str(turn.get("speaker"))
+                    by_cluster[spk] = by_cluster.get(spk, 0.0) + (
+                        float(turn.get("end", 0)) - float(turn.get("start", 0)))
+                clusters = sorted(by_cluster)
                 if len(clusters) < 2:
                     # Une seule voix : la piste reste son propre locuteur (nom proposé
                     # directement quand la plateforme le connaît — cas fluide D5.3).
                     skipped[p.id] = f"{len(clusters)} voix"
+                    continue
+                # RÈGLE DE DOMINANCE (gate Zoom réel 2026-07-31 : le chevauchement fait
+                # REPISSER la voix de l'autre dans le micro → 2e cluster ~12 %) : sur une
+                # piste NOMMÉE — par-participant par contrat de plateforme, modèle
+                # qu'attendee applique sans même diariser — une voix ≥ 80 % EST le
+                # participant ; les intervalles minoritaires sont la repisse, écartés du
+                # STT (leurs mots vivent sur la piste de leur propriétaire). Sans
+                # dominant net : vrai micro partagé → sous-voix, comme avant.
+                total = sum(by_cluster.values()) or 1.0
+                dominant = max(by_cluster, key=lambda spk: by_cluster[spk])
+                ratio = by_cluster[dominant] / total
+                if p.name and ratio >= self._SUBDIAR_DOMINANT_RATIO:
+                    bleed[p.id] = [
+                        [round(float(t_["start"]), 3), round(float(t_["end"]), 3)]
+                        for t_ in res.get("turns", [])
+                        if str(t_.get("speaker")) != dominant]
+                    skipped[p.id] = (f"voix dominante {ratio:.0%} — "
+                                     f"{len(bleed[p.id])} intervalle(s) de repisse écarté(s)")
                     continue
                 rename = {spk: f"PISTE_{p.id}_S{i + 1}" for i, spk in enumerate(clusters)}
                 sub_by_pid[p.id] = {
@@ -163,7 +190,8 @@ class SpeakerDetector:
         finally:
             diarizer.offload()
         fs.save_json("speakers/track_diarization.json",
-                     {"version": 1, "tracks": sub_by_pid, "skipped": skipped})
+                     {"version": 1, "tracks": sub_by_pid, "bleed": bleed,
+                      "skipped": skipped})
         return sub_by_pid
 
     @staticmethod

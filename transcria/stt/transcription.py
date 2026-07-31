@@ -639,7 +639,11 @@ class Transcriber:
         """
         # Différé : transcria.workflow.__init__ tire le runner → cycle stt↔workflow ;
         # le module lui-même est PUR, seul le paquet pose problème.
-        from transcria.workflow.track_fusion import fuse_track_segments, merge_windows
+        from transcria.workflow.track_fusion import (
+            fuse_track_segments,
+            merge_windows,
+            subtract_intervals,
+        )
 
         raw = fs.load_json("metadata/participants_manifest.json")
         if not isinstance(raw, dict) or raw.get("version") != 2:
@@ -665,7 +669,9 @@ class Transcriber:
         # Sous-diarisation par piste (lot B2, écrite par SpeakerDetector) : une piste
         # salle scindée en PISTE_<pid>_S1… est découpée par SES tours exclusifs — le
         # chunking pyannote éprouvé — au lieu des fenêtres mono-locuteur.
-        sub_tracks = (fs.load_json("speakers/track_diarization.json") or {}).get("tracks", {})
+        track_diar = fs.load_json("speakers/track_diarization.json") or {}
+        sub_tracks = track_diar.get("tracks", {})
+        bleed = track_diar.get("bleed", {}) if isinstance(track_diar, dict) else {}
         workflow_cfg = self.config.get("workflow", {}) or {}
         chunk_cfg = workflow_cfg.get("pyannote_chunking", {}) or {}
 
@@ -681,6 +687,9 @@ class Transcriber:
                 )
             if chunks is None:
                 windows = merge_windows(p.speech_windows, max_end_s=len(audio) / _SR)
+                # Repisse d'une piste nommée (règle de dominance B2) : ces intervalles
+                # portent la voix de l'AUTRE — écartés, leurs mots sont sur SA piste.
+                windows = subtract_intervals(windows, bleed.get(p.id))
                 if not windows:
                     continue
                 chunks = [self._make_chunk(audio, start, end, speaker)

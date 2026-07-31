@@ -701,3 +701,22 @@ class TestPlatformEnvInterface:
             from transcria.services.config_service import ConfigService
             penv = ConfigService.get_singleton()["connectors"]["meetings"]["platform_env"]
             assert penv == {"ZOOM_CLIENT_SECRET": "s3cret"}
+
+
+class TestPageJobEnReunion:
+    def test_wizard_rendu_a_l_etat_in_meeting_jamais_500(self, meetings_on, client,
+                                                         admin_client, runner_token):
+        """Vécu au gate Zoom multi-intervenants (2026-07-31) : 500 au moment où le bot
+        entre en réunion — l'instant où la page du job se recharge à l'état in_meeting
+        (panneau « Suivi en direct », AVANT toute ingestion d'audio)."""
+        _heartbeat(client, runner_token)
+        body = _create(client, admin_client).get_json()
+        sid, job_id = body["session"]["id"], body["job_id"]
+        client.post("/v1/meetings/claim", headers=_auth(runner_token),
+                    json={"runner": "runner-1", "max": 1})
+        for event in ("joining", "in_meeting"):
+            client.post(f"/v1/meetings/{sid}/events", headers=_auth(runner_token),
+                        json={"runner": "runner-1", "event": event})
+        r = admin_client.get(f"/jobs/{job_id}")
+        assert r.status_code == 200, r.get_data(as_text=True)[-800:]
+        assert b"live-captions-panel" in r.data

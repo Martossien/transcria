@@ -78,3 +78,17 @@ class TestOverlappingIndices:
             {"start": 2.0, "end": 4.0, "speaker": "Bob"},
         ]
         assert overlapping_indices(segs) == set()
+
+
+class TestSubtractIntervals:
+    def test_repisse_au_milieu_et_aux_bords(self):
+        from transcria.workflow.track_fusion import subtract_intervals
+        out = subtract_intervals([(0.0, 10.0), (20.0, 30.0)],
+                                 [[2.0, 3.0], [9.0, 21.0]])
+        assert out == [(0.0, 2.0), (3.0, 9.0), (21.0, 30.0)]
+
+    def test_sans_trous_ni_invalides(self):
+        from transcria.workflow.track_fusion import subtract_intervals
+        assert subtract_intervals([(1.0, 2.0)], None) == [(1.0, 2.0)]
+        assert subtract_intervals([(1.0, 2.0)], [[5.0, 4.0]]) == [(1.0, 2.0)]
+        assert subtract_intervals([(1.0, 2.0)], [[0.0, 5.0]]) == []

@@ -156,3 +156,44 @@ class TestSubdiarizeTracks:
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def _bleedy(dom=(0.0, 80.0), minor=(80.0, 92.0)):
+    turns = [{"start": dom[0], "end": dom[1], "speaker": "SPEAKER_00"},
+             {"start": minor[0], "end": minor[1], "speaker": "SPEAKER_01"}]
+    return {"available": True, "turns": turns, "exclusive_turns": turns,
+            "speakers": ["SPEAKER_00", "SPEAKER_01"], "stats": {}}
+
+
+class TestRegleDominance:
+    """Gate Zoom réel 2026-07-31 : la repisse du chevauchement fait un 2e cluster ~12 % —
+    une piste NOMMÉE à voix dominante garde son NOM, la repisse est écartée du STT."""
+
+    def test_voix_dominante_garde_le_nom_et_note_la_repisse(self, tmp_path, monkeypatch):
+        fs = _job_with_tracks(tmp_path, [ROOM_P2])
+        det = _detector(monkeypatch, tmp_path, _FakeDiarizer({"p2.wav": _bleedy()}))
+
+        det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+
+        turns = fs.load_json("speakers/speaker_turns.json")
+        assert turns["speakers"] == ["Salle B"]           # le NOM survit (87 % dominant)
+        audit = fs.load_json("speakers/track_diarization.json")
+        assert audit["bleed"]["p2"] == [[80.0, 92.0]]     # la repisse, relisible
+        assert "dominante" in audit["skipped"]["p2"]
+
+    def test_partage_reel_reste_scinde(self, tmp_path, monkeypatch):
+        fs = _job_with_tracks(tmp_path, [ROOM_P2])
+        det = _detector(monkeypatch, tmp_path, _FakeDiarizer(
+            {"p2.wav": _bleedy(dom=(0.0, 50.0), minor=(50.0, 92.0))}))   # 54 % : pas net
+
+        det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+
+        turns = fs.load_json("speakers/speaker_turns.json")
+        assert {"PISTE_p2_S1", "PISTE_p2_S2"} <= set(turns["speakers"])
+
+    def test_piste_sans_nom_toujours_scindee(self, tmp_path, monkeypatch):
+        anon = dict(ROOM_P2, name="")
+        fs = _job_with_tracks(tmp_path, [anon])
+        det = _detector(monkeypatch, tmp_path, _FakeDiarizer({"p2.wav": _bleedy()}))
+        det.detect(SimpleNamespace(id="job-1"), tmp_path / "mix.wav")
+        assert "PISTE_p2_S1" in fs.load_json("speakers/speaker_turns.json")["speakers"]

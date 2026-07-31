@@ -173,3 +173,21 @@ class TestSousVoixParPiste:
 
         segments = _transcriber(job_with_tracks)._transcribe_per_track(fs, "fr", _SL())
         assert {s["speaker"] for s in segments} == {"Alice", "Bob"}
+
+
+class TestRepisseEcarteeDuSTT:
+    def test_fenetres_moins_la_repisse(self, job_with_tracks):
+        """Règle de dominance (gate Zoom réel) : les intervalles de repisse d'une piste
+        nommée ne sont PAS transcrits — leurs mots vivent sur la piste du propriétaire."""
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(job_with_tracks), "job-1")
+        # bob parle 2..5 ; on marque 2..4.6 comme repisse → il ne reste ~0,8 s à transcrire
+        fs.save_json("speakers/track_diarization.json", {"version": 1, "tracks": {},
+                     "bleed": {"bob": [[2.0, 4.6]]}, "skipped": {}})
+        segments = _transcriber(job_with_tracks)._transcribe_per_track(fs, "fr", _SL())
+        bob = [s for s in segments if s["speaker"] == "Bob"]
+        # Contrat : AUCUN segment ne recouvre la repisse (les fragments de MARGE avant/
+        # après restent légitimes) ; il ne reste que ~0,8 s à transcrire au lieu de 3 s.
+        assert bob and all(s["end"] <= 2.0 or s["start"] >= 4.6 for s in bob)
+        assert sum(s["end"] - s["start"] for s in bob) < 1.2
