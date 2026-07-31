@@ -41,6 +41,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.services.job_service import JobService
 from transcria.web.blueprint import web_bp
+from transcria.web.connector_catalog import load_catalog
 from transcria.web.job_access import can_access_job
 from transcria.web.meetings_views import ready_providers as _ready_providers_shared
 from transcria.web.request_helpers import bearer_token_required
@@ -266,7 +267,27 @@ def v1_meetings_claim():
     if not name:
         return jsonify({"error": "Nom de runner requis"}), 400
     max_n = min(max(int(body.get("max") or 1), 0), 8)
-    return jsonify({"sessions": MeetingSessionStore.claim_due(name, max_n)})
+    sessions = MeetingSessionStore.claim_due(name, max_n)
+    for intent in sessions:
+        env = _platform_env_for(str(intent.get("provider") or ""))
+        if env:
+            intent["platform_env"] = env
+    return jsonify({"sessions": sessions})
+
+
+def _platform_env_for(provider: str) -> dict[str, str]:
+    """Identités de plateforme saisies par l'interface admin, filtrées aux clés que la
+    fiche du connecteur DÉCLARE (`requires` du catalogue) — remises au seul runner
+    claimant, par le claim : le canal où les secrets sortent déjà (référence, code de
+    salle). L'environnement machine du runner reste un repli (docker_argv). ⚠ revue Opus 5."""
+    stored = _meetings_cfg(get_config()).get("platform_env") or {}
+    if not stored:
+        return {}
+    connector = next((c for c in load_catalog() if c.id == provider), None)
+    if connector is None:
+        return {}
+    return {f.key: str(stored[f.key]) for f in connector.requires
+            if str(stored.get(f.key) or "").strip()}
 
 
 @web_bp.route("/v1/meetings/<session_id>/events", methods=["POST"])

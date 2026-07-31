@@ -139,6 +139,7 @@
 | `/` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/admin/config` | GET,POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/connecteurs` | GET | connexion + Permission.MANAGE_CONFIG | Connecteurs de réunion : check-list vivante, activation en UN clic, exécutants. | `transcria.web.admin_routes` |
+| `/admin/connecteurs/<connector_id>/credentials` | POST | connexion + Permission.MANAGE_CONFIG | Identités de PLATEFORME saisies par l'interface (« l'admin ne touche que | `transcria.web.admin_routes` |
 | `/admin/connecteurs/meetings/toggle` | POST | connexion + Permission.MANAGE_CONFIG | Interrupteur UNIQUE des réunions en ligne — active = auto-provisionnement complet | `transcria.web.admin_routes` |
 | `/admin/connecteurs/runners/<name>/revoke` | POST | connexion + Permission.MANAGE_CONFIG | Révoque PRÉCISÉMENT cet exécutant (son jeton du heartbeat) — son prochain battement | `transcria.web.admin_routes` |
 | `/admin/connecteurs/runners/kit` | POST | connexion + Permission.MANAGE_CONFIG | Génère le kit « exécutant distant » (docs/RUNNER_DISTANT_KIT.md) : un script | `transcria.web.admin_routes` |
@@ -210,7 +211,7 @@
 | `/v1/meetings/claim` | POST | — | Claim atomique (SKIP LOCKED) des sessions dues — SEUL endroit où la référence de | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 144 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 145 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

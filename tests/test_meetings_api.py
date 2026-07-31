@@ -660,3 +660,44 @@ class TestLiveCaptions:
         body = admin_client.get(f"/api/meetings/{sid}/captions?after=0").get_json()
         assert body["truncated"] == 3 and len(body["captions"]) == 5
         assert body["captions"][0]["n"] == 4                   # la tête est partie, n monotone
+
+
+class TestPlatformEnvInterface:
+    """Identités de plateforme saisies par l'INTERFACE : filtrées aux clés que la fiche
+    déclare, remises au claim — jamais une clé étrangère au connecteur."""
+
+    def test_filtre_par_les_requires_du_catalogue(self, meetings_on, app):
+        from transcria.config import get_config
+        from transcria.web.meetings_api import _platform_env_for
+        get_config()["connectors"]["meetings"]["platform_env"] = {
+            "ZOOM_CLIENT_ID": "abc", "ZOOM_CLIENT_SECRET": "s", "LIVEKIT_URL": "wss://x",
+            "PAS_UNE_CLE": "poubelle"}
+        with app.app_context():
+            assert _platform_env_for("zoom-sdk") == {"ZOOM_CLIENT_ID": "abc",
+                                                     "ZOOM_CLIENT_SECRET": "s"}
+            assert _platform_env_for("visio") == {"LIVEKIT_URL": "wss://x"}
+            assert _platform_env_for("jitsi") == {}      # requires: [] → rien ne sort
+
+    def test_sauvegarde_interface_et_masquage(self, meetings_on, app, admin_client,
+                                              monkeypatch, tmp_path):
+        # ⚠ ISOLATION VITALE (incident 2026-07-31) : la route écrit via
+        # ConfigService.save_if_valid → SANS redirection, le test persiste le singleton
+        # (pollué par d'autres fixtures) dans le VRAI config.yaml de la machine —
+        # jobs_dir pytest, base pytest, auth proxy... Rediriger le CHEMIN, toujours.
+        from transcria.services.config_service import ConfigService
+        monkeypatch.setattr(ConfigService, "get_path",
+                            staticmethod(lambda p=None: str(tmp_path / "config.yaml")))
+        r = admin_client.post("/admin/connecteurs/zoom-sdk/credentials", data={
+            "ZOOM_CLIENT_ID": "abc", "ZOOM_CLIENT_SECRET": "s3cret"})
+        assert r.status_code == 302
+        with app.app_context():
+            from transcria.services.config_service import ConfigService
+            penv = ConfigService.get_singleton()["connectors"]["meetings"]["platform_env"]
+            assert penv == {"ZOOM_CLIENT_ID": "abc", "ZOOM_CLIENT_SECRET": "s3cret"}
+        # Sentinelle ******** = secret INCHANGÉ ; champ vidé = clé retirée (repli env machine).
+        r = admin_client.post("/admin/connecteurs/zoom-sdk/credentials", data={
+            "ZOOM_CLIENT_ID": "", "ZOOM_CLIENT_SECRET": "********"})
+        with app.app_context():
+            from transcria.services.config_service import ConfigService
+            penv = ConfigService.get_singleton()["connectors"]["meetings"]["platform_env"]
+            assert penv == {"ZOOM_CLIENT_SECRET": "s3cret"}

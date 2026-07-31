@@ -58,6 +58,12 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
     for name in _MACHINE_ENV:
         if os.environ.get(name):
             env[name] = os.environ[name]
+    # Identités de plateforme remises PAR LE CLAIM (saisies /admin/connecteurs) : elles
+    # priment sur l'env machine — c'est l'intention explicite de l'admin. Les VALEURS ne
+    # passent que par l'environnement du process (argv ne porte que `-e NOM`).
+    for name, value in (intent.get("platform_env") or {}).items():
+        if isinstance(name, str) and isinstance(value, str) and value:
+            env[name] = value
     argv = ["docker", "run", "--rm"]
     if _portal_is_local(portal_url):
         argv += ["--network", "host"]      # sinon le loopback du conteneur n'est pas l'hôte

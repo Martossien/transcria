@@ -76,7 +76,18 @@ def _config_for_display(cfg: dict) -> dict:
     ldap_cfg = auth_cfg.get("ldap") if isinstance(auth_cfg, dict) else None
     if isinstance(ldap_cfg, dict) and ldap_cfg.get("service_password"):
         ldap_cfg["service_password"] = CONFIG_SECRET_SENTINEL
+    # Identités de plateforme (fiches connecteurs) : les clés déclarées SECRÈTES par le
+    # catalogue ne s'affichent jamais en clair dans l'onglet YAML — même règle qu'OIDC/LDAP.
+    penv = ((display_cfg.get("connectors") or {}).get("meetings") or {}).get("platform_env")
+    if isinstance(penv, dict):
+        for key in penv:
+            if key in _secret_platform_keys() and penv[key]:
+                penv[key] = CONFIG_SECRET_SENTINEL
     return display_cfg
+
+
+def _secret_platform_keys() -> set[str]:
+    return {f.key for c in load_catalog() for f in c.requires if f.secret}
 
 
 def _restore_masked_config_secrets(submitted: dict, current_cfg: dict) -> dict:
@@ -91,6 +102,13 @@ def _restore_masked_config_secrets(submitted: dict, current_cfg: dict) -> dict:
     ldap_cfg = auth_cfg.get("ldap") if isinstance(auth_cfg, dict) else None
     if isinstance(ldap_cfg, dict) and ldap_cfg.get("service_password") == CONFIG_SECRET_SENTINEL:
         ldap_cfg["service_password"] = (current_auth.get("ldap", {}) or {}).get("service_password", "")
+    penv = ((restored.get("connectors") or {}).get("meetings") or {}).get("platform_env")
+    current_penv = (((current_cfg.get("connectors") or {}).get("meetings") or {})
+                    .get("platform_env") or {})
+    if isinstance(penv, dict):
+        for key, value in penv.items():
+            if value == CONFIG_SECRET_SENTINEL:
+                penv[key] = current_penv.get(key, "")
     return restored
 
 
@@ -322,7 +340,10 @@ def admin_connectors():
     réveille de lui-même au poll suivant. Chaque prérequis affiche son verdict ET son remède.
     """
     cfg = ConfigService.get_singleton()
-    fournis = {cle: valeur for cle, valeur in os.environ.items()}
+    meetings_now = ((cfg.get("connectors") or {}).get("meetings") or {})
+    platform_env = {k: str(v) for k, v in (meetings_now.get("platform_env") or {}).items()}
+    # « fourni » = env machine OU saisie interface — les deux canaux valent.
+    fournis = {**{cle: valeur for cle, valeur in os.environ.items()}, **platform_env}
     vues = [describe_configuration(connecteur, fournis) for connecteur in load_catalog()]
     meetings_cfg = ((cfg.get("connectors") or {}).get("meetings") or {})
     runners = [{
@@ -334,6 +355,7 @@ def admin_connectors():
         "admin_connectors.html", vues=vues,
         meetings_enabled=bool(meetings_cfg.get("enabled", False)),
         meetings_checklist=meetings_checklist(cfg),
+        platform_env=platform_env,
         meeting_runners=runners)
 
 
@@ -356,6 +378,51 @@ def admin_meetings_toggle():
     audit_log(action=AuditAction.MEETING_FEATURE_TOGGLE, target_type="config",
               target_id="connectors.meetings", target_label="réunions en ligne",
               details={"enabled": enable, "ok": ok})
+    return redirect("/admin/connecteurs")
+
+
+@web_bp.route("/admin/connecteurs/<connector_id>/credentials", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_connector_credentials(connector_id: str):
+    """Identités de PLATEFORME saisies par l'interface (« l'admin ne touche que
+    l'interface ») : clés = celles que la fiche DÉCLARE (`requires`), stockées en config
+    (secrets masqués ******** à l'affichage — précédent OIDC/LDAP), remises au runner
+    claimant PAR LE CLAIM. Vider un champ retire la clé (l'env machine redevient le
+    repli). Audité par NOMS de clés, jamais les valeurs. ⚠ revue sécurité Opus 5."""
+    connector = next((c for c in load_catalog() if c.id == connector_id), None)
+    if connector is None or not connector.requires:
+        abort(404)
+    cfg = ConfigService.get_singleton()
+    stored = dict(((cfg.get("connectors") or {}).get("meetings") or {}).get("platform_env") or {})
+    changed: list[str] = []
+    for field in connector.requires:
+        raw = request.form.get(field.key)
+        if raw is None:
+            continue
+        value = raw.strip()
+        if field.secret and value == CONFIG_SECRET_SENTINEL:
+            continue                                  # masqué → inchangé
+        if value:
+            if stored.get(field.key) != value:
+                stored[field.key] = value
+                changed.append(field.key)
+        elif field.key in stored:
+            stored.pop(field.key)
+            changed.append(field.key)
+    merged = _deep_merge(cfg, {"connectors": {"meetings": {}}})
+    merged["connectors"]["meetings"]["platform_env"] = stored   # remplacement ENTIER (retraits compris)
+    ok, errors, _warnings = ConfigService.save_if_valid(merged, ConfigService.get_path())
+    if not ok:
+        for err in errors:
+            flash(err, "error")
+    else:
+        flash(_("Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim.",
+                name=connector.name) if changed else _("Aucun changement."),
+              "success" if changed else "info")
+    audit_log(action=AuditAction.MEETING_FEATURE_TOGGLE, target_type="connector",
+              target_id=connector_id, target_label=connector.name,
+              details={"credentials_changed": changed, "ok": ok})   # jamais les valeurs
     return redirect("/admin/connecteurs")
 
 

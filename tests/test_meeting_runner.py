@@ -216,3 +216,12 @@ class TestCaptionRelay:
         calls = self._run(lines)
         batches = [pl["captions"] for p, pl in calls if p.endswith("/captions")]
         assert [len(b) for b in batches] == [25, 1]            # 25 pleins + le reliquat final
+
+
+class TestPlatformEnvDuClaim:
+    def test_valeurs_dans_l_env_jamais_dans_argv(self):
+        intent = dict(INTENT, platform_env={"ZOOM_CLIENT_ID": "abc", "ZOOM_CLIENT_SECRET": "s3cret"})
+        argv, env = docker_argv(intent, portal_url="http://127.0.0.1:7870", token="tia_x")
+        assert env["ZOOM_CLIENT_ID"] == "abc" and env["ZOOM_CLIENT_SECRET"] == "s3cret"
+        assert "s3cret" not in " ".join(argv)      # argv ne porte que `-e NOM`
+        assert "-e" in argv and "ZOOM_CLIENT_SECRET" in argv

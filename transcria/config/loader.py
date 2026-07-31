@@ -155,6 +155,12 @@ _DEFAULT_CONFIG = {
             # mix (le manifeste l'annonce). Le bot a son propre plafond local (16).
             "max_tracks": 16,
             "max_track_mb": 512,
+            # Identités de PLATEFORME saisies par l'interface admin (« l'admin ne touche
+            # que l'interface ») : {NOM_ENV: valeur} — clés admises = celles des fiches du
+            # catalogue (requires). Secrets masqués à l'affichage, remis au runner PAR LE
+            # CLAIM (seul canal où les secrets sortent), jamais dans argv. L'environnement
+            # du runner reste un repli machine. ⚠ Périmètre revue sécurité Opus 5.
+            "platform_env": {},
             # Suivi en direct (vague 5, D5.5) : plafond du fichier `live/captions.jsonl`
             # par job — au-delà, troncature de TÊTE annoncée dans le flux. Le direct est
             # PROVISOIRE : le pipeline batch reste la référence (ADR-001 D5).

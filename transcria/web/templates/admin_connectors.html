@@ -147,6 +147,26 @@
               {{ _('Manque :') }} {{ vue.missing|join(', ') }}
             </div>
           {% endif %}
+          {% if meetings_enabled %}
+          {# Saisie par l'INTERFACE (« l'admin ne touche que l'interface ») : stockée en
+             config (secrets masqués), remise aux exécutants PAR LE CLAIM — l'env machine
+             du runner reste un repli. Vider un champ retire la clé. #}
+          <form method="POST" action="/admin/connecteurs/{{ c.id }}/credentials" class="small mb-2">
+            {% for champ in c.requires %}
+            <div class="mb-1">
+              <label class="form-label mb-0" for="cred-{{ c.id }}-{{ champ.key }}">
+                <code>{{ champ.key }}</code> <span class="text-muted">— {{ champ.label }}</span>
+                {% if champ.secret %}<i class="bi bi-key text-warning" title="{{ _('Secret : jamais réaffiché') }}"></i>{% endif %}
+              </label>
+              <input class="form-control form-control-sm" id="cred-{{ c.id }}-{{ champ.key }}"
+                     name="{{ champ.key }}" autocomplete="off"
+                     type="{{ 'password' if champ.secret else 'text' }}"
+                     value="{{ '********' if champ.secret and platform_env.get(champ.key) else platform_env.get(champ.key, '') }}">
+            </div>
+            {% endfor %}
+            <button class="btn btn-sm btn-outline-primary">{{ _('Enregistrer les identités') }}</button>
+          </form>
+          {% else %}
           <ul class="list-unstyled small mb-2">
             {% for champ in c.requires %}
             <li>
@@ -158,6 +178,7 @@
             </li>
             {% endfor %}
           </ul>
+          {% endif %}
         {% else %}
           <div class="small text-success mb-2">
             <i class="bi bi-check-circle"></i> {{ _('Aucun identifiant nécessaire') }}
