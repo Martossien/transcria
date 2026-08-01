@@ -43,8 +43,11 @@ class UserResolutionError(RuntimeError):
     """Adresse non résolue — le message dit laquelle et pourquoi."""
 
 
-def explain_failure(detail: str) -> str:
+def explain_failure(detail: object) -> str:
     """Refus brut de Google → cause ACTIONNABLE.
+
+    Accepte une exception aussi bien qu'un message : les appelants ont l'une ou l'autre sous
+    la main, et exiger la conversion chez eux ne ferait que déplacer le `str()`.
 
     Deux prérequis se ressemblent dans le message et n'appellent pas du tout le même geste,
     l'un dans la console Cloud, l'autre dans la console d'administration Workspace :
