@@ -9,6 +9,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from transcria.audio.diarization_pcm import DiarizationPcmPreparer
 from transcria.audio.squim_scorer import pick_device
+from transcria.config.loader import default_at
 from transcria.gpu.model_load_lock import model_load_lock
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -207,7 +208,11 @@ class DiarizerService(BaseDiarizer):
             # du LLM → OOM (finding F13). Un index explicite (`cuda:N`) est respecté tel quel ;
             # repli CPU propre si rien d'éligible. Lecture seule, ne tue/évince aucun process.
 
-            required_mb = float((self.config.get("gpu", {}) or {}).get("pyannote_vram_mb", 3000) or 3000)
+            # Défaut pris au CHARGEUR : le réécrire ici a déjà produit deux valeurs
+            # divergentes (2 000 / 3 000) pour la même question.
+            _defaut = default_at("gpu.pyannote_vram_mb")
+            required_mb = float((self.config.get("gpu", {}) or {}).get("pyannote_vram_mb", _defaut)
+                                or _defaut)
             resolved = pick_device(self.device, required_mb=required_mb)
             if resolved != self.device:
                 logger.info(

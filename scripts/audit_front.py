@@ -82,14 +82,27 @@ def check_baseline(current: dict, baseline: dict) -> list[str]:
     return problems
 
 
+#: Baseline versionnée du cliquet frontend — celle qu'utilise la CI.
+DEFAULT_BASELINE = Path("quality_baseline_front.json")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--write-baseline", metavar="FICHIER", type=Path)
     parser.add_argument("--check-baseline", metavar="FICHIER", type=Path)
+    parser.add_argument("--stats", action="store_true",
+                        help="afficher les métriques SANS vérifier le cliquet")
     args = parser.parse_args(argv)
 
     metrics = collect_metrics()
+
+    # SANS ARGUMENT, ON VÉRIFIE. Auparavant le script se contentait d'afficher des
+    # statistiques et sortait 0 : lancé de mémoire avant un push, il donnait l'illusion d'un
+    # contrôle passé. Vécu deux fois le 2026-08-01, dont une CI rouge à l'arrivée. Le mode
+    # « statistiques » existe toujours, mais il faut le demander.
+    if not (args.write_baseline or args.check_baseline or args.json or args.stats):
+        args.check_baseline = DEFAULT_BASELINE
 
     if args.write_baseline:
         args.write_baseline.write_text(
@@ -99,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.check_baseline:
+        if not args.check_baseline.exists():
+            print(f"[audit-front] baseline introuvable : {args.check_baseline} — la créer "
+                  f"avec --write-baseline, ou demander --stats pour les seules métriques")
+            return 1
         baseline = json.loads(args.check_baseline.read_text(encoding="utf-8"))
         problems = check_baseline(metrics, baseline)
         if problems:

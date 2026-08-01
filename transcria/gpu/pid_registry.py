@@ -15,13 +15,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from transcria.config.loader import default_at
+
 
 def pid_file_path(config: dict) -> Path:
     """Chemin du fichier PID — la MÊME dérivation que l'allocateur historique :
     `workflow.scheduling.pid_file` sinon `<storage.jobs_dir>/.transcria_pids`,
     résolu depuis le répertoire courant s'il est relatif."""
     scheduling = (config.get("workflow", {}) or {}).get("scheduling", {}) or {}
-    default = Path(config.get("storage", {}).get("jobs_dir", ".")) / ".transcria_pids"
+    # Défaut pris au CHARGEUR. Le littéral « . » plaçait le registre de PID à la RACINE du
+    # répertoire courant sur configuration partielle, alors que tout le reste du produit le
+    # cherche sous `./jobs` : deux processus pouvaient suivre deux fichiers différents et se
+    # croire seuls sur le GPU.
+    default = (Path(config.get("storage", {}).get("jobs_dir", default_at("storage.jobs_dir")))
+               / ".transcria_pids")
     path = Path(scheduling.get("pid_file") or default)
     return path if path.is_absolute() else Path.cwd() / path
 

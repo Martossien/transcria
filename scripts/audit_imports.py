@@ -232,15 +232,27 @@ def check_baseline(current: dict, baseline: dict) -> list[str]:
     return problems
 
 
+#: Baseline versionnée du cliquet d'architecture — celle qu'utilise la CI.
+DEFAULT_BASELINE = Path("quality_baseline.json")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", type=Path, default=Path("."), help="racine du dépôt")
     parser.add_argument("--json", action="store_true", help="sortie JSON complète")
     parser.add_argument("--write-baseline", metavar="FICHIER", type=Path)
     parser.add_argument("--check-baseline", metavar="FICHIER", type=Path)
+    parser.add_argument("--stats", action="store_true",
+                        help="afficher les métriques SANS vérifier le cliquet")
     args = parser.parse_args(argv)
 
     metrics = collect_metrics(args.base)
+
+    # SANS ARGUMENT, ON VÉRIFIE — cf. la note identique dans scripts/audit_front.py : un
+    # script de contrôle qui sort 0 sans rien contrôler est pire qu'une absence de contrôle,
+    # parce qu'on lui fait confiance.
+    if not (args.write_baseline or args.check_baseline or args.json or args.stats):
+        args.check_baseline = DEFAULT_BASELINE
 
     if args.write_baseline:
         payload = {k: v for k, v in metrics.items() if k not in ("cycles_detail", "init_cycles_detail")}
@@ -249,6 +261,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.check_baseline:
+        if not args.check_baseline.exists():
+            print(f"[audit] baseline introuvable : {args.check_baseline} — la créer avec "
+                  f"--write-baseline, ou demander --stats pour les seules métriques",
+                  file=sys.stderr)
+            return 1
         baseline = json.loads(args.check_baseline.read_text(encoding="utf-8"))
         problems = check_baseline(metrics, baseline)
         if problems:

@@ -1,6 +1,7 @@
 import logging
 from copy import deepcopy
 
+from transcria.config.loader import default_at
 from transcria.stt.base_diarizer import BaseDiarizer
 from transcria.stt.diarization import DiarizerService
 from transcria.stt.remote_diarizer import RemoteDiarizer
@@ -127,7 +128,7 @@ def get_diarizer_vram_mb(backend: str, config: dict) -> int:
     gpu_cfg = config.get("gpu", {})
     if backend == "sortformer":
         return int(gpu_cfg.get("sortformer_vram_mb", 3500))
-    return int(gpu_cfg.get("pyannote_vram_mb", 2000))
+    return int(gpu_cfg.get("pyannote_vram_mb", default_at("gpu.pyannote_vram_mb")))
 
 
 def list_available_backends() -> tuple[str, ...]:

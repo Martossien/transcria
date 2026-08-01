@@ -20,7 +20,7 @@ dette qui ne se voient jamais en vert.
 
 ---
 
-## Vague 1 — défauts vérifiés, correction courte
+## Vague 1 — défauts vérifiés, correction courte  ✅ **LIVRÉE**
 
 Chacun a été constaté sur l'arbre, pas déduit. Ce sont les meilleurs rapports qualité/effort
 du lot.
@@ -34,10 +34,13 @@ même question, selon qui appelle.
 Ce n'est pas théorique : une réservation VRAM calculée à 3 000 Mo là où l'admission en a
 compté 2 000 fausse l'arbitrage GPU, et l'écart ne se voit qu'à la saturation.
 
-**Correction :** les consommateurs ne définissent plus de défaut métier ; le chargeur est la
-seule source. Un test compare les défauts du chargeur à ceux écrits ailleurs.
-**Effort :** S. **Critère :** aucun `get("<clé>", <valeur>)` métier hors du chargeur pour les
-clés GPU, STT et stockage.
+**Correction :** `config.loader.default_at("<chemin>")` devient la seule source ; les trois
+sites l'utilisent. Un test balaie l'arbre et refuse tout littéral divergent sur les clés
+surveillées.
+**Livré.** Le test a trouvé un **second cas** non repéré : `gpu/pid_registry.py` plaçait le
+registre de PID à la racine du répertoire courant (`"."`) au lieu de `./jobs` sur
+configuration partielle — deux processus pouvaient suivre deux fichiers différents et se
+croire seuls sur le GPU.
 
 ### Q1.2 — Le parcours navigateur ignore ses propres erreurs
 
@@ -48,9 +51,10 @@ avec des erreurs JavaScript à l'écran.
 C'est le pire type de test : il coûte son temps d'exécution et donne une confiance qu'il ne
 mérite pas.
 
-**Correction :** faire entrer `console_errors` dans le verdict, avec une liste d'exceptions
-étroite (URL + motif) si des erreurs tierces subsistent — et un test du verdict lui-même.
-**Effort :** S. **Critère :** un parcours avec une erreur console non listée sort rouge.
+**Correction :** `console_errors` entre dans le verdict, avec une liste d'exceptions
+**vide par défaut** et documentée. Huit tests portent sur l'oracle lui-même.
+**Livré.** Le premier parcours réel fera probablement apparaître les erreurs jusqu'ici
+ignorées : c'est le but.
 
 ### Q1.3 — `connector_service` est hors de la mesure de couverture
 
@@ -58,9 +62,9 @@ La CI mesure `--cov=transcria --cov=inference_service`. Les ~9 600 lignes du ser
 connecteur — bots, ingestion, chaîne Meet — ne comptent pas. Le seuil de 80 % porte donc sur
 un périmètre plus favorable qu'annoncé.
 
-**Correction :** ajouter `--cov=connector_service`, mesurer d'abord sans plancher pour
-constater, puis poser un plancher réaliste.
-**Effort :** S. **Critère :** la couverture publiée couvre les trois paquets.
+**Correction :** `--cov=connector_service` ajouté en CI.
+**Livré.** Mesure des trois paquets : **83,60 %** — au-dessus du plancher de 80. Le plancher
+reste à 80 le temps d'une release, puis passera à 83.
 
 ### Q1.4 — La configuration est écrite sans précaution
 
@@ -72,9 +76,10 @@ réunion), et il est **`0644` sur l'installation observée** — alors que `.env
 Deux conséquences distinctes : un secret lisible par tout compte de la machine, et une
 sauvegarde interrompue qui laisse une configuration tronquée.
 
-**Correction :** écriture dans un fichier temporaire puis `replace`, `chmod(0o600)` avant
-publication, et contrôle au doctor.
-**Effort :** S. **Critère :** le doctor refuse une configuration lisible par tous.
+**Correction :** écriture atomique (temporaire + `replace`), `chmod(0600)` à chaque
+écriture — y compris sur un fichier existant trop permissif, cas des installations déjà
+déployées — et nettoyage du temporaire en cas d'échec.
+**Livré**, six tests. **Reste :** le contrôle au doctor.
 
 ### Q1.5 — Une ressource non fermée
 
@@ -82,8 +87,10 @@ La suite complète émet un `ResourceWarning` sur une connexion SQLite non ferm�
 `gpu/vram_manager.py`. Sans effet sur une suite de treize minutes ; coûteux dans un service
 qui tourne des semaines.
 
-**Correction :** gestionnaire de contexte, et transformer ce type d'avertissement en échec.
-**Effort :** S. **Critère :** `-W error::ResourceWarning` passe sur le paquet GPU.
+**Correction :** à faire. **Constat affiné :** l'avertissement porte sur une connexion
+**psycopg**, pas SQLite, et `scheduler_lock` la ferme correctement dans `release()` — la
+fuite vient donc d'un verrou acquis puis jamais relâché (process secondaire, test).
+À traiter avec Q2.2, dont c'est le même sujet.
 
 ---
 

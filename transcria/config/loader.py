@@ -1,5 +1,7 @@
+import contextlib
 import copy
 import os
+import tempfile
 
 import yaml
 
@@ -925,6 +927,27 @@ def get_default_config() -> dict:
     return copy.deepcopy(_DEFAULT_CONFIG)
 
 
+def default_at(dotted: str):
+    """Défaut d'une clé, par son chemin pointé — la SEULE source légitime.
+
+    POURQUOI CETTE FONCTION EXISTE. Un consommateur qui écrit
+    `cfg.get("gpu", {}).get("pyannote_vram_mb", 3000)` crée une seconde réponse à une
+    question déjà tranchée ici. Constaté : ce défaut valait 2 000 dans ce fichier et 3 000
+    dans le chemin de diarisation, si bien qu'une réservation VRAM pouvait être calculée à
+    3 000 Mo là où l'admission en avait compté 2 000 — un écart qui ne se voit qu'à la
+    saturation, et jamais dans un test.
+
+    Lève sur une clé inconnue : un défaut silencieux serait exactement le problème qu'on
+    ferme.
+    """
+    noeud: object = _DEFAULT_CONFIG
+    for segment in dotted.split("."):
+        if not isinstance(noeud, dict) or segment not in noeud:
+            raise KeyError(f"clé de configuration inconnue : {dotted}")
+        noeud = noeud[segment]
+    return copy.deepcopy(noeud)
+
+
 def _normalize_config(cfg: dict) -> dict:
     normalized = copy.deepcopy(cfg)
     normalized.setdefault("auth", {})["enabled"] = True
@@ -1014,13 +1037,40 @@ def get_config_path(config_path: str | None = None) -> str:
     return config_path or os.environ.get(_CONFIG_PATH_ENV, _DEFAULT_CONFIG_PATH) or _DEFAULT_CONFIG_PATH
 
 
+#: La configuration porte des SECRETS saisis depuis l'interface (OIDC, LDAP, SMTP, identités
+#: de plateformes). Elle ne doit pas être lisible par les autres comptes de la machine —
+#: constaté en `0644` sur une installation réelle, alors que `.env` était bien en `0600`.
+CONFIG_FILE_MODE = 0o600
+
+
 def save_config(cfg: dict, config_path: str | None = None) -> str:
+    """Écrit la configuration : ATOMIQUEMENT, et lisible par son seul propriétaire.
+
+    Deux soins, deux incidents distincts qu'ils ferment :
+
+    - **écriture atomique** (fichier temporaire puis remplacement) — une écriture directe
+      interrompue laisse une configuration TRONQUÉE, que le démarrage suivant refuse ; et
+      le portail lit ce fichier en permanence, y compris pendant qu'on l'écrit ;
+    - **permissions** — sans `chmod`, le fichier hérite du masque et se retrouve
+      world-readable avec des secrets dedans.
+    """
     path = get_config_path(config_path)
-    parent = os.path.dirname(os.path.abspath(path))
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        yaml.safe_dump(_normalize_config(cfg), fh, allow_unicode=True, sort_keys=False)
+    parent = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(parent, exist_ok=True)
+    # Le fichier temporaire naît dans le MÊME répertoire : `os.replace` n'est atomique que
+    # sur un même système de fichiers.
+    fd, provisoire = tempfile.mkstemp(prefix=".config-", suffix=".yaml", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            yaml.safe_dump(_normalize_config(cfg), fh, allow_unicode=True, sort_keys=False)
+        os.chmod(provisoire, CONFIG_FILE_MODE)
+        os.replace(provisoire, path)
+    except BaseException:
+        # Ne JAMAIS laisser un fichier temporaire derrière : le répertoire de configuration
+        # se remplirait de fragments porteurs de secrets.
+        with contextlib.suppress(OSError):
+            os.unlink(provisoire)
+        raise
     return path
 
 

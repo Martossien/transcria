@@ -52,6 +52,18 @@ def _write_tiny_wav(path: Path) -> None:
         w.writeframes(b"\x00\x00" * 8000)
 
 
+#: Erreurs console TOLÉRÉES, et pourquoi. Une liste d'exceptions doit rester courte et
+#: motivée : c'est le seul moyen d'être strict par défaut sans bloquer sur du bruit tiers.
+#: Une entrée sans justification est une régression déguisée.
+CONSOLE_ALLOWLIST: tuple[tuple[str, str], ...] = (
+    # (motif, raison)
+)
+
+
+def _console_error_is_allowed(message: str) -> bool:
+    return any(motif in message for motif, _ in CONSOLE_ALLOWLIST)
+
+
 class Walkthrough:
     def __init__(self, page: Page, base_url: str, out: Path):
         self.page = page
@@ -64,7 +76,7 @@ class Walkthrough:
         page.on("response", self._on_response)
 
     def _on_console(self, msg) -> None:
-        if msg.type == "error":
+        if msg.type == "error" and not _console_error_is_allowed(msg.text):
             self.console_errors.append(msg.text)
 
     def _on_response(self, resp) -> None:
@@ -643,9 +655,16 @@ class Walkthrough:
         if self.server_errors:
             print(f"  erreurs serveur (5xx): {self.server_errors}")
         if self.console_errors:
-            print(f"  erreurs console JS: {self.console_errors[:5]}")
+            print(f"  erreurs console JS: {len(self.console_errors)}")
+            for message in self.console_errors[:10]:
+                print(f"    ✗ {message[:160]}")
         print(f"  captures: {self.out}")
-        return not failed and not self.server_errors
+        # LES ERREURS CONSOLE COMPTENT. Elles étaient collectées, affichées… et exclues du
+        # verdict : un parcours pouvait sortir vert avec des erreurs JavaScript à l'écran.
+        # C'est le pire type de test — il coûte son temps d'exécution et donne une confiance
+        # qu'il ne mérite pas. Pour tolérer une erreur tierce, l'inscrire dans
+        # CONSOLE_ALLOWLIST avec sa raison, pas ici.
+        return not failed and not self.server_errors and not self.console_errors
 
 
 def main() -> int:

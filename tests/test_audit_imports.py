@@ -161,6 +161,9 @@ class TestRealTree:
         assert problems == [], "\n".join(problems)
 
     def test_cli_smoke(self, repo_root, capsys):
-        assert audit.main(["--base", str(repo_root)]) == 0
+        """`--stats` affiche les métriques. SANS argument, le script VÉRIFIE désormais le
+        cliquet (cf. tests/test_audit_gates_default.py) : un script de contrôle qui rend 0
+        sans rien contrôler donnait un faux vert avant chaque push."""
+        assert audit.main(["--base", str(repo_root), "--stats"]) == 0
         out = capsys.readouterr().out
         assert "cycles top-level          : 0" in out

@@ -6,6 +6,7 @@ import time
 from typing import IO
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
+from transcria.config.loader import default_at
 from transcria.gpu import inventory, pid_registry
 from transcria.gpu._port_utils import generation_confirmed, kill_port_listeners
 from transcria.gpu._port_utils import is_port_open as _check_port_open
@@ -56,7 +57,8 @@ class VRAMManager:
         self.llm_cleanup_ports: list[int] = list(
             services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
         )
-        self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
+        self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb",
+                                                 default_at("gpu.pyannote_vram_mb"))
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
         self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
         # Patterns de préemption : l'UNIQUE construction de l'arbre (B3).
