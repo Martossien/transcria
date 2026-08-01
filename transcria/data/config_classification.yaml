@@ -35,6 +35,7 @@ exposed:
 - connectors.meetings.max_track_mb
 - connectors.meetings.max_caption_lines
 - connectors.meetings.platform_env
+- connectors.meetings.meet_spaces
 - live.facade.enabled
 - models.diarization_backend
 - models.live_stt_backend

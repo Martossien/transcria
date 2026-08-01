@@ -1,62 +1,219 @@
 # Google Meet et Microsoft Teams avec TranscrIA — guide de l'administrateur
 
-> Vérifié contre la documentation officielle **le 2026-07-31** :
-> [Meet — S'abonner aux événements](https://developers.google.com/workspace/events/guides/events-meet)
-> (page à jour du 2026-04-20), [Meet REST API v2](https://developers.google.com/workspace/meet/api/guides/overview),
-> [Graph — notifications d'enregistrements et transcriptions](https://learn.microsoft.com/en-us/graph/teams-changenotifications-callrecording-and-calltranscript)
-> (page à jour du 2026-06-29).
+> Vérifié contre la documentation officielle ET **éprouvé sur un vrai Workspace le
+> 2026-08-01**, réunion à deux participants comprise : agenda → salle pré-réglée →
+> enregistrement automatique → évènement → Drive → job attribué à l'organisateur → arrêt au
+> workflow humain (résumé de contrôle) → compte rendu. Le connecteur est `validated`.
 >
-> ⚠️ **Ces deux connecteurs sont `implemented`, pas `validated`** : le code existe et passe
-> les tests, mais n'a jamais vu la vraie plateforme — il exige un abonnement payant. Ce
-> guide prépare le terrain ; l'épreuve réelle reste à faire.
+> Les encadrés ⚠ signalent des pièges **réellement rencontrés** ce jour-là. Aucun ne produit
+> de message clair : ils se traduisent par un compte rendu qui n'arrive jamais.
+>
+> ⚠️ **Teams n'a jamais vu la vraie plateforme** — il exige un abonnement M365 et deux URL
+> HTTPS publiques. Sa section prépare le terrain ; l'épreuve réelle reste à faire.
 
-Contrairement à Jitsi/Visio/Zoom (un bot rejoint la réunion), Meet et Teams sont des
-connecteurs **post-réunion** : la plateforme prévient qu'un enregistrement existe,
-TranscrIA le télécharge et le passe dans son propre pipeline. Aucun participant
-supplémentaire dans la réunion.
+## Comment ça marche
 
-## 0. Lequel commencer ? — **Meet**, même s'il coûte plus cher
+```text
+Google Meet
+   │  début/fin de conférence, participants, enregistrement prêt
+   ▼
+Google Workspace Events API
+   ▼
+Sujet Pub/Sub  ──►  Abonnement PULL  ──►  TranscrIA
+                                            ├─ API Meet   : conférence, participants
+                                            ├─ API Drive  : le média
+                                            ├─ Admin SDK  : utilisateurs (facultatif)
+                                            └─ Agenda     : réunions à venir (facultatif)
+```
 
-| | Meet | Teams |
-|---|---|---|
-| Abonnement | Google Workspace Business Standard (~14 $/mois, **essai 14 jours**) | Microsoft 365 Business (~7 $/mois) |
-| Ouverture de pare-feu | **AUCUNE** (on interroge une file Pub/Sub) | **DEUX URL HTTPS publiques** (notifications + cycle de vie) |
-| Acceptabilité DSI | élevée (rien d'entrant) | à négocier |
-
-Meet est donc validable même si l'ouverture réseau traîne — et c'est le seul point qui
-justifie l'ordre.
+Aucun bot n'entre dans la réunion, et **aucun port entrant n'est ouvert** : tout est sortant.
+C'est ce qui rend cette voie acceptable là où un webhook est refusé.
 
 ## 1. Google Meet
 
-### Ce que l'admin Google fait (une fois)
+### 1.1 Prérequis
 
-1. **Console Google Cloud** → créer (ou choisir) un projet → **activer** les API
-   « Google Meet API » et « Google Workspace Events API », plus « Cloud Pub/Sub ».
-2. **Créer un compte de service** et générer une clé JSON (elle restera sur le serveur
-   TranscrIA, jamais dans le dépôt).
-3. **Délégation à l'échelle du domaine** (console Admin Workspace → Sécurité → Contrôle
-   des API → Délégation) : autoriser le *client ID* du compte de service sur les
-   portées Meet nécessaires (lecture des espaces et des artefacts) et Drive en lecture.
-4. **Créer un sujet Pub/Sub** et un abonnement de type **pull** (surtout pas « push » :
-   c'est ce qui évite toute ouverture de pare-feu).
-5. ⚠️ **La panne muette n°1** : accorder le rôle **Pub/Sub Publisher** au compte
-   `meet-api-event-push@system.gserviceaccount.com` **sur le sujet**. Sans lui,
-   l'abonnement se crée, l'API répond 200… et la file reste vide **à jamais**.
+- une organisation **Google Workspace** (un compte Gmail personnel ne suffit pas) ;
+- un compte **administrateur** Workspace ;
+- un projet **Google Cloud** ;
+- l'enregistrement Meet inclus dans l'édition (Business **Standard** ou supérieure).
 
-### Ce que TranscrIA écoute
+> Une clé JSON de compte de service est un **secret**. Jamais dans Git, jamais dans une
+> capture d'écran. TranscrIA la dépose en 0600 hors configuration ; seul son chemin est
+> stocké.
 
-Les événements officiels (vérifiés) : `google.workspace.meet.recording.v2.fileGenerated`
-(le signal utile — l'enregistrement est prêt), `…recording.v2.started/ended`,
-`…conference.v2.started/ended`, `…participant.v2.joined/left`. L'artefact est ensuite lu
-par l'API Meet REST **v2** (`conferenceRecords/…/recordings/…`) et récupéré sur le Drive
-de l'organisateur.
+### 1.2 Activer les API (console Cloud)
 
-### Côté TranscrIA
+**API et services → Bibliothèque**, puis activer :
 
-Administration → Connecteurs → fiche **Meet** : renseigner les identités demandées
-(chemin de la clé JSON du compte de service, utilisateur à impersonner, sujet et
-abonnement Pub/Sub), puis **Tester la connexion** — le portail vérifie l'authentification
-et l'accès à l'abonnement **sans réunion**.
+| API | Service | Nécessaire à |
+|---|---|---|
+| Google Meet REST API | `meet.googleapis.com` | conférences, participants, réglages |
+| Google Workspace Events API | `workspaceevents.googleapis.com` | les abonnements |
+| Cloud Pub/Sub API | `pubsub.googleapis.com` | la file |
+| Google Drive API | `drive.googleapis.com` | télécharger l'enregistrement |
+| Admin SDK API | `admin.googleapis.com` | *facultatif* — résolution efficace des utilisateurs |
+| Google Calendar API | `calendar-json.googleapis.com` | *facultatif* — pré-réglage des réunions à venir |
+
+> ⚠ **Activer une API et déléguer sa portée sont DEUX gestes, dans deux consoles.**
+> Vécu : la portée `admin.directory.user.readonly` était correctement déléguée, et l'appel
+> répondait `403 — Admin SDK API has not been used in project … before or it is disabled`.
+> Le message oriente vers les droits ; la cause était l'API jamais activée. TranscrIA
+> distingue désormais les deux cas dans ses messages.
+
+### 1.3 Compte de service et clé
+
+**IAM et administration → Comptes de service** → créer (ex. `meet-connector`) → clé **JSON**.
+
+Relevez deux choses, qui ne servent PAS au même endroit :
+
+| Valeur | Où elle va |
+|---|---|
+| l'**adresse** `meet-connector@projet.iam.gserviceaccount.com` | droits IAM (Pub/Sub) |
+| l'**ID client NUMÉRIQUE** (21 chiffres) | délégation dans la console Admin |
+
+> ⚠ **Ne confondez pas ces deux identifiants, ni avec l'utilisateur à impersonner.**
+> Vécu trois fois dans la même journée : l'ID numérique saisi dans le champ « utilisateur à
+> impersonner » de TranscrIA a produit `invalid_request — Invalid principal`, un message qui
+> ne désigne rien. Le portail refuse maintenant toute valeur sans `@` en expliquant à quoi
+> sert chaque identifiant.
+
+### 1.4 Sujet et abonnement Pub/Sub
+
+1. **Pub/Sub → Sujets** → créer (ex. `meet-events`) ;
+2. **Pub/Sub → Abonnements** → créer, type **Pull** (surtout pas « push » : c'est ce qui
+   évite toute ouverture de pare-feu).
+
+Conservez le **chemin complet** de l'abonnement :
+
+```text
+projects/mon-projet/subscriptions/meet-events-pull
+```
+
+> ⚠ **Le nom court ne marche pas.** La console affiche `meet-events-pull` ; l'API exige la
+> forme entière `projects/…/subscriptions/…` et répond `404` sans dire ce qui manque.
+> TranscrIA refuse le nom court avant d'appeler.
+
+### 1.5 Les deux droits IAM — les pannes muettes n°1 et n°2
+
+| Rôle | Sur quelle ressource | Pour qui |
+|---|---|---|
+| **Pub/Sub Publisher** (`roles/pubsub.publisher`) | le **SUJET** | `meet-api-event-push@system.gserviceaccount.com` |
+| **Pub/Sub Subscriber** (`roles/pubsub.subscriber`) | l'**ABONNEMENT** | votre compte de service |
+
+> ⚠ Sans le premier, l'abonnement se crée, l'API répond 200… et **la file reste vide à
+> jamais**. Sans le second, l'interrogation est refusée. Aucun test d'authentification ne
+> peut les voir — le verdict de TranscrIA le rappelle explicitement.
+
+### 1.6 Délégation à l'échelle du domaine
+
+**console Admin → Sécurité → Contrôle des API → Délégation au niveau du domaine**, avec
+l'**ID client numérique**, et les portées séparées par des **virgules sans espace ni retour
+à la ligne** :
+
+```text
+https://www.googleapis.com/auth/meetings.space.readonly,https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/meetings.space.settings,https://www.googleapis.com/auth/admin.directory.user.readonly,openid,https://www.googleapis.com/auth/calendar.events.readonly
+```
+
+| Portée | Sert à | Sans elle |
+|---|---|---|
+| `meetings.space.readonly` | espaces, conférences, **abonnements** | rien ne fonctionne |
+| `drive.readonly` | télécharger l'enregistrement | on sait qu'il existe, on ne l'a pas |
+| `meetings.space.settings` | régler une salle en **auto-enregistrement** | un humain doit cliquer « Enregistrer » |
+| `admin.directory.user.readonly` | adresse → identifiant, **une authentification pour tous** | repli OpenID, une par personne |
+| `openid` | même chose, par personne | rien, si l'annuaire est accordé |
+| `calendar.events.readonly` | pré-régler les réunions à venir | pas d'auto-enregistrement sans Business Plus |
+
+> ⚠ **N'ajoutez JAMAIS `pubsub` à la délégation.** La file appartient au projet Cloud, ce
+> n'est pas une donnée d'utilisateur — son droit vient de Cloud IAM (§1.5). Et comme Google
+> **refuse en bloc** toute demande dont une seule portée n'est pas déléguée, l'exiger ici
+> fait échouer une configuration pourtant correcte.
+
+> ⚠ **Comptez ~3 minutes de propagation** (Google annonce « jusqu'à 24 h »). Mesuré deux
+> fois : 180 secondes. Un refus juste après l'enregistrement ne signifie pas une erreur de
+> saisie — rouvrez la ligne, comptez les pastilles, et retentez.
+
+### 1.7 Côté TranscrIA
+
+**Administration → Connecteurs → fiche Meet** : téléverser la clé JSON, renseigner
+l'utilisateur à impersonner (une **adresse** du domaine) et l'abonnement **pleinement
+qualifié**, puis **Tester la connexion**.
+
+En cas de refus, le test désigne la cause au lieu de la laisser deviner : il rejoue la
+demande **portée par portée** (`unauthorized_client` → laquelle manque) et **sans
+impersonation** (`Invalid principal` → est-ce l'utilisateur représenté ou le compte de
+service ?).
+
+Ensuite, dans le panneau **Couverture Meet** :
+
+- **les utilisateurs sont couverts automatiquement** — un abonnement par personne, déduit des
+  comptes du portail portant une adresse du domaine. Rien à saisir, et **toutes** leurs
+  réunions sont ingérées ;
+- les **salles particulières** (une salle physique, un canal permanent) se déclarent à part.
+
+> ⚠ **L'adresse du compte TranscrIA doit être celle du domaine Meet.** C'est elle qui
+> déclenche l'abonnement ET l'attribution du compte rendu. Sans elle, le job existe mais
+> appartient au compte de service : l'utilisateur ne le voit nulle part.
+
+### 1.8 Faire enregistrer les réunions — quatre voies
+
+| Voie | Effort par réunion | Effort admin | Édition |
+|---|---|---|---|
+| **A.** réglage d'organisation « enregistrées par défaut » | aucun | un clic, une fois | Business **Plus**+ |
+| **B.** pré-réglage par l'**Agenda** (TranscrIA) | aucun | aucun | Business Standard |
+| **C.** enregistrement de conformité | aucun, non désactivable | par groupe | module Assured Controls |
+| **D.** l'hôte coche « enregistrer » | un clic | aucun | Business Standard |
+
+La voie **A** (*Apps → Google Workspace → Google Meet → Paramètres vidéo → Enregistrement
+automatique*) est la plus simple quand l'édition la permet. Sinon la voie **B** : TranscrIA
+lit les réunions à venir de chaque utilisateur couvert et règle leurs salles en
+`autoRecordingGeneration = ON` **avant** qu'elles commencent — même résultat, sans changer
+d'édition.
+
+> Vérifiez que l'enregistrement automatique est compatible avec vos règles internes et que
+> les participants en sont informés. Meet affiche un bandeau, mais la conformité ne s'arrête
+> pas là.
+
+### 1.9 Deux délais mesurés, à ne pas confondre avec des pannes
+
+- l'enregistrement passe par `ENDED` **dès l'arrêt**, puis `FILE_GENERATED` **5 à 6 minutes
+  plus tard** ; l'évènement ne part qu'au second. Conclure « pas d'enregistrement » à la fin
+  de la conférence est **systématiquement faux** ;
+- un message Pub/Sub **non acquitté est redélivré** et peut **masquer le suivant** dans une
+  interrogation : on croit l'évènement perdu alors qu'il attend derrière. Vécu.
+
+### 1.10 Durée de vie des abonnements
+
+Un abonnement Workspace Events vit **sept jours au maximum**, et Google **supprime
+définitivement** celui qui expire : *« you can't renew or reactivate it »*. Le service Meet
+de TranscrIA les renouvelle tout seul (marge d'un jour).
+
+> ⚠ Le silence qui suit une expiration ressemble trait pour trait à « aucune réunion n'a été
+> enregistrée » — une semaine après que tout fonctionnait. C'est la panne la plus coûteuse de
+> ce connecteur, parce qu'elle survient longtemps après la validation.
+
+### 1.11 Ce que TranscrIA ne peut PAS faire, et pourquoi
+
+- **Pas de bot dans la réunion.** L'API média de Meet est en *Developer Preview* et exige que
+  **tous les participants** soient inscrits au programme : inutilisable. Meet est donc
+  post-réunion, contrairement à Jitsi, Visio et Zoom.
+- **Pas de piste par participant.** Google ne livre qu'un fichier **mixé**. Les voix sont
+  donc séparées par notre diarisation, pas par la plateforme. TranscrIA compense en
+  transmettant le **nombre exact de participants** (ce qui évite qu'une voix unique soit
+  coupée en deux) et leurs **noms**, proposés à la validation.
+- **Pas de surveillance à l'échelle du domaine.** Un abonnement vise un utilisateur ou un
+  espace, jamais une organisation — d'où un abonnement par personne, posé automatiquement.
+
+### 1.12 Vérifications avant d'appeler à l'aide
+
+- le bon projet Cloud, et les API **activées** (§1.2) ;
+- l'abonnement **pull** existe, chemin **complet** relevé ;
+- `meet-api-event-push@system.gserviceaccount.com` → **Publisher** sur le **sujet** ;
+- votre compte de service → **Subscriber** sur l'**abonnement** ;
+- la délégation porte l'**ID numérique** et les portées exactes, **sans `pubsub`** ;
+- l'utilisateur à impersonner est une **adresse** valide du domaine ;
+- le compte TranscrIA porte cette même adresse ;
+- l'heure du serveur est juste (une horloge décalée invalide les assertions signées).
 
 ## 2. Microsoft Teams
 

@@ -11,7 +11,18 @@ import subprocess
 from pathlib import Path
 
 import yaml
-from flask import Response, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import (
+    Response,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from flask_babel import gettext as _
 from flask_login import login_required
 
@@ -23,6 +34,8 @@ from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
+from transcria.ingestion.meet_links import MeetLinkError, normalize_meeting_input
+from transcria.ingestion.meet_status import is_stale, read_status
 from transcria.ingestion.runner_kit import (
     build_kit_script,
     mint_remote_runner_token,
@@ -56,6 +69,7 @@ from transcria.web.config_form import (
     restore_masked_secrets,
 )
 from transcria.web.connector_catalog import describe_configuration, load_catalog
+from transcria.web.connector_secrets import CredentialFileError, store_json_credential
 from transcria.web.maintenance_service import MaintenanceService
 
 logger = logging.getLogger(__name__)
@@ -356,11 +370,88 @@ def admin_connectors():
         meetings_enabled=bool(meetings_cfg.get("enabled", False)),
         meetings_checklist=meetings_checklist(cfg),
         platform_env=platform_env,
-        # Saisie par l'interface = SEULEMENT les plateformes servies par le RUNNER (la
-        # remise passe par le claim). Les connecteurs webhook (Teams/Meet/RTMS) lisent
-        # l'environnement du service connecteur — afficher un formulaire mentirait.
+        # DEUX canaux de remise, donc deux libellés — mais la MÊME saisie par l'interface :
+        #  · claim_platforms : plateformes servies par un exécutant, remises PAR LE CLAIM ;
+        #  · _TESTABLE_CONNECTORS : Teams/Meet, lus ici même (bouton « Tester la connexion »,
+        #    qui interroge `platform_env` AVANT l'environnement machine).
+        # Priver Meet/Teams du formulaire contredisait « l'admin ne touche que l'interface » :
+        # leur bouton de test était alimentable par le seul environnement du service.
         claim_platforms=("jitsi", "visio", "zoom-sdk"),
+        credential_platforms=("jitsi", "visio", "zoom-sdk", *_TESTABLE_CONNECTORS),
+        # Panneau Meet : ce que l'admin DEMANDE (config) et ce que le service RAPPORTE
+        # (fichier d'état). Le portail n'appelle jamais Google lui-même — il n'importe pas
+        # `connector_service` — donc l'intention circule par la DONNÉE.
+        meet_spaces=[str(r) for r in (meetings_now.get("meet_spaces") or [])],
+        meet_status=_meet_status_view(),
         meeting_runners=runners)
+
+
+def _meet_status_view() -> dict:
+    """État du service Meet pour l'affichage — jamais un simple « actif/inactif ».
+
+    Un état PÉRIMÉ est aussi parlant qu'une absence : le service écrit à chaque tour, donc
+    un compte rendu vieux de plusieurs minutes signale un service arrêté bien avant qu'on
+    cherche un compte rendu de réunion qui n'arrive jamais.
+    """
+    etat = read_status(current_app.instance_path)
+    if etat is None:
+        return {"known": False}
+    return {"known": True, "stale": is_stale(etat), "updated_at": etat.updated_at,
+            "cycles": etat.cycles, "watched": etat.watched, "problems": etat.problems,
+            "last_jobs": etat.last_jobs, "auto_recording": etat.auto_recording,
+            "watched_users": etat.watched_users,
+            "extra": [s.get("target") for s in etat.subscriptions]}
+
+
+@web_bp.route("/admin/connecteurs/meet/spaces", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_meet_spaces():
+    """Réunions Meet à surveiller — ajout/retrait depuis l'interface.
+
+    Le portail écrit une INTENTION ; c'est le service Meet qui crée l'abonnement chez Google
+    au tour suivant (le cœur n'importe jamais `connector_service`). L'écran le dit, faute de
+    quoi l'admin croirait l'abonnement posé à l'instant du clic.
+    """
+    cfg = ConfigService.get_singleton()
+    meetings = ((cfg.get("connectors") or {}).get("meetings") or {})
+    liste = [str(r) for r in (meetings.get("meet_spaces") or [])]
+    retirer = (request.form.get("remove") or "").strip()
+    brut = (request.form.get("meeting") or "").strip()
+    ajouter = ""
+    if brut and not retirer:
+        # Validé à la SAISIE : sans cela, une valeur fautive reste en configuration et le
+        # service échoue au tour suivant, loin du geste qui l'a causée. Vécu : une portée
+        # OAuth collée ici après l'avoir ajoutée dans la console Google.
+        try:
+            ajouter = normalize_meeting_input(brut)
+        except MeetLinkError as exc:
+            flash(str(exc), "error")
+            return redirect("/admin/connecteurs")
+    if retirer:
+        liste = [r for r in liste if r != retirer]
+        message = _("Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à "
+                    "expiration (7 jours).", m=retirer)
+    elif ajouter and ajouter not in liste:
+        liste.append(ajouter)
+        message = _("Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain "
+                    "tour.", m=ajouter)
+    elif ajouter:
+        message = _("Cette réunion est déjà surveillée.")
+    else:
+        flash(_("Aucun lien de réunion fourni."), "error")
+        return redirect("/admin/connecteurs")
+    merged = _deep_merge(cfg, {"connectors": {"meetings": {"meet_spaces": liste}}})
+    merged["connectors"]["meetings"]["meet_spaces"] = liste
+    ok, errors, _warnings = ConfigService.save_if_valid(merged, ConfigService.get_path())
+    for err in errors:
+        flash(err, "error")
+    if ok:
+        flash(message, "success")
+    audit_log(action=AuditAction.MEETING_FEATURE_TOGGLE, target_type="connector",
+              target_id="meet", target_label="Google Meet",
+              details={"watched_count": len(liste), "ok": ok})
+    return redirect("/admin/connecteurs")
 
 
 @web_bp.route("/admin/connecteurs/meetings/toggle", methods=["POST"])
@@ -460,6 +551,33 @@ def admin_connector_credentials(connector_id: str):
     stored = dict(((cfg.get("connectors") or {}).get("meetings") or {}).get("platform_env") or {})
     changed: list[str] = []
     for field in connector.requires:
+        # Fichier téléversé : il l'emporte sur le champ texte du même nom (l'administrateur
+        # qui choisit un fichier ne veut pas voir gagner le chemin précédent). Déposé en
+        # 0600 hors configuration ; c'est le CHEMIN qui est stocké, jamais la clé privée.
+        if field.kind == "json_file":
+            envoye = request.files.get(field.key)
+            if envoye is not None and envoye.filename:
+                try:
+                    chemin = store_json_credential(current_app.instance_path, connector.id,
+                                                   field.key, envoye.read(), field.expects)
+                except CredentialFileError as exc:
+                    flash(_("Fichier « %(label)s » refusé : %(raison)s",
+                            label=field.label, raison=str(exc)), "error")
+                    continue
+                if stored.get(field.key) != str(chemin):
+                    stored[field.key] = str(chemin)
+                    changed.append(field.key)
+                continue
+            # Sans fichier ni chemin saisi, la valeur en place est CONSERVÉE : un formulaire
+            # à téléversement se renvoie vide par nature (le navigateur ne repropose jamais
+            # le fichier choisi), et l'y voir comme un retrait effacerait l'identité au
+            # moindre enregistrement d'un champ voisin. Le retrait est donc explicite.
+            if request.form.get(f"{field.key}__clear"):
+                if stored.pop(field.key, None) is not None:
+                    changed.append(field.key)
+                continue
+            if not (request.form.get(field.key) or "").strip():
+                continue
         raw = request.form.get(field.key)
         if raw is None:
             continue

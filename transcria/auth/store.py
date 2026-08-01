@@ -34,6 +34,22 @@ class UserStore:
         return db.session.execute(db.select(User).filter_by(username=username)).scalar_one_or_none()
 
     @staticmethod
+    def get_by_email(email: str) -> User | None:
+        """Utilisateur ACTIF portant cette adresse (comparaison insensible à la casse).
+
+        Sert au rattachement d'un enregistrement importé à son organisateur : la plateforme
+        de réunion ne connaît que des adresses, TranscrIA que des comptes. Restreint aux
+        comptes actifs — attribuer un job à un compte désactivé le rendrait invisible à
+        tous, ce qui est pire que de le laisser au compte de service.
+        """
+        normalise = (email or "").strip().lower()
+        if not normalise:
+            return None
+        return db.session.execute(
+            db.select(User).filter(db.func.lower(User.email) == normalise,
+                                   User.is_active.is_(True))).scalars().first()
+
+    @staticmethod
     def list_users(active_only: bool = True) -> list[User]:
         q = db.select(User)
         if active_only:

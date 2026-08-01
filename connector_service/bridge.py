@@ -57,6 +57,8 @@ class JobsApiBridge:
         participants_manifest: dict | None = None,
         job_id: str | None = None,
         track_files: dict | None = None,
+        owner_email: str | None = None,
+        participants_hint: dict | None = None,
     ) -> IngestResult:
         """POST /v1/audio/ingest. `idempotency_key` porte l'idempotence côté serveur :
         deux appels avec la même clé ⇒ un seul job (le 2e revient `idempotent=True`).
@@ -75,6 +77,17 @@ class JobsApiBridge:
             data["external_meeting_id"] = external_meeting_id
         if mode:
             data["mode"] = mode
+        if owner_email:
+            # ORGANISATEUR de la réunion. Sans lui, le job appartient au compte de service
+            # qui l'a déposé et l'organisateur ne le voit nulle part : la fonctionnalité
+            # marche alors parfaitement… pour personne. Le serveur n'honore ce champ que
+            # pour le compte de service des connecteurs.
+            data["owner_email"] = owner_email
+        if participants_hint:
+            # INDICE (noms + nombre), à ne pas confondre avec le manifeste : celui-ci
+            # remplace la diarisation, celui-là la guide. Sur un audio MIXÉ, seul l'indice
+            # a un sens — un manifeste sans tours de parole donnerait zéro locuteur.
+            data["participants_hint"] = json.dumps(participants_hint, ensure_ascii=False)
         if job_id:
             # Rattachement D4 (vague 3) : l'audio rejoint le job PLANIFIÉ au lieu d'en créer
             # un second — réservé au compte de service runner côté serveur.

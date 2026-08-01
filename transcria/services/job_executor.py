@@ -459,13 +459,33 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
         sl.warning("Réconciliation: erreur ignorée", error=str(exc))
 
 
+def _holds_scheduler_lock(service: "JobExecutorService | None") -> bool:
+    """Ce process est-il l'ordonnanceur RÉEL ? Faux si un autre détient le verrou.
+
+    Sans ordonnanceur du tout (file désactivée), il n'y a personne d'autre pour réconcilier :
+    on autorise, sinon un job interrompu par un redémarrage resterait « en cours » à jamais.
+    """
+    scheduler = getattr(service, "_scheduler", None)
+    if scheduler is None:
+        return True
+    return bool(getattr(scheduler, "is_singleton_owner", True))
+
+
 def init_job_executor(app: Flask, config: dict, run_scheduler: bool = True) -> JobExecutorService:
     global _executor_service
     with _executor_lock:
         _executor_service = JobExecutorService(app, config, run_scheduler=run_scheduler)
-        # Réconciliation des jobs interrompus : tâche d'orchestration → uniquement si
-        # ce process draine la file (rôle scheduler/all), pas dans le tier web.
-        if run_scheduler:
+        # Réconciliation des jobs interrompus : elle marque en ÉCHEC tout job trouvé « en
+        # cours ». Elle ne doit donc être faite que par le process qui draine réellement la
+        # file — celui qui DÉTIENT le verrou « ordonnanceur unique ».
+        #
+        # ⚠ INCIDENT DU 2026-08-01. Elle ne dépendait que de `run_scheduler`, c'est-à-dire
+        # d'une intention de rôle, pas de la réalité. Un second process créé pour une simple
+        # lecture en base (un script de diagnostic) a donc réconcilié la file du service en
+        # marche, et fait passer en échec un job qui transcrivait très bien. Le scheduler,
+        # lui, refusait poliment de démarrer faute de verrou : le garde-fou existait, la
+        # réconciliation ne le consultait pas.
+        if run_scheduler and _holds_scheduler_lock(_executor_service):
             _reconcile_interrupted_jobs(app, config)
         return _executor_service
 

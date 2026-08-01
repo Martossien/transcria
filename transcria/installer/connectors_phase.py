@@ -81,6 +81,34 @@ TimeoutStopSec=300
 WantedBy=multi-user.target
 """
 
+# Unité du SERVICE MEET — distincte du meeting-runner, et volontairement : le runner fait
+# entrer des bots dans des réunions en cours, celui-ci récupère des enregistrements APRÈS
+# coup. Deux responsabilités, deux cycles de vie, deux pannes à diagnostiquer séparément.
+# Elle est DORMANTE tant que la fiche Meet n'est pas renseignée : le service dort et le dit,
+# au lieu d'entrer en boucle de redémarrage (cf. `connector_service/meet_service.py`).
+MEET_UNIT_TEMPLATE = """\
+[Unit]
+Description=TranscrIA — service Meet (ingestion post-réunion depuis Google Workspace)
+Documentation=file://{repo_root}/docs/MEET_TEAMS_ADMIN.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={repo_root}
+Environment=PYTHONPATH={repo_root}
+Environment=TRANSCRIA_REPO_ROOT={repo_root}
+ExecStart={venv_python} -m connector_service.meet_main
+Restart=on-failure
+RestartSec=30
+# Un téléchargement d'enregistrement puis son téléversement au portail peuvent être longs :
+# on laisse le tour en cours se terminer plutôt que de le couper au redéploiement.
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
+"""
+
 
 def connectors_deps_complete(venv_python: Path) -> bool:
     """Idempotence : la dépendance MARQUEUR des connecteurs (PyJWT) est-elle importable ?"""
@@ -130,11 +158,19 @@ def apply_connectors(plan: ConnectorsPlan, *, console, runner: Runner) -> None:
             console.info(f"droits insuffisants pour {unit_path} — poser l'unité en root : "
                          "sudo venv/bin/python -m transcria.installer.cli connectors --no-deps --systemd")
             return
+        meet_unit_path = plan.systemd_dir / "transcria-meet-poller.service"
+        meet_unit_path.write_text(
+            MEET_UNIT_TEMPLATE.format(repo_root=plan.repo_root,
+                                      venv_python=plan.venv_python),
+            encoding="utf-8")
         runner(["systemctl", "daemon-reload"])
-        # DORMANT par défaut (décision utilisateur) : démarrée tout de suite, elle patiente
-        # tant que l'admin n'a pas cliqué « Activer » — zéro commande au moment voulu.
+        # DORMANTES par défaut (décision utilisateur) : démarrées tout de suite, elles
+        # patientent tant que l'admin n'a pas renseigné l'interface — zéro commande au
+        # moment voulu.
         runner(["systemctl", "enable", "--now", "transcria-meeting-runner"])
-        console.ok(f"unité systemd installée et démarrée (DORMANTE) : {unit_path}")
+        runner(["systemctl", "enable", "--now", "transcria-meet-poller"])
+        console.ok(f"unités systemd installées et démarrées (DORMANTES) : {unit_path}, "
+                   f"{meet_unit_path}")
 
 
 def _ensure_meeting_ref_key(plan: ConnectorsPlan, console) -> None:

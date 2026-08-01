@@ -35,6 +35,7 @@ from transcria.audio.analyzer import AudioAnalyzer
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
+from transcria.auth.store import UserStore
 from transcria.config import get_config
 from transcria.gpu.vram_release import register_releaser
 from transcria.ingestion.manifest import (
@@ -42,6 +43,13 @@ from transcria.ingestion.manifest import (
     seed_participants,
     speaker_hint_from_manifest,
 )
+from transcria.ingestion.participants_hint import (
+    ParticipantsHintError,
+    parse_hint,
+    seed_entries,
+    speaker_hint,
+)
+from transcria.ingestion.runner_provisioning import RUNNER_ACCOUNT
 from transcria.ingestion.session_store import MeetingSessionStore
 from transcria.ingestion.store import MeetingImportStore, compute_dedup_key
 from transcria.jobs.filesystem import JobFilesystem
@@ -447,7 +455,10 @@ def _seed_from_manifest(cfg: dict, job_id: str, raw: dict) -> None:
 def _create_and_queue_job(cfg: dict, file, title: str, *,
                           processing_profile_id: str | None = None,
                           requested_mode: str | None = None,
-                          participants_manifest_raw: dict | None = None):
+                          participants_manifest_raw: dict | None = None,
+                          owner_id: str | None = None,
+                          participants_hint_raw: str | None = None,
+                          provider_hint: str | None = None):
     """Crée → dépose → analyse → met en file un job depuis un fichier uploadé.
 
     Primitives identiques au wizard (JobService + exécuteur), via l'API de jobs.
@@ -465,17 +476,38 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
     except (KeyError, ValueError) as exc:
         return None, None, (jsonify({"error": f"Profil ou mode inconnu: {exc}"}), 400)
 
-    job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
+    job_id = JobService.create(owner_id=owner_id or current_user.id, title=title)["job_id"]
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
 
     participants_manifest_raw = _store_track_parts(cfg, job_id, participants_manifest_raw)
     if participants_manifest_raw is not None:
         _seed_from_manifest(cfg, job_id, participants_manifest_raw)
+    else:
+        # L'indice ne vaut QUE sans manifeste : ce dernier est plus riche (il porte les tours
+        # de parole), et les faire cohabiter ferait s'écraser deux fourchettes de locuteurs.
+        _seed_participants_hint(cfg, job_id, participants_hint_raw)
 
     analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
     if analysis.get("error"):
         return job_id, None, (jsonify({"error": f"Analyse impossible: {analysis['error']}",
                                        "job_id": job_id}), 422)
+
+    # DÉCISION UTILISATEUR (2026-07-29) : une réunion n'est qu'une AUTRE façon d'amener
+    # l'audio à l'étape 1 — le job s'arrête AU MÊME POINT qu'un upload (analysé) et le
+    # workflow humain reprend la main (résumé de contrôle, contexte, validation des
+    # locuteurs, lexique). C'est LÀ que les livrables gagnent les vrais noms.
+    #
+    # ⚠ CETTE RÈGLE N'ÉTAIT APPLIQUÉE QU'AU RATTACHEMENT (bot sur job planifié). Le chemin
+    # post-réunion — Meet, Teams, Zoom Cloud — créait un job et déroulait tout le pipeline
+    # sans jamais s'arrêter : constaté le 2026-08-01 sur une vraie réunion Meet, dont le
+    # compte rendu est parti au résumé sans que personne ait pu nommer les locuteurs.
+    # La règle vit dans `profiles.profile_requires_human`, elle est testée ; seul l'appel
+    # manquait ici.
+    if provider_hint and profiles.profile_requires_human(profile):
+        logger.info("[façade] réunion %s ingérée et ANALYSÉE — le workflow humain reprend "
+                    "la main (profil %s)", provider_hint, profile.id)
+        return job_id, {"job_id": job_id, "profile_id": profile.id, "mode": mode,
+                        "awaiting_human": True}, None
 
     audio_path = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).get_original_audio_path()
     if audio_path is None:
@@ -512,6 +544,79 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
     JobStore.update(job_id, processing_mode=mode)
     JobStore.update_state(job_id, JobState.READY_TO_PROCESS)
     return job_id, {"job_id": job_id, "profile_id": profile.id, "mode": mode}, None
+
+
+def _seed_participants_hint(cfg: dict, job_id: str, raw: str | None) -> None:
+    """Sème l'INDICE de participants d'une réunion à audio MIXÉ (Meet) : noms connus et
+    NOMBRE de voix à chercher.
+
+    Distinct du manifeste, et il faut que ça le reste : un manifeste fait SAUTER la
+    diarisation (le pipeline croit connaître les tours de parole), ce qui, sur un mixage,
+    produirait un compte rendu sans aucun locuteur. Ici la diarisation travaille
+    normalement — simplement avec le bon nombre de voix à trouver.
+
+    Best-effort : un indice douteux est ignoré, l'ingestion continue. Réservé au compte de
+    service des connecteurs, comme le rattachement à l'organisateur.
+    """
+    if not raw or getattr(current_user, "username", "") != RUNNER_ACCOUNT:
+        return
+    try:
+        noms, compte = parse_hint(json.loads(raw))
+    except (ValueError, ParticipantsHintError) as exc:
+        logger.warning("[façade] indice de participants IGNORÉ (%s) — diarisation sans "
+                       "borne, comme pour un fichier audio ordinaire", exc)
+        return
+    # DEUX semis INDÉPENDANTS, et l'ordre compte. Le NOMBRE de voix est ce qui empêche la
+    # sur-segmentation (une voix unique coupée en deux) ; les noms ne sont qu'un confort de
+    # relecture. Les enchaîner dans un seul `try` faisait perdre le premier quand le second
+    # échouait — le contraire de ce qu'on veut.
+    try:
+        JobStore.update_extra_data(
+            job_id, lambda extra: {**extra, "speaker_hint": speaker_hint(compte)})
+        logger.info("[façade] indice de participants : %d voix attendues", compte)
+    except Exception:  # noqa: BLE001
+        logger.exception("[façade] fourchette de locuteurs non semée")
+    if not noms:
+        return
+    try:
+        JobFilesystem(cfg["storage"]["jobs_dir"], job_id).save_json(
+            "context/participants.json", seed_entries(noms))
+        logger.info("[façade] %d nom(s) de participant semé(s)", len(noms))
+    except Exception:  # noqa: BLE001 — les noms sont un confort, la fourchette est acquise
+        logger.exception("[façade] noms de participants non semés (fourchette conservée)")
+
+
+def _resolve_owner(owner_email: str | None) -> str | None:
+    """Adresse de l'ORGANISATEUR → identifiant du compte TranscrIA à qui attribuer le job.
+
+    POURQUOI CE RATTACHEMENT EXISTE. Un enregistrement importé par un connecteur est déposé
+    par le COMPTE DE SERVICE qui porte le jeton : sans ce rattachement, le compte rendu de
+    la réunion appartient à `svc-runner` et l'organisateur ne le voit nulle part. La
+    fonctionnalité marche alors parfaitement… pour personne.
+
+    PRIVILÈGE RESTREINT au compte de service des connecteurs — même doctrine que le
+    rattachement `job_id` : un jeton ordinaire ne doit pas pouvoir créer un job au nom d'un
+    autre utilisateur.
+
+    Adresse inconnue → `None`, donc repli sur le déposant, et un AVERTISSEMENT explicite :
+    perdre silencieusement l'attribution donnerait un job introuvable sans rien pour
+    l'expliquer.
+    """
+    adresse = (owner_email or "").strip()
+    if not adresse:
+        return None
+    if getattr(current_user, "username", "") != RUNNER_ACCOUNT:
+        logger.warning("[façade] owner_email IGNORÉ : réservé au compte de service des "
+                       "connecteurs (déposant=%s)", getattr(current_user, "username", "?"))
+        return None
+    cible = UserStore.get_by_email(adresse)
+    if cible is None:
+        logger.warning("[façade] organisateur « %s » sans compte TranscrIA ACTIF — le job "
+                       "reste au compte de service ; créer le compte (ou renseigner son "
+                       "adresse) pour qu'il lui revienne", adresse)
+        return None
+    logger.info("[façade] job attribué à l'organisateur %s", cible.username)
+    return str(cible.id)
 
 
 @web_bp.route("/v1/audio/ingest", methods=["POST"])
@@ -594,7 +699,10 @@ def facade_ingest():
         cfg, file, title,
         processing_profile_id=explicit_profile,
         requested_mode=explicit_mode,
-        participants_manifest_raw=manifest_raw)
+        participants_manifest_raw=manifest_raw,
+        owner_id=_resolve_owner(request.form.get("owner_email")),
+        participants_hint_raw=request.form.get("participants_hint"),
+        provider_hint=provider)
     if error is not None:
         if dedup_key:
             MeetingImportStore.release(dedup_key)  # rejeu propre après échec
@@ -627,9 +735,15 @@ def facade_ingest():
                                             else "absent")),
         },
     )
+    # L'état RENDU doit dire la vérité : une réunion arrêtée pour le workflow humain n'est
+    # PAS « prête à traiter ». Le connecteur journalise cette réponse, et annoncer un
+    # traitement lancé ferait chercher un compte rendu qui n'arrivera qu'après validation.
+    en_attente = bool(result.get("awaiting_human"))
     return jsonify({
         "job_id": result["job_id"],
-        "state": JobState.READY_TO_PROCESS.value,
+        "state": (JobState.ANALYZED.value if en_attente
+                  else JobState.READY_TO_PROCESS.value),
+        "awaiting_human": en_attente,
         "processing_profile_id": result["profile_id"],
         "mode": result["mode"],
         "external_meeting_id": external_meeting_id,

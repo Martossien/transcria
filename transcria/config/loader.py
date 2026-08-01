@@ -161,6 +161,12 @@ _DEFAULT_CONFIG = {
             # CLAIM (seul canal où les secrets sortent), jamais dans argv. L'environnement
             # du runner reste un repli machine. ⚠ Périmètre revue sécurité Opus 5.
             "platform_env": {},
+            # Réunions Meet à SURVEILLER — liens ou codes saisis dans l'interface admin.
+            # C'est de la DONNÉE d'intention : le portail n'a pas le droit d'appeler Google
+            # (il n'importe jamais `connector_service`), c'est le service Meet qui lit cette
+            # liste et crée/supprime les abonnements pour l'y conformer. Même doctrine que
+            # `meeting_connectors.yaml` : ce qui doit remonter à l'UI passe par la donnée.
+            "meet_spaces": [],
             # Suivi en direct (vague 5, D5.5) : plafond du fichier `live/captions.jsonl`
             # par job — au-delà, troncature de TÊTE annoncée dans le flux. Le direct est
             # PROVISOIRE : le pipeline batch reste la référence (ADR-001 D5).

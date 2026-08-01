@@ -84,6 +84,16 @@ class QueueScheduler:
         # CHANGEMENT d'état (pas à chaque tick du dispatch — sinon spam toutes les N s).
         self._warned_no_remote_gpu = False
 
+    @property
+    def is_singleton_owner(self) -> bool:
+        """Ce process détient-il le verrou « ordonnanceur unique » ?
+
+        Sert à décider des tâches qui ne doivent être faites QUE par l'ordonnanceur réel —
+        au premier chef la réconciliation des jobs interrompus, qui marque en échec tout job
+        « en cours » qu'elle trouve.
+        """
+        return self._singleton_lock is not None
+
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return

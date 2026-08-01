@@ -9,7 +9,16 @@ POURQUOI L'API REST ET NON `google-cloud-pubsub`. La bibliothèque officielle ap
 tout son arbre de dépendances pour offrir un « streaming pull » dimensionné pour des milliers
 de messages par seconde. Nous en attendons quelques-uns par réunion : une interrogation
 périodique en REST suffit, se teste sans mock de gRPC, et n'ajoute aucune dépendance —
-`oauth.GoogleOAuth` fournit déjà le jeton (lui passer `PUBSUB_SCOPE` en plus de ses portées).
+`oauth.GoogleOAuth` fournit déjà le jeton.
+
+⚠ AVEC QUELLE IDENTITÉ. La file appartient au projet Cloud, pas à un utilisateur : le jeton
+`PUBSUB_SCOPE` doit être demandé par le COMPTE DE SERVICE SEUL, donc SANS `subject`
+(l'impersonation sert aux données Meet et Drive de l'organisateur, elle seule). Le droit
+correspondant est `roles/pubsub.subscriber` accordé au compte de service SUR L'ABONNEMENT,
+dans Cloud IAM — surtout pas `pubsub` ajouté à la délégation Workspace, qui ferait dépendre
+l'interrogation d'un droit accordé par l'administrateur du domaine sur ses utilisateurs.
+Vécu le 2026-08-01 : le test de connexion réclamait cette portée par délégation et échouait
+sur une configuration pourtant correcte.
 
 ⚠ `message.data` est encodé en BASE64 par l'API REST. `meet_events.parse_pubsub_message` sait
 déjà lire cette forme ; c'est ce qui permet de brancher les deux modules sans adaptateur.

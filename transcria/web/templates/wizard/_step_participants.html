@@ -94,6 +94,20 @@
         {% if suggested_count %}
         <div class="small text-muted mb-2">{{ _('%(done)s locuteur(s) nommés par la réunion, %(rest)s à valider — la validation reste obligatoire.', done=suggested_count, rest=(speakers.speakers|length - suggested_count)) }}</div>
         {% endif %}
+        {# Personnes CONSTATÉES par la plateforme. Proposées, jamais attribuées d'office :
+           sur un audio mixé, rien ne dit quelle voix est laquelle — et un nom faux est pire
+           qu'une étiquette honnête. La liste alimente l'autocomplétion des champs « Nom ». #}
+        {% if platform_names %}
+        <div class="alert alert-info py-2 small mb-2">
+          <i class="bi bi-camera-video"></i>
+          {{ _('Personnes vues par la réunion :') }}
+          {% for nom in platform_names %}<strong>{{ nom }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}
+          — <span class="text-muted">{{ _("commencez à taper dans « Nom » pour les retrouver ; l'outil ne peut pas deviner quelle voix est laquelle sur un enregistrement mixé.") }}</span>
+        </div>
+        <datalist id="noms-connus-reunion">
+          {% for nom in platform_names %}<option value="{{ nom }}"></option>{% endfor %}
+        </datalist>
+        {% endif %}
         {% for s in speakers.speakers %}
         {% set voice_hint = namespace(item=None) %}
         {% for m in voice_matches.get('matches', []) %}
@@ -106,7 +120,7 @@
           <span class="text-muted small">{{ _('%(s)ss, %(n)s interventions', s=s.speaking_time_seconds|round(0), n=s.turn_count) }}</span>
           <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-action="TranscrIA.loadClips" data-arg="{{ s.speaker_id }}"
                   aria-label="{{ _('Écouter des extraits de ce locuteur') }}" title="{{ _('Écouter des extraits de ce locuteur') }}"><i class="bi bi-play-fill"></i></button>
-          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ s.mapped_name or s.suggested_name or '' }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ s.mapped_name or s.suggested_name or '' }}" style="max-width:150px;"{% if platform_names %} list="noms-connus-reunion"{% endif %}>
           {% if not s.mapped_name and s.suggested_name %}
           <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"
                 title="{{ _('Nom proposé par la plateforme de réunion — vérifiez puis validez') }}">

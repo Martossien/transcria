@@ -27,6 +27,7 @@ from flask_login import current_user, login_required
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
+from transcria.auth.store import UserStore
 from transcria.config import get_config
 from transcria.ingestion import session_states as st
 from transcria.ingestion.live_captions import (
@@ -263,6 +264,39 @@ def v1_runner_heartbeat():
     )
     return jsonify({"ok": True,
                     "cancelled_sessions": MeetingSessionStore.cancelled_for_runner(name)})
+
+
+@web_bp.route("/v1/meetings/meet/watched-users", methods=["GET"])
+@meetings_enabled
+@bearer_token_required
+@_runner_guard
+def v1_meet_watched_users():
+    """Utilisateurs dont le service Meet doit surveiller les réunions.
+
+    POURQUOI UN POINT D'ENTRÉE ET NON UN FICHIER. Le service Meet peut vivre sur une AUTRE
+    machine (ADR-001) : un fichier partagé n'y serait pas. Il parle déjà HTTP au portail avec
+    son jeton — c'est le canal naturel, et le seul qui marche à distance.
+
+    POURQUOI LA LISTE VIENT DU PORTAIL. Un abonnement Workspace Events ne vise qu'un
+    utilisateur ou un espace, jamais un domaine : il en faut un PAR PERSONNE. Les faire
+    saisir à la main serait intenable au-delà de quelques comptes — et un utilisateur oublié
+    n'aurait jamais de compte rendu, sans que rien ne le signale. Le portail connaît déjà ses
+    utilisateurs et leurs adresses : la liste se déduit, elle ne se saisit pas.
+
+    Filtré sur le DOMAINE de l'utilisateur impersonné : la délégation ne vaut que pour lui,
+    et demander un abonnement pour une adresse extérieure produirait un refus par personne
+    concernée, à chaque tour.
+    """
+    penv = _meetings_cfg(get_config()).get("platform_env") or {}
+    impersonne = str(penv.get("MEET_IMPERSONATE_USER") or "")
+    domaine = impersonne.rsplit("@", 1)[-1].lower() if "@" in impersonne else ""
+    if not domaine:
+        return jsonify({"users": [], "reason": "fiche Meet incomplète (utilisateur à "
+                                               "impersonner absent)"}), 200
+    adresses = sorted({
+        u.email.strip().lower() for u in UserStore.list_users(active_only=True)
+        if u.email and u.email.strip().lower().endswith(f"@{domaine}")})
+    return jsonify({"users": adresses, "domain": domaine}), 200
 
 
 @web_bp.route("/v1/meetings/claim", methods=["POST"])

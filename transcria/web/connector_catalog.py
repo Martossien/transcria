@@ -35,6 +35,14 @@ VALID_STATUSES = ("validated", "implemented", "planned")
 VALID_PATHS = ("bot", "native", "webhook", "pull")
 
 
+# Comment l'administrateur FOURNIT le renseignement :
+#   text       une chaîne saisie dans le formulaire
+#   json_file  un FICHIER JSON téléversé (clé de compte de service…) — déposé en 0600 hors
+#              configuration, c'est son CHEMIN qui est stocké. Coller le contenu d'une clé
+#              privée dans `config.yaml` reste possible mais n'est plus la voie proposée.
+VALID_FIELD_KINDS = ("text", "json_file")
+
+
 @dataclass(frozen=True)
 class RequiredField:
     """Un renseignement à fournir pour activer un connecteur."""
@@ -42,6 +50,10 @@ class RequiredField:
     key: str
     label: str
     secret: bool = False
+    kind: str = "text"
+    # Clés que le fichier téléversé doit porter — ce qui permet de refuser à l'arrivée le
+    # mauvais JSON plutôt qu'à la première authentification. Vide hors `json_file`.
+    expects: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -83,9 +95,15 @@ class CatalogError(ValueError):
 def _field(raw: Any, index: int, connector_id: str) -> RequiredField:
     if not isinstance(raw, dict) or not raw.get("key"):
         raise CatalogError(f"{connector_id} : champ requis n°{index} sans clé")
+    kind = str(raw.get("kind") or "text")
+    if kind not in VALID_FIELD_KINDS:
+        raise CatalogError(f"{connector_id} : nature de champ inconnue « {kind} » "
+                           f"(attendu : {', '.join(VALID_FIELD_KINDS)})")
     return RequiredField(key=str(raw["key"]),
                          label=str(raw.get("label") or raw["key"]),
-                         secret=bool(raw.get("secret")))
+                         secret=bool(raw.get("secret")),
+                         kind=kind,
+                         expects=tuple(str(c) for c in (raw.get("expects") or [])))
 
 
 def _connector(raw: Any, index: int) -> Connector:

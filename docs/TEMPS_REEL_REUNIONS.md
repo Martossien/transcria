@@ -993,8 +993,8 @@ accepter par une DSI** — plus encore que Teams, qui impose une URL publique.
 |---|---|
 | `providers/meet.py` — `conferenceRecords` → Drive | **écrit** (164 l), jamais exécuté |
 | `live/meet_media*.py` — Media API temps réel (WebRTC) | **écrit**, jamais exécuté ; ⚠ plafonné aux **3 locuteurs les plus forts** et admission HUMAINE |
-| **Abonnement Workspace Events + Pub/Sub (pull)** | partie PURE **écrite et testée** (`meet_events.py`, `pubsub_pull.py`, `subscription_renewal.py`, `subscription_keeper.py`) ; il reste les APPELS réseau — cf. §7-quinquies |
-| Téléchargement Drive | manquant |
+| **Abonnement Workspace Events + Pub/Sub (pull)** | **ÉPROUVÉ EN RÉEL 2026-08-01** — parties pures + couche réseau (`workspace_events_client.py`, `meet_poller.py`, `meet_keeper.py`) |
+| Téléchargement Drive | **ÉPROUVÉ EN RÉEL** — `fetchers.GoogleDriveFetcher` (existait déjà ; l'extension du fichier se déduit désormais du type de média) |
 
 Autrement dit, nous savons déjà lire un enregistrement une fois qu'on en connaît la
 référence ; nous ne savons pas encore **apprendre qu'il existe**. C'est exactement l'inverse
@@ -1101,12 +1101,21 @@ en production, et aucune ne se voit avant que les évènements ne cessent d'arri
    jamais et bloquerait la file par redélivrances sans fin, alors qu'un téléchargement raté
    peut réussir au prochain essai — l'acquitter perdrait l'enregistrement pour de bon.
 
-Ce qui manque encore, et qui exige un compte :
+#### Ce qui manquait — LEVÉ pour Meet le 2026-08-01
 
-- **les appels réseau eux-mêmes** : créer l'abonnement, exécuter l'interrogation Pub/Sub,
-  télécharger le média ;
-- **le branchement sur l'ingestion** : de l'évènement à un job TranscrIA ;
-- **toute validation réelle.** Rien de la liste ci-dessus n'a jamais vu une vraie plateforme.
+Les trois manques annoncés ici (appels réseau, branchement sur l'ingestion, validation
+réelle) sont comblés **pour Meet**, sur un Workspace d'essai : réunion enregistrée →
+`recording.v2.fileGenerated` → API Meet → Drive → `POST /v1/audio/ingest` → job → DOCX.
+Modules ajoutés : `workspace_events_client.py`, `meet_api_client.py`, `meet_poller.py`,
+`meet_keeper.py` ; exploitation par `scripts/meet_subscription.py` et
+`scripts/meet_ingest.py`.
+
+L'inventaire préalable du paquet — la leçon inscrite ci-dessus — a évité trois doublons :
+`GoogleDriveFetcher`, `MeetArtifactProvider` et le pont d'ingestion existaient déjà. Le seul
+trou réel était le SONDEUR qui les relie.
+
+**Teams et Zoom RTMS restent entiers** : leurs appels réseau, leur branchement et toute
+validation réelle sont à faire, et exigent un compte payant plus deux URL HTTPS publiques.
 
 Le découpage n'est pas gratuit : il place la totalité des RÈGLES (durées, revendications,
 formes, algorithmes acceptés) du côté testable, et ne laisse au réseau que le transport. C'est

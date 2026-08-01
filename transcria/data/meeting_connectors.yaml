@@ -195,7 +195,8 @@ connectors:
   - id: meet
     name: Google Meet
     path: pull
-    status: implemented
+    status: validated
+    verified_on: "2026-08-01"
     summary: >-
       Google Workspace Events publie dans une file Pub/Sub que le portail INTERROGE (pull) :
       il apprend qu'un enregistrement existe, puis le récupère par l'API Meet et Drive.
@@ -203,20 +204,23 @@ connectors:
     doc: docs/TEMPS_REEL_REUNIONS.md#7-quater
     requires:
       - key: MEET_SERVICE_ACCOUNT_JSON
-        label: Clé JSON du compte de service (chemin ou contenu)
+        # Chemin RECOMMANDÉ : la clé privée reste alors dans un fichier à droits restreints,
+        # hors config.yaml. Le contenu JSON collé est accepté (même champ) pour les
+        # déploiements où poser un fichier n'est pas commode.
+        label: Clé JSON du compte de service
         secret: true
+        kind: json_file
+        # Ce que doit porter le fichier — la console Google propose à deux clics de là le
+        # JSON d'un « ID client OAuth », qui n'a ni l'un ni l'autre : le refuser au
+        # téléversement épargne un échec d'authentification inexplicable des jours plus tard.
+        expects: [client_email, private_key]
       - key: MEET_IMPERSONATE_USER
         label: Utilisateur à impersonner (organisateur)
         secret: false
-      - key: MEET_SERVICE_ACCOUNT_EMAIL
-        label: Adresse du compte de service
-        secret: false
-      - key: MEET_SERVICE_ACCOUNT_KEY
-        label: Clé privée du compte de service (JSON)
-        secret: true
-      - key: MEET_DELEGATED_USER
-        label: Utilisateur représenté (délégation)
-        secret: false
+      # NE PAS rajouter MEET_SERVICE_ACCOUNT_EMAIL / _KEY / MEET_DELEGATED_USER : c'était une
+      # SECONDE famille de noms pour les deux clés ci-dessus, que rien ne lisait — un
+      # formulaire les affichant demandait deux fois le même secret à l'administrateur.
+      # L'adresse du compte de service est déjà DANS le JSON (`client_email`).
       - key: MEET_PUBSUB_SUBSCRIPTION
         label: Abonnement Pub/Sub à interroger
         secret: false
@@ -227,10 +231,11 @@ connectors:
         Events », « Google Drive » et « Pub/Sub ».
       - Créer un compte de service et générer sa clé privée JSON.
       - >-
-        Dans la console d'administration Workspace, accorder la DÉLÉGATION À L'ÉCHELLE DU
-        DOMAINE au compte de service pour les portées Meet et Drive : sans elle, le compte
-        n'agit que pour lui-même et ne voit AUCUN artefact de réunion (symptôme : des 404 sur
-        des ressources qui existent).
+        Console d'administration Workspace : accorder la DÉLÉGATION À L'ÉCHELLE DU DOMAINE au
+        compte de service, avec son ID CLIENT NUMÉRIQUE (pas son adresse), sur les portées
+        listées dans docs/MEET_TEAMS_ADMIN.md. N'y ajouter SURTOUT PAS `pubsub` : la file
+        relève de Cloud IAM, et Google refuse EN BLOC une demande dont une portée n'est pas
+        déléguée — une configuration correcte se met alors à échouer.
       - >-
         Créer un sujet Pub/Sub, puis y autoriser le publicateur
         `meet-api-event-push@system.gserviceaccount.com` — sans ce droit, l'abonnement est
@@ -238,15 +243,23 @@ connectors:
       - >-
         Créer un abonnement Pub/Sub de type PULL (surtout pas « push ») : c'est lui qui évite
         toute ouverture de pare-feu.
+      - >-
+        Accorder au COMPTE DE SERVICE le rôle « Pub/Sub Subscriber » SUR L'ABONNEMENT — c'est
+        Cloud IAM, pas la délégation Workspace : la file appartient au projet, le compte
+        l'interroge en son propre nom. Sans ce rôle, l'authentification réussit et chaque
+        interrogation est refusée.
     notes:
       - >-
         Voie la plus facile à faire accepter par une DSI : tout est SORTANT, à la différence de
         Teams et de Zoom RTMS.
       - >-
-        Les abonnements Workspace Events durent au maximum SEPT JOURS et doivent être
-        renouvelés ; le portail s'en charge (`connector_service/subscription_renewal.py`).
+        Les utilisateurs du portail ayant une adresse du domaine sont surveillés AUTOMATIQUEMENT
+        (un abonnement chacun, renouvelé seul). Leurs réunions planifiées sont réglées pour
+        s'enregistrer seules ; la liste de salles ne sert qu'à ce que personne n'organise.
       - >-
-        L'évènement ne porte qu'une RÉFÉRENCE (`conferenceRecords/…`) : le média est ensuite
-        récupéré par l'API. Ce n'est pas une limite de notre code mais du format Google.
-      - Un abonnement Google Workspace (payant) est requis ; un compte Gmail ne suffit pas.
-      - Jamais exécuté contre une vraie conférence.
+        Google ne livre qu'un enregistrement MIXÉ : les voix sont séparées par notre
+        diarisation, avec le nombre exact de participants pour la borner. Les noms connus sont
+        proposés à la validation, sans être attribués — rien ne dit quelle voix est laquelle.
+      - >-
+        Un abonnement Google Workspace est requis (un compte Gmail ne suffit pas), et
+        l'enregistrement exige Business Standard ou supérieur.

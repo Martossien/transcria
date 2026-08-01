@@ -112,6 +112,30 @@ class HttpArtifactFetcher:
         return data, name
 
 
+def drive_filename(remote_name: str, file_id: str, media_type: str,
+                   extensions: dict[str, str]) -> str:
+    """Nom de fichier à donner au portail — c'est lui qui devient le TITRE du job.
+
+    Trois soins, dans cet ordre :
+
+    1. le nom DISTANT s'il existe (Meet écrit « abc-mnop-xyz (2026-08-01 13:24 GMT) ») ;
+       à défaut l'identifiant Drive, illisible mais toujours mieux que rien ;
+    2. les séparateurs de chemin sont retirés : un nom vient d'un service tiers et n'a pas
+       à décider d'un chemin sur notre disque ;
+    3. l'extension est ajoutée si le nom n'en porte pas — sans elle, la détection de
+       conteneur échoue à l'ingestion (vécu : un MP4 sans suffixe).
+    """
+    extension = extensions.get(media_type, "")
+    base = (remote_name or "").replace("/", "-").replace("\\", "-").strip()
+    # Un nom réduit à des points ne donne pas un fichier exploitable — et ce sont justement
+    # les formes qui désignent un répertoire. On retombe sur l'identifiant, illisible mais sûr.
+    if not base or set(base) <= {"."}:
+        base = file_id
+    if extension and not base.lower().endswith(extension):
+        base += extension
+    return base
+
+
 class GoogleDriveFetcher:
     """Télécharge un fichier Drive (`gdrive://{file_id}`) via l'API Drive (Bearer Google).
 
@@ -139,9 +163,40 @@ class GoogleDriveFetcher:
             raise_for()
         return resp.content
 
+    def _get_name(self, file_id: str, token: str) -> str:
+        """Nom du fichier tel que la plateforme l'a écrit — vide si on ne peut pas le lire.
+
+        Meet nomme ses enregistrements de façon PARFAITEMENT lisible
+        (« abc-mnop-xyz (2026-08-01 13:24 GMT) »), et c'est ce nom qui devient le TITRE du
+        job côté portail. Sans lui, l'utilisateur voit un identifiant Drive opaque dans sa
+        liste — la chaîne fonctionne, et le résultat est inutilisable au quotidien.
+
+        Best-effort : un refus sur les métadonnées ne doit PAS empêcher le téléchargement.
+        """
+        sess = self._session
+        if sess is None:
+            import requests
+
+            sess = requests
+        try:
+            resp = sess.get(f"{self.API}/{file_id}?fields=name",
+                            headers={"Authorization": f"Bearer {token}"}, timeout=self._timeout)
+            donnees = resp.json() if callable(getattr(resp, "json", None)) else {}
+            return str((donnees or {}).get("name") or "").strip()
+        except Exception:  # noqa: BLE001 — le nom est un CONFORT, jamais un prérequis
+            return ""
+
+    #: Extension déduite du type de média. Un identifiant Drive n'en porte AUCUNE, et un
+    #: fichier sans extension fait échouer la détection de conteneur en aval — l'ingestion
+    #: recevrait un MP4 nommé « 11I_PgBq… ». Le type vient du provider (`video/mp4` pour un
+    #: enregistrement Meet), pas d'une devinette sur le contenu.
+    EXTENSIONS = {"video/mp4": ".mp4", "audio/mpeg": ".mp3", "audio/mp4": ".m4a",
+                  "audio/wav": ".wav", "audio/x-wav": ".wav", "video/webm": ".webm"}
+
     async def fetch(self, artifact: RemoteArtifact) -> tuple[bytes, str]:
         file_id = artifact.storage_uri.replace("gdrive://", "", 1)
         token = artifact.auth_token or (self._oauth.token() if self._oauth else "")
-        data = await asyncio.get_event_loop().run_in_executor(
-            None, self._get_bytes, file_id, token)
-        return data, file_id
+        boucle = asyncio.get_event_loop()
+        data = await boucle.run_in_executor(None, self._get_bytes, file_id, token)
+        nom = await boucle.run_in_executor(None, self._get_name, file_id, token)
+        return data, drive_filename(nom, file_id, artifact.media_type, self.EXTENSIONS)

@@ -202,7 +202,18 @@ def _wire_ingest(monkeypatch, *, analyze_result=None, accepted=True):
     monkeypatch.setattr(facade_api, "JobFilesystem", _FakeFS)
 
     class _Prof:
+        """Profil ENTIÈREMENT automatique — aucune étape humaine attendue.
+
+        Les attributs comptent : depuis 2026-08-01, l'ingestion d'une réunion s'arrête à
+        « analysé » quand le profil réclame l'humain (résumé de contrôle, validation des
+        locuteurs…). Un profil sans ces champs ferait passer les tests à côté de la règle.
+        """
         id = "fast"
+        requires_summary = False
+        requires_context = "none"
+        requires_participants = "none"
+        requires_speaker_validation = "none"
+        requires_lexicon = "none"
     monkeypatch.setattr(facade_api.profiles, "resolve_request", lambda pid, mode: (_Prof(), "fast"))
     monkeypatch.setattr(facade_api.PipelineService, "estimate_profile_resources",
                         staticmethod(lambda cfg, p: {"peak_vram_mb": 0}))
@@ -214,6 +225,143 @@ def _wire_ingest(monkeypatch, *, analyze_result=None, accepted=True):
     monkeypatch.setattr(facade_api.JobStore, "update", staticmethod(lambda *a, **k: None))
     monkeypatch.setattr(facade_api.JobStore, "update_state", staticmethod(lambda *a, **k: None))
     monkeypatch.setattr(facade_api, "audit_log", lambda *a, **k: None)
+
+
+class TestRattachementOrganisateur:
+    """Sans ce rattachement, le compte rendu d'une réunion importée appartient au COMPTE DE
+    SERVICE qui l'a déposé, et l'organisateur ne le voit nulle part : la chaîne fonctionne
+    parfaitement… pour personne."""
+
+    def _capture_owner(self, monkeypatch):
+        vu = {}
+        _wire_ingest(monkeypatch)
+        monkeypatch.setattr(facade_api.JobService, "create",
+                            staticmethod(lambda owner_id, title: vu.update(owner=owner_id)
+                                         or {"job_id": "jobK"}))
+        return vu
+
+    def _runner_token(self, app, monkeypatch):
+        """Jeton du compte de service des connecteurs — le SEUL habilité à déposer au nom
+        d'un tiers."""
+        import uuid
+
+        from transcria.auth.api_tokens import create_token
+        from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
+        with app.app_context():
+            # get-or-create : le compte de service est UNIQUE, plusieurs tests le demandent.
+            runner = (UserStore.get_by_username(facade_api.RUNNER_ACCOUNT)
+                      or UserStore.create_user(facade_api.RUNNER_ACCOUNT, "x" * 24,
+                                               role=Role.OPERATOR))
+            organisateur = (UserStore.get_by_email("chef@exemple.test")
+                            or UserStore.create_user(f"chef-{uuid.uuid4().hex[:6]}", "x" * 24,
+                                                     email="chef@exemple.test",
+                                                     role=Role.OPERATOR))
+            full, _ = create_token(runner.id, "runner-test")
+            return full, str(organisateur.id)
+
+    def test_le_job_revient_a_l_ORGANISATEUR(self, app, client, facade_on, monkeypatch):
+        vu = self._capture_owner(monkeypatch)
+        jeton, organisateur_id = self._runner_token(app, monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(jeton),
+                        data={**_wav(), "provider": "meet",
+                              "owner_email": "chef@exemple.test"},
+                        content_type="multipart/form-data")
+        assert r.status_code in (200, 202)
+        assert vu["owner"] == organisateur_id
+
+    def test_une_adresse_INCONNUE_ne_perd_pas_le_job(self, app, client, facade_on, monkeypatch):
+        """Repli sur le déposant plutôt qu'un échec : le job existe, il est simplement à
+        réattribuer — et l'avertissement dans les journaux dit quoi faire."""
+        vu = self._capture_owner(monkeypatch)
+        jeton, organisateur_id = self._runner_token(app, monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(jeton),
+                        data={**_wav(), "provider": "meet",
+                              "owner_email": "personne@ailleurs.test"},
+                        content_type="multipart/form-data")
+        assert r.status_code in (200, 202)
+        assert vu["owner"] != organisateur_id
+
+    def test_un_jeton_ORDINAIRE_ne_depose_PAS_au_nom_d_un_autre(self, app, client, facade_on,
+                                                                op_token, monkeypatch):
+        """Privilège restreint au compte de service — sinon n'importe quel opérateur créerait
+        des jobs au nom d'autrui."""
+        vu = self._capture_owner(monkeypatch)
+        _, organisateur_id = self._runner_token(app, monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data={**_wav(), "provider": "meet",
+                              "owner_email": "chef@exemple.test"},
+                        content_type="multipart/form-data")
+        assert r.status_code in (200, 202)
+        assert vu["owner"] != organisateur_id
+
+
+class TestIndiceParticipants:
+    """Vécu : une réunion Meet à UN participant a produit SPEAKER_00 et SPEAKER_01. L'API
+    annonçait « 1 participant » ; nous ne le demandions pas, et rien ne bornait pyannote."""
+
+    def _capture(self, monkeypatch):
+        vu = {}
+        _wire_ingest(monkeypatch)
+        monkeypatch.setattr(facade_api.JobStore, "update_extra_data",
+                            staticmethod(lambda job_id, fn: vu.update(fn({}))))
+        monkeypatch.setattr(facade_api, "seed_entries", lambda noms: vu.setdefault("noms", noms))
+        return vu
+
+    def _runner(self, app):
+        from transcria.auth.api_tokens import create_token
+        from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
+        with app.app_context():
+            runner = (UserStore.get_by_username(facade_api.RUNNER_ACCOUNT)
+                      or UserStore.create_user(facade_api.RUNNER_ACCOUNT, "x" * 24,
+                                               role=Role.OPERATOR))
+            return create_token(runner.id, "runner-hint")[0]
+
+    def test_le_nombre_de_participants_BORNE_la_diarisation(self, app, client, facade_on,
+                                                            monkeypatch):
+        import json as _json
+        vu = self._capture(monkeypatch)
+        client.post("/v1/audio/ingest", headers=_auth(self._runner(app)),
+                    data={**_wav(), "provider": "meet",
+                          "participants_hint": _json.dumps({"names": ["Alice"], "count": 1})},
+                    content_type="multipart/form-data")
+        assert vu.get("speaker_hint") == {"min": 1, "max": 1}
+
+    def test_un_indice_DOUTEUX_n_empeche_pas_l_ingestion(self, app, client, facade_on,
+                                                         monkeypatch):
+        """Il vient d'une plateforme tierce : il informe, il ne commande pas. La réunion
+        redevient un fichier audio ordinaire, sans échec."""
+        vu = self._capture(monkeypatch)
+        r = client.post("/v1/audio/ingest", headers=_auth(self._runner(app)),
+                        data={**_wav(), "provider": "meet",
+                              "participants_hint": "pas du json"},
+                        content_type="multipart/form-data")
+        assert r.status_code in (200, 202)
+        assert "speaker_hint" not in vu
+
+    def test_un_echec_sur_les_NOMS_garde_la_fourchette(self, app, client, facade_on,
+                                                       monkeypatch):
+        """Le nombre de voix empêche la sur-segmentation ; les noms ne sont qu'un confort.
+        Les enchaîner dans un seul essai faisait perdre le premier quand le second ratait."""
+        import json as _json
+        vu = self._capture(monkeypatch)
+        client.post("/v1/audio/ingest", headers=_auth(self._runner(app)),
+                    data={**_wav(), "provider": "meet",
+                          "participants_hint": _json.dumps({"names": ["Alice"], "count": 2})},
+                    content_type="multipart/form-data")
+        # `_FakeFS` n'a pas `save_json` : le semis des noms échoue, la fourchette reste.
+        assert vu.get("speaker_hint") == {"min": 2, "max": 2}
+
+    def test_un_jeton_ORDINAIRE_ne_peut_PAS_semer_d_indice(self, app, client, facade_on,
+                                                           op_token, monkeypatch):
+        import json as _json
+        vu = self._capture(monkeypatch)
+        client.post("/v1/audio/ingest", headers=_auth(op_token),
+                    data={**_wav(), "provider": "meet",
+                          "participants_hint": _json.dumps({"count": 5})},
+                    content_type="multipart/form-data")
+        assert "speaker_hint" not in vu
 
 
 class TestIngest:
@@ -291,6 +439,67 @@ class TestIngest:
         assert r2.status_code == 422  # re-tenté, pas coincé
 
 
+class TestArretAuWorkflowHumain:
+    """DÉCISION UTILISATEUR (2026-07-29) : une réunion est une AUTRE façon d'amener l'audio à
+    l'étape 1 — le job s'arrête AU MÊME POINT qu'un upload, et le workflow humain reprend la
+    main. C'est là que les livrables gagnent les vrais noms.
+
+    ⚠ La règle n'était appliquée qu'au RATTACHEMENT (bot sur job planifié). Le chemin
+    post-réunion (Meet, Teams, Zoom Cloud) déroulait tout le pipeline sans jamais s'arrêter —
+    constaté le 2026-08-01 sur une vraie réunion Meet, partie au résumé sans que personne
+    ait pu nommer les locuteurs.
+    """
+
+    def _wire(self, monkeypatch, *, humain: bool):
+        lance = {"pipeline": False}
+        _wire_ingest(monkeypatch)
+
+        class _Prof:
+            id = "reunion"
+            requires_summary = humain
+            requires_context = "none"
+            requires_participants = "none"
+            requires_speaker_validation = "none"
+            requires_lexicon = "none"
+        monkeypatch.setattr(facade_api.profiles, "resolve_request",
+                            lambda pid, mode: (_Prof(), mode or "quality"))
+
+        class _Exec:
+            def submit_process(self, *a, **k):
+                lance["pipeline"] = True
+                return {"accepted": True, "position": 1}
+        monkeypatch.setattr(facade_api, "get_job_executor", lambda: _Exec())
+        return lance
+
+    def test_une_REUNION_s_arrete_pour_l_humain(self, client, facade_on, op_token, monkeypatch):
+        lance = self._wire(monkeypatch, humain=True)
+        r = client.post("/v1/audio/ingest", headers=_auth(op_token),
+                        data={**_wav(), "provider": "meet"},
+                        content_type="multipart/form-data")
+        assert r.status_code in (200, 202)
+        assert r.get_json().get("awaiting_human") is True
+        assert not lance["pipeline"], "le pipeline est parti sans validation humaine"
+
+    def test_un_profil_SANS_etape_humaine_part_tout_seul(self, client, facade_on, op_token,
+                                                         monkeypatch):
+        """Un profil qui n'attend rien de l'humain (SRT express) ne doit PAS attendre : ce
+        serait un job bloqué que personne ne viendra débloquer."""
+        lance = self._wire(monkeypatch, humain=False)
+        client.post("/v1/audio/ingest", headers=_auth(op_token),
+                    data={**_wav(), "provider": "meet"},
+                    content_type="multipart/form-data")
+        assert lance["pipeline"]
+
+    def test_un_upload_ORDINAIRE_n_est_pas_concerne(self, client, facade_on, op_token,
+                                                    monkeypatch):
+        """Sans `provider`, ce n'est pas une réunion : la façade sert aussi de dépôt direct
+        (micro, intégration tierce), qui attend un traitement, pas un wizard."""
+        lance = self._wire(monkeypatch, humain=True)
+        client.post("/v1/audio/ingest", headers=_auth(op_token), data=_wav(),
+                    content_type="multipart/form-data")
+        assert lance["pipeline"]
+
+
 class TestIngestMeetingDefaults:
     """Vague 1 du plan UI_REUNIONS (§8) — D6 : un dépôt qui déclare un `provider` est une
     réunion → défaut DIARISANT (`quality`), plus jamais le `fast` implicite ; l'appelant
@@ -301,7 +510,14 @@ class TestIngestMeetingDefaults:
         _wire_ingest(monkeypatch)
 
         class _Prof:
+            # Profil sans étape humaine : ces tests portent sur le MODE choisi, pas sur
+            # l'arrêt au résumé de contrôle (couvert par TestArretAuWorkflowHumain).
             id = "capture"
+            requires_summary = False
+            requires_context = "none"
+            requires_participants = "none"
+            requires_speaker_validation = "none"
+            requires_lexicon = "none"
 
         def _resolve(pid, mode):
             captured["profile_id"], captured["mode"] = pid, mode

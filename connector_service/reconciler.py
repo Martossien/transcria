@@ -72,6 +72,12 @@ class ProviderReconciler:
                 audio, filename, idempotency_key=key,
                 provider=occurrence.provider,
                 external_meeting_id=occurrence.external_occurrence_id,
+                # `organizer` porte l'adresse : c'est elle qui rattache le compte rendu à
+                # son organisateur plutôt qu'au compte de service déposant.
+                owner_email=occurrence.organizer,
+                # Ce que la plateforme sait des participants — utile seulement quand l'audio
+                # est MIXÉ (Meet) : les connecteurs à pistes envoient un manifeste, plus riche.
+                participants_hint=getattr(occurrence, "participants_hint", None),
             )
             seen.add(key)
             outcomes.append(ReconcileOutcome(dedup_key=key, action="imported", result=result))

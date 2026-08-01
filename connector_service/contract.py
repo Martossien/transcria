@@ -39,6 +39,10 @@ class ExternalMeetingOccurrence:
     organizer: str | None = None
     start_time: str | None = None      # ISO 8601 UTC
     end_time: str | None = None
+    # Ce que la plateforme sait des participants quand l'audio est MIXÉ : `{"names": [...],
+    # "count": N}`. À NE PAS confondre avec le manifeste des connecteurs à pistes — celui-ci
+    # remplace la diarisation, celui-là la guide (cf. transcria/ingestion/participants_hint).
+    participants_hint: dict | None = None
 
 
 @dataclass(frozen=True)

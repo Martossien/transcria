@@ -147,24 +147,65 @@
               {{ _('Manque :') }} {{ vue.missing|join(', ') }}
             </div>
           {% endif %}
-          {% if meetings_enabled and c.id in claim_platforms %}
+          {% if meetings_enabled and c.id in credential_platforms %}
           {# Saisie par l'INTERFACE (« l'admin ne touche que l'interface ») : stockée en
-             config (secrets masqués), remise aux exécutants PAR LE CLAIM — l'env machine
-             du runner reste un repli. Vider un champ retire la clé. #}
-          <form method="POST" action="/admin/connecteurs/{{ c.id }}/credentials" class="small mb-2">
+             config (secrets masqués). Remise aux exécutants PAR LE CLAIM pour les
+             plateformes à bot ; lue sur place par le portail pour Teams/Meet. Dans les
+             deux cas l'env machine reste un REPLI. Vider un champ retire la clé. #}
+          <form method="POST" action="/admin/connecteurs/{{ c.id }}/credentials" class="small mb-2"
+                enctype="multipart/form-data">
             {% for champ in c.requires %}
             <div class="mb-1">
               <label class="form-label mb-0" for="cred-{{ c.id }}-{{ champ.key }}">
                 <code>{{ champ.key }}</code> <span class="text-muted">— {{ champ.label }}</span>
                 {% if champ.secret %}<i class="bi bi-key text-warning" title="{{ _('Secret : jamais réaffiché') }}"></i>{% endif %}
               </label>
+              {% if champ.kind == 'json_file' %}
+              {# Identité livrée sous forme de FICHIER : on le téléverse plutôt que d'en
+                 coller le contenu — la clé privée est déposée en 0600 hors configuration,
+                 seul son chemin est stocké. Le champ texte reste disponible dessous pour
+                 désigner un fichier déjà posé sur la machine. #}
+              <input class="form-control form-control-sm" type="file" accept=".json,application/json"
+                     id="cred-{{ c.id }}-{{ champ.key }}" name="{{ champ.key }}">
+              {% if platform_env.get(champ.key) %}
+              <div class="form-text">
+                {% if platform_env.get(champ.key).startswith('{') %}
+                  {{ _('Contenu enregistré directement en configuration. Téléverser le fichier le remplacera par un dépôt en accès restreint.') }}
+                {% else %}
+                  {{ _('Fichier en place :') }} <code>{{ platform_env.get(champ.key) }}</code>
+                {% endif %}
+              </div>
+              {% endif %}
+              <input class="form-control form-control-sm mt-1" type="text" autocomplete="off"
+                     name="{{ champ.key }}" value=""
+                     placeholder="{{ _('…ou chemin d’un fichier déjà présent sur le serveur') }}">
+              {% if platform_env.get(champ.key) %}
+              {# Laisser les deux champs vides CONSERVE l'identité en place : le retrait doit
+                 donc être demandé, sans quoi il n'aurait aucun moyen de s'exprimer. #}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1"
+                       name="{{ champ.key }}__clear" id="clear-{{ c.id }}-{{ champ.key }}">
+                <label class="form-check-label text-muted" for="clear-{{ c.id }}-{{ champ.key }}">
+                  {{ _('Retirer cette identité') }}
+                </label>
+              </div>
+              {% endif %}
+              {% else %}
               <input class="form-control form-control-sm" id="cred-{{ c.id }}-{{ champ.key }}"
                      name="{{ champ.key }}" autocomplete="off"
                      type="{{ 'password' if champ.secret else 'text' }}"
                      value="{{ '********' if champ.secret and platform_env.get(champ.key) else platform_env.get(champ.key, '') }}">
+              {% endif %}
             </div>
             {% endfor %}
             <button class="btn btn-sm btn-outline-primary">{{ _('Enregistrer les identités') }}</button>
+            <div class="form-text">
+              {% if c.id in claim_platforms %}
+                {{ _('Remises aux exécutants au prochain claim.') }}
+              {% else %}
+                {{ _("Lues par le portail. La variable d'environnement de même nom reste un repli.") }}
+              {% endif %}
+            </div>
           </form>
           {% else %}
           <ul class="list-unstyled small mb-2">
@@ -179,6 +220,113 @@
             {% endfor %}
           </ul>
           {% endif %}
+          {# PANNEAU MEET — la seule fiche où l'admin doit DÉSIGNER des réunions : Meet ne
+             met pas de bot dans la salle, il faut donc dire lesquelles surveiller. Ce que
+             l'on écrit ici est une INTENTION : le portail n'appelle jamais Google (il
+             n'importe pas le service connecteur), c'est le service Meet qui s'y conforme. #}
+          {% if c.id == 'meet' and meetings_enabled %}
+          <div class="border rounded p-2 mb-2 bg-body-tertiary">
+            <div class="fw-semibold small mb-1">{{ _('Couverture Meet') }}</div>
+
+            {% if not meet_status.known %}
+              <div class="small text-warning mb-2">
+                <i class="bi bi-exclamation-triangle"></i>
+                {{ _("Le service Meet n'a jamais rendu compte — vérifier qu'il tourne (transcria-meet-poller).") }}
+              </div>
+            {% elif meet_status.stale %}
+              <div class="small text-danger mb-2">
+                <i class="bi bi-exclamation-octagon"></i>
+                {{ _('Service SILENCIEUX depuis %(t)s — il est probablement arrêté.', t=meet_status.updated_at) }}
+              </div>
+            {% else %}
+              <div class="small text-success mb-2">
+                <i class="bi bi-check-circle"></i>
+                {{ _('Service actif (%(n)s tours).', n=meet_status.cycles) }}
+              </div>
+            {% endif %}
+
+            {% for probleme in meet_status.get('problems', []) %}
+              <div class="small text-danger">{{ _('Non surveillée :') }} {{ probleme }}</div>
+            {% endfor %}
+
+            {# LE MODÈLE PRINCIPAL : un abonnement par PERSONNE couvre toutes ses réunions.
+               La liste de salles, en dessous, n'est plus qu'un complément pour ce que
+               personne n'« organise » (salle physique, canal permanent). #}
+            <div class="small mb-2">
+              {% set _users = meet_status.get('watched_users', []) %}
+              {% if _users %}
+                <i class="bi bi-people-fill text-success"></i>
+                {{ _('%(n)s utilisateur(s) couvert(s) — toutes leurs réunions sont ingérées, sans rien déclarer.', n=_users|length) }}
+                <details class="mt-1">
+                  <summary class="text-muted">{{ _('voir les personnes') }}</summary>
+                  <ul class="list-unstyled ms-3 mt-1 mb-0">
+                    {% for adresse in _users %}<li><code>{{ adresse }}</code></li>{% endfor %}
+                  </ul>
+                </details>
+              {% else %}
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                {{ _("Aucun utilisateur couvert — vérifier que des comptes du portail portent une adresse du domaine Meet (c'est elle qui déclenche l'abonnement).") }}
+              {% endif %}
+            </div>
+
+            {% if meet_status.get('auto_recording') %}
+            <div class="small text-success mb-2">
+              <i class="bi bi-record-circle"></i>
+              {{ _('%(n)s réunion(s) à venir préparée(s) depuis les agendas : elles s\'enregistreront seules.', n=meet_status['auto_recording']|length) }}
+            </div>
+            {% endif %}
+
+            <div class="fw-semibold small mb-1 mt-3">{{ _('Salles particulières (complément)') }}</div>
+            <div class="form-text mb-1">
+              {{ _("Pour ce que personne n'organise : une salle de réunion physique, un canal permanent. Les réunions ordinaires des utilisateurs couverts n'ont PAS à figurer ici.") }}
+            </div>
+            <ul class="list-unstyled small mb-2">
+              {% for reunion in meet_spaces %}
+              <li class="d-flex align-items-center gap-2">
+                {% if reunion in meet_status.get('watched', []) %}
+                  <i class="bi bi-broadcast text-success" title="{{ _('Abonnement actif') }}"></i>
+                {% else %}
+                  <i class="bi bi-hourglass-split text-muted" title="{{ _('Abonnement pas encore posé') }}"></i>
+                {% endif %}
+                {# Surveillée SANS enregistrement automatique = un compte rendu qui dépend
+                   encore d'un humain pensant à cliquer « Enregistrer ». La distinction doit
+                   sauter aux yeux, sinon la page promet une automatisation qu'elle n'a pas. #}
+                {% if reunion in meet_status.get('auto_recording', []) %}
+                  <i class="bi bi-record-circle text-danger" title="{{ _("S'enregistre automatiquement") }}"></i>
+                {% else %}
+                  <i class="bi bi-hand-index text-warning" title="{{ _('Enregistrement à lancer À LA MAIN par un participant') }}"></i>
+                {% endif %}
+                <code>{{ reunion }}</code>
+                <form method="POST" action="/admin/connecteurs/meet/spaces" class="ms-auto">
+                  <input type="hidden" name="remove" value="{{ reunion }}">
+                  <button class="btn btn-sm btn-link text-danger p-0">{{ _('retirer') }}</button>
+                </form>
+              </li>
+              {% else %}
+              <li class="text-muted">{{ _('Aucune salle particulière déclarée.') }}</li>
+              {% endfor %}
+            </ul>
+
+            <form method="POST" action="/admin/connecteurs/meet/spaces" class="d-flex gap-2">
+              <input class="form-control form-control-sm" name="meeting"
+                     placeholder="{{ _('https://meet.google.com/abc-mnop-xyz') }}">
+              <button class="btn btn-sm btn-outline-primary text-nowrap">{{ _('Surveiller') }}</button>
+            </form>
+            <div class="form-text">
+              {{ _("L'abonnement est posé par le service au tour suivant, pas à l'instant du clic. La réunion est aussi réglée pour s'ENREGISTRER SEULE — Meet prévient les participants, comme toujours.") }}
+            </div>
+
+            {% if meet_status.get('last_jobs') %}
+            <div class="small mt-2">
+              {{ _('Derniers comptes rendus importés :') }}
+              {% for job in meet_status['last_jobs'] %}
+                <a href="/jobs/{{ job }}"><code>{{ job[:8] }}</code></a>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+
           {# Test de connexion : disponible dès que la fiche est testable — les identités
              viennent de l'interface (plateformes du runner) OU de l'environnement du
              service connecteur (Teams/Meet), le test lit les deux. #}

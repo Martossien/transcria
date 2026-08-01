@@ -25,7 +25,7 @@ from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, Le
 from transcria.context.meeting_context import MeetingContextManager
 from transcria.context.meeting_type_catalog import localized_type_display, meeting_type_names, type_specific_fields
 from transcria.context.meeting_type_store import MeetingTypeStore
-from transcria.context.participants import ParticipantsManager
+from transcria.context.participants import PLATFORM_SOURCE, ParticipantsManager
 from transcria.diagnostics.system_status import get_system_status
 from transcria.i18n import select_locale
 from transcria.ingestion.manifest import parse_participants_manifest
@@ -678,6 +678,12 @@ def job_wizard(job_id: str):
         meeting_session=sessions_for_jobs([job]).get(job.id),
         synthese_prefill=synthese_prefill,
         participants=participants,
+        # Personnes CONSTATÉES par la plateforme (Meet). Proposées à la validation des
+        # locuteurs, jamais attribuées d'office : sur un audio MIXÉ, rien ne dit quelle voix
+        # est laquelle — deux noms pour deux voix, c'est une chance sur deux de se tromper,
+        # et un nom faux est pire qu'une étiquette honnête.
+        platform_names=[p["name"] for p in participants
+                        if p.get("source") == PLATFORM_SOURCE and p.get("name")],
         lexicon=lexicon,
         central_lexicons=central_lexicons,
         central_lexicon_display=central_lexicon_display,

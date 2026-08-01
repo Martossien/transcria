@@ -114,7 +114,50 @@ def test_drive_fetcher_telecharge_par_file_id():
     art = RemoteArtifact(artifact_id="rec-1", storage_uri="gdrive://drive-1",
                          media_type="video/mp4", artifact_type="recording", auth_token="GTOK")
     data, name = asyncio.run(fetcher.fetch(art))
-    assert data == b"MEET-AUDIO" and name == "drive-1"
+    # Le NOM DISTANT devient le titre du job : sans lui, l'utilisateur voit un identifiant
+    # Drive opaque dans sa liste. La session factice ne rend pas de métadonnées → repli sur
+    # l'identifiant, avec l'extension déduite du type de média (sans elle, la détection de
+    # conteneur échoue à l'ingestion).
+    assert data == b"MEET-AUDIO" and name == "drive-1.mp4"
     call = sess.calls[0]
     assert "/drive/v3/files/drive-1?alt=media" in call["url"]
     assert call["headers"]["Authorization"] == "Bearer GTOK"
+
+
+def test_drive_fetcher_utilise_le_NOM_DE_LA_PLATEFORME():
+    """Meet nomme ses enregistrements de façon lisible (« abc-mnop-xyz (2026-08-01 13:24
+    GMT) ») : c'est CE nom qui devient le titre du job. Le jeter pour un identifiant Drive
+    rendait la liste de jobs illisible — la chaîne marchait, le résultat était inutilisable."""
+    class _SessionNommee(_FakeSession):
+        def get(self, url, headers, timeout):
+            self.calls.append({"url": url, "headers": headers})
+            if "fields=name" in url:
+                class _R:
+                    @staticmethod
+                    def json():
+                        return {"name": "abc-mnop-xyz (2026-08-01 13:24 GMT)"}
+                return _R()
+            return _FakeResp(self._content)
+
+    fetcher = GoogleDriveFetcher(session=_SessionNommee(b"X"))
+    art = RemoteArtifact(artifact_id="rec-1", storage_uri="gdrive://drive-1",
+                         media_type="video/mp4", artifact_type="recording", auth_token="T")
+    assert asyncio.run(fetcher.fetch(art))[1] == "abc-mnop-xyz (2026-08-01 13:24 GMT).mp4"
+
+
+def test_drive_fetcher_un_nom_avec_SEPARATEUR_ne_decide_pas_d_un_chemin():
+    """Un nom vient d'un service tiers : le laisser porter des « / » lui donnerait voix au
+    chapitre sur l'arborescence du serveur."""
+    from connector_service.fetchers import drive_filename
+    assert drive_filename("../../etc/passwd", "id", "video/mp4", {"video/mp4": ".mp4"}) \
+        == "..-..-etc-passwd.mp4"   # aplati : plus aucun segment de chemin
+
+
+def test_drive_fetcher_sans_type_connu_ne_fabrique_PAS_d_extension():
+    """Inventer « .mp4 » sur un type inconnu tromperait la détection en aval : mieux vaut
+    aucun suffixe qu'un faux."""
+    fetcher = GoogleDriveFetcher(session=_FakeSession(b"X"))
+    art = RemoteArtifact(artifact_id="rec-1", storage_uri="gdrive://drive-9",
+                         media_type="application/octet-stream", artifact_type="recording",
+                         auth_token="T")
+    assert asyncio.run(fetcher.fetch(art))[1] == "drive-9"

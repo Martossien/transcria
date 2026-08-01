@@ -276,7 +276,7 @@ Validé contre une **vraie réunion Zoom**, avec un compte **gratuit** :
 | Authentification | `AUTHRET_SUCCESS` |
 | Entrée en réunion, micro et caméra coupés | oui, aucun son émis |
 | Audio par participant | 9879 frames, crête 32734/32767, 4226 sonores |
-| **Locuteurs nommés** | oui — « Martos Martossien », pas un identifiant de flux |
+| **Locuteurs nommés** | oui — « Bob Morane », pas un identifiant de flux |
 | Transcription bout en bout | 29 segments attribués |
 | Code de sortie | `0` |
 

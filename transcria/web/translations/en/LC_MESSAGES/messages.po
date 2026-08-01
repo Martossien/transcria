@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 21:49+0200\n"
+"POT-Creation-Date: 2026-08-01 22:28+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -388,9 +388,9 @@ msgid "Finalisation…"
 msgstr "Finalizing…"
 
 #: transcria/i18n/js_catalog.py:60
-#: transcria/web/templates/wizard/_step_participants.html:115
-#: transcria/web/templates/wizard/_step_participants.html:140
-#: transcria/web/templates/wizard/_step_participants.html:163
+#: transcria/web/templates/wizard/_step_participants.html:129
+#: transcria/web/templates/wizard/_step_participants.html:154
+#: transcria/web/templates/wizard/_step_participants.html:177
 msgid "Fonction"
 msgstr "Role"
 
@@ -460,9 +460,9 @@ msgstr "Central glossary: %(name)s"
 #: transcria/web/templates/central_lexicons.html:18
 #: transcria/web/templates/schedule.html:139
 #: transcria/web/templates/schedule.html:195
-#: transcria/web/templates/wizard/_step_participants.html:109
-#: transcria/web/templates/wizard/_step_participants.html:139
-#: transcria/web/templates/wizard/_step_participants.html:162
+#: transcria/web/templates/wizard/_step_participants.html:123
+#: transcria/web/templates/wizard/_step_participants.html:153
+#: transcria/web/templates/wizard/_step_participants.html:176
 msgid "Nom"
 msgstr "Name"
 
@@ -529,7 +529,7 @@ msgid "Réponse serveur invalide."
 msgstr "Invalid server response."
 
 #: transcria/i18n/js_catalog.py:89
-#: transcria/web/templates/wizard/_step_participants.html:116
+#: transcria/web/templates/wizard/_step_participants.html:130
 msgid "Rôle dans la réunion"
 msgstr "Role in the meeting"
 
@@ -1605,158 +1605,181 @@ msgstr "Generation failed: %(e)s"
 msgid "Voix désactivée."
 msgstr "Voice disabled."
 
-#: transcria/web/admin_routes.py:152 transcria/web/admin_routes.py:211
+#: transcria/web/admin_routes.py:166 transcria/web/admin_routes.py:225
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s validation error(s). Save cancelled."
 
-#: transcria/web/admin_routes.py:156
+#: transcria/web/admin_routes.py:170
 msgid "Réglages sauvegardés."
 msgstr "Settings saved."
 
-#: transcria/web/admin_routes.py:161
+#: transcria/web/admin_routes.py:175
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Identity backend changed: restart the service to apply it (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:187
+#: transcria/web/admin_routes.py:201
 msgid "Aucun prompt modifié."
 msgstr "No prompt modified."
 
-#: transcria/web/admin_routes.py:194
+#: transcria/web/admin_routes.py:208
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Invalid YAML: %(e)s"
 
-#: transcria/web/admin_routes.py:198
+#: transcria/web/admin_routes.py:212
 msgid "La configuration doit être un objet YAML racine."
 msgstr "The configuration must be a root YAML object."
 
-#: transcria/web/admin_routes.py:214
+#: transcria/web/admin_routes.py:228
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration saved to %(p)s."
 
-#: transcria/web/admin_routes.py:263
+#: transcria/web/admin_routes.py:277
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Scheduled backup enabled (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:268
+#: transcria/web/admin_routes.py:282
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Scheduled backup disabled."
 
-#: transcria/web/admin_routes.py:270
+#: transcria/web/admin_routes.py:284
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Scheduling failed: %(e)s"
 
-#: transcria/web/admin_routes.py:284
+#: transcria/web/admin_routes.py:298
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation required: restoring replaces the data and restarts the service."
 
-#: transcria/web/admin_routes.py:287
+#: transcria/web/admin_routes.py:301
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "The re-entered name does not match the archive — restore cancelled."
 
-#: transcria/web/admin_routes.py:295
+#: transcria/web/admin_routes.py:309
 msgid "Archive invalide — restauration refusée : "
 msgstr "Invalid archive — restore denied: "
 
-#: transcria/web/admin_routes.py:307
+#: transcria/web/admin_routes.py:321
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restore started. The service will stop, restore, then restart — sign back in within a minute or so."
 
-#: transcria/web/admin_routes.py:310
+#: transcria/web/admin_routes.py:324
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:424
+#: transcria/web/admin_routes.py:433
+#, python-format
+msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
+msgstr "Meeting removed: %(m)s — its subscription is left in place until it expires (7 days)."
+
+#: transcria/web/admin_routes.py:437
+#, python-format
+msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
+msgstr "Meeting added: %(m)s — the service will create the subscription on its next cycle."
+
+#: transcria/web/admin_routes.py:440
+msgid "Cette réunion est déjà surveillée."
+msgstr "This meeting is already being watched."
+
+#: transcria/web/admin_routes.py:442
+msgid "Aucun lien de réunion fourni."
+msgstr "No meeting link provided."
+
+#: transcria/web/admin_routes.py:515
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "%(id)s test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:443
+#: transcria/web/admin_routes.py:534
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Zoom test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:483
+#: transcria/web/admin_routes.py:564
+#, python-format
+msgid "Fichier « %(label)s » refusé : %(raison)s"
+msgstr "“%(label)s” file rejected: %(raison)s"
+
+#: transcria/web/admin_routes.py:601
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "“%(name)s” credentials saved — handed to runners at the next claim."
 
-#: transcria/web/admin_routes.py:484
+#: transcria/web/admin_routes.py:602
 msgid "Aucun changement."
 msgstr "No change."
 
-#: transcria/web/admin_routes.py:502
+#: transcria/web/admin_routes.py:620
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Enable the feature first (“Enable” button)."
 
-#: transcria/web/admin_routes.py:507
+#: transcria/web/admin_routes.py:625
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Invalid runner name (letters/digits/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:510
+#: transcria/web/admin_routes.py:628
 msgid "URL du portail invalide — celle que la machine DISTANTE peut joindre."
 msgstr "Invalid portal URL — use the one the REMOTE machine can reach."
 
-#: transcria/web/admin_routes.py:514
+#: transcria/web/admin_routes.py:632
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Service account missing — use the “Enable” button first."
 
-#: transcria/web/admin_routes.py:533
+#: transcria/web/admin_routes.py:651
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Runner “%(name)s” revoked."
 
-#: transcria/web/admin_routes.py:550
+#: transcria/web/admin_routes.py:668
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:555
+#: transcria/web/admin_routes.py:673
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:558
+#: transcria/web/admin_routes.py:676
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:572
+#: transcria/web/admin_routes.py:690
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:581
+#: transcria/web/admin_routes.py:699
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:584
+#: transcria/web/admin_routes.py:702
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:586
+#: transcria/web/admin_routes.py:704
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:609
+#: transcria/web/admin_routes.py:727
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:643
+#: transcria/web/admin_routes.py:761
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:648
+#: transcria/web/admin_routes.py:766
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:654
+#: transcria/web/admin_routes.py:772
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2467,7 +2490,7 @@ msgstr "Telephone-type bandwidth detected (codec)."
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:795
+#: transcria/web/pages_routes.py:801
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -2963,33 +2986,145 @@ msgstr "All details provided"
 msgid "Manque :"
 msgstr "Disk:"
 
-#: transcria/web/templates/admin_connectors.html:159
+#: transcria/web/templates/admin_connectors.html:161
 msgid "Secret : jamais réaffiché"
 msgstr "Secret: never shown again"
 
-#: transcria/web/templates/admin_connectors.html:167
+#: transcria/web/templates/admin_connectors.html:173
+msgid "Contenu enregistré directement en configuration. Téléverser le fichier le remplacera par un dépôt en accès restreint."
+msgstr "Contents stored directly in the configuration. Uploading the file replaces it with a restricted-access copy."
+
+#: transcria/web/templates/admin_connectors.html:175
+msgid "Fichier en place :"
+msgstr "File in place:"
+
+#: transcria/web/templates/admin_connectors.html:181
+msgid "…ou chemin d’un fichier déjà présent sur le serveur"
+msgstr "…or path to a file already on the server"
+
+#: transcria/web/templates/admin_connectors.html:189
+msgid "Retirer cette identité"
+msgstr "Remove this credential"
+
+#: transcria/web/templates/admin_connectors.html:201
 msgid "Enregistrer les identités"
 msgstr "Save credentials"
 
-#: transcria/web/templates/admin_connectors.html:176
+#: transcria/web/templates/admin_connectors.html:204
+msgid "Remises aux exécutants au prochain claim."
+msgstr "Handed to runners at the next claim."
+
+#: transcria/web/templates/admin_connectors.html:206
+msgid "Lues par le portail. La variable d'environnement de même nom reste un repli."
+msgstr "Read by the portal. The environment variable of the same name remains a fallback."
+
+#: transcria/web/templates/admin_connectors.html:217
 msgid "Secret : ne jamais commiter"
 msgstr "Secret: never commit"
 
-#: transcria/web/templates/admin_connectors.html:187
+#: transcria/web/templates/admin_connectors.html:229
+msgid "Couverture Meet"
+msgstr "Meet coverage"
+
+#: transcria/web/templates/admin_connectors.html:234
+msgid "Le service Meet n'a jamais rendu compte — vérifier qu'il tourne (transcria-meet-poller)."
+msgstr "The Meet service has never reported — check that it is running (transcria-meet-poller)."
+
+#: transcria/web/templates/admin_connectors.html:239
+#, python-format
+msgid "Service SILENCIEUX depuis %(t)s — il est probablement arrêté."
+msgstr "Service SILENT since %(t)s — it has most likely stopped."
+
+#: transcria/web/templates/admin_connectors.html:244
+#, python-format
+msgid "Service actif (%(n)s tours)."
+msgstr "Service running (%(n)s cycles)."
+
+#: transcria/web/templates/admin_connectors.html:249
+msgid "Non surveillée :"
+msgstr "Not watched:"
+
+#: transcria/web/templates/admin_connectors.html:259
+#, python-format
+msgid "%(n)s utilisateur(s) couvert(s) — toutes leurs réunions sont ingérées, sans rien déclarer."
+msgstr "%(n)s user(s) covered — all their meetings are ingested, nothing to declare."
+
+#: transcria/web/templates/admin_connectors.html:261
+msgid "voir les personnes"
+msgstr "show people"
+
+#: transcria/web/templates/admin_connectors.html:268
+msgid "Aucun utilisateur couvert — vérifier que des comptes du portail portent une adresse du domaine Meet (c'est elle qui déclenche l'abonnement)."
+msgstr "No user covered — check that portal accounts carry an address in the Meet domain (that is what triggers the subscription)."
+
+#: transcria/web/templates/admin_connectors.html:275
+#, python-format
+msgid "%(n)s réunion(s) à venir préparée(s) depuis les agendas : elles s'enregistreront seules."
+msgstr "%(n)s upcoming meeting(s) prepared from calendars: they will record themselves."
+
+#: transcria/web/templates/admin_connectors.html:279
+msgid "Salles particulières (complément)"
+msgstr "Specific rooms (supplementary)"
+
+#: transcria/web/templates/admin_connectors.html:281
+msgid "Pour ce que personne n'organise : une salle de réunion physique, un canal permanent. Les réunions ordinaires des utilisateurs couverts n'ont PAS à figurer ici."
+msgstr "For what nobody organises: a physical meeting room, a permanent channel. Ordinary meetings of covered users do NOT belong here."
+
+#: transcria/web/templates/admin_connectors.html:287
+msgid "Abonnement actif"
+msgstr "Subscription active"
+
+#: transcria/web/templates/admin_connectors.html:289
+msgid "Abonnement pas encore posé"
+msgstr "Subscription not created yet"
+
+#: transcria/web/templates/admin_connectors.html:295
+msgid "S'enregistre automatiquement"
+msgstr "Records automatically"
+
+#: transcria/web/templates/admin_connectors.html:297
+msgid "Enregistrement à lancer À LA MAIN par un participant"
+msgstr "Recording must be started BY HAND by a participant"
+
+#: transcria/web/templates/admin_connectors.html:302
+msgid "retirer"
+msgstr "remove"
+
+#: transcria/web/templates/admin_connectors.html:306
+msgid "Aucune salle particulière déclarée."
+msgstr "No specific room declared."
+
+#: transcria/web/templates/admin_connectors.html:312
+msgid "https://meet.google.com/abc-mnop-xyz"
+msgstr "https://meet.google.com/abc-mnop-xyz"
+
+#: transcria/web/templates/admin_connectors.html:313
+msgid "Surveiller"
+msgstr "Watch"
+
+#: transcria/web/templates/admin_connectors.html:316
+msgid "L'abonnement est posé par le service au tour suivant, pas à l'instant du clic. La réunion est aussi réglée pour s'ENREGISTRER SEULE — Meet prévient les participants, comme toujours."
+msgstr "The subscription is created by the service on its next cycle, not the moment you click. The meeting is also set to RECORD ITSELF — Meet notifies participants, as always."
+
+#: transcria/web/templates/admin_connectors.html:321
+msgid "Derniers comptes rendus importés :"
+msgstr "Latest imported reports:"
+
+#: transcria/web/templates/admin_connectors.html:335
 msgid "Tester la connexion"
 msgstr "Test the connection"
 
-#: transcria/web/templates/admin_connectors.html:192
+#: transcria/web/templates/admin_connectors.html:340
 #, fuzzy
 msgid "Aucun identifiant nécessaire"
 msgstr "Identifier"
 
-#: transcria/web/templates/admin_connectors.html:198
+#: transcria/web/templates/admin_connectors.html:346
 #, fuzzy
 msgid "Marche à suivre"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_connectors.html:213
+#: transcria/web/templates/admin_connectors.html:361
 #, fuzzy
 msgid "Documentation"
 msgstr "Administration"
@@ -4901,8 +5036,8 @@ msgstr "Email"
 
 #: transcria/web/templates/user_form.html:24
 #: transcria/web/templates/users.html:13
-#: transcria/web/templates/wizard/_step_participants.html:141
-#: transcria/web/templates/wizard/_step_participants.html:164
+#: transcria/web/templates/wizard/_step_participants.html:155
+#: transcria/web/templates/wizard/_step_participants.html:178
 msgid "Rôle"
 msgstr "Role"
 
@@ -5236,7 +5371,7 @@ msgstr "Analyze the file"
 
 #: transcria/web/templates/wizard/_step_analysis.html:131
 #: transcria/web/templates/wizard/_step_context.html:190
-#: transcria/web/templates/wizard/_step_participants.html:181
+#: transcria/web/templates/wizard/_step_participants.html:195
 #: transcria/web/templates/wizard/_step_summary.html:110
 msgid "Étapes optionnelles pour ce profil"
 msgstr "Optional steps for this profile"
@@ -5635,65 +5770,73 @@ msgstr "Person name"
 msgid "%(done)s locuteur(s) nommés par la réunion, %(rest)s à valider — la validation reste obligatoire."
 msgstr "%(done)s speaker(s) named by the meeting, %(rest)s left to validate — validation remains required."
 
-#: transcria/web/templates/wizard/_step_participants.html:106
+#: transcria/web/templates/wizard/_step_participants.html:103
+msgid "Personnes vues par la réunion :"
+msgstr "People seen by the meeting:"
+
+#: transcria/web/templates/wizard/_step_participants.html:105
+msgid "commencez à taper dans « Nom » pour les retrouver ; l'outil ne peut pas deviner quelle voix est laquelle sur un enregistrement mixé."
+msgstr "start typing in “Name” to find them; the tool cannot guess which voice is which on a mixed recording."
+
+#: transcria/web/templates/wizard/_step_participants.html:120
 #, python-format
 msgid "%(s)ss, %(n)s interventions"
 msgstr "%(s)ss, %(n)s turns"
 
-#: transcria/web/templates/wizard/_step_participants.html:108
+#: transcria/web/templates/wizard/_step_participants.html:122
 msgid "Écouter des extraits de ce locuteur"
 msgstr "Listen to excerpts of this speaker"
 
-#: transcria/web/templates/wizard/_step_participants.html:112
+#: transcria/web/templates/wizard/_step_participants.html:126
 msgid "Nom proposé par la plateforme de réunion — vérifiez puis validez"
 msgstr "Name suggested by the meeting platform — check then validate"
 
-#: transcria/web/templates/wizard/_step_participants.html:113
+#: transcria/web/templates/wizard/_step_participants.html:127
 #, fuzzy
 msgid "suggéré par la réunion"
 msgstr "Role in the meeting"
 
-#: transcria/web/templates/wizard/_step_participants.html:117
+#: transcria/web/templates/wizard/_step_participants.html:131
 msgid "Genre vocal (modifiable)"
 msgstr "Vocal gender (editable)"
 
-#: transcria/web/templates/wizard/_step_participants.html:118
+#: transcria/web/templates/wizard/_step_participants.html:132
 msgid "Non déterminé"
 msgstr "Undetermined"
 
-#: transcria/web/templates/wizard/_step_participants.html:119
+#: transcria/web/templates/wizard/_step_participants.html:133
 msgid "Féminin ♀"
 msgstr "Female ♀"
 
-#: transcria/web/templates/wizard/_step_participants.html:120
+#: transcria/web/templates/wizard/_step_participants.html:134
 msgid "Masculin ♂"
 msgstr "Male ♂"
 
-#: transcria/web/templates/wizard/_step_participants.html:125
+#: transcria/web/templates/wizard/_step_participants.html:139
 msgid "Suggestion issue des voix enregistrées"
 msgstr "Suggestion from enrolled voices"
 
-#: transcria/web/templates/wizard/_step_participants.html:138
+#: transcria/web/templates/wizard/_step_participants.html:152
 msgid "participant"
 msgstr "participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:142
+#: transcria/web/templates/wizard/_step_participants.html:156
 msgid "Animateur"
 msgstr "Facilitator"
 
-#: transcria/web/templates/wizard/_step_participants.html:161
+#: transcria/web/templates/wizard/_step_participants.html:175
 msgid "suggéré"
 msgstr "suggested"
 
-#: transcria/web/templates/wizard/_step_participants.html:172
+#: transcria/web/templates/wizard/_step_participants.html:186
 msgid "+ Ajouter un participant"
 msgstr "+ Add a participant"
 
-#: transcria/web/templates/wizard/_step_participants.html:174
+#: transcria/web/templates/wizard/_step_participants.html:188
 msgid "Valider participants & locuteurs"
 msgstr "Validate participants & speakers"
 
-#: transcria/web/templates/wizard/_step_participants.html:175
+#: transcria/web/templates/wizard/_step_participants.html:189
 msgid "Validé"
 msgstr "Validated"
 
@@ -5904,4 +6047,10 @@ msgstr "Generate summary"
 
 #~ msgid "Construire : docker build -f Dockerfile.bot -t transcria-bot:latest . (ou renseigner une image GHCR dans runner.yaml)."
 #~ msgstr "Build it: docker build -f Dockerfile.bot -t transcria-bot:latest . (or set a GHCR image in runner.yaml)."
+
+#~ msgid "Réunions surveillées"
+#~ msgstr "Watched meetings"
+
+#~ msgid "Aucune réunion surveillée — aucun enregistrement ne sera importé."
+#~ msgstr "No meeting is being watched — no recording will be imported."
 

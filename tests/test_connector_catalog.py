@@ -7,6 +7,9 @@ jamais passer pour prêt.
 """
 from __future__ import annotations
 
+import copy
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -53,8 +56,8 @@ def test_les_connecteurs_jamais_executes_ne_sont_PAS_prets():
     """Le point d'honnêteté de la page : `is_ready` ne doit refléter que le vérifié."""
     par_id = {c.id: c for c in load_catalog()}
     assert par_id["zoom-sdk"].is_ready
+    assert par_id["meet"].is_ready          # éprouvé de bout en bout le 2026-08-01
     assert not par_id["teams"].is_ready
-    assert not par_id["meet"].is_ready
     assert not par_id["zoom-rtms"].is_ready
 
 
@@ -210,6 +213,55 @@ def test_connecteur_sans_exigence_est_configure_d_office():
 # --------------------------------------------------------------------------- #
 #  La page elle-même
 # --------------------------------------------------------------------------- #
+@pytest.fixture
+def config_isolee(monkeypatch, tmp_path, admin_client):
+    """Configuration ET répertoire d'instance JETABLES, réunions activées.
+
+    Quatre protections, toutes payées par un incident réel :
+
+    · on travaille sur une COPIE du singleton, jamais sur le partagé ;
+    · `get_path` vise `tmp_path` — sinon `save_if_valid` réécrit le VRAI `config.yaml` ;
+    · le singleton, que `save_if_valid` remplace par ce qu'il vient de lire, est rendu ;
+    · `instance_path` vise `tmp_path` — sinon un test de TÉLÉVERSEMENT dépose son fichier
+      dans le répertoire d'instance de la machine, à côté (et sous le même nom que) les
+      identités réelles de l'exploitant. Vécu le 2026-08-01 : un test a écrit sa fausse clé
+      dans `instance/connector_secrets/`, où l'administrateur a déposé la sienne 25 minutes
+      plus tard. Sans dégât cette fois-là — mais l'ordre inverse écrasait la vraie.
+    """
+    from transcria.services.config_service import ConfigService
+
+    origine = ConfigService.get_singleton()
+    cfg = copy.deepcopy(origine)
+    reunions = cfg.setdefault("connectors", {}).setdefault("meetings", {})
+    reunions["enabled"] = True
+    # Identités ET réunions surveillées REMISES À ZÉRO : sans cela, un test hérite de l'état
+    # de la machine et son verdict dépend de ce que l'exploitant a saisi la veille (constaté
+    # deux fois : « la clé ne doit pas être là » échouait parce qu'il venait de la déposer,
+    # puis « aucune réunion surveillée » parce qu'il venait d'en ajouter une).
+    reunions["platform_env"] = {}
+    reunions["meet_spaces"] = []
+    monkeypatch.setattr(ConfigService, "get_singleton", staticmethod(lambda: cfg))
+    monkeypatch.setattr(ConfigService, "get_path",
+                        staticmethod(lambda chemin=None: str(tmp_path / "config.yaml")))
+    monkeypatch.setattr(admin_client.application, "instance_path", str(tmp_path / "instance"))
+    try:
+        yield cfg
+    finally:
+        ConfigService.set_singleton(origine)
+
+
+from transcria.services.config_service import ConfigService  # noqa: E402
+
+
+def _platform_env_ecrit() -> dict:
+    """Ce qui a effectivement ÉTÉ ÉCRIT sur le disque — pas ce que la route a manipulé en
+    mémoire : c'est le fichier de configuration qui survit au redémarrage du portail."""
+    from transcria.services.config_service import ConfigService
+
+    ecrit = yaml.safe_load(Path(ConfigService.get_path()).read_text(encoding="utf-8"))
+    return ((ecrit.get("connectors") or {}).get("meetings") or {}).get("platform_env") or {}
+
+
 class TestPageAdministration:
     """La page n'était couverte par AUCUN test : une faute de gabarit ne se serait vue qu'en
     la chargeant dans un navigateur — c'est-à-dire, en pratique, chez l'exploitant."""
@@ -247,3 +299,152 @@ class TestPageAdministration:
 
     def test_la_page_exige_des_droits_d_administration(self, viewer_client):
         assert viewer_client.get("/admin/connecteurs").status_code in (302, 403)
+
+    @pytest.mark.parametrize("connecteur,champ", [
+        ("zoom-sdk", "ZOOM_CLIENT_ID"),          # remise au runner par le claim
+        ("visio", "LIVEKIT_API_SECRET"),
+        ("meet", "MEET_SERVICE_ACCOUNT_JSON"),   # lu sur place par le portail
+        ("teams", "TEAMS_TENANT_ID"),
+    ])
+    def test_toute_fiche_a_identites_offre_sa_saisie(self, admin_client, config_isolee,
+                                                     connecteur, champ):
+        """Vécu : Meet et Teams affichaient leurs clés en LISTE MORTE, sans champ de saisie —
+        l'administrateur ne pouvait pas les renseigner alors que le bouton « Tester la
+        connexion » de leur propre fiche lit ces valeurs. Le formulaire suit désormais les
+        identités que le PORTAIL consomme, quel que soit le canal de remise."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert f'name="{champ}"' in page, f"{connecteur} : {champ} n'est pas saisissable"
+
+    def test_une_identite_fichier_se_choisit_dans_un_selecteur(self, admin_client, config_isolee):
+        """Une clé privée collée dans un champ texte finit dans `config.yaml` : la fiche doit
+        proposer un SÉLECTEUR de fichier, et le formulaire savoir le transporter."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert 'enctype="multipart/form-data"' in page
+        assert 'type="file"' in page and 'name="MEET_SERVICE_ACCOUNT_JSON"' in page
+
+    def test_une_identite_fichier_se_televerse(self, admin_client, config_isolee, tmp_path):
+        """« L'administrateur ne touche que l'interface » : une clé de compte de service se
+        DÉPOSE. Ce qui atterrit en configuration est le CHEMIN — coller une clé privée dans
+        `config.yaml` (répertoire du dépôt) était la seule voie offerte auparavant."""
+        import io
+        import json as _json
+
+        cle = _json.dumps({"client_email": "svc@x.iam.gserviceaccount.com",
+                           "private_key": "-----BEGIN PRIVATE KEY-----\nk\n"}).encode()
+        reponse = admin_client.post(
+            "/admin/connecteurs/meet/credentials",
+            data={"MEET_SERVICE_ACCOUNT_JSON": (io.BytesIO(cle), "sa.json"),
+                  "MEET_IMPERSONATE_USER": "admin@exemple.test"},
+            content_type="multipart/form-data", follow_redirects=True)
+        assert reponse.status_code == 200
+        depose = _platform_env_ecrit()["MEET_SERVICE_ACCOUNT_JSON"]
+        assert not depose.lstrip().startswith("{"), "la clé privée est en configuration"
+        assert _json.loads(Path(depose).read_text())["client_email"].startswith("svc@")
+        # Et NULLE PART ailleurs : le dépôt doit rester dans l'instance jetable du test.
+        assert Path(depose).is_relative_to(tmp_path)
+
+    def test_un_mauvais_fichier_est_refuse_AVANT_d_etre_enregistre(self, admin_client,
+                                                                   config_isolee):
+        """Le JSON « ID client OAuth » ressemble au bon fichier et se télécharge à deux clics
+        de là : accepté, il ne se trahirait qu'au premier appel réseau."""
+        import io
+        import json as _json
+
+        mauvais = _json.dumps({"installed": {"client_id": "…"}}).encode()
+        page = admin_client.post(
+            "/admin/connecteurs/meet/credentials",
+            data={"MEET_SERVICE_ACCOUNT_JSON": (io.BytesIO(mauvais), "client_secret.json")},
+            content_type="multipart/form-data", follow_redirects=True).get_data(as_text=True)
+        assert "refusé" in page
+        assert "MEET_SERVICE_ACCOUNT_JSON" not in _platform_env_ecrit()
+
+    def test_enregistrer_sans_rechoisir_le_fichier_ne_l_efface_PAS(self, admin_client,
+                                                                   config_isolee):
+        """Un champ de téléversement se renvoie TOUJOURS vide (le navigateur ne repropose pas
+        le fichier choisi) : traiter ce vide comme un retrait effacerait la clé dès qu'on
+        enregistre un champ voisin."""
+        cfg = config_isolee
+        cfg["connectors"]["meetings"]["platform_env"] = {
+            "MEET_SERVICE_ACCOUNT_JSON": "/etc/transcria/sa.json"}
+        admin_client.post("/admin/connecteurs/meet/credentials",
+                          data={"MEET_IMPERSONATE_USER": "admin@exemple.test"},
+                          content_type="multipart/form-data", follow_redirects=True)
+        penv = _platform_env_ecrit()
+        assert penv["MEET_SERVICE_ACCOUNT_JSON"] == "/etc/transcria/sa.json"
+        assert penv["MEET_IMPERSONATE_USER"] == "admin@exemple.test"
+
+    def test_le_retrait_d_une_identite_fichier_reste_possible(self, admin_client,
+                                                              config_isolee):
+        """Corollaire du test précédent : le vide ne retirant plus rien, le retrait doit
+        avoir sa propre commande, sinon une identité posée serait indélébile."""
+        cfg = config_isolee
+        cfg["connectors"]["meetings"]["platform_env"] = {
+            "MEET_SERVICE_ACCOUNT_JSON": "/etc/transcria/sa.json"}
+        admin_client.post("/admin/connecteurs/meet/credentials",
+                          data={"MEET_SERVICE_ACCOUNT_JSON__clear": "1"},
+                          content_type="multipart/form-data", follow_redirects=True)
+        assert "MEET_SERVICE_ACCOUNT_JSON" not in _platform_env_ecrit()
+
+    def test_le_panneau_meet_dit_qu_AUCUN_utilisateur_n_est_couvert(self, admin_client,
+                                                                    config_isolee):
+        """Le modèle principal est l'abonnement par PERSONNE. Sans utilisateur couvert, rien
+        n'est importé — et un panneau muet laisserait croire le connecteur opérationnel."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert "Aucun utilisateur couvert" in page
+        assert "Salles particulières" in page      # le complément, clairement secondaire
+        assert 'name="meeting"' in page
+
+    def test_le_service_jamais_vu_est_DIT(self, admin_client, config_isolee):
+        """Un panneau qui n'affiche que la liste laisserait croire à une surveillance active
+        alors que le service est peut-être arrêté depuis des jours."""
+        page = admin_client.get("/admin/connecteurs").get_data(as_text=True)
+        assert "jamais rendu compte" in page
+
+    def test_ajouter_une_reunion_l_ECRIT_en_configuration(self, admin_client, config_isolee):
+        lien = "https://meet.google.com/abc-mnop-xyz"
+        page = admin_client.post("/admin/connecteurs/meet/spaces", data={"meeting": lien},
+                                 follow_redirects=True).get_data(as_text=True)
+        assert "prochain tour" in page          # l'écran dit que ce n'est PAS immédiat
+        ecrit = yaml.safe_load(Path(ConfigService.get_path()).read_text(encoding="utf-8"))
+        assert ((ecrit["connectors"]["meetings"]["meet_spaces"]) == [lien])
+
+    def test_retirer_une_reunion_la_RETIRE(self, admin_client, config_isolee):
+        lien = "https://meet.google.com/abc-mnop-xyz"
+        config_isolee["connectors"]["meetings"]["meet_spaces"] = [lien]
+        admin_client.post("/admin/connecteurs/meet/spaces", data={"remove": lien},
+                          follow_redirects=True)
+        ecrit = yaml.safe_load(Path(ConfigService.get_path()).read_text(encoding="utf-8"))
+        assert ecrit["connectors"]["meetings"]["meet_spaces"] == []
+
+    def test_une_PORTEE_OAuth_collee_dans_le_champ_est_REFUSEE(self, admin_client,
+                                                                config_isolee):
+        """Vécu : l'administrateur venait d'ajouter une portée dans la console Google et l'a
+        collée ici. Elle est restée en configuration, muette, et rien ne surveillait la
+        réunion qu'on croyait avoir ajoutée."""
+        page = admin_client.post(
+            "/admin/connecteurs/meet/spaces",
+            data={"meeting": "https://www.googleapis.com/auth/meetings.space.settings"},
+            follow_redirects=True).get_data(as_text=True)
+        assert "PORTÉE OAuth" in page
+        # RIEN n'a été écrit : le refus intervient AVANT la sauvegarde, donc le fichier de
+        # configuration n'existe même pas — c'est la preuve la plus nette que la valeur
+        # fautive n'a pas transité par la configuration.
+        assert not Path(ConfigService.get_path()).exists()
+
+    def test_un_doublon_ne_cree_PAS_deux_entrees(self, admin_client, config_isolee):
+        lien = "https://meet.google.com/abc-mnop-xyz"
+        config_isolee["connectors"]["meetings"]["meet_spaces"] = [lien]
+        admin_client.post("/admin/connecteurs/meet/spaces", data={"meeting": lien},
+                          follow_redirects=True)
+        ecrit = yaml.safe_load(Path(ConfigService.get_path()).read_text(encoding="utf-8"))
+        assert ecrit["connectors"]["meetings"]["meet_spaces"] == [lien]
+
+    def test_meet_ne_demande_pas_deux_fois_la_meme_cle(self):
+        """Le catalogue portait DEUX familles de noms pour la même identité
+        (…_SERVICE_ACCOUNT_JSON / …_SERVICE_ACCOUNT_KEY, …_IMPERSONATE_USER /
+        …_DELEGATED_USER) dont une seule était lue : le formulaire réclamait le même secret
+        deux fois."""
+        meet = {c.id: c for c in load_catalog()}["meet"]
+        cles = {champ.key for champ in meet.requires}
+        assert cles == {"MEET_SERVICE_ACCOUNT_JSON", "MEET_IMPERSONATE_USER",
+                        "MEET_PUBSUB_SUBSCRIPTION"}

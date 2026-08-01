@@ -68,6 +68,23 @@ def test_systemd_ecrit_l_unite_et_recharge(tmp_path, monkeypatch):
     assert ["systemctl", "enable", "--now", "transcria-meeting-runner"] in cmds   # DORMANTE, démarrée
 
 
+def test_systemd_pose_AUSSI_le_service_meet(tmp_path, monkeypatch):
+    """Deux unités parce que deux responsabilités : le runner fait ENTRER des bots dans des
+    réunions en cours, le service Meet récupère des enregistrements APRÈS coup. Les fondre
+    donnerait une seule panne à diagnostiquer pour deux causes sans rapport."""
+    import transcria.installer.connectors_phase as mod
+    monkeypatch.setattr(mod, "connectors_deps_complete", lambda p: True)
+    sysd = tmp_path / "systemd"
+    sysd.mkdir()
+    cmds: list = []
+    apply_connectors(_plan(tmp_path, install_systemd=True, systemd_dir=sysd),
+                     console=_Console(), runner=cmds.append)
+    unit = (sysd / "transcria-meet-poller.service").read_text(encoding="utf-8")
+    assert "connector_service.meet_main" in unit
+    assert "WorkingDirectory=" in unit and "PYTHONPATH=" in unit and "TRANSCRIA_REPO_ROOT=" in unit
+    assert ["systemctl", "enable", "--now", "transcria-meet-poller"] in cmds
+
+
 def test_requirements_absent_erreur_actionnable(tmp_path):
     plan = ConnectorsPlan(repo_root=tmp_path / "vide", venv_python=Path("/fake"),
                           config_dir=tmp_path)

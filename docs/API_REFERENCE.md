@@ -141,6 +141,7 @@
 | `/admin/connecteurs` | GET | connexion + Permission.MANAGE_CONFIG | Connecteurs de réunion : check-list vivante, activation en UN clic, exécutants. | `transcria.web.admin_routes` |
 | `/admin/connecteurs/<connector_id>/credentials` | POST | connexion + Permission.MANAGE_CONFIG | Identités de PLATEFORME saisies par l'interface (« l'admin ne touche que | `transcria.web.admin_routes` |
 | `/admin/connecteurs/<connector_id>/test` | POST | connexion + Permission.MANAGE_CONFIG | Bouton « Tester la connexion » — vérifie les identités contre l'AUTHENTIFICATION | `transcria.web.admin_routes` |
+| `/admin/connecteurs/meet/spaces` | POST | connexion + Permission.MANAGE_CONFIG | Réunions Meet à surveiller — ajout/retrait depuis l'interface. | `transcria.web.admin_routes` |
 | `/admin/connecteurs/meetings/toggle` | POST | connexion + Permission.MANAGE_CONFIG | Interrupteur UNIQUE des réunions en ligne — active = auto-provisionnement complet | `transcria.web.admin_routes` |
 | `/admin/connecteurs/runners/<name>/revoke` | POST | connexion + Permission.MANAGE_CONFIG | Révoque PRÉCISÉMENT cet exécutant (son jeton du heartbeat) — son prochain battement | `transcria.web.admin_routes` |
 | `/admin/connecteurs/runners/kit` | POST | connexion + Permission.MANAGE_CONFIG | Génère le kit « exécutant distant » (docs/RUNNER_DISTANT_KIT.md) : un script | `transcria.web.admin_routes` |
@@ -211,9 +212,10 @@
 | `/v1/meetings/<session_id>/events` | POST | — | Événement de vie relayé par le runner claimant (jamais un terminal) — idempotent, | `transcria.web.meetings_api` |
 | `/v1/meetings/<session_id>/result` | POST | — | Issue d'une exécution de bot : mapping des codes 0/1/2/3 par la machine d'états | `transcria.web.meetings_api` |
 | `/v1/meetings/claim` | POST | — | Claim atomique (SKIP LOCKED) des sessions dues — SEUL endroit où la référence de | `transcria.web.meetings_api` |
+| `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 147 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 149 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

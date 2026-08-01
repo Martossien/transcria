@@ -445,7 +445,11 @@ transcria/
     # --- Briques cloud PURES (aucun réseau ici : c'est ce qui les rend testables sans compte) ---
     teams_graph.py          # abonnements Microsoft Graph : construction, durées (max 4320 min), notifications, cycle de vie
     graph_validation.py     # identité de l'émetteur des notifications (`appid` v1 / `azp` v2)
-    meet_events.py          # abonnements Google Workspace Events + lecture CloudEvents (binaire)
+    meet_events.py          # abonnements Google Workspace Events + lecture CloudEvents (binaire) — PUR
+    workspace_events_client.py # RÉSEAU des abonnements : create (validateOnly !), list (filtre OBLIGATOIRE), patch, reactivate
+    meet_api_client.py      # RÉSEAU Meet REST : code de réunion → spaces/… (l'abonnement vise l'ESPACE, pas le code)
+    meet_poller.py          # file Pub/Sub → ingestion ; décide QUOI acquitter (sans objet = acquitté, échec = NON)
+    meet_keeper.py          # exécutant du renouvellement (7 j max ; un abonnement EXPIRÉ est perdu, pas renouvelable)
     pubsub_pull.py          # Pub/Sub en mode PULL (REST) — aucun port entrant ; décide QUOI acquitter
     subscription_renewal.py # règle COMMUNE de renouvellement Teams/Meet (deux politiques)
     subscription_keeper.py  # ordonnanceur qui l'applique (plusieurs abonnements, échecs, délais) — `plan()` pur et synchrone
@@ -818,14 +822,36 @@ centralisés). Règles pour tout agent de codage :
 
 ### Connecteurs de réunion & temps réel (paquet `connector_service/`)
 
-**État au 2026-07-31.** ÉPROUVÉ EN RÉEL et complet de bout en bout (planification →
+**État au 2026-08-01.** ÉPROUVÉ EN RÉEL et complet de bout en bout (planification →
 runner → bot → pistes par participant → suivi en direct → étape 5 → DOCX) sur **Jitsi**,
 **Visio** (LiveKit) et **Zoom** (Meeting SDK, compte gratuit). Bancs de gates AUTOMATISÉS
 sur stacks auto-hébergées pour Jitsi et Visio (`gates/`, 6 scénarios validés jusqu'au
-livrable Word). **Teams / Meet / Zoom RTMS** restent `implemented` : code + CI, jamais
-exécutés en réel — bloqués par des ACHATS (M365, Workspace) et, pour Teams/RTMS, deux URL
-HTTPS publiques ; guides admin prêts (`docs/MEET_TEAMS_ADMIN.md`) et tests de connexion
-câblés. Revue SÉCURITÉ Opus 5 = passage obligé avant mise en service réelle.
+livrable Word).
+
+**Meet : `validated` le 2026-08-01** — chaîne complète éprouvée sur un Workspace réel,
+réunion à deux participants comprise : agenda → salle réglée en auto-enregistrement →
+évènement → Drive → job attribué à l'organisateur → arrêt au workflow humain → DOCX.
+Modules de la voie réseau : `workspace_events_client.py` (abonnements : créer/inventorier/
+renouveler/réactiver/supprimer), `meet_api_client.py` (résoudre un espace depuis un code de
+réunion), `meet_poller.py` (file → ingestion), `meet_keeper.py` (maintien en vie).
+Service supervisé : `transcria-meet-poller.service` (`connector_service.meet_main`), dormant
+tant que la fiche est vide. Outils d'exploitation : `scripts/meet_subscription.py`
+(list/create/keep/pull/delete) et `scripts/meet_ingest.py` (un tour, ou rejeu d'une
+conférence). ⚠ La revue SÉCURITÉ Opus 5 reste un passage obligé avant mise en service réelle.
+
+**Teams / Zoom RTMS** restent `implemented` : code + CI, jamais exécutés en réel — bloqués
+par un ACHAT (M365) et deux URL HTTPS publiques ; guide admin prêt
+(`docs/MEET_TEAMS_ADMIN.md`) et test de connexion câblé. Revue SÉCURITÉ Opus 5 = passage
+obligé avant mise en service réelle.
+
+⚠ **Deux identités Google, deux mécanismes d'autorisation** — la confusion coûte une
+demi-journée : les données d'UTILISATEUR (espaces Meet, Drive de l'organisateur) exigent
+l'impersonation, autorisée par la délégation à l'échelle du domaine (portées
+`meetings.space.readonly` + `drive.readonly`, enregistrées avec l'ID client NUMÉRIQUE) ;
+la file Pub/Sub appartient au PROJET, le compte de service l'interroge en son propre nom,
+autorisé par Cloud IAM (`roles/pubsub.subscriber` sur l'abonnement). Ne JAMAIS mettre
+`pubsub` dans la délégation : Google refuse en bloc toute demande dont une portée n'est pas
+déléguée, et une configuration correcte se met alors à échouer.
 
 **👉 Point d'entrée pour reprendre le chantier : `docs/TEMPS_REEL_REUNIONS.md` § 0 « REPRISE ».**
 Elle dit en une page ce qui est ÉPROUVÉ, ce qui ne l'est pas, ce qui bloque et par quoi continuer
