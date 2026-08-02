@@ -24,6 +24,11 @@ _MACHINE_ENV = (
     "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
     "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET",       # app Meeting SDK (propriété machine)
     "VISIO_API_BASE", "BOT_HIDDEN",               # visio : API séparée (dev) / bot invisible (opt-in)
+    "VISIO_ALLOWED_HOSTS",                        # allowlist des requêtes SORTANTES du bot :
+                                                  # posée sur l'hôte, elle doit ATTEINDRE le
+                                                  # conteneur — sinon la garde y voit une
+                                                  # liste vide et ne borne rien (même oubli
+                                                  # que BOT_IDLE_TIMEOUT_S ci-dessous)
     "BOT_INSECURE",                               # certificat auto-signé (instance interne, bancs locaux)
     "BOT_IDLE_TIMEOUT_S", "BOT_MAX_DURATION_S",   # réglages génériques des bots (vécu : posés
                                                   # au runner mais jamais relayés au conteneur)

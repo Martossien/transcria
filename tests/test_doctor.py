@@ -1053,20 +1053,41 @@ def test_lechec_du_connecteur_prime_sur_lavertissement_federe(app):
     assert doc.check_transport_security(cfg).status == "fail"
 
 
+def _cfg_visio_reel():
+    """Configuration Visio avec les VRAIES clés — lues du catalogue, pas inventées.
+
+    Ma première version de ce test posait `VISIO_LIVEKIT_URL`, une clé qui n'existe pas.
+    Il passait donc en validant l'hypothèse de son auteur pendant que le contrôle, qui
+    cherchait `startswith("VISIO_")`, ne se déclenchait jamais en réel — le connecteur
+    déclare `LIVEKIT_*`. D'où cette fabrique : la donnée fait foi."""
+    from transcria.web.connector_catalog import load_catalog
+
+    visio = next(c for c in load_catalog() if c.id == "visio")
+    return {"connectors": {"meetings": {
+        "enabled": True,
+        "platform_env": {champ.key: "valeur" for champ in visio.requires},
+    }}}
+
+
 def test_visio_configure_sans_allowlist_est_signale(app, monkeypatch):
     """L'allowlist sortante est LA sécurité quand l'adressage ne dit pas si l'on est
     chez soi (un LAN peut être en IP publique). Encore faut-il savoir qu'elle existe :
     un mécanisme facultatif que personne ne découvre ne protège personne."""
     monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
-    cfg = {"connectors": {"meetings": {"enabled": True,
-                                       "platform_env": {"VISIO_LIVEKIT_URL": "wss://x"}}}}
-    assert doc.check_outbound_allowlist(cfg).status == "warn"
+    assert doc.check_outbound_allowlist(_cfg_visio_reel()).status == "warn"
 
 
 def test_visio_avec_allowlist_est_OK(app, monkeypatch):
     monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "visio.exemple.test")
-    cfg = {"connectors": {"meetings": {"enabled": True,
-                                       "platform_env": {"VISIO_LIVEKIT_URL": "wss://x"}}}}
+    assert doc.check_outbound_allowlist(_cfg_visio_reel()).status == "ok"
+
+
+def test_visio_INCOMPLET_ne_declenche_rien(app, monkeypatch):
+    """Des identifiants à moitié saisis ne sont pas un connecteur actif."""
+    monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
+    cfg = _cfg_visio_reel()
+    cle = next(iter(cfg["connectors"]["meetings"]["platform_env"]))
+    del cfg["connectors"]["meetings"]["platform_env"][cle]
     assert doc.check_outbound_allowlist(cfg).status == "ok"
 
 

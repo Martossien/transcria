@@ -286,3 +286,63 @@ class TestUnScriptNeVitPasLaOuLApplicationEcrit:
         with pytest.raises(ScriptRefuse) as exc:
             safe_script_path(str(racine / "p.md"), cfg)
         assert "workflow.prompts_dir" in str(exc.value)
+
+
+# --- Reprise d'audit n°3 : la garde ne regardait que la config COURANTE ------------------
+#
+# Interdire qu'un script vive sous `workflow.prompts_dir` fermait le cas simultané, pas le
+# cas TEMPOREL :
+#   1. `prompts_dir` := <racine autorisée> ; enregistrer un prompt au contenu libre ;
+#   2. remettre `prompts_dir` ailleurs — le fichier, lui, RESTE ;
+#   3. le désigner comme script : la configuration courante ne montre plus aucun
+#      chevauchement, la garde laisse passer.
+#
+# Un fichier persiste ; une configuration change. Vérifier à l'exécution ne suffit donc
+# jamais — il faut empêcher l'ÉCRITURE. C'est `prompt_files` qui refuse désormais d'écrire
+# dans une racine exécutable, et cette garde-ci reste comme seconde barrière.
+
+class TestLeCasTemporel:
+    def test_un_fichier_DEJA_depose_reste_refuse_apres_deplacement(self, racine):
+        """La preuve que la garde d'exécution seule est insuffisante : ici `prompts_dir`
+        pointe ailleurs, et pourtant le fichier déposé auparavant est toujours là."""
+        piege = racine / "depose_avant.md"
+        piege.write_text("#!/bin/bash\ncharge\n")
+        piege.chmod(0o755)
+        cfg_apres = {"workflow": {"prompts_dir": "/tmp/ailleurs"}}
+        # La configuration courante ne montre AUCUN chevauchement…
+        from transcria.gpu.script_guard import safe_script_path as _sp
+        try:
+            _sp(str(piege), cfg_apres)
+            passe = True
+        except ScriptRefuse:
+            passe = False
+        # …donc cette garde seule le laisse passer. C'est attendu, et c'est pourquoi la
+        # vraie protection est en amont : voir test_prompt_files_refuse_decrire.
+        assert passe, "constat documenté : l'exécution seule ne peut pas voir le passé"
+
+
+def test_prompt_files_refuse_decrire_dans_une_racine_executable(tmp_path, monkeypatch):
+    """LA vraie barrière : le fichier ne doit jamais atterrir dans une racine exécutable.
+
+    Une garde à l'écriture est permanente ; une garde à l'exécution ne voit que l'instant
+    présent, et une configuration se change."""
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+    from transcria.web.prompt_files import PromptDirRefuse, verifier_repertoire_prompts
+
+    racine_exec = tmp_path / "scripts"
+    racine_exec.mkdir()
+    monkeypatch.setenv(CLE_ENV_RACINES, str(racine_exec))
+    with pytest.raises(PromptDirRefuse, match="(?i)exécutable"):
+        verifier_repertoire_prompts({"workflow": {"prompts_dir": str(racine_exec)}})
+    # un sous-répertoire ne sauve pas
+    with pytest.raises(PromptDirRefuse):
+        verifier_repertoire_prompts({"workflow": {"prompts_dir": str(racine_exec / "fr")}})
+
+
+def test_un_repertoire_de_prompts_normal_est_accepte(tmp_path, monkeypatch):
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+    from transcria.web.prompt_files import verifier_repertoire_prompts
+
+    (tmp_path / "scripts").mkdir()
+    monkeypatch.setenv(CLE_ENV_RACINES, str(tmp_path / "scripts"))
+    assert verifier_repertoire_prompts({"workflow": {"prompts_dir": str(tmp_path / "prompts")}})

@@ -211,9 +211,20 @@ def check_outbound_allowlist(cfg: dict) -> CheckResult:
     """
     name = _t("chk_outbound")
     meetings = ((cfg.get("connectors", {}) or {}).get("meetings", {}) or {})
-    penv = meetings.get("platform_env") or {}
-    visio_actif = meetings.get("enabled", False) and any(
-        str(k).startswith("VISIO_") and str(v).strip() for k, v in penv.items())
+    penv = {k: str(v) for k, v in (meetings.get("platform_env") or {}).items() if str(v).strip()}
+    # Les clés viennent du CATALOGUE, pas d'une convention de nommage devinée. Première
+    # version : `startswith("VISIO_")` — or le connecteur déclare `LIVEKIT_*`. Le contrôle
+    # ne se déclenchait donc JAMAIS, et mon test passait parce qu'il inventait une clé
+    # `VISIO_LIVEKIT_URL` au lieu de lire la donnée. Un test qui valide l'hypothèse de son
+    # auteur ne vérifie rien.
+    visio_actif = False
+    if meetings.get("enabled", False) and penv:
+        try:
+            for connecteur in load_catalog():
+                if connecteur.id == "visio" and connecteur.requires:
+                    visio_actif = all(champ.key in penv for champ in connecteur.requires)
+        except Exception:  # noqa: BLE001 — catalogue illisible : on ne bloque pas le doctor
+            visio_actif = False
     if not visio_actif:
         return CheckResult(name, OK, _t("outbound_sans_objet"))
     if not (os.environ.get("VISIO_ALLOWED_HOSTS", "") or "").strip():

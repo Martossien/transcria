@@ -20,6 +20,7 @@ from pathlib import Path
 from flask_babel import gettext as _
 from flask_babel import lazy_gettext as _l
 
+from transcria.gpu.script_guard import allowed_script_roots
 from transcria.llm_tools.opencode_runner import _get_prompts_dir
 
 # Prompts éditables — liste FERMÉE (le nom vient du formulaire, jamais le chemin).
@@ -55,8 +56,36 @@ SCRIPT_CONFIG_KEYS: tuple[tuple[str, object], ...] = (
 MAX_SCRIPT_DISPLAY_BYTES = 64 * 1024
 
 
+class PromptDirRefuse(RuntimeError):
+    """Répertoire de prompts intenable — il chevauche une racine EXÉCUTABLE."""
+
+
+def verifier_repertoire_prompts(cfg: dict) -> Path:
+    """Le répertoire des prompts ne doit JAMAIS chevaucher une racine exécutable.
+
+    Sécurité S1.6, troisième correctif. Interdire à l'*exécution* qu'un script vive sous
+    `workflow.prompts_dir` fermait le cas simultané, pas le cas **temporel** : il suffisait
+    de pointer `prompts_dir` sur une racine autorisée, d'y enregistrer un prompt au contenu
+    libre, puis de remettre `prompts_dir` ailleurs. Le fichier, lui, reste — et la
+    configuration courante ne montre plus aucun chevauchement.
+
+    **Un fichier persiste ; une configuration change.** Une garde qui n'observe que
+    l'instant présent ne peut donc rien contre le passé : la barrière doit être à
+    l'ÉCRITURE, où elle est permanente. Celle de `script_guard` demeure en seconde ligne.
+    """
+    base = Path(os.path.abspath(_get_prompts_dir(cfg)))
+    for racine in allowed_script_roots():
+        if base == racine or racine in base.parents:
+            raise PromptDirRefuse(
+                f"workflow.prompts_dir ({base}) est sous une racine EXÉCUTABLE ({racine}). "
+                f"Le contenu des prompts est libre : un fichier déposé là pourrait être "
+                f"lancé comme script. Choisissez un répertoire hors des racines de scripts."
+            )
+    return base
+
+
 def prompts_dir(cfg: dict) -> Path:
-    return Path(os.path.abspath(_get_prompts_dir(cfg)))
+    return verifier_repertoire_prompts(cfg)
 
 
 def _prompt_path(base: Path, filename: str, language: str) -> Path:

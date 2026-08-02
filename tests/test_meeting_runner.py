@@ -237,3 +237,34 @@ def test_zoom_meeting_ref_par_env_jamais_argv():
     assert env["ZOOM_MEETING"] == "https://us05web.zoom.us/j/123?pwd=SECRET.1"
     assert not any("zoom.us" in a for a in argv)      # jamais le lien dans argv
     assert argv[-1] == "transcria-zoom-sdk:latest"    # l'image reste le dernier argument
+
+
+# --- Sécurité : l'allowlist sortante doit ATTEINDRE le conteneur -------------------------
+#
+# `VISIO_ALLOWED_HOSTS` est lue par la garde qui tourne DANS le bot. Posée sur l'hôte mais
+# non relayée, la garde y voit une liste vide et ne borne rien : la protection existe et ne
+# s'applique jamais. Le même oubli s'était déjà produit pour `BOT_IDLE_TIMEOUT_S` — le
+# commentaire de `_MACHINE_ENV` en garde la trace.
+
+def test_lallowlist_sortante_est_relayee_au_conteneur(monkeypatch):
+    from connector_service.runner.commands import docker_argv
+
+    monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "visio.exemple.test,autre.hote")
+    argv, env = docker_argv(
+        {"provider": "visio", "job_id": "j1", "meeting_ref": "https://visio.exemple/salle"},
+        portal_url="https://portail.exemple", token="tia_x")
+    assert env.get("VISIO_ALLOWED_HOSTS") == "visio.exemple.test,autre.hote"
+    assert "VISIO_ALLOWED_HOSTS" in argv          # transmise par `-e NOM`
+    # la VALEUR ne doit jamais apparaître dans argv (visible de tout `ps`)
+    assert "visio.exemple.test,autre.hote" not in argv
+
+
+def test_sans_allowlist_rien_nest_transmis(monkeypatch):
+    """Contre-épreuve : on ne pose pas une variable vide dans le conteneur."""
+    from connector_service.runner.commands import docker_argv
+
+    monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
+    _argv, env = docker_argv(
+        {"provider": "visio", "job_id": "j1", "meeting_ref": "https://visio.exemple/salle"},
+        portal_url="https://portail.exemple", token="tia_x")
+    assert "VISIO_ALLOWED_HOSTS" not in env

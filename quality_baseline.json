@@ -213,7 +213,7 @@
   "transcria.web.meetings_views": 5,
   "transcria.web.pages_routes": 35,
   "transcria.web.processing_api": 25,
-  "transcria.web.prompt_files": 1,
+  "transcria.web.prompt_files": 2,
   "transcria.web.refine_api": 10,
   "transcria.web.refine_shared": 4,
   "transcria.web.request_helpers": 3,

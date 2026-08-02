@@ -633,6 +633,49 @@ facultatif que personne ne découvre ne protège personne.
 
 ---
 
+## Quatrième passage (2026-08-02) — le temps, et deux gardes inertes
+
+Trois défauts, tous fondés. Ils partagent un motif : **une protection qui existe mais ne
+s'applique pas**.
+
+### La garde S1.6 ne voyait que l'instant présent
+
+Interdire qu'un script vive sous `workflow.prompts_dir` fermait le cas *simultané*, pas le
+cas **temporel** :
+
+```
+prompts_dir := <racine autorisée>   → enregistrer un prompt (contenu libre)
+prompts_dir := ailleurs             → le fichier, lui, RESTE
+services.arbitrage_script := ce fichier   → plus aucun chevauchement visible → exécuté
+```
+
+**Un fichier persiste ; une configuration change.** Une garde qui n'observe que la
+configuration courante ne peut donc rien contre le passé. La barrière est désormais à
+l'**écriture** — `prompt_files` refuse un `prompts_dir` sous une racine exécutable — ce qui
+est permanent. Celle de `script_guard` demeure en seconde ligne.
+
+### Le contrôle Visio du doctor ne se déclenchait jamais
+
+Je cherchais des clés commençant par `VISIO_`. Le connecteur déclare `LIVEKIT_*`. Le
+contrôle ajouté au troisième passage était donc **mort-né** — et mon test passait parce
+qu'il inventait une clé `VISIO_LIVEKIT_URL` au lieu de lire le catalogue.
+
+**Un test qui valide l'hypothèse de son auteur ne vérifie rien.** Le contrôle lit
+maintenant le catalogue, et le test construit sa configuration depuis la même donnée.
+
+### L'allowlist n'atteignait pas le bot
+
+`VISIO_ALLOWED_HOSTS` est lue par la garde qui tourne **dans le conteneur**. Elle n'était
+pas dans `_MACHINE_ENV`, la liste des variables relayées : posée sur l'hôte, elle ne
+parvenait jamais au bot, qui voyait donc une liste vide et ne bornait rien.
+
+Le plus gênant : la liste porte déjà le commentaire *« vécu : posés au runner mais jamais
+relayés au conteneur »*, laissé après le même oubli sur `BOT_IDLE_TIMEOUT_S`. L'avertissement
+était écrit à l'endroit exact — je ne l'ai pas lu. Deux tests couvrent désormais le relais,
+dont un qui vérifie que la **valeur** ne passe pas par `argv` (visible de tout `ps`).
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
@@ -666,6 +709,7 @@ renseignement le plus utile de ce document :
 | 2ᵉ | deux corrections d'**instance au lieu de classe** (`/health` oublié à côté de `/ready`, l'arrêt de l'arbitrage à côté de son lancement) ; une allowlist que l'administrateur réglait lui-même ; une garde SSRF jugeant la forme écrite plutôt que la destination |
 | 3ᵉ | la chaîne S1.6 **toujours ouverte** (écrire un prompt *dans* une racine autorisée) ; le détail SQL visible de tout compte authentifié ; `TRANSCRIA_SCRIPT_ROOTS` absente des unités et guides ; **pollution d'environnement entre mes tests** |
 | exploitant | « un LAN n'est pas forcément en adressage privé » — le code tenait, la **justification** était fausse |
+| 4ᵉ | S1.6 contournable dans le **temps** (déposer, puis déplacer la configuration) ; le contrôle Visio du doctor cherchait des clés inexistantes ; `VISIO_ALLOWED_HOSTS` jamais relayée au conteneur bot |
 
 Aucun de ces passages n'a produit un faux positif sur le fond. Trois de mes correctifs
 étaient incomplets, et je ne l'aurais pas vu seul : les deux premiers parce que j'avais
