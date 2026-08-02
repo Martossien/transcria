@@ -22,6 +22,8 @@ lignes ; c'est un arbitrage assumé, écrit dans `docs/PASSE_SECURITE_2026-08.md
 - le chemin **résolu** (liens symboliques suivis) est sous une racine autorisée — vérifier
   le chemin *écrit* laisserait passer `scripts/piege.sh -> /tmp/charge.sh` ;
 - c'est un **fichier régulier** qui existe ;
+- il n'est **pas dans une zone où l'application écrit** (`workflow.prompts_dir`,
+  `storage.jobs_dir`) — voir `_ZONES_INSCRIPTIBLES` ;
 - il n'est **pas inscriptible par tous** (`o+w`) : un script que n'importe quel compte de
   la machine peut réécrire est un shell root offert, et la racine ne protégerait de rien.
 
@@ -52,6 +54,20 @@ _RACINE_DEPOT = Path(__file__).resolve().parents[2] / "scripts"
 #: service (unité systemd, docker-compose) est hors de portée du formulaire d'administration :
 #: c'est la bonne place. Séparateur `:`, comme un PATH.
 CLE_ENV_RACINES = "TRANSCRIA_SCRIPT_ROOTS"
+
+#: Zones où l'APPLICATION écrit, déclarées en configuration. Un exécutable ne doit jamais
+#: y vivre — sinon la racine autorisée ne protège de rien.
+#:
+#: C'est le maillon qui manquait après le passage à l'environnement. La chaîne complète,
+#: montrée par un troisième audit : l'administrateur pose `workflow.prompts_dir` sur
+#: `<dépôt>/scripts` (une racine autorisée), enregistre un prompt — le NOM est dans une
+#: liste fermée, le CONTENU est libre — puis désigne le fichier obtenu comme script
+#: d'arbitrage. Le pré-lancement LLM l'exécute. Déplacer l'allowlist hors de portée de
+#: l'admin ne suffisait pas : il pouvait écrire À L'INTÉRIEUR.
+_ZONES_INSCRIPTIBLES = (
+    ("workflow", "prompts_dir"),     # contenu libre, écrit depuis /admin/config
+    ("storage", "jobs_dir"),         # reçoit des fichiers d'utilisateurs
+)
 
 
 class ScriptRefuse(RuntimeError):
@@ -101,6 +117,21 @@ def safe_script_path(raw: str, config: dict) -> Path:
 
     if not resolu.is_file():
         raise ScriptRefuse(f"script introuvable ou non régulier : {resolu}")
+
+    for section, cle in _ZONES_INSCRIPTIBLES:
+        brut_zone = (config.get(section, {}) or {}).get(cle)
+        if not brut_zone:
+            continue
+        try:
+            zone = Path(str(brut_zone)).resolve()
+        except (OSError, RuntimeError):
+            continue
+        if resolu == zone or zone in resolu.parents:
+            raise ScriptRefuse(
+                f"script situé dans une zone inscriptible par l'application : {resolu} "
+                f"est sous {section}.{cle} ({zone}). Un exécutable ne vit pas là où "
+                f"l'application écrit — sinon il suffit d'y déposer un fichier."
+            )
 
     mode = resolu.stat().st_mode
     if mode & stat.S_IWOTH:

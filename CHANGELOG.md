@@ -57,6 +57,40 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   quelqu'un qui n'est pas forcément l'admin du portail. Validation de forme stricte
   (schéma, hôte, pas de userinfo ni de caractère de contrôle) **et** `shlex.quote` à
   l'injection : deux défenses indépendantes, 19 tests négatifs.
+- **Séparation lecture / écriture sur les jobs** (S1.5) : un compte `VIEWER`, dont la seule
+  permission est `DOWNLOAD_EXPORTS`, pouvait **réécrire le sous-titrage** d'un job qui ne lui
+  appartient pas dès qu'il partageait un groupe avec le propriétaire. `can_edit_job` exige
+  désormais `EDIT_SHARED_JOBS` (ADMIN / MANAGER / OPERATOR) ; 27 routes mutantes basculées.
+- **Amorçage sans secret publié** (S1.4) : `config.example.yaml` livrait
+  `first_admin_password: "CHANGE-ME"` et le compte était réellement créé avec. TranscrIA
+  **génère** maintenant un mot de passe aléatoire, affiché **une seule fois** au premier
+  démarrage. `first_admin_password` vide devient la valeur normale.
+- **Scripts exécutés en root : racine allowlistée** (S1.6). Trois valeurs de configuration
+  désignent un fichier lancé avec `bash` ; `/admin/config` propose un mode YAML brut, donc un
+  administrateur applicatif pouvait faire exécuter n'importe quel fichier.
+  **Deux durcissements successifs, après relectures externes :**
+  - les racines autorisées viennent de la variable d'environnement `TRANSCRIA_SCRIPT_ROOTS`
+    (unité systemd) et **non plus de la configuration** — une allowlist que l'acteur visé
+    règle lui-même ne contraint personne. `<dépôt>/scripts` reste toujours autorisée ;
+  - un script situé dans une zone où l'**application écrit** (`workflow.prompts_dir`,
+    `storage.jobs_dir`) est refusé. Sans cela, il suffisait de pointer le répertoire des
+    prompts sur `<dépôt>/scripts`, d'y enregistrer un prompt au contenu libre, puis de le
+    désigner comme script.
+- **Transport rattaché à l'exposition réelle** (S2.1) : un connecteur exigeant un point
+  d'entrée HTTPS **public** (Zoom RTMS, Teams) configuré sans TLS fait désormais **échouer**
+  le doctor, au lieu d'un simple avertissement. Détection par `path: webhook` dans le
+  catalogue — tout connecteur futur est couvert sans modification.
+- **Requêtes sortantes bornées** (S2.2) : le bot Visio interroge l'hôte lu dans le lien de
+  réunion fourni par un utilisateur. La garde refuse la boucle locale, l'adresse « toutes
+  interfaces » et le lien-local (métadonnées cloud), **décide sur l'adresse résolue** (les
+  notations `2130706433`, `0x7f000001`, `127.1` la contournaient) et ne suit plus les
+  redirections. Allowlist optionnelle `VISIO_ALLOWED_HOSTS` — **le seul mécanisme qui sache
+  quels hôtes sont les vôtres**, un réseau local pouvant être en adressage public.
+- **Sondes et exports** (S3) : `/health` et `/ready` ne divulguent plus l'URI de connexion à
+  la base (réservée aux **administrateurs**) ; les exports CSV neutralisent les formules
+  (`=`, `+`, `-`, `@` — le titre d'un job est une valeur d'utilisateur) ; les archives
+  DOCX/PPTX ont un budget de décompression ; les uploads sont écrits par blocs au lieu d'être
+  chargés en mémoire (jusqu'à 1 Gio auparavant).
 - **Révocation de session épinglée par des tests** (S1.3). La protection existait, mais
   reposait entièrement sur un détail de `flask_login` (`UserMixin.is_authenticated`
   délègue à `is_active`). Elle est maintenant écrite dans le projet et testée.

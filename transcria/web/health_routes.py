@@ -24,10 +24,20 @@ PROCESS_START_TIME = time.time()
 
 
 def _peut_voir_le_detail() -> bool:
-    """Vrai pour un compte authentifié. Faux pour la sonde anonyme."""
+    """Vrai pour un ADMINISTRATEUR seulement.
+
+    Première version : tout compte authentifié. Un troisième audit l'a justement relevé —
+    le motif technique porte l'URI de connexion à la base (hôte, port, utilisateur, nom de
+    base). Ce n'est pas une information de travail pour un rédacteur de comptes rendus ;
+    c'est de la topologie d'infrastructure. Elle appartient à qui exploite la machine.
+    """
     try:
         from flask_login import current_user
-        return bool(getattr(current_user, "is_authenticated", False))
+
+        from transcria.auth.models import Role
+        if not getattr(current_user, "is_authenticated", False):
+            return False
+        return bool(current_user.has_role(Role.ADMIN))
     except Exception:  # noqa: BLE001 — hors contexte de requête : on ne divulgue pas
         return False
 

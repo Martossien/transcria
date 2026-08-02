@@ -237,3 +237,52 @@ class TestLesRacinesNeViennentPlusDeLaConfig:
             safe_script_path(str(charge), {})
         assert "TRANSCRIA_SCRIPT_ROOTS" in str(exc.value)
         assert "security.allowed_script_roots" not in str(exc.value)
+
+
+# --- Reprise d'audit n°2 : un script ne doit pas vivre là où l'APPLICATION écrit ---------
+#
+# Le déplacement de l'allowlist vers l'environnement ne fermait PAS la chaîne. Un troisième
+# audit l'a montrée en entier :
+#   1. l'admin pose `workflow.prompts_dir` = `<dépôt>/scripts` (clé de configuration) ;
+#   2. il enregistre un prompt — le NOM est dans une liste fermée, le CONTENU est libre ;
+#   3. le fichier atterrit DANS une racine autorisée ;
+#   4. il le désigne comme `services.arbitrage_script` ; le pré-lancement LLM l'exécute.
+#
+# La racine autorisée ne protège de rien si l'application peut y écrire. Le principe qui
+# manquait : **un exécutable ne vit pas dans une zone inscriptible par l'application**.
+
+class TestUnScriptNeVitPasLaOuLApplicationEcrit:
+    def test_un_script_sous_le_repertoire_des_prompts_est_refuse(self, racine):
+        """Le cœur de la chaîne : prompts_dir pointé DANS une racine autorisée."""
+        (racine / "prompt_injecte.md").write_text("#!/bin/bash\ncharge\n")
+        cfg = {"workflow": {"prompts_dir": str(racine)}}
+        with pytest.raises(ScriptRefuse, match="inscriptible par l'application"):
+            safe_script_path(str(racine / "prompt_injecte.md"), cfg)
+
+    def test_meme_en_sous_repertoire_des_prompts(self, racine):
+        sous = racine / "fr"
+        sous.mkdir()
+        (sous / "x.md").write_text("#!/bin/bash\n")
+        cfg = {"workflow": {"prompts_dir": str(racine)}}
+        with pytest.raises(ScriptRefuse):
+            safe_script_path(str(sous / "x.md"), cfg)
+
+    def test_un_script_sous_le_repertoire_des_jobs_est_refuse(self, racine, tmp_path):
+        """Même principe : `storage.jobs_dir` reçoit des fichiers d'UTILISATEURS."""
+        (racine / "depuis_un_job.sh").write_text("#!/bin/bash\n")
+        cfg = {"storage": {"jobs_dir": str(racine)}}
+        with pytest.raises(ScriptRefuse):
+            safe_script_path(str(racine / "depuis_un_job.sh"), cfg)
+
+    def test_le_lanceur_LEGITIME_passe_toujours(self, racine, tmp_path):
+        """Contre-épreuve : tant que les zones d'écriture sont ailleurs, rien ne change."""
+        cfg = {"workflow": {"prompts_dir": str(tmp_path / "prompts")},
+               "storage": {"jobs_dir": str(tmp_path / "jobs")}}
+        assert safe_script_path(str(racine / "launch.sh"), cfg) == (racine / "launch.sh")
+
+    def test_le_message_nomme_la_cle_fautive(self, racine):
+        cfg = {"workflow": {"prompts_dir": str(racine)}}
+        (racine / "p.md").write_text("#!/bin/bash\n")
+        with pytest.raises(ScriptRefuse) as exc:
+            safe_script_path(str(racine / "p.md"), cfg)
+        assert "workflow.prompts_dir" in str(exc.value)

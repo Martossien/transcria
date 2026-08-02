@@ -1051,3 +1051,26 @@ def test_lechec_du_connecteur_prime_sur_lavertissement_federe(app):
                           ZOOM_WEBHOOK_SECRET_TOKEN="z")
     cfg["auth"] = {"backend": "oidc"}
     assert doc.check_transport_security(cfg).status == "fail"
+
+
+def test_visio_configure_sans_allowlist_est_signale(app, monkeypatch):
+    """L'allowlist sortante est LA sécurité quand l'adressage ne dit pas si l'on est
+    chez soi (un LAN peut être en IP publique). Encore faut-il savoir qu'elle existe :
+    un mécanisme facultatif que personne ne découvre ne protège personne."""
+    monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
+    cfg = {"connectors": {"meetings": {"enabled": True,
+                                       "platform_env": {"VISIO_LIVEKIT_URL": "wss://x"}}}}
+    assert doc.check_outbound_allowlist(cfg).status == "warn"
+
+
+def test_visio_avec_allowlist_est_OK(app, monkeypatch):
+    monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "visio.exemple.test")
+    cfg = {"connectors": {"meetings": {"enabled": True,
+                                       "platform_env": {"VISIO_LIVEKIT_URL": "wss://x"}}}}
+    assert doc.check_outbound_allowlist(cfg).status == "ok"
+
+
+def test_sans_visio_aucun_signalement(app, monkeypatch):
+    """Contre-épreuve : ne pas fatiguer les installations qui n'utilisent pas Visio."""
+    monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
+    assert doc.check_outbound_allowlist({}).status == "ok"

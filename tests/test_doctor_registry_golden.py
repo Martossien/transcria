@@ -35,6 +35,9 @@ GOLDEN_ALL_CHECKS = [
     # secrets ; `save_config` pose 0600 mais un fichier ANTÉRIEUR au correctif garde
     # ses permissions tant que personne n'enregistre depuis l'interface.
     "check_config_permissions",
+    # Ajout 2026-08-02 (reprise d'audit) : rappel de l'allowlist sortante Visio — un LAN
+    # peut être en adressage PUBLIC, donc l'adresse ne dit pas quels hôtes sont les vôtres.
+    "check_outbound_allowlist",
     "check_inference_node_gpus",
     "check_local_models",
     "check_storage",

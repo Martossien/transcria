@@ -58,6 +58,7 @@ from transcria.diagnostics.checks.deployment import (  # noqa: F401 — façade
 from transcria.diagnostics.checks.identity import (  # noqa: F401 — façade
     check_config_permissions,
     check_identity_backend,
+    check_outbound_allowlist,
     check_transport_security,
 )
 from transcria.diagnostics.checks.llm import (  # noqa: F401 — façade
@@ -127,6 +128,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_identity_backend,
     check_transport_security,
     check_config_permissions,
+    check_outbound_allowlist,
     check_inference_node_gpus,
     check_local_models,
     check_storage,

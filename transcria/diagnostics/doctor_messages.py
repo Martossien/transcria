@@ -237,6 +237,14 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "transport_webhook_insecure": "connecteur(s) à point d'entrée PUBLIC configuré(s) "
                                       "({connecteurs}) sans TLS — un webhook en clair "
                                       "transporte des jetons de plateforme",
+        "chk_outbound": "Requêtes sortantes (Visio)",
+        "outbound_sans_objet": "connecteur Visio non configuré — sans objet",
+        "outbound_sans_allowlist": "aucun VISIO_ALLOWED_HOSTS : l'hôte interrogé vient du "
+                                   "lien de réunion. La garde refuse la machine elle-même "
+                                   "et les métadonnées, mais elle ne peut pas savoir quels "
+                                   "hôtes sont les vôtres (un LAN peut être en IP publique)",
+        "outbound_hint": "Déclarez vos instances : VISIO_ALLOWED_HOSTS=visio.mondomaine,autre.hote",
+        "outbound_ok": "allowlist sortante déclarée",
         "chk_config_perms": "Permissions de la configuration",
         "cfgperm_large": "config.yaml en {mode} — lisible par les autres comptes de la machine, "
                          "alors qu'il porte des secrets (OIDC, LDAP, SMTP, plateformes)",
@@ -501,6 +509,14 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "transport_webhook_insecure": "connector(s) with a PUBLIC entry point configured "
                                       "({connecteurs}) without TLS — a cleartext webhook "
                                       "carries platform tokens",
+        "chk_outbound": "Outbound requests (Visio)",
+        "outbound_sans_objet": "Visio connector not configured — not applicable",
+        "outbound_sans_allowlist": "no VISIO_ALLOWED_HOSTS: the queried host comes from the "
+                                   "meeting link. The guard refuses the machine itself and "
+                                   "metadata, but it cannot know which hosts are yours (a "
+                                   "LAN may use public addressing)",
+        "outbound_hint": "Declare your instances: VISIO_ALLOWED_HOSTS=visio.mydomain,other.host",
+        "outbound_ok": "outbound allowlist declared",
         "chk_config_perms": "Configuration file permissions",
         "cfgperm_large": "config.yaml is {mode} — readable by other accounts on this machine, "
                          "while it holds secrets (OIDC, LDAP, SMTP, meeting platforms)",

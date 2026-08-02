@@ -16,6 +16,14 @@ Type=simple
 User=admin_ia
 WorkingDirectory=/home/admin_ia/transcria
 Environment=TRANSCRIA_ROLE=web
+# ── Sécurité S1.6 : racines d'où un script déclaré en configuration peut être EXÉCUTÉ ──
+# `<dépôt>/scripts` est toujours autorisée. Cette variable l'ÉTEND, pour les exploitants
+# qui rangent leurs lanceurs ailleurs (séparateur « : », comme un PATH).
+#
+# Elle vit ICI et non dans config.yaml — c'est délibéré : l'administrateur applicatif édite
+# la configuration depuis /admin/config, il réglerait donc lui-même les limites censées le
+# contraindre. Une unité systemd est hors de sa portée.
+# Environment=TRANSCRIA_SCRIPT_ROOTS=/opt/transcria-lanceurs
 EnvironmentFile=/home/admin_ia/transcria/.env
 # --workers : nombre de process web (sans état). --timeout élevé pour les gros uploads.
 ExecStart=/home/admin_ia/transcria/venv/bin/gunicorn \

@@ -224,3 +224,42 @@ class TestRedirections:
         ouvreur = ouvreur_sans_redirection()
         handlers = [type(h).__name__ for h in ouvreur.handlers]
         assert not any("RedirectHandler" in n and "No" not in n for n in handlers), handlers
+
+
+# --- Un LAN n'est pas forcément en adressage privé ---------------------------------------
+#
+# Remarque d'exploitant : certaines organisations disposent d'un bloc d'adresses PUBLIQUES
+# et s'en servent en interne (réservation de plage pour simplifier le routage). Leur
+# instance Visio est donc sur une IP publique **et** sur leur réseau local.
+#
+# Raisonner « privé = interne, public = externe » serait donc faux, et une garde bâtie
+# là-dessus refuserait un déploiement parfaitement légitime. C'est pourquoi le niveau 1 ne
+# parle PAS de plages privées : il refuse ce qui n'est jamais une instance de
+# visioconférence (la machine elle-même, les métadonnées). Tout le reste — privé comme
+# public — passe, et c'est l'ALLOWLIST qui apporte la sécurité à qui en veut.
+
+class TestLanEnAdressagePublic:
+    @pytest.mark.parametrize("adresse", [
+        "203.0.113.10",     # TEST-NET-3, publique
+        "198.51.100.7",     # TEST-NET-2, publique
+        "192.168.1.50",     # privée
+        "10.0.0.7",         # privée
+        "172.16.4.2",       # privée
+    ])
+    def test_un_LAN_passe_quel_que_soit_son_adressage(self, adresse, monkeypatch):
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: [adresse])
+        assert verifier_hote_sortant("http://visio.interne.exemple/api", allowlist=[])
+
+    def test_lallowlist_est_LA_securite_de_ce_cas(self, monkeypatch):
+        """Un exploitant sur adressage public qui veut se borner déclare ses hôtes —
+        c'est le seul mécanisme qui distingue « son » réseau d'Internet, puisque
+        l'adresse ne le dit pas."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["203.0.113.10"])
+        assert verifier_hote_sortant("https://visio.exemple.test/x",
+                                     allowlist=["visio.exemple.test"])
+        with pytest.raises(HoteRefuse, match="allowlist"):
+            verifier_hote_sortant("https://ailleurs.test/x", allowlist=["visio.exemple.test"])

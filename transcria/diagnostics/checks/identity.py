@@ -195,3 +195,28 @@ def check_config_permissions(cfg: dict, *, config_path: str | None = None,
         return CheckResult(name, WARN, _t("cfgperm_large", mode=f"{mode:04o}"),
                            hint=_t("cfgperm_hint", chemin=chemin))
     return CheckResult(name, OK, _t("cfgperm_ok", mode=f"{mode:04o}"))
+
+
+def check_outbound_allowlist(cfg: dict) -> CheckResult:
+    """Le connecteur Visio résout les salles en interrogeant l'hôte du LIEN de réunion.
+
+    La garde sortante (S2.2) refuse ce qui n'est jamais une instance — la machine
+    elle-même, les métadonnées cloud — mais elle ne peut pas deviner quels hôtes sont
+    « chez vous » : un réseau local peut parfaitement être en adressage PUBLIC. Le seul
+    mécanisme qui le sache est l'allowlist `VISIO_ALLOWED_HOSTS`.
+
+    WARN et non FAIL : sans allowlist le service fonctionne, et l'exposition reste faible
+    (aucune réponse n'est renvoyée à l'utilisateur). Mais un mécanisme facultatif que
+    personne ne découvre ne protège personne — d'où ce rappel.
+    """
+    name = _t("chk_outbound")
+    meetings = ((cfg.get("connectors", {}) or {}).get("meetings", {}) or {})
+    penv = meetings.get("platform_env") or {}
+    visio_actif = meetings.get("enabled", False) and any(
+        str(k).startswith("VISIO_") and str(v).strip() for k, v in penv.items())
+    if not visio_actif:
+        return CheckResult(name, OK, _t("outbound_sans_objet"))
+    if not (os.environ.get("VISIO_ALLOWED_HOSTS", "") or "").strip():
+        return CheckResult(name, WARN, _t("outbound_sans_allowlist"),
+                           hint=_t("outbound_hint"))
+    return CheckResult(name, OK, _t("outbound_ok"))

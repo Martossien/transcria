@@ -16,7 +16,7 @@ import pathlib
 from transcria.gpu.vram_manager import VRAMManager
 
 
-def _default_config(**overrides):
+def _default_config(monkeypatch=None, **overrides):
     cfg = {
         "services": {
             "arbitrage_script": "/bin/true",
@@ -32,7 +32,11 @@ def _default_config(**overrides):
     # `/bin/true` comme lanceur factice, et parfois d'un script en tmp_path.
     racines = ["/bin"] + [str(pathlib.Path(overrides[c]).parent)
                           for c in ("arbitrage_script", "stop_script") if overrides.get(c)]
-    os.environ["TRANSCRIA_SCRIPT_ROOTS"] = ":".join(racines)
+    # `monkeypatch` et non `os.environ[...]` : une écriture directe FUIT vers les tests
+    # suivants (relevé par un audit — la variable restait posée). Les tests qui n'en
+    # passent pas se contentent du défaut, ce qui reste correct puisqu'ils ne lancent rien.
+    if monkeypatch is not None:
+        monkeypatch.setenv("TRANSCRIA_SCRIPT_ROOTS", ":".join(racines))
     return cfg
 
 
@@ -86,7 +90,7 @@ class TestVRAMManagerInstantiation:
     def test_env_var_overrides_scripts(self, monkeypatch):
         monkeypatch.setenv("TRANSCRIA_ARBITRAGE_SCRIPT", "/custom/arb.sh")
         monkeypatch.setenv("TRANSCRIA_STOP_SCRIPT", "/custom/stop.sh")
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         assert mgr.arbitrage_script == "/custom/arb.sh"
         assert mgr.stop_script == "/custom/stop.sh"
 
@@ -106,7 +110,7 @@ class TestVRAMManagerGetGpuInfo:
             raise AssertionError("get_gpu_info ne doit plus faire d'appel réseau (C2.3)")
 
         monkeypatch.setattr(requests, "get", _no_network)
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         gpus = mgr.get_gpu_info()
         assert isinstance(gpus, list)   # torch absent/CPU → liste vide, jamais d'exception
 
@@ -120,14 +124,14 @@ class TestVRAMManagerGetGpuInfo:
             r = type("R", (), {"status_code": 500, "raise_for_status": lambda self: (_ for _ in ()).throw(requests.HTTPError("500"))})()
             return r
         monkeypatch.setattr(requests, "get", raise_status)
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         gpus = mgr.get_gpu_info()
         assert isinstance(gpus, list)
 
 
 class TestVRAMManagerGetFreeVram:
     def test_get_free_vram_mb_from_mocked_info(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
             {"id": 0, "memory": {"free": 20.0, "total": 24.0, "used": 4.0}},
         ])
@@ -135,7 +139,7 @@ class TestVRAMManagerGetFreeVram:
         assert free == int(20.0 * 1024)
 
     def test_get_free_vram_mb_missing_gpu(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
             {"id": 0, "memory": {"free": 20.0, "total": 24.0, "used": 4.0}},
         ])
@@ -143,7 +147,7 @@ class TestVRAMManagerGetFreeVram:
         assert free == 0
 
     def test_get_free_vram_mb_empty_gpus(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [])
         free = mgr.get_free_vram_mb(0)
         assert free == 0
@@ -151,7 +155,7 @@ class TestVRAMManagerGetFreeVram:
 
 class TestVRAMManagerFreeMemory:
     def test_free_memory_kills_large_processes(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         nvidia_output = "12345, llama-server, 8000\n67890, tiny_app, 500\n"
         second_output = "12345, llama-server, 8000\n"
 
@@ -173,7 +177,7 @@ class TestVRAMManagerFreeMemory:
 
     def test_free_memory_targets_requested_visible_gpu(self, monkeypatch):
         monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         commands = []
 
         def fake_run(cmd, **kw):
@@ -189,7 +193,7 @@ class TestVRAMManagerFreeMemory:
         assert all(cmd[1:3] == ["-i", "2"] for cmd in commands)
 
     def test_free_memory_skips_small_processes(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         nvidia_output = "11111, app, 500\n22222, app, 200\n"
 
         def fake_run(cmd, **kw):
@@ -204,7 +208,7 @@ class TestVRAMManagerFreeMemory:
         assert len(killed_pids) == 0
 
     def test_free_memory_empty_nvidia_output(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -215,7 +219,7 @@ class TestVRAMManagerFreeMemory:
         mgr._free_memory(0)
 
     def test_free_memory_malformed_lines_skipped(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         nvidia_output = "badline\n,,,,\n33333, llama-server, 7000\n"
 
         def fake_run(cmd, **kw):
@@ -232,7 +236,7 @@ class TestVRAMManagerFreeMemory:
         assert len(bad_pids) == 0
 
     def test_free_memory_sigkill_after_sigterm_failure(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         first_output = "44444, llama-server, 9000\n"
         second_output = "44444, llama-server, 9000\n"
 
@@ -254,12 +258,12 @@ class TestVRAMManagerFreeMemory:
         assert (44444, signal.SIGKILL) in killed_with
 
     def test_free_memory_subprocess_exception_is_caught(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(subprocess, "run",lambda *a, **kw: (_ for _ in ()).throw(subprocess.TimeoutExpired(cmd=[], timeout=10)))
         mgr._free_memory(0)
 
     def test_free_memory_pid_1_not_killed(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         nvidia_output = "1, llama-server, 50000\n99999, llama-server, 8000\n"
 
         def fake_run(cmd, **kw):
@@ -275,7 +279,7 @@ class TestVRAMManagerFreeMemory:
         assert (99999, signal.SIGTERM) in killed_pids
 
     def test_free_memory_does_not_kill_unmatched_processes(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         nvidia_output = "22222, python, 12000\n"
 
         def fake_run(cmd, **kw):
@@ -293,7 +297,7 @@ class TestVRAMManagerFreeMemory:
 
 class TestVRAMManagerKillPort:
     def test_kill_port_no_process(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -304,7 +308,7 @@ class TestVRAMManagerKillPort:
         assert result is True
 
     def test_kill_port_one_process_clean_exit(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         call_n = {"n": 0}
 
         def fake_run(cmd, **kw):
@@ -323,7 +327,7 @@ class TestVRAMManagerKillPort:
         assert (1234, signal.SIGTERM) in killed
 
     def test_kill_port_process_resists_then_sigkill(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         call_n = {"n": 0}
 
         def fake_run(cmd, **kw):
@@ -342,7 +346,7 @@ class TestVRAMManagerKillPort:
         assert (5555, signal.SIGKILL) in killed
 
     def test_kill_port_process_gone_before_kill(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         call_n = {"n": 0}
 
         def fake_run(cmd, **kw):
@@ -362,7 +366,7 @@ class TestVRAMManagerKillPort:
         assert result is True
 
     def test_kill_port_permission_error_handled(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout="8888\n", stderr="")
@@ -378,7 +382,7 @@ class TestVRAMManagerKillPort:
         assert result is True
 
     def test_kill_port_generic_exception(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
 
         def fake_run(cmd, **kw):
             raise OSError("Subprocess failed")
@@ -461,7 +465,7 @@ class TestVRAMManagerIsPortOpen:
 
 class TestVRAMManagerArbitrageRunning:
     def test_arbitrage_running_uses_api_health_before_lsof(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(arbitrage_llm_port=8080))
+        mgr = VRAMManager(config=_default_config(monkeypatch, arbitrage_llm_port=8080))
         calls = []
 
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: True))
@@ -471,7 +475,7 @@ class TestVRAMManagerArbitrageRunning:
         assert calls == []
 
     def test_arbitrage_running_falls_back_to_lsof(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(arbitrage_llm_port=8080))
+        mgr = VRAMManager(config=_default_config(monkeypatch, arbitrage_llm_port=8080))
 
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
         monkeypatch.setattr(
@@ -562,7 +566,7 @@ class TestVRAMManagerWaitForPort:
         """Le lancement doit rediriger stdout/stderr vers le fichier de log
         configuré (plus de DEVNULL silencieux)."""
         log_file = tmp_path / "arb.log"
-        mgr = VRAMManager(config=_default_config(arbitrage_log_path=str(log_file)))
+        mgr = VRAMManager(config=_default_config(monkeypatch, arbitrage_log_path=str(log_file)))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
         monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: True))
@@ -588,13 +592,13 @@ class TestVRAMManagerWaitForPort:
 
 class TestVRAMManagerLaunchArbitrageLLM:
     def test_launch_arbitrage_script_not_found(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(arbitrage_script="/nonexistent/script.sh"))
+        mgr = VRAMManager(config=_default_config(monkeypatch, arbitrage_script="/nonexistent/script.sh"))
         monkeypatch.setattr(os.path, "isfile", lambda p: False)
         result = mgr.launch_arbitrage_llm()
         assert result is False
 
     def test_launch_arbitrage_script_exists_and_launches(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
         monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: True))
@@ -614,7 +618,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         assert launched["done"]
 
     def test_launch_arbitrage_kills_existing_port_then_launches(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         check_n = {"n": 0}
 
         def fake_is_port_open(port):
@@ -637,7 +641,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         assert result is True
 
     def test_launch_arbitrage_popen_exception(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
         monkeypatch.setattr(time, "sleep", lambda s: None)
@@ -650,7 +654,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         assert result is False
 
     def test_launch_arbitrage_wait_timeout(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
         monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: False))
@@ -666,7 +670,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
 
 class TestVRAMManagerStopArbitrageLLM:
     def test_stop_arbitrage_runs_script_and_kills_port(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
 
         script_called = {"done": False}
@@ -684,7 +688,7 @@ class TestVRAMManagerStopArbitrageLLM:
         assert script_called["done"]
 
     def test_stop_arbitrage_script_not_found_falls_back_to_kill_port(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: False)
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
         monkeypatch.setattr(time, "sleep", lambda s: None)
@@ -693,7 +697,7 @@ class TestVRAMManagerStopArbitrageLLM:
         assert result is True
 
     def test_stop_arbitrage_script_exception_falls_back(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(OSError("fail")))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
@@ -703,7 +707,7 @@ class TestVRAMManagerStopArbitrageLLM:
         assert result is True
 
     def test_stop_arbitrage_resets_pid(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config())
+        mgr = VRAMManager(config=_default_config(monkeypatch))
         mgr._arbitrage_llm_pid = 12345
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout="", stderr=""))
@@ -716,7 +720,7 @@ class TestVRAMManagerStopArbitrageLLM:
 
 class TestVRAMManagerStopCleanupLlmPorts:
     def test_stop_cleanup_llm_ports_kills_configured_port(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(llm_cleanup_ports=[12345]))
+        mgr = VRAMManager(config=_default_config(monkeypatch, llm_cleanup_ports=[12345]))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: port == 12345)
         result = mgr.stop_cleanup_llm_ports()
         assert result is True
@@ -729,7 +733,7 @@ class TestEnsureArbitrageLlmHealthProbe:
     la sonde jugeait « malade » un serveur sain et le REDÉMARRAIT."""
 
     def _probe(self, monkeypatch, completion_payload):
-        vm = VRAMManager(_default_config(arbitrage_api_model_id="modele-test"))
+        vm = VRAMManager(_default_config(monkeypatch, arbitrage_api_model_id="modele-test"))
         restarted = {"called": False}
         monkeypatch.setattr(vm, "launch_arbitrage_llm", lambda: restarted.update(called=True) or True)
         monkeypatch.setattr(vm, "stop_arbitrage_llm", lambda: True)
@@ -792,7 +796,7 @@ class TestArbitrageLaunchLogFallback:
         script.write_text("#!/bin/bash\necho bonjour-du-script\n")
         script.chmod(0o755)
         vm = VRAMManager(_default_config(
-            arbitrage_script=str(script), arbitrage_log_path=str(blocked),
+            monkeypatch, arbitrage_script=str(script), arbitrage_log_path=str(blocked),
         ))
         monkeypatch.setattr(vm, "is_port_open", lambda port: False)
         monkeypatch.setattr(vm, "_wait_for_port", lambda port, timeout=600, proc=None, log_path=None: True)

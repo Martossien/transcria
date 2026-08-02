@@ -372,10 +372,15 @@ instances il utilise), et refus des plages d'adresses privées/locales quand l'a
 vide. Journaliser l'hôte contacté.
 
 **Critère d'acceptation revu à l'écriture — et c'est le point important.** La recette
-habituelle anti-SSRF (refuser toutes les adresses privées) est **fausse ici** : TranscrIA est
-auto-hébergé, et l'instance Visio d'un exploitant vit très probablement sur son LAN
-(`192.168.x`, `10.x`). L'appliquer aurait cassé le cas le plus courant, et la garde aurait été
-retirée dans la semaine. D'où deux niveaux :
+habituelle anti-SSRF (refuser toutes les adresses privées) est **fausse ici**, pour deux
+raisons qui se cumulent : TranscrIA est auto-hébergé, donc l'instance Visio vit sur le réseau
+de l'exploitant ; et **un réseau local n'est pas forcément en adressage privé** — une
+organisation disposant d'un bloc public s'en sert en interne, et son instance est alors sur
+une IP publique *et* sur son LAN (remarque d'exploitant, 2026-08-02).
+
+**L'adresse ne dit donc pas si l'on est « chez soi ».** Une garde bâtie sur
+« privé = interne » refuserait des déploiements légitimes tout en manquant son objet. D'où
+deux niveaux :
 
 1. **toujours refusé** — ce qui n'est *jamais* une instance de visioconférence : boucle
    locale, adresse « toutes interfaces », lien-local (les **métadonnées cloud**). Ce sont les
@@ -565,6 +570,64 @@ typé de bout en bout ; le **runner d'étape** renvoie encore des dictionnaires,
 `from_legacy_dict` ne sert plus qu'à lui. Ce n'est pas un reste oublié — c'est écrit dans
 Q2.1 de la passe qualité, avec la raison. Le gate E2E GPU réel de Q2.1 reste, lui,
 réellement à jouer.
+
+---
+
+## Troisième passage (2026-08-02) — la chaîne n'était pas fermée
+
+Le second correctif de S1.6 déplaçait l'allowlist hors de portée de l'administrateur. Un
+troisième passage a montré que **cela ne suffisait pas** : il pouvait toujours écrire *à
+l'intérieur* d'une racine autorisée.
+
+```
+workflow.prompts_dir := <dépôt>/scripts     (clé de configuration, éditable)
+  → enregistrer un prompt                    (NOM dans une liste fermée, CONTENU libre)
+  → le fichier atterrit dans une racine autorisée
+  → services.arbitrage_script := ce fichier
+  → le pré-lancement LLM l'exécute
+```
+
+**Le principe qui manquait : un exécutable ne vit pas dans une zone où l'application
+écrit.** `safe_script_path` refuse désormais tout script situé sous `workflow.prompts_dir`
+ou `storage.jobs_dir`. Une racine autorisée ne vaut que si personne ne peut y déposer un
+fichier.
+
+**Trois autres réserves traitées :**
+
+- **le détail SQL était visible de tout compte authentifié.** L'URI de connexion (hôte,
+  port, utilisateur, base) n'est pas une information de travail pour un rédacteur de comptes
+  rendus : c'est de la topologie d'infrastructure. Réservée aux **administrateurs** ;
+- **`TRANSCRIA_SCRIPT_ROOTS` n'existait nulle part** hors du code. Ajoutée aux unités
+  systemd (commentée, avec la raison de son emplacement) et à `.env.example` ;
+- **pollution d'environnement entre tests** : j'écrivais `os.environ[...]` directement au
+  lieu de `monkeypatch`, donc la variable fuyait vers les tests suivants. Corrigé — c'est
+  exactement le genre de défaut qui rend une suite verte pour de mauvaises raisons.
+
+### Un réseau local n'est pas forcément en adressage privé
+
+Remarque d'exploitant qui **corrige le raisonnement** de S2.2, pas seulement sa rédaction.
+J'écrivais « l'instance Visio vit sur le LAN (`192.168.x`, `10.x`) ». C'est faux en général :
+une organisation disposant d'un bloc d'adresses **publiques** s'en sert en interne, et son
+instance est alors sur une IP publique *et* sur son réseau local.
+
+**L'adresse ne dit donc pas si l'on est « chez soi ».** Le correctif tenait déjà — la garde
+ne borne aucune plage, ni privée ni publique — mais la justification était bancale, et une
+justification bancale se transforme tôt ou tard en règle fausse.
+
+Ce cas est aussi celui où l'**allowlist** compte le plus : c'est le seul mécanisme capable
+de distinguer « mon réseau » d'Internet quand l'adressage ne le dit pas. Un contrôle au
+doctor la signale désormais quand le connecteur Visio est configuré sans elle — un mécanisme
+facultatif que personne ne découvre ne protège personne.
+
+### Ce qui reste ouvert, sciemment
+
+- **DNS rebinding** : entre la vérification et la requête, le nom peut changer d'adresse. Le
+  fermer demanderait d'épingler l'adresse résolue jusqu'à la connexion. Non retenu ici : le
+  repli est le nom de la salle, et **aucune réponse n'est renvoyée à l'utilisateur** — le
+  gain ne paie pas la mécanique ;
+- **`config.yaml` en `0644` sur l'installation déployée** : le code force `0600` depuis Q1.4
+  et le doctor le signale, mais un fichier créé avant garde ses permissions. `chmod 600
+  config.yaml`, ou un simple enregistrement depuis l'interface.
 
 ---
 

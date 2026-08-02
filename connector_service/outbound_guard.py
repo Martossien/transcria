@@ -6,10 +6,19 @@ aveugle. Le repli est honnête (on retombe sur le slug de la salle), donc l'atta
 apprend peu — mais la requête part, potentiellement vers un réseau interne.
 
 **La difficulté de ce correctif tient au produit, pas à la technique.** La recette
-habituelle anti-SSRF — refuser toutes les adresses privées — est ici *fausse* :
-TranscrIA est auto-hébergé, et l'instance Visio d'un exploitant vit très probablement
-sur son LAN (`192.168.x`, `10.x`). L'appliquer casserait le cas le plus courant, et la
-garde serait retirée dans la semaine.
+habituelle anti-SSRF — refuser toutes les adresses privées — est ici *fausse*, pour deux
+raisons qui se cumulent :
+
+- TranscrIA est auto-hébergé : l'instance Visio d'un exploitant vit sur SON réseau ;
+- et **un réseau local n'est pas forcément en adressage privé**. Une organisation qui
+  dispose d'un bloc d'adresses publiques s'en sert en interne (réservation de plage pour
+  simplifier le routage). Son instance est alors sur une IP *publique* et sur son LAN.
+
+Autrement dit : **l'adresse ne dit pas si l'on est « chez soi »**. Une garde bâtie sur
+« privé = interne » refuserait des déploiements légitimes tout en manquant son objet. Le
+niveau 1 ci-dessous ne parle donc pas de plages : il refuse ce qui n'est *jamais* une
+instance de visioconférence. La sécurité du reste, c'est l'allowlist — le seul mécanisme
+qui sache distinguer « mon réseau » d'Internet quand l'adressage ne le dit pas.
 
 D'où deux niveaux :
 
@@ -17,7 +26,8 @@ D'où deux niveaux :
    la boucle locale (`127.0.0.0/8`, `::1`, `localhost`), l'adresse « toutes interfaces »
    et le lien-local (`169.254.0.0/16`, `fe80::/10`), qui porte les **métadonnées cloud**.
    Ce sont les deux pivots réels : atteindre un service qui n'écoute que sur la machine,
-   ou lire des identifiants d'instance.
+   ou lire des identifiants d'instance. **Aucune plage privée ou publique n'est bornée
+   ici** — voir plus haut pourquoi.
 2. **Allowlist stricte** (`VISIO_ALLOWED_HOSTS`), quand l'exploitant la pose : seuls ces
    hôtes sont joignables. Elle ne peut pas rouvrir le niveau 1 — déclarer `localhost` par
    mégarde ne redonne pas le pivot. Pour viser délibérément sa propre machine, il y a
