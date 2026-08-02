@@ -217,8 +217,8 @@ class TestParserToContext:
 
     def test_apply_llm_suggestions_stocke_structured_data(self, tmp_path):
         """Vérifie que runner._apply_llm_suggestions écrit structured_data dans meeting_context."""
-        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
+        from transcria.llm_tools.opencode_runner import OpenCodeRunner
         from transcria.workflow.runner import WorkflowRunner
 
         jobs_dir = str(tmp_path)

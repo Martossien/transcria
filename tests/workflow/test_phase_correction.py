@@ -47,8 +47,8 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             job = JobStore.create_job(owner_id, "Correction Partial Timeout")
             runner = WorkflowRunner(JobStore, cfg)
 
-            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             from transcria.jobs.filesystem import JobFilesystem
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")

@@ -65,8 +65,8 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.llm_tools.opencode_runner import OpenCodeRunner
             from transcria.jobs.filesystem import JobFilesystem
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("summary/quick_transcript.txt", "Bonjour")

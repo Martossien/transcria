@@ -87,10 +87,8 @@ La suite complète émet un `ResourceWarning` sur une connexion SQLite non ferm�
 `gpu/vram_manager.py`. Sans effet sur une suite de treize minutes ; coûteux dans un service
 qui tourne des semaines.
 
-**Correction :** à faire. **Constat affiné :** l'avertissement porte sur une connexion
-**psycopg**, pas SQLite, et `scheduler_lock` la ferme correctement dans `release()` — la
-fuite vient donc d'un verrou acquis puis jamais relâché (process secondaire, test).
-À traiter avec Q2.2, dont c'est le même sujet.
+**Livré avec Q2.2.** Le constat de départ était inexact : l'avertissement portait sur une
+connexion **psycopg**, pas SQLite, et pas dans le gestionnaire VRAM. Voir Q2.2.
 
 ---
 
@@ -114,19 +112,27 @@ seulement aux frontières HTTP.
 **Effort :** M. **Critère :** aucun accès par chaîne aux clés de résultat de phase hors
 frontière.
 
-### Q2.2 — Une seule porte pour les transitions d'état
+### Q2.2 — Une seule porte pour les transitions d'état  ✅ **LIVRÉE**
 
 `Job.state` est une chaîne libre et `JobStore.update_state` n'impose aucun graphe. En
 parallèle, l'exécution vit dans `extra_data_json` en dictionnaires libres. On l'a payé
 aujourd'hui même : une réconciliation lancée depuis un second process a fait passer en
 `FAILED` un job qui transcrivait très bien.
 
-**Correction — volontairement minimale :** centraliser les transitions derrière une fonction
-unique portant une matrice `depuis → vers`, refuser (et journaliser) l'impossible. **Pas** de
-machine à états générique ni de framework d'événements : le besoin est de fermer les
-transitions absurdes, pas de modéliser le monde.
-**Effort :** M. **Critère :** une transition hors matrice lève, et un test le prouve pour les
-trois plus dangereuses.
+**Correction — volontairement minimale :** `jobs/transitions.py` ne refuse que l'absurde —
+repartir d'un état TERMINAL (`completed`, `cancelled`) sans relance explicite. `failed` n'y
+figure pas : le produit le présente comme relançable, et l'y mettre aurait obligé à forcer
+sur le chemin le plus courant, donc à ne plus rien protéger. Un état inconnu ne bloque rien :
+être strict face à l'inconnu transformerait chaque évolution du modèle en panne.
+
+**Livré**, 18 tests. La matrice a immédiatement révélé les **deux seuls** endroits qui
+repartent d'un terminal — la relance depuis l'interface, et un test qui remet artificiellement
+un job à zéro. Les deux portent désormais `force=True`, visible à la lecture.
+
+**Fuite de connexion (ex-Q1.5) fermée avec :** `SchedulerLock` garde une connexion PostgreSQL
+ouverte pour tenir le verrou consultatif ; un process qui s'arrête sans `release()` la
+laissait ouverte. Un finaliseur la ferme désormais — donc libère aussi le verrou, sans quoi un
+verrou pouvait survivre à son propriétaire et empêcher tout autre ordonnanceur de démarrer.
 
 ### Q2.3 — Rompre l'inversion STT → workflow
 

@@ -425,7 +425,9 @@ def api_reprocess(job_id: str):
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours"}), 409
     JobStore.update(job.id, processing_mode=mode)
-    JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
+    # RELANCE EXPLICITE : l'utilisateur redemande le traitement d'un job déjà terminé. C'est
+    # le seul cas où l'on repart d'un état terminal, et il doit se voir dans le code.
+    JobStore.update_state(job.id, JobState.READY_TO_PROCESS, force=True)
 
     return jsonify({
         "status": "queued",

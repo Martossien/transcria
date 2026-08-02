@@ -88,7 +88,10 @@ class TestRefineSubmit:
         from transcria.jobs.models import JobState
         from transcria.jobs.store import JobStore
         with app.app_context():
-            JobStore.update_state(refine_job, JobState.CREATED)
+            # `force` : le test remet ARTIFICIELLEMENT un job terminé à l'état initial pour
+            # éprouver le refus de l'API. La porte unique des transitions refuse ce retour
+            # en arrière — ce qui est le comportement voulu en production.
+            JobStore.update_state(refine_job, JobState.CREATED, force=True)
         r = admin_client.post(f"/api/jobs/{refine_job}/refine", json={"kind": "discuss", "message": "?"})
         assert r.status_code == 409
 

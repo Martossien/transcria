@@ -7,6 +7,7 @@ from transcria.auth.models import GroupMembership, Role
 from transcria.database import db
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
+from transcria.jobs.transitions import ensure_allowed
 
 
 class JobStore:
@@ -61,10 +62,19 @@ class JobStore:
         )
 
     @staticmethod
-    def update_state(job_id: str, state: JobState, error_message: str | None = None) -> Job | None:
+    def update_state(job_id: str, state: JobState, error_message: str | None = None,
+                     *, force: bool = False) -> Job | None:
+        """Change l'état d'un job — PORTE UNIQUE, et la seule qui vérifie.
+
+        `force=True` est réservé aux gestes EXPLICITES de l'utilisateur (relance d'un job
+        terminé) : il dit « je sais que je repars d'un état terminal ». Tout le reste passe
+        par la vérification — sans quoi un effet de bord peut ressusciter un job archivé.
+        """
         job = db.session.get(Job, job_id)
         if job is None:
             return None
+        if not force:
+            ensure_allowed(job.state, state)
         if state in (JobState.FAILED, JobState.CANCELLED):
             extra = job.get_extra_data()
             extra["last_non_terminal_state"] = job.state

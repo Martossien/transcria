@@ -13,7 +13,9 @@ seul process tourne.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
+import weakref
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
@@ -25,6 +27,13 @@ logger = logging.getLogger(__name__)
 SCHEDULER_ADVISORY_LOCK_KEY = 0x7A5C4ED1
 
 
+def _close_quietly(conn) -> None:
+    """Ferme une connexion sans jamais lever — appelé par le ramasse-miettes, où une
+    exception ne serait ni attrapable ni utile."""
+    with contextlib.suppress(Exception):
+        conn.close()
+
+
 class SchedulerLock:
     """Verrou « ordonnanceur unique ». À acquérir au démarrage du scheduler, à
     libérer à son arrêt. Non réentrant, non thread-safe (un seul propriétaire)."""
@@ -33,6 +42,7 @@ class SchedulerLock:
         self._engine = engine
         self._key = int(key)
         self._conn: Connection | None = None
+        self._finalizer: weakref.finalize | None = None
         self.acquired = False
 
     @property
@@ -62,6 +72,13 @@ class SchedulerLock:
             return False
         # Connexion gardée ouverte = verrou de session maintenu.
         self._conn = conn
+        # FILET DE SÉCURITÉ. La connexion est fermée par `release()` dans le cas nominal ;
+        # mais un process qui s'arrête sans passer par là (test, arrêt brutal, exception au
+        # démarrage) la laissait ouverte — d'où le `ResourceWarning` « connection was deleted
+        # while still open » de la suite. Le finaliseur ferme, donc libère aussi le verrou :
+        # sans lui, un verrou consultatif pouvait survivre à son propriétaire et empêcher
+        # tout autre ordonnanceur de démarrer.
+        self._finalizer = weakref.finalize(self, _close_quietly, conn)
         self.acquired = True
         return True
 
@@ -76,4 +93,7 @@ class SchedulerLock:
             finally:
                 self._conn.close()
                 self._conn = None
+                if self._finalizer is not None:
+                    self._finalizer.detach()      # fermeture faite : plus rien à rattraper
+                    self._finalizer = None
         self.acquired = False
