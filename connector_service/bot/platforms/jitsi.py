@@ -211,8 +211,11 @@ class JitsiDriver:
                 return
             await ws.connect_to_server()
 
-        with contextlib.suppress(Exception):      # `route_web_socket` : Playwright récent
-            await self._page.route_web_socket("**/*", _filtre_ws)
+        # PAS de `suppress` ici : si la garde ne peut pas être posée, le bot s'arrête.
+        # L'envelopper la faisait disparaître en silence sur une version antérieure à 1.48
+        # — soit exactement le « fail-open » que cette passe a commencé par corriger
+        # (S1.1). Une protection qu'on peut perdre sans le savoir n'en est pas une.
+        await self._page.route_web_socket("**/*", _filtre_ws)
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         import json as _json
         await self._page.add_init_script(

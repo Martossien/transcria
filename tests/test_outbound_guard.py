@@ -644,3 +644,44 @@ def test_le_bot_pose_les_DEUX_filtres_avant_de_naviguer():
     websocket = source.index("route_web_socket(")
     navigation = source.index("self._page.goto(")
     assert http < navigation and websocket < navigation
+
+
+# --- Une garde ne doit pas pouvoir disparaître en SILENCE --------------------------------
+#
+# `route_web_socket` n'existe que depuis Playwright 1.48, et `requirements-connectors.txt`
+# autorisait `>=1.40`. Pire : j'avais enveloppé sa pose dans `contextlib.suppress(Exception)`.
+# Sur une version 1.40–1.47, ou à la moindre erreur de branchement, la protection
+# s'évaporait sans que rien ne s'arrête.
+#
+# C'est EXACTEMENT le défaut que cette passe a commencé par corriger (S1.1 : « le service
+# d'inférence ne démarre plus OUVERT »). Je l'ai reproduit dans mon propre correctif.
+
+def test_la_version_de_playwright_est_epinglee_pour_les_websockets():
+    """`route_web_socket` exige 1.48. Une borne plus basse laisserait une installation
+    valide tourner sans protection WebSocket."""
+    import pathlib
+    import re
+
+    contraintes = pathlib.Path("requirements-connectors.txt").read_text()
+    ligne = next(l for l in contraintes.splitlines() if l.strip().startswith("playwright"))
+    minimum = re.search(r">=(\d+)\.(\d+)", ligne)
+    assert minimum, f"borne inférieure absente : {ligne}"
+    majeur, mineur = int(minimum.group(1)), int(minimum.group(2))
+    assert (majeur, mineur) >= (1, 48), (
+        f"playwright>={majeur}.{mineur} autorise des versions sans `route_web_socket` — "
+        f"la garde WebSocket y disparaîtrait sans bruit"
+    )
+
+
+def test_la_pose_de_la_garde_websocket_ECHOUE_FERME():
+    """Aucun `suppress` autour de `route_web_socket` : si la garde ne peut pas être posée,
+    le bot doit s'arrêter, pas continuer sans protection."""
+    import pathlib
+    import re
+
+    source = pathlib.Path("connector_service/bot/platforms/jitsi.py").read_text()
+    pose = source.index("route_web_socket(")
+    contexte = source[max(0, pose - 400):pose]
+    assert not re.search(r"suppress\([^)]*\)\s*:\s*$", contexte.rstrip().split("\n")[-1]), \
+        "la pose de la garde WebSocket ne doit pas être avalée par un suppress"
+    assert "suppress" not in contexte.split("await self._page.route_web_socket")[0][-200:]

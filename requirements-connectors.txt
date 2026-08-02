@@ -25,4 +25,6 @@ msgpack>=1.0,<2.0
 aiortc>=1.6,<2.0
 # Bot de réunion (fallback SORTANT, phase installeur DÉDIÉE opt-in) : navigateur headless.
 # ⚠ Chrome + Xvfb à provisionner à part — JAMAIS dans l'image par défaut.
-playwright>=1.40,<2.0
+# >=1.48 : `route_web_socket` n'existe pas avant. Une borne plus basse
+# laisserait tourner une installation SANS garde WebSocket, en silence.
+playwright>=1.48,<2.0

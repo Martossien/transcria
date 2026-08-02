@@ -850,6 +850,44 @@ mieux qu'une promesse récurrente.
 
 ---
 
+## Neuvième passage — j'avais reproduit le défaut n°1 dans mon propre correctif
+
+`route_web_socket` n'existe que depuis Playwright **1.48**, et `requirements-connectors.txt`
+autorisait `>=1.40`. Pire : j'avais enveloppé sa pose dans `contextlib.suppress(Exception)`.
+Sur une version antérieure — ou à la moindre erreur de branchement — la garde WebSocket
+**s'évaporait sans que rien ne s'arrête**.
+
+C'est exactement le défaut par lequel cette passe a commencé : **S1.1, « le service
+d'inférence ne démarre plus OUVERT »**. Je l'ai reproduit dans le correctif censé fermer le
+dernier trajet. Borne portée à `>=1.48`, `suppress` retiré, deux tests qui l'exigent — dont
+un qui lit la contrainte de version, parce qu'une dépendance trop permissive est une garde
+absente.
+
+**Leçon, et elle vaut au-delà de ce point :** on ne « met pas un `try` autour » d'une
+protection. Si elle ne peut pas être posée, l'exécution doit s'arrêter — sinon on obtient
+une installation qui se croit protégée.
+
+### Ce qui reste, et qui est un ARBITRAGE, pas un défaut
+
+Les plages privées (`10/8`, `172.16/12`, `192.168/16`) restent joignables sans allowlist.
+L'audit propose de les refuser sauf déclaration explicite. **Non appliqué sans décision de
+l'exploitant**, parce que ce serait un changement cassant qui contredit un arbitrage déjà
+pris :
+
+- une instance Jitsi ou Visio **auto-hébergée sur un LAN privé** est le cas le plus courant,
+  et le connecteur Jitsi ne demande **aucun identifiant** (« une URL de salle suffit ») — il
+  n'existe donc rien à partir de quoi dériver une allowlist implicite ;
+- et surtout : **l'adresse ne dit pas si l'on est « chez soi »**. Une organisation disposant
+  d'un bloc public l'utilise en interne. Refuser `192.168/16` protégerait donc le
+  déploiement privé tout en laissant l'autre exactement aussi exposé — pour un coût de
+  configuration réel dans les deux cas.
+
+L'allowlist reste le seul mécanisme qui distingue « mon réseau » d'Internet. La question
+ouverte est de savoir si elle doit devenir **obligatoire** pour l'interne. C'est un choix de
+produit — il appartient à l'exploitant, pas à l'audit.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
