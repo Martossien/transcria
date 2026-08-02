@@ -418,11 +418,10 @@ class TestDecisionDeNavigation:
         monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
         assert navigation_autorisee("https://meet.exemple/salle", est_navigation=True) is True
 
-    def test_les_sous_ressources_ne_sont_PAS_filtrees(self):
-        """Proportionné : la SSRF passe par la NAVIGATION, que l'utilisateur choisit. Les
-        sous-ressources viennent du contenu de la page — donc de l'hôte de réunion, qui est
-        déjà validé. Les filtrer ferait passer tout le trafic d'une visioconférence par
-        Python, pour un gain nul."""
+    def test_navigation_autorisee_ne_juge_QUE_la_navigation(self):
+        """Cette fonction ne décide que des navigations — les sous-ressources ont leur
+        propre politique (`sous_ressource_autorisee`), plus permissive sur l'allowlist mais
+        tout aussi ferme sur l'interne."""
         from connector_service.outbound_guard import navigation_autorisee
 
         assert navigation_autorisee("http://127.0.0.1/style.css", est_navigation=False) is True
@@ -462,11 +461,11 @@ class TestInterceptionPlaywright:
     def _jouer(self, url, navigation):
         import asyncio
 
-        from connector_service.outbound_guard import filtre_de_navigation
+        from connector_service.outbound_guard import filtre_de_requete
 
         route, requete = self._RouteFactice(), self._RequeteFactice(url, navigation)
         asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-            filtre_de_navigation(route, requete))
+            filtre_de_requete(route, requete))
         return route
 
     def test_la_requete_interne_est_ABANDONNEE_avant_emission(self):
@@ -480,9 +479,14 @@ class TestInterceptionPlaywright:
         route = self._jouer("https://meet.exemple/salle", navigation=True)
         assert route.poursuivie and not route.abandonnee
 
-    def test_une_sous_ressource_poursuit_sans_verification(self):
+    def test_une_sous_ressource_interne_est_ABANDONNEE_elle_aussi(self):
+        """RENVERSEMENT ASSUMÉ. Ce test affirmait l'inverse : les sous-ressources
+        passaient sans vérification, au motif qu'elles « viennent d'un hôte déjà validé ».
+        Raisonnement faux — avoir passé le contrôle loopback ne rend pas un hôte digne de
+        confiance. Une page hostile chargeait donc `<img src="http://127.0.0.1:8080/…">`
+        et récupérait le pivot."""
         route = self._jouer("http://127.0.0.1/app.js", navigation=False)
-        assert route.poursuivie and not route.abandonnee
+        assert route.abandonnee and not route.poursuivie
 
 
 def test_le_filtre_est_POSE_avant_toute_navigation():
@@ -497,7 +501,7 @@ def test_le_filtre_est_POSE_avant_toute_navigation():
     pose = source.index("self._page.route(")
     premiere_navigation = source.index("self._page.goto(")
     assert pose < premiere_navigation, "le filtre doit être posé avant la première navigation"
-    assert "filtre_de_navigation" in source
+    assert "filtre_de_requete" in source
 
 
 def test_plus_aucun_controle_a_posteriori_ne_subsiste():
@@ -505,3 +509,138 @@ def test_plus_aucun_controle_a_posteriori_ne_subsiste():
     import connector_service.outbound_guard as og
 
     assert not hasattr(og, "verifier_destination_atteinte")
+
+
+# --- Les SOUS-RESSOURCES aussi, et le piège du pont --------------------------------------
+#
+# Mon raisonnement précédent était FAUX : « les sous-ressources viennent d'un hôte déjà
+# validé ». Avoir passé le contrôle loopback ne rend pas un hôte DIGNE DE CONFIANCE — j'ai
+# confondu « joignable » et « sûr ». Une page publique contrôlée par un attaquant charge
+# `<img src="http://127.0.0.1:8080/…">` et le pivot revient par la fenêtre.
+#
+# L'argument de performance ne tenait pas non plus : `page.route("**/*")` intercepte DÉJÀ
+# tout ; on ne paie pas l'interception, seulement la décision.
+#
+# LE PIÈGE : le pont de capture du bot est lui-même sur `ws://127.0.0.1:8791`. Un refus
+# naïf du loopback tuerait la captation audio — donc le produit.
+
+_PONT = "ws://127.0.0.1:8791"
+
+
+class TestSousRessources:
+    @pytest.mark.parametrize("interne", [
+        "http://127.0.0.1:8080/admin",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]:9000/x",
+        "http://0.0.0.0/x",
+    ])
+    def test_une_sous_ressource_vers_linterne_est_REFUSEE(self, interne):
+        from connector_service.outbound_guard import sous_ressource_autorisee
+
+        assert sous_ressource_autorisee(interne, pont=_PONT) is False
+
+    def test_le_PONT_du_bot_reste_autorise(self):
+        """Sans cette exception, la capture audio meurt : le pont EST sur la boucle locale."""
+        from connector_service.outbound_guard import sous_ressource_autorisee
+
+        assert sous_ressource_autorisee(_PONT, pont=_PONT) is True
+        assert sous_ressource_autorisee("ws://127.0.0.1:8791/flux", pont=_PONT) is True
+
+    def test_un_AUTRE_port_de_la_boucle_locale_reste_refuse(self):
+        """L'exception est EXACTE (hôte + port), pas « tout le loopback » — sinon elle
+        rouvrirait le pivot qu'elle est censée préserver."""
+        from connector_service.outbound_guard import sous_ressource_autorisee
+
+        assert sous_ressource_autorisee("ws://127.0.0.1:9999/x", pont=_PONT) is False
+        assert sous_ressource_autorisee("http://127.0.0.1:8791/x", pont=_PONT) is False  # schéma
+
+    def test_une_ressource_publique_passe(self, monkeypatch):
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import sous_ressource_autorisee
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+        assert sous_ressource_autorisee("https://cdn.exemple/police.woff2", pont=_PONT) is True
+
+    def test_lallowlist_NE_sapplique_PAS_aux_sous_ressources(self, monkeypatch):
+        """Une salle légitime charge des polices, des scripts, une CDN. Y appliquer
+        l'allowlist casserait la page pour un gain nul — le pivot vise l'INTERNE."""
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import sous_ressource_autorisee
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+        monkeypatch.setenv("BOT_ALLOWED_HOSTS", "meet.exemple")
+        assert sous_ressource_autorisee("https://cdn.ailleurs/x.js", pont=_PONT) is True
+
+
+class TestCacheDeResolution:
+    def test_un_hote_nest_resolu_QU_UNE_fois(self, monkeypatch):
+        """Chaque requête d'une page déclenchait une résolution : une visioconférence en
+        émet des centaines. Le cache est ce qui rend le filtrage des sous-ressources
+        soutenable."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.undo()          # on veut le VRAI `_resoudre` (celui qui mémorise)
+        og.vider_cache_resolution()
+        appels = []
+        monkeypatch.setattr(og, "_resoudre_sans_cache",
+                            lambda hote: appels.append(hote) or ["93.184.216.34"])
+        for _ in range(5):
+            og.sous_ressource_autorisee("https://cdn.exemple/a.js", pont=_PONT)
+        assert appels == ["cdn.exemple"], f"résolutions : {appels}"
+
+    def test_le_cache_est_borne(self, monkeypatch):
+        """Une page hostile pourrait sinon faire grossir le cache indéfiniment."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.undo()
+        og.vider_cache_resolution()
+        monkeypatch.setattr(og, "_resoudre_sans_cache", lambda hote: ["93.184.216.34"])
+        for i in range(og.TAILLE_CACHE_RESOLUTION + 50):
+            og.sous_ressource_autorisee(f"https://h{i}.exemple/x", pont=_PONT)
+        assert len(og._CACHE_RESOLUTION) <= og.TAILLE_CACHE_RESOLUTION
+
+
+class TestFiltreCompletDuBot:
+    """Le filtre unique appelé par Playwright : navigation ET sous-ressources."""
+
+    def _jouer(self, url, navigation, pont=_PONT):
+        import asyncio
+
+        from connector_service.outbound_guard import filtre_de_requete
+
+        route = TestInterceptionPlaywright._RouteFactice()
+        requete = TestInterceptionPlaywright._RequeteFactice(url, navigation)
+        asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
+            filtre_de_requete(route, requete, pont=pont))
+        return route
+
+    def test_une_sous_ressource_interne_est_ABANDONNEE(self):
+        route = self._jouer("http://127.0.0.1:8080/admin", navigation=False)
+        assert route.abandonnee and not route.poursuivie
+
+    def test_le_pont_du_bot_poursuit(self):
+        route = self._jouer("ws://127.0.0.1:8791/flux", navigation=False)
+        assert route.poursuivie and not route.abandonnee
+
+    def test_une_navigation_interne_est_ABANDONNEE(self):
+        route = self._jouer("http://169.254.169.254/x", navigation=True)
+        assert route.abandonnee
+
+    def test_une_ressource_publique_poursuit(self, monkeypatch):
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+        route = self._jouer("https://cdn.exemple/x.js", navigation=False)
+        assert route.poursuivie
+
+
+def test_le_bot_pose_les_DEUX_filtres_avant_de_naviguer():
+    """Câblage : route HTTP *et* route WebSocket, toutes deux avant la première
+    navigation. `page.route` ne couvre PAS les WebSockets — il faut `route_web_socket`."""
+    import pathlib
+
+    source = pathlib.Path("connector_service/bot/platforms/jitsi.py").read_text()
+    http = source.index("self._page.route(")
+    websocket = source.index("route_web_socket(")
+    navigation = source.index("self._page.goto(")
+    assert http < navigation and websocket < navigation

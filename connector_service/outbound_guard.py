@@ -99,16 +99,38 @@ def _adresse_interdite(adresse: ipaddress.IPv4Address | ipaddress.IPv6Address) -
     return bool(adresse.is_loopback or adresse.is_link_local or adresse.is_unspecified)
 
 
-def _resoudre(hote: str) -> list[str]:
-    """Toutes les adresses derrière un nom. Liste vide si la résolution échoue.
+#: Une page de visioconférence émet des CENTAINES de requêtes. Résoudre à chaque fois
+#: rendrait le filtrage des sous-ressources insoutenable — le cache est ce qui le permet.
+#: Borné : une page hostile ferait sinon grossir la table indéfiniment.
+TAILLE_CACHE_RESOLUTION = 512
+_CACHE_RESOLUTION: dict[str, list[str]] = {}
 
-    Injectable dans les tests : la garde doit être vérifiable sans DNS.
-    """
+
+def vider_cache_resolution() -> None:
+    """Pour les tests, et pour un éventuel rechargement de politique."""
+    _CACHE_RESOLUTION.clear()
+
+
+def _resoudre_sans_cache(hote: str) -> list[str]:
+    """Toutes les adresses derrière un nom. Liste vide si la résolution échoue."""
     try:
         infos = socket.getaddrinfo(hote, None, proto=socket.IPPROTO_TCP)
     except (OSError, UnicodeError):
         return []
     return [str(info[4][0]) for info in infos]
+
+
+def _resoudre(hote: str) -> list[str]:
+    """`_resoudre_sans_cache`, mémorisé. Injectable dans les tests : la garde doit être
+    vérifiable sans DNS."""
+    cle = hote.lower()
+    if cle in _CACHE_RESOLUTION:
+        return _CACHE_RESOLUTION[cle]
+    adresses = _resoudre_sans_cache(hote)
+    if len(_CACHE_RESOLUTION) >= TAILLE_CACHE_RESOLUTION:
+        _CACHE_RESOLUTION.clear()      # politique simple et bornée : on repart à zéro
+    _CACHE_RESOLUTION[cle] = adresses
+    return adresses
 
 
 def _est_toujours_interdit(hote: str) -> tuple[bool, str]:
@@ -193,6 +215,46 @@ def verifier_hote_sortant(url: str, *, allowlist: list[str] | None = None) -> bo
     return True
 
 
+def sous_ressource_autorisee(url: str, *, pont: str = "") -> bool:
+    """Décide si une SOUS-RESSOURCE (image, script, formulaire, WebSocket) peut partir.
+
+    Mon raisonnement précédent était faux : « les sous-ressources viennent d'un hôte déjà
+    validé ». Avoir passé le contrôle loopback ne rend pas un hôte **digne de confiance** —
+    « joignable » n'est pas « sûr ». Une page publique contrôlée par un attaquant charge
+    `<img src="http://127.0.0.1:8080/…">` et le pivot revient par la fenêtre.
+
+    Politique **plus permissive que pour la navigation**, et c'est délibéré : on refuse
+    l'interne (boucle locale, « toutes interfaces », lien-local/métadonnées) mais **pas**
+    l'allowlist. Une salle légitime charge des polices, des scripts, une CDN — y appliquer
+    l'allowlist casserait la page sans rien protéger, puisque le pivot vise l'interne.
+
+    **Exception exacte pour le pont du bot** (`ws://127.0.0.1:<port>`) : il est lui-même sur
+    la boucle locale, et un refus naïf tuerait la captation audio. L'exception porte sur le
+    schéma, l'hôte ET le port — « tout le loopback » rouvrirait ce qu'elle doit préserver.
+    """
+    brut = (url or "").strip()
+    if pont and _meme_origine(brut, pont):
+        return True
+    try:
+        parts = urlsplit(brut)
+    except ValueError:
+        return False
+    hote = parts.hostname
+    if not hote:
+        return True          # data:, blob:, about: — rien ne part sur le réseau
+    interdit, _motif = _est_toujours_interdit(hote)
+    return not interdit
+
+
+def _meme_origine(url: str, reference: str) -> bool:
+    """Schéma + hôte + port identiques. Volontairement strict."""
+    try:
+        a, b = urlsplit(url), urlsplit(reference)
+    except ValueError:
+        return False
+    return (a.scheme, a.hostname, a.port) == (b.scheme, b.hostname, b.port)
+
+
 def navigation_autorisee(url: str, *, est_navigation: bool,
                          allowlist: list[str] | None = None) -> bool:
     """Décide si une requête du navigateur peut PARTIR. Ne lève pas — répond.
@@ -214,19 +276,29 @@ def navigation_autorisee(url: str, *, est_navigation: bool,
         return False
 
 
-async def filtre_de_navigation(route, request) -> None:
-    """Gestionnaire de route Playwright : abandonne une navigation interdite AVANT émission.
+async def filtre_de_requete(route, request, *, pont: str = "") -> None:
+    """Gestionnaire de route Playwright — décide AVANT émission, pour TOUTE requête.
 
-    Branché sur le contexte du navigateur, il couvre `page.goto` ET **chaque saut de
-    redirection** — c'est là tout l'intérêt : un hôte légitime répondant
-    `302 Location: http://127.0.0.1/` voit son second saut refusé avant de partir.
+    Deux politiques, parce que les deux risques diffèrent :
+
+    - **navigation** : c'est l'URL que l'utilisateur choisit → contrôle complet, allowlist
+      comprise, y compris à chaque saut de redirection ;
+    - **sous-ressource** : elle vient du contenu de la page → seul l'INTERNE est refusé.
+      Y appliquer l'allowlist casserait toute salle qui charge une police ou une CDN.
+
+    Le pont de capture du bot (`ws://127.0.0.1:<port>`) est exempté nominativement — il est
+    sur la boucle locale, et le refuser tuerait l'audio.
     """
     try:
         est_nav = bool(request.is_navigation_request())
     except Exception:  # noqa: BLE001 — objet Playwright inattendu : on ne bloque pas la page
         est_nav = False
-    if est_nav and not navigation_autorisee(request.url, est_navigation=True):
-        logger.warning("navigation REFUSÉE avant émission : %s", url_expurgee(request.url))
+    autorise = (navigation_autorisee(request.url, est_navigation=True) if est_nav
+                else sous_ressource_autorisee(request.url, pont=pont))
+    if not autorise:
+        logger.warning("requête REFUSÉE avant émission (%s) : %s",
+                       "navigation" if est_nav else "sous-ressource",
+                       url_expurgee(request.url))
         await route.abort("blockedbyclient")
         return
     await route.continue_()

@@ -809,10 +809,29 @@ pour les points, mais parce que deux d'entre eux rendaient mon travail précéde
 
   Corrigé par **interception de route** (`page.route`) : Playwright appelle le filtre pour
   chaque requête, **y compris chaque saut de redirection**, et une navigation interdite est
-  abandonnée **avant émission**. Seules les navigations sont examinées — la SSRF passe par
-  l'URL que l'utilisateur choisit ; les sous-ressources viennent du contenu de la page, donc
-  d'un hôte déjà validé, et les filtrer ferait transiter tout le trafic d'une
-  visioconférence par Python pour un gain nul.
+  abandonnée **avant émission**.
+
+  **Puis un huitième passage a montré que ma politique restait fausse.** J'écrivais que les
+  sous-ressources « viennent d'un hôte déjà validé » — mais *joignable* n'est pas *sûr* :
+  une page publique contrôlée par un attaquant charge `<img src="http://127.0.0.1:8080/…">`
+  et le pivot revient par la fenêtre. Mon argument de performance ne tenait pas non plus :
+  `page.route("**/*")` intercepte **déjà** tout ; on ne paie pas l'interception, seulement
+  la décision.
+
+  Politique corrigée, en **deux niveaux** parce que les deux risques diffèrent : la
+  navigation (URL choisie par l'utilisateur) subit le contrôle complet, allowlist comprise ;
+  la sous-ressource ne se voit refuser que l'**interne** — y appliquer l'allowlist casserait
+  toute salle qui charge une police ou une CDN, sans rien protéger de plus.
+
+  **Le piège de ce correctif :** le pont de capture du bot est lui-même sur
+  `ws://127.0.0.1:8791`. Un refus naïf du loopback aurait tué la captation audio — donc le
+  produit. L'exception est **exacte** (schéma + hôte + port) : « tout le loopback » aurait
+  rouvert ce qu'elle doit préserver.
+
+  Deux compléments nécessaires : un **cache de résolution** borné (une visioconférence émet
+  des centaines de requêtes — sans lui, le filtrage des sous-ressources serait
+  insoutenable), et `route_web_socket` — `page.route` **ne couvre pas** les WebSockets, un
+  `new WebSocket("ws://127.0.0.1…")` serait passé à côté.
 
   La fonction de contrôle *a posteriori* a été **supprimée** plutôt que gardée en seconde
   ligne : une fonction qui suggère une protection sans la fournir est pire que son absence.

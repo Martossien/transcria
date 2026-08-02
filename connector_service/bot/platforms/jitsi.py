@@ -7,6 +7,7 @@ avant de dériver Zoom-web/Teams/Meet (mêmes étapes, autres sélecteurs). NON 
 from __future__ import annotations
 
 import contextlib
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +19,18 @@ from connector_service.bot.platforms.jitsi_state import (
     ConferencePhase,
     interpret_conference_state,
 )
-from connector_service.outbound_guard import filtre_de_navigation, verifier_url_de_reunion
+from connector_service.outbound_guard import (
+    filtre_de_requete,
+    sous_ressource_autorisee,
+    url_expurgee,
+    verifier_url_de_reunion,
+)
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 # Résolveur d'identité SPÉCIFIQUE à Jitsi : traduit une piste WebRTC en participant nommé,
 # en interrogeant l'état de l'application. `capture.js` reste générique.
+_log = logging.getLogger(__name__)
+
 _IDENTITY_JS = Path(__file__).resolve().parent / "jitsi_identity.js"
 
 # Config de join du bot AUDITEUR — transmise par le fragment de l'URL (Jitsi la lit là).
@@ -189,7 +197,22 @@ class JitsiDriver:
         # abandonnée avant émission. C'est la différence entre empêcher et constater :
         # contrôler `page.url` après coup laisse la requête atteindre le service interne.
         # Seules les navigations sont examinées (cf. `navigation_autorisee`).
-        await self._page.route("**/*", filtre_de_navigation)
+        async def _filtre(route, request):
+            await filtre_de_requete(route, request, pont=self._bridge_url)
+
+        await self._page.route("**/*", _filtre)
+        # `page.route` ne couvre PAS les WebSockets : un `new WebSocket("ws://127.0.0.1…")`
+        # depuis la page passerait à côté du filtre. Le pont du bot est explicitement
+        # autorisé ; tout autre socket vers l'interne est fermé d'emblée.
+        async def _filtre_ws(ws):
+            if not sous_ressource_autorisee(ws.url, pont=self._bridge_url):
+                _log.warning("WebSocket REFUSÉ : %s", url_expurgee(ws.url))
+                await ws.close()
+                return
+            await ws.connect_to_server()
+
+        with contextlib.suppress(Exception):      # `route_web_socket` : Playwright récent
+            await self._page.route_web_socket("**/*", _filtre_ws)
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         import json as _json
         await self._page.add_init_script(
