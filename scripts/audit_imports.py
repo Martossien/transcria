@@ -236,6 +236,32 @@ def check_baseline(current: dict, baseline: dict) -> list[str]:
 DEFAULT_BASELINE = Path("quality_baseline.json")
 
 
+def _print_target_gap(metrics: dict, baseline: dict) -> None:
+    """Affiche l'écart aux CIBLES — sans jamais faire échouer.
+
+    Le cliquet interdit la hausse ; il n'oblige à rien. Sans cible affichée, « vert » finit
+    par vouloir dire « entériné » : la baseline devient le niveau normal, et la dette cesse
+    d'être une dette. On ne bloque pas pour autant — une cible qui casse la CI serait
+    contournée par une révision de la cible.
+    """
+    cibles = baseline.get("_targets") or {}
+    echeance = cibles.get("_deadline", "")
+    restants = []
+    for cle, cible in sorted(cibles.items()):
+        if cle.startswith("_") or not isinstance(cible, (int, float)):
+            continue
+        actuel = metrics.get(cle)
+        if isinstance(actuel, (int, float)) and actuel > cible:
+            restants.append(f"{cle} : {actuel} → cible {cible} (reste {actuel - cible})")
+    if not restants:
+        if cibles:
+            print("[audit] toutes les cibles sont atteintes.")
+        return
+    print(f"[audit] dette restante vers les cibles{f' ({echeance})' if echeance else ''} :")
+    for ligne in restants:
+        print(f"  · {ligne}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", type=Path, default=Path("."), help="racine du dépôt")
@@ -276,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
                   " avec --write-baseline dans le même commit, en l'expliquant)", file=sys.stderr)
             return 1
         print("[audit] ratchet OK — aucune dégradation d'architecture.")
+        _print_target_gap(metrics, baseline)
         return 0
 
     if args.json:

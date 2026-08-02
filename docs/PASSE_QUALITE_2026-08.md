@@ -109,8 +109,17 @@ comportement de reprise. C'est exactement la classe de bug que le typage devait 
 
 **Correction :** types de retour jusqu'aux producteurs ; sérialisation en dictionnaire
 seulement aux frontières HTTP.
-**Effort :** M. **Critère :** aucun accès par chaîne aux clés de résultat de phase hors
-frontière.
+
+**Périmètre mesuré :** le pipeline n'a que **six points de sortie** significatifs
+(`pipeline_service.py`, lignes 210 à 337) — la migration est bornée, pas tentaculaire. Deux
+d'entre eux portent des données hors contrat (`transcription`, `processing_seconds`), ce qui
+demande un champ `details` sur `PhaseOutcome`.
+
+**Non livrée dans cette passe, et c'est délibéré :** ces six points sont le cœur de
+l'exécution, et la règle du projet est qu'un changement de pipeline se valide par l'**E2E GPU
+réel**, pas par la seule suite unitaire. La faire en fin de session sans ce gate reviendrait à
+troquer un risque connu (une faute de clé silencieuse) contre un risque inconnu.
+**Prochaine session, avec l'E2E.**
 
 ### Q2.2 — Une seule porte pour les transitions d'état  ✅ **LIVRÉE**
 
@@ -175,15 +184,24 @@ Côté mypy, `warn_unused_ignores` puis `disallow_untyped_defs` sur les paquets 
 sensibles (`auth`, `ingestion`, `queue`).
 **Effort :** M, étalé. **Critère :** chaque palier est vert avant le suivant.
 
-### Q3.3 — Un cliquet qui converge
+### Q3.3 — Un cliquet qui converge  ✅ **LIVRÉE**
 
 Le cliquet actuel empêche l'aggravation, mais entérine l'existant : 195 accès profonds à la
 configuration, 99 imports différés, 96 routes sans docstring. Vert ne veut pas dire remboursé.
 
-**Correction :** séparer **baseline courante** et **cible datée**, et publier la tendance à
-chaque release. Le cliquet interdit la hausse ; la cible oblige la baisse.
-**Effort :** S. **Critère :** la cible figure dans le fichier de baseline et est révisée à
-chaque version.
+**Correction :** une section `_targets` datée dans la baseline, et l'écart affiché à chaque
+passage du cliquet :
+
+```
+[audit] ratchet OK — aucune dégradation d'architecture.
+[audit] dette restante vers les cibles (2026-11-01) :
+  · deep_config_chains : 196 → cible 120 (reste 76)
+  · deferred_internal_imports : 95 → cible 60 (reste 35)
+```
+
+**Livré.** La cible ne fait **jamais échouer** : une cible qui casse la CI serait contournée
+en révisant la cible. Elle rend la dette visible à chaque exécution, ce qui suffit à
+l'empêcher de devenir le niveau normal.
 
 ---
 

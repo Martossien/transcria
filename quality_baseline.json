@@ -1,4 +1,13 @@
 {
+ "_targets": {
+  "_comment": "Cible à atteindre — révisée à chaque version. Le cliquet interdit la HAUSSE ; ces valeurs disent où l'on va. Une métrique au-dessus de sa cible n'échoue pas : elle est SIGNALÉE, avec l'écart restant.",
+  "_deadline": "2026-11-01",
+  "deep_config_chains": 120,
+  "deferred_internal_imports": 60,
+  "long_functions": 5,
+  "routes_without_docstring": 60,
+  "very_long_functions": 0
+ },
  "cycles": 0,
  "deep_config_chains": 196,
  "deferred_internal_imports": 99,
