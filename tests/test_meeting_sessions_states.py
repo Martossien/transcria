@@ -95,6 +95,22 @@ class TestMeetingRefCrypto:
 # bot ». L'intention doit rester disponible pour un exécutant capable.
 
 class TestClaimFiltrePlateformes:
+    #: Clé STABLE pour toute la classe. Une clé neuve à chaque test rendrait indéchiffrables
+    #: les sessions créées par les précédents — `claim_due` les relit toutes.
+    _CLE = None
+
+    @pytest.fixture(autouse=True)
+    def _cle_de_chiffrement(self, monkeypatch):
+        """`create` chiffre la référence : sans clé, ces tests passent en LOCAL (la `.env`
+        de développement en porte une) et rougissent en CI. Un test ne doit pas dépendre de
+        l'environnement de la machine qui l'exécute — posée ici, comme les autres tests de
+        ce fichier."""
+        from cryptography.fernet import Fernet
+
+        if TestClaimFiltrePlateformes._CLE is None:
+            TestClaimFiltrePlateformes._CLE = Fernet.generate_key().decode()
+        monkeypatch.setenv("TRANSCRIA_MEETING_REF_KEY", TestClaimFiltrePlateformes._CLE)
+
     def _planifier(self, app, provider):
         from transcria.ingestion.session_store import MeetingSessionStore
         from transcria.jobs.store import JobStore
