@@ -23,6 +23,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
 from transcria.gpu.stt_vram_planner import SttVramPlanner
 from transcria.gpu.vram_manager import VRAMManager
 
@@ -94,7 +95,7 @@ def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> 
     if auto_relocate is None:
         auto_relocate = bool((rn.get("vram", {}) or {}).get("auto_relocate", False))
     planner = SttVramPlanner.from_vram_manager(VRAMManager(config=config))
-    launcher = make_script_launcher(health_prober=http_health_prober)
+    launcher = make_script_launcher(health_prober=http_health_prober, config=config)
     return SttEngineSupervisor(planner, http_health_prober, launcher, auto_relocate=auto_relocate)
 
 
@@ -375,6 +376,7 @@ def make_script_launcher(
     runner: Callable[[str, dict, str], None] | None = None,
     sleeper: Callable[[float], None] | None = None,
     log_dir: str = "/tmp",
+    config: dict | None = None,
 ) -> Launcher:
     """Fabrique un `launcher` : lance `spec.script` (STT_GPU/STT_PORT surchargés)
     puis attend la readiness via `health_prober`. Retourne True si prêt à temps.
@@ -390,9 +392,17 @@ def make_script_launcher(
         # soit la valeur configurée (l'admission utilisait gpu_mem, mais PAS le lancement réel).
         env = {"STT_GPU": str(gpu_index), "STT_PORT": str(spec.port), "STT_GPU_MEM": str(spec.gpu_mem)}
         log_path = f"{log_dir}/stt_{spec.name}_{spec.port}.log"
+        # S1.6 : `spec.script` vient du manifeste `resource_node.engines[]`, donc de la
+        # configuration — éditable en YAML brut depuis /admin/config. Vérifié avant d'être
+        # exécuté par un service root, comme les scripts d'arbitrage.
+        try:
+            script = str(safe_script_path(spec.script, config or {}))
+        except ScriptRefuse as exc:
+            logger.error("[stt-sup] lancement de %s REFUSÉ : %s", spec.name, exc)
+            return False
         logger.info("[stt-sup] lancement %s : %s (STT_GPU=%d STT_PORT=%d) → %s",
-                    spec.name, spec.script, gpu_index, spec.port, log_path)
-        run(spec.script, env, log_path)
+                    spec.name, script, gpu_index, spec.port, log_path)
+        run(script, env, log_path)
 
         deadline = time.monotonic() + ready_timeout_s
         while time.monotonic() < deadline:

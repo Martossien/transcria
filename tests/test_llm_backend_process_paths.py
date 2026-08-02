@@ -46,6 +46,11 @@ def _script_config(tmp_path, *, script_exists=True):
             "arbitrage_log_path": str(tmp_path / "launch.log"),
         },
         "workflow": {"arbitration_llm": {"model_id": "local/arbitrage"}},
+        # S1.6 : un chemin de script venu de la config n'est exécuté que sous une racine
+        # autorisée. Ces tests posent leurs scripts dans un tmp_path — ils déclarent donc
+        # cette racine, exactement comme le ferait un exploitant qui range ses lanceurs
+        # ailleurs que dans `<dépôt>/scripts`.
+        "security": {"allowed_script_roots": [str(tmp_path)]},
     }
 
 

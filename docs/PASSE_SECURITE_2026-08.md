@@ -270,7 +270,7 @@ propre job, même rétrogradé depuis (lui retirer son travail serait une surpri
 protection) ; et le message de refus dit maintenant *lequel* des deux droits manque —
 « Accès interdit » ou « Modification interdite ».
 
-### S1.6 — Un chemin de script libre, exécuté en root
+### S1.6 — Un chemin de script libre, exécuté en root  ✅ **LIVRÉE**
 
 `transcria/gpu/llm_backend.py:270` lance `["/bin/bash", self.launch_script]`, où `launch_script`
 vient de `gpu.arbitrage_script` en configuration. Or `/admin/config` propose un **mode YAML
@@ -287,8 +287,35 @@ répertoire configurable), refuser les fichiers inscriptibles par autrui, refuse
 symboliques sortant de la racine. **On ne re-architecture pas** le service en non-root ni en
 registre fermé de backends : voir la section « Écarté ».
 
-**Critère d'acceptation :** chemin hors racine, chemin traversant (`../`), lien symbolique
-sortant, fichier world-writable → refus au démarrage du backend, message explicite (tests).
+**Critère d'acceptation :** chemin hors racine, traversée `../`, lien symbolique **sortant**,
+fichier inscriptible par tous, chemin absent, répertoire → refus avec un message qui dit le
+remède. **16 tests.**
+
+**Le périmètre était plus large que l'audit ne le disait :** il citait `gpu.arbitrage_script`.
+En cherchant *tous* les endroits où un chemin de configuration est exécuté, on en trouve
+**trois** — `services.arbitrage_script`, `services.stop_script` et
+`resource_node.engines[].script` (les lanceurs de moteurs STT). Le troisième est le plus
+discret : il vient d'un manifeste, pas d'un champ que l'on regarde.
+
+**Décisions prises à l'écriture :**
+
+- **la vérification porte sur le chemin RÉSOLU**, et c'est ce chemin-là qui est exécuté. Sans
+  quoi la garde et l'usage porteraient sur deux choses différentes, et
+  `scripts/piege.sh -> /tmp/charge.sh` passerait tranquillement ;
+- **l'écriture par le groupe est tolérée**, seule `o+w` est refusée. `775` est courant sur un
+  dépôt d'équipe ; une garde qui gêne l'exploitant normal finit désactivée, et ne protège
+  alors plus personne. On refuse ce qui est réellement dangereux : un script que **n'importe
+  quel compte** de la machine peut réécrire ;
+- **pas d'exigence de propriété root** : sur le déploiement de référence le dépôt appartient à
+  l'utilisateur applicatif et le service tourne en root — l'exiger aurait tout cassé pour un
+  gain nul ;
+- **la clé vit sous `security.allowed_script_roots`**, et non sous `services` ou `gpu` : la
+  même règle couvre les trois sources. La rattacher à l'une d'elles aurait obligé à la
+  tripler. Les racines configurées **s'ajoutent** à `<dépôt>/scripts`, qui reste toujours
+  autorisée — sans quoi le premier exploitant qui range ses lanceurs ailleurs perdrait ceux
+  du dépôt.
+
+**Toujours écarté :** le passage des services en non-root. Voir la section « Écarté ».
 
 ---
 

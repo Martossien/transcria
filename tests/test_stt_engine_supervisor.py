@@ -9,6 +9,8 @@ subprocess réel. On vérifie la décision :
 """
 from __future__ import annotations
 
+import pathlib
+
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -205,7 +207,10 @@ def test_launcher_runs_script_with_overridden_env_and_waits_ready():
     )
     ok = launcher(_SPEC, 5)
     assert ok is True
-    assert runs[0][0] == "scripts/launch_stt_cohere.sh"
+    # S1.6 : c'est le chemin RÉSOLU et vérifié qui est exécuté, pas la valeur brute de la
+    # configuration — sans quoi la vérification et l'usage porteraient sur deux choses.
+    assert runs[0][0].endswith("/scripts/launch_stt_cohere.sh")
+    assert pathlib.Path(runs[0][0]).is_absolute()
     # GPU relocalisé surchargé + gpu_mem transmis depuis la config (cf. fix F12b : le lanceur
     # ne doit plus retomber sur son défaut 0.85, mais utiliser le gpu_mem du moteur déclaré).
     assert runs[0][1] == {"STT_GPU": "5", "STT_PORT": "8003", "STT_GPU_MEM": "0.85"}

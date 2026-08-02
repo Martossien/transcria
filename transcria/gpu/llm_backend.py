@@ -8,6 +8,7 @@ from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu._port_utils import kill_port_listeners
+from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
 
 logger = logging.getLogger(__name__)
 
@@ -246,8 +247,13 @@ class ScriptLLMBackend(LLMBackend):
             self._launched_by_us = False
             return True
 
-        if not os.path.isfile(self.launch_script):
-            logger.error("Script de lancement introuvable: %s", self.launch_script)
+        # S1.6 : ce chemin vient de la CONFIG et sera exécuté par un service root.
+        # La garde remplace l'ancien simple `isfile` (racine autorisée, lien symbolique
+        # résolu, refus d'un fichier inscriptible par tous).
+        try:
+            script_verifie = safe_script_path(self.launch_script, self.config)
+        except ScriptRefuse as exc:
+            logger.error("Script de lancement REFUSÉ : %s", exc)
             return False
 
         if self.is_port_open(self.port, timeout=2):
@@ -267,7 +273,7 @@ class ScriptLLMBackend(LLMBackend):
             log_fh = subprocess.DEVNULL
         try:
             proc = subprocess.Popen(
-                ["/bin/bash", self.launch_script],
+                ["/bin/bash", str(script_verifie)],
                 stdout=log_fh,
                 stderr=log_fh,
                 stdin=subprocess.DEVNULL,
@@ -305,7 +311,7 @@ class ScriptLLMBackend(LLMBackend):
         if _os.path.isfile(self.stop_script):
             try:
                 subprocess.run(
-                    ["/bin/bash", self.stop_script],
+                    ["/bin/bash", str(safe_script_path(self.stop_script, self.config))],
                     capture_output=True, text=True, timeout=30,
                 )
                 logger.info("Script d'arrêt exécuté: %s", self.stop_script)

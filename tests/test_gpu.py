@@ -11,6 +11,8 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+import pathlib
+
 from transcria.gpu.vram_manager import VRAMManager
 
 
@@ -21,10 +23,19 @@ def _default_config(**overrides):
             "stop_script": "/bin/true",
             "qwen_port": 8080,
             "llm_cleanup_ports": [8000],
-        }
+        },
+        # S1.6 : un script n'est exécuté que sous une racine autorisée. Ces tests se
+        # servent de `/bin/true` comme lanceur factice — ils déclarent donc `/bin`.
+        "security": {"allowed_script_roots": ["/bin"]},
     }
     for k, v in overrides.items():
         cfg["services"][k] = v
+    # Un test qui pose son propre lanceur (tmp_path) autorise sa racine — sinon la garde
+    # S1.6 le refuse, à juste titre.
+    for cle in ("arbitrage_script", "stop_script"):
+        chemin = overrides.get(cle)
+        if chemin:
+            cfg["security"]["allowed_script_roots"].append(str(pathlib.Path(chemin).parent))
     return cfg
 
 

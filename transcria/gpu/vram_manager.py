@@ -18,6 +18,7 @@ from transcria.gpu.cuda_visible import (
 )
 from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
+from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
 from transcria.gpu.stt_instance_planner import llm_reserved_by_gpu, llm_shares
 from transcria.gpu.vram_release import release_idle_vram
 
@@ -390,8 +391,12 @@ class VRAMManager:
                 # Modèle résident → recalage VRAM sur la mesure réelle (vérif au 1ᵉʳ load).
                 self.recalibrate_llm_vram_from_measurement()
             return ready
-        if not os.path.isfile(self.arbitrage_script):
-            logger.error("Script d'arbitrage introuvable: %s", self.arbitrage_script)
+        # S1.6 : remplace le simple `isfile` — racine autorisée, lien symbolique résolu,
+        # refus d'un fichier inscriptible par tous.
+        try:
+            safe_script_path(self.arbitrage_script, self.config)
+        except ScriptRefuse as exc:
+            logger.error("Script d'arbitrage REFUSÉ : %s", exc)
             return False
 
         if self.is_port_open(self.arbitrage_llm_port):
@@ -444,8 +449,9 @@ class VRAMManager:
                 log_fh = subprocess.DEVNULL
                 effective_log_path = self.arbitrage_log_path
         try:
+            # S1.6 : chemin déclaré en configuration, exécuté par un service root.
             proc = subprocess.Popen(
-                ["/bin/bash", self.arbitrage_script],
+                ["/bin/bash", str(safe_script_path(self.arbitrage_script, self.config))],
                 stdout=log_fh, stderr=log_fh,
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
