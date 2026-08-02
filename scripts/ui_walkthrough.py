@@ -34,6 +34,7 @@ Lancé via le helper de cycle de vie serveur (instance contrôlée, DB SQLite te
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 import time
@@ -71,12 +72,38 @@ class Walkthrough:
         self.out = out
         self.checks: list[tuple[str, bool, str]] = []
         self.console_errors: list[str] = []
+        # Erreurs SURVENUES dans une fenêtre `expected_console_errors` : comptées à part,
+        # affichées, et sans effet sur le verdict.
+        self.expected_console: list[tuple[str, str]] = []
+        self._expected_console = ""
         self.server_errors: list[str] = []
         page.on("console", self._on_console)
         page.on("response", self._on_response)
 
+    @contextlib.contextmanager
+    def expected_console_errors(self, raison: str):
+        """Fenêtre où les erreurs console sont ATTENDUES — et le disent.
+
+        Le parcours contient des gestes délibérément négatifs : visiter une page inexistante
+        pour éprouver le 404, demander une page d'administration en tant que simple lecteur
+        pour éprouver le refus. Le navigateur journalise chacun comme une erreur console.
+
+        Tolérer « 403 » ou « 404 » partout masquerait les vraies. On borne donc la tolérance
+        au geste qui la justifie, et on la nomme.
+        """
+        self._expected_console = raison
+        try:
+            yield
+        finally:
+            self._expected_console = ""
+
     def _on_console(self, msg) -> None:
-        if msg.type == "error" and not _console_error_is_allowed(msg.text):
+        if msg.type != "error":
+            return
+        if self._expected_console:
+            self.expected_console.append((self._expected_console, msg.text))
+            return
+        if not _console_error_is_allowed(msg.text):
             self.console_errors.append(msg.text)
 
     def _on_response(self, resp) -> None:
@@ -561,7 +588,8 @@ class Walkthrough:
         # Lectrice (VIEWER) : lecture seule — l'admin est interdit, l'accueil lisible.
         self._logout()
         self.login("demo-lectrice", "walkthrough-demo-pw")
-        resp = self.page.goto(f"{self.base}/admin/users", wait_until="networkidle")
+        with self.expected_console_errors("refus RBAC volontaire (lectrice sur /admin/users)"):
+            resp = self.page.goto(f"{self.base}/admin/users", wait_until="networkidle")
         self.check("lectrice : /admin/users interdit", resp is not None and resp.status == 403)
         self.page.goto(f"{self.base}/", wait_until="networkidle")
         self.check("lectrice : accueil accessible", "Déconnexion" in self.page.content())
@@ -570,7 +598,8 @@ class Walkthrough:
         # Opérateur : peut créer un job, pas d'administration.
         self._logout()
         self.login("demo-operateur", "walkthrough-demo-pw")
-        resp = self.page.goto(f"{self.base}/admin/config", wait_until="networkidle")
+        with self.expected_console_errors("refus RBAC volontaire (opérateur sur /admin/config)"):
+            resp = self.page.goto(f"{self.base}/admin/config", wait_until="networkidle")
         self.check("opérateur : /admin/config interdit", resp is not None and resp.status == 403)
         self.page.goto(f"{self.base}/", wait_until="networkidle")
         body = self.page.content()
@@ -631,7 +660,9 @@ class Walkthrough:
         # (pas la page Werkzeug brute en anglais) AVEC un chemin de sortie cliquable qui
         # ramène à l'accueil — un cul-de-sac frustrerait l'utilisateur.
         try:
-            resp = self.page.goto(f"{self.base}/page-qui-nexiste-pas-xyz", wait_until="networkidle")
+            with self.expected_console_errors("page inexistante — éprouve la page 404"):
+                resp = self.page.goto(f"{self.base}/page-qui-nexiste-pas-xyz",
+                                      wait_until="networkidle")
             self.shot("20_error_404")
             body = self.page.content()
             status = resp.status if resp else 0
@@ -654,6 +685,10 @@ class Walkthrough:
         print(f"  checks: {len(self.checks) - len(failed)}/{len(self.checks)} OK")
         if self.server_errors:
             print(f"  erreurs serveur (5xx): {self.server_errors}")
+        if self.expected_console:
+            print(f"  erreurs console ATTENDUES: {len(self.expected_console)}")
+            for raison in dict.fromkeys(r for r, _ in self.expected_console):
+                print(f"    · {raison}")
         if self.console_errors:
             print(f"  erreurs console JS: {len(self.console_errors)}")
             for message in self.console_errors[:10]:

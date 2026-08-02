@@ -79,3 +79,48 @@ def test_une_erreur_NON_tolérée_est_retenue(tmp_path, texte):
     parcours = _parcours(tmp_path)
     parcours._on_console(type("M", (), {"type": "error", "text": texte})())
     assert parcours.console_errors == [texte]
+
+
+class TestGestesVolontairementNégatifs:
+    """Le parcours visite une page inexistante et demande des pages d'administration en tant
+    que simple lecteur : le navigateur journalise chacun comme une erreur console.
+
+    Tolérer « 403 » ou « 404 » PARTOUT masquerait les vraies. La tolérance est donc bornée au
+    geste qui la justifie, et nommée.
+    """
+
+    def _erreur(self, parcours, texte="Failed to load resource: 403"):
+        parcours._on_console(type("M", (), {"type": "error", "text": texte})())
+
+    def test_une_erreur_dans_la_fenêtre_ne_fait_PAS_échouer(self, tmp_path):
+        parcours = _parcours(tmp_path)
+        parcours.checks.append(("geste", True, ""))
+        with parcours.expected_console_errors("refus RBAC volontaire"):
+            self._erreur(parcours)
+        assert parcours.console_errors == []
+        assert parcours.report() is True
+
+    def test_elle_est_tout_de_même_COMPTÉE_et_motivée(self, tmp_path):
+        """Silencieuse, la tolérance deviendrait un trou qu'on oublie."""
+        parcours = _parcours(tmp_path)
+        with parcours.expected_console_errors("page inexistante"):
+            self._erreur(parcours)
+        assert parcours.expected_console == [("page inexistante",
+                                              "Failed to load resource: 403")]
+
+    def test_la_MÊME_erreur_hors_fenêtre_fait_échouer(self, tmp_path):
+        """C'est tout l'enjeu : le motif ne dit pas si l'erreur était voulue, le CONTEXTE si."""
+        parcours = _parcours(tmp_path)
+        parcours.checks.append(("geste", True, ""))
+        self._erreur(parcours)
+        assert parcours.report() is False
+
+    def test_la_fenêtre_se_referme_même_sur_exception(self, tmp_path):
+        """Sinon un geste raté laisserait la tolérance ouverte pour tout le reste du
+        parcours — le faux vert reviendrait par la porte de service."""
+        parcours = _parcours(tmp_path)
+        with pytest.raises(RuntimeError):
+            with parcours.expected_console_errors("geste négatif"):
+                raise RuntimeError("navigation impossible")
+        self._erreur(parcours)
+        assert parcours.console_errors, "la tolérance est restée ouverte"
