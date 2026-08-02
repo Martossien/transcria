@@ -23,7 +23,7 @@ from transcria.notifications.admin_alerts import alert_admin_vram_wait
 from transcria.notifications.job_facts import completed_facts
 from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
-from transcria.queue.store import QueueStore
+from transcria.queue.store import QUEUE_RUNNING, QueueStore
 from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
@@ -205,9 +205,13 @@ class JobExecutorService:
                         result = runner.run_refine(job, self.config)
                     else:  # SPEAKER_MODE
                         result = runner.run_speaker_detection(job, audio_path, self.config, update_state=True)
+                    # Le runner d'étape renvoie encore des dicts : l'adaptateur encode la
+                    # priorité historique entre clés (goldens : test_job_executor_outcomes_golden).
+                    # Il ne reste QUE pour ce producteur — le pipeline, lui, est typé.
+                    outcome = PhaseOutcome.from_legacy_dict(result)
                 else:
                     pipeline = PipelineService(self.config)
-                    result = pipeline.run_process(job, audio_path, mode, finalize_job_state=False)
+                    outcome = pipeline.run_process(job, audio_path, mode, finalize_job_state=False)
 
                 # Filet de durabilité (backend `pg`) : pousse les fichiers produits, même
                 # partiels (utiles à la reprise sur un autre worker et à l'affichage
@@ -215,12 +219,6 @@ class JobExecutorService:
                 # ceci couvre les étapes (`summary`/`speakers`) et les fichiers hors phase.
                 # Un échec doit remonter : un résultat non durable n'est pas un résultat.
                 artifact_store.push_job_files(self.config, job_id)
-
-                # Contrat typé (vague B0) : les producteurs historiques renvoient encore
-                # des dicts — l'adaptateur encode la priorité (goldens :
-                # test_job_executor_outcomes_golden.py). Disparaît quand les producteurs
-                # renverront PhaseOutcome nativement (vague B2).
-                outcome = PhaseOutcome.from_legacy_dict(result)
 
                 if outcome.kind is OutcomeKind.CANCELLED:
                     QueueStore.dequeue(job_id, status="cancelled")
@@ -389,6 +387,11 @@ def _kill_orphaned_opencode(job_id: str, jobs_dir: str, sl) -> None:
             pid_file.unlink(missing_ok=True)
 
 
+#: Statut de FILE correspondant à chaque fin d'exécution — pour libérer une entrée
+#: orpheline sans mentir sur la façon dont le job s'est terminé.
+_STATUT_FILE_TERMINAL = {"failed": "failed", "completed": "done", "cancelled": "cancelled"}
+
+
 def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
     """Au démarrage, récupère les jobs bloqués en 'running' suite à un redémarrage.
 
@@ -414,6 +417,20 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
                     sl.info("Réconciliation: job queued réinséré dans job_queue", job_id=job.id)
                     continue
                 if exec_status != "running":
+                    # Le job n'est plus en cours, mais son entrée de file peut l'être
+                    # restée : une terminaison qui pose `execution.status` sans passer
+                    # par `dequeue` laisse une entrée ORPHELINE en `running`. Elle n'est
+                    # visible nulle part — et elle coûte cher : la capacité de la file
+                    # est calculée par `effective_max - count_running()`, donc chaque
+                    # orpheline retire DÉFINITIVEMENT une place d'exécution.
+                    # (Constaté sur une installation réelle : un job `failed` depuis la
+                    # veille tenait encore un slot.)
+                    if exec_status in ("failed", "completed", "cancelled"):
+                        entree = QueueStore.get_entry(job.id)
+                        if entree is not None and entree.status == QUEUE_RUNNING:
+                            QueueStore.dequeue(job.id, status=_STATUT_FILE_TERMINAL[exec_status])
+                            sl.warning("Réconciliation: entrée de file orpheline libérée",
+                                       job_id=job.id, execution=exec_status)
                     continue
 
                 fs = JobFilesystem(jobs_dir, job.id)

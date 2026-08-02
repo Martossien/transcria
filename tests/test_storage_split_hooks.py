@@ -14,6 +14,7 @@ from transcria.jobs import artifact_store
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.services.job_executor import JobExecutorService
+from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ class TestExecutorHooks:
     ):
         monkeypatch.setattr(
             "transcria.services.pipeline_service.PipelineService.run_process",
-            lambda self, job, audio_path, mode, finalize_job_state=False: {"status": "completed"},
+            lambda self, job, audio_path, mode, finalize_job_state=False: PhaseOutcome(OutcomeKind.SUCCESS),
         )
         monkeypatch.setattr("transcria.services.job_executor._notify", lambda *a, **k: None)
         svc = JobExecutorService(app, pg_cfg)
@@ -94,9 +95,9 @@ class TestExecutorHooks:
         """Re-queue transitoire (vram_wait) : surtout ne pas purger les entrées."""
         monkeypatch.setattr(
             "transcria.services.pipeline_service.PipelineService.run_process",
-            lambda self, job, audio_path, mode, finalize_job_state=False: {
-                "vram_wait": True, "required_mb": 6000, "phase": "stt", "retry_after_s": 30,
-            },
+            lambda self, job, audio_path, mode, finalize_job_state=False: PhaseOutcome(
+                OutcomeKind.WAITING_VRAM, phase="stt", required_vram_mb=6000, retry_after_s=30
+            ),
         )
         monkeypatch.setattr("transcria.services.job_executor.alert_admin_vram_wait", lambda *a, **k: None)
         svc = JobExecutorService(app, pg_cfg)
@@ -193,7 +194,7 @@ class TestPipelineCheckpoint:
             _stub_preprocess(svc, monkeypatch)
             result = svc._run_pipeline_steps(job, "/tmp/a.wav", "fast", _SL(), finalize_job_state=False)
 
-        assert result.get("status") == "completed"
+        assert result.kind is OutcomeKind.SUCCESS
         assert events == ["push", "mark:preprocess", "push", "mark:transcription"]
 
     def test_push_failure_leaves_phase_unmarked(self, app, owner_id, pg_cfg, monkeypatch):
@@ -229,7 +230,7 @@ class TestPipelineCheckpoint:
             _stub_preprocess(svc, monkeypatch, on_transform=lambda: replayed.append("transform"))
             result = svc._run_pipeline_steps(job, "/tmp/a.wav", "fast", _SL(), finalize_job_state=False)
 
-        assert result.get("status") == "completed"
+        assert result.kind is OutcomeKind.SUCCESS
         assert replayed  # les transforms ont été rejoués au lieu d'utiliser un chemin mort
 
 

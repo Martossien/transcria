@@ -8,6 +8,7 @@ from __future__ import annotations
 from transcria.jobs.store import JobStore
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow import resume
+from transcria.workflow.outcomes import OutcomeKind
 
 
 def _cfg(tmp_path):
@@ -66,7 +67,7 @@ def test_fresh_run_executes_and_marks_all_phases(app, owner_id, monkeypatch, tmp
 
         result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
 
-        assert result.get("status") == "completed"
+        assert result.kind is OutcomeKind.SUCCESS
         # Toutes les phases exécutées une fois.
         for ph in ("preprocess", "transcription", "diarization", "correction", "final_review", "quality", "export"):
             assert calls.get(ph) == 1, ph
@@ -96,7 +97,7 @@ def test_resume_skips_completed_phases(app, owner_id, monkeypatch, tmp_path):
 
         result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
 
-        assert result.get("status") == "completed"
+        assert result.kind is OutcomeKind.SUCCESS
         # Phases déjà faites : NON rejouées.
         assert calls.get("preprocess") is None
         assert calls.get("transcription") is None
@@ -210,7 +211,7 @@ def _instrument_artifacts(svc, monkeypatch, fs, outputs):
 def _full_run(app_cfg, job, svc_calls, tmp_path):
     svc, calls = svc_calls
     result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
-    assert result.get("status") == "completed"
+    assert result.kind is OutcomeKind.SUCCESS
     return calls
 
 
@@ -336,7 +337,7 @@ class TestProvenance:
                 lambda *a, **k: {"vram_wait": True, "required_mb": 16000, "phase": "llm_arbitration"},
             )
             result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
-            assert result.get("vram_wait")
+            assert result.kind is OutcomeKind.WAITING_VRAM
             done = resume.get_completed_phases(JobStore.get_by_id(job.id))
             assert "correction" not in done  # marqueur retiré EN BASE avant l'exécution
             assert "transcription" in done   # l'amont sauté reste marqué

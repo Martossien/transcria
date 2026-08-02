@@ -6,6 +6,7 @@ from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.states import StepStatus, WorkflowState
+from transcria.workflow.outcomes import OutcomeKind
 
 
 def _default_config(**overrides):
@@ -367,7 +368,8 @@ class TestPipelineServiceStateRecovery:
             result = service.run_process(job, "/tmp/fake.wav", "fast")
             updated = JobStore.get_by_id(job.id)
 
-            assert result["error"] == "qwen down"
+            assert result.kind is OutcomeKind.FAILED
+            assert result.reason == "qwen down"
             assert updated.state == JobState.FAILED.value
 
     def test_pipeline_can_defer_terminal_state_to_worker(self, app, owner_id, monkeypatch, tmp_path):
@@ -390,7 +392,7 @@ class TestPipelineServiceStateRecovery:
             result = service.run_process(job, "/tmp/fake.wav", "fast", finalize_job_state=False)
             updated = JobStore.get_by_id(job.id)
 
-            assert result["status"] == "completed"
+            assert result.kind is OutcomeKind.SUCCESS
             assert updated.state != JobState.COMPLETED.value
 
 

@@ -11,10 +11,10 @@ from transcria.jobs.store import JobStore
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 
 
-def remote_resource_gate(config: dict, job: Job, sl) -> dict | None:
-    """Retourne None si on peut poursuivre ; sinon un dict d'erreur (le job sera
-    marqué FAILED par l'appelant). Aucun coût en mode tout-local (sortie immédiate
-    du gate). Voir docs/SERVICE_RESSOURCES_GPU.md §7.
+def remote_resource_gate(config: dict, job: Job, sl) -> PhaseOutcome | None:
+    """Retourne None si on peut poursuivre ; sinon l'issue qui arrête le pipeline
+    (FAILED, ou DEFERRED si l'indisponibilité est transitoire). Aucun coût en mode
+    tout-local (sortie immédiate du gate). Voir docs/SERVICE_RESSOURCES_GPU.md §7.
     """
 
     # Tout-local : aucun pré-vol, aucun effet de bord (cas le plus courant).
@@ -44,7 +44,7 @@ def remote_resource_gate(config: dict, job: Job, sl) -> dict | None:
             OutcomeKind.FAILED,
             phase="preflight",
             reason=f"ressources_distantes_indisponibles: {verdict.reason}",
-        ).to_legacy_dict()
+        )
     # defer (transitoire) — re-queue différé (§7.2) : le job patiente puis re-tente.
     sl.warning("Pré-vol ressources : indisponibles (transitoire) — mise en file différée (%s)",
                verdict.reason, job_id=job.id)
@@ -53,4 +53,4 @@ def remote_resource_gate(config: dict, job: Job, sl) -> dict | None:
         phase="preflight",
         reason=verdict.reason,
         retry_after_s=verdict.retry_after_s,
-    ).to_legacy_dict()
+    )

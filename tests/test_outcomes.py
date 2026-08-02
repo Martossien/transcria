@@ -1,8 +1,8 @@
 """Tests du contrat PhaseOutcome/ExecutionMode (vague B0) — adaptateurs et priorité.
 
 Le point dur : ``from_legacy_dict`` doit encoder EXACTEMENT la priorité historique de
-l'exécuteur (cancelled > deferred > vram_wait > error > succès), et ``to_legacy_dict``
-doit ré-émettre une forme que ``from_legacy_dict`` relit à l'identique (aller-retour).
+l'exécuteur (cancelled > deferred > vram_wait > error > succès). Il ne reste qu'un
+producteur dictionnaire — le runner d'étape ; le pipeline, lui, renvoie du typé.
 """
 from __future__ import annotations
 
@@ -41,22 +41,6 @@ class TestFromLegacy:
         assert o.required_vram_mb == 6000 and o.retry_after_s == 30 and o.phase == "stt"
         # `step` (pipeline) et `phase` (vram) sont le même concept
         assert PhaseOutcome.from_legacy_dict({"error": "x", "step": "export"}).phase == "export"
-
-
-class TestRoundTrip:
-    @pytest.mark.parametrize("legacy, kind", OBSERVED_SHAPES)
-    def test_to_then_from_is_stable(self, legacy, kind):
-        once = PhaseOutcome.from_legacy_dict(legacy)
-        again = PhaseOutcome.from_legacy_dict(once.to_legacy_dict())
-        assert again == once
-
-    def test_legacy_keys_survive(self):
-        d = PhaseOutcome(OutcomeKind.WAITING_VRAM, phase="stt", required_vram_mb=6000, retry_after_s=30).to_legacy_dict()
-        assert d["vram_wait"] is True and d["required_mb"] == 6000 and d["phase"] == "stt"
-        d = PhaseOutcome(OutcomeKind.FAILED, reason="boom", phase="export").to_legacy_dict()
-        assert d["error"] == "boom" and d["step"] == "export"
-        d = PhaseOutcome(OutcomeKind.CANCELLED).to_legacy_dict()
-        assert d["cancelled"] is True and d["error"]  # l'historique posait toujours un error
 
 
 class TestExecutionMode:

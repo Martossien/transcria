@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from transcria.database import db
@@ -68,7 +69,13 @@ class PipelineService:
         audio_path: str,
         mode: str = "fast",
         finalize_job_state: bool = True,
-    ) -> dict:
+    ) -> PhaseOutcome:
+        """Exécute le pipeline et renvoie son ISSUE TYPÉE (vague B2 terminée).
+
+        Le retour n'est plus un dictionnaire de forme libre : une faute de clé ne peut
+        plus changer silencieusement le comportement de reprise de l'exécuteur — c'est
+        exactement la classe de bug que le typage devait fermer. La sérialisation
+        (`to_legacy_dict`) ne sert plus qu'aux frontières qui en ont besoin."""
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="process")
 
@@ -90,24 +97,25 @@ class PipelineService:
             return gated
 
         try:
-            result = self._execute_pipeline(job, audio_path, mode, sl, finalize_job_state)
+            outcome = self._execute_pipeline(job, audio_path, mode, sl, finalize_job_state)
             elapsed = time.monotonic() - t0
-            status = "OK" if not result.get("error") else "ERROR"
+            echec = outcome.kind is OutcomeKind.FAILED
             sl.info("FIN pipeline %s", mode, job_id=job.id,
-                    duree=round(elapsed, 1), status=status)
-            if not result.get("error"):
+                    duree=round(elapsed, 1), status="ERROR" if echec else "OK")
+            if not echec:
                 self.progress.clear(job.id)
                 # Temps machine du traitement (pour l'email « terminé » enrichi).
-                result.setdefault("processing_seconds", round(elapsed, 1))
-            return result
+                if outcome.processing_seconds is None:
+                    outcome = replace(outcome, processing_seconds=round(elapsed, 1))
+            return outcome
         except Exception as exc:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.FAILED, str(exc))
-            return PhaseOutcome(OutcomeKind.FAILED, phase="pipeline", reason=str(exc)).to_legacy_dict()
+            return PhaseOutcome(OutcomeKind.FAILED, phase="pipeline", reason=str(exc))
 
     @staticmethod
-    def _vram_wait_result(phase_result: dict, *, step: str) -> dict:
+    def _vram_wait_result(phase_result: dict, *, step: str) -> PhaseOutcome:
         """Normalise un résultat de phase `vram_wait` pour remontée à l'exécuteur.
 
         Conserve le motif/la VRAM requise et un délai de re-tentative ; l'exécuteur
@@ -119,9 +127,9 @@ class PipelineService:
             reason=phase_result.get("reason") or phase_result.get("error") or "VRAM insuffisante",
             required_vram_mb=int(phase_result.get("required_mb") or 0),
             retry_after_s=int(phase_result.get("retry_after_s", 30)),
-        ).to_legacy_dict()
+        )
 
-    def _remote_resource_gate(self, job: Job, sl) -> dict | None:
+    def _remote_resource_gate(self, job: Job, sl) -> PhaseOutcome | None:
         # Corps extrait vers services/pipeline_remote_gate.py (B2 lot 2).
         return pipeline_remote_gate.remote_resource_gate(self.config, job, sl)
 
@@ -132,7 +140,7 @@ class PipelineService:
         mode: str,
         sl,
         finalize_job_state: bool = True,
-    ) -> dict:
+    ) -> PhaseOutcome:
         try:
             return self._run_pipeline_steps(job, audio_path, mode, sl, finalize_job_state)
         finally:
@@ -202,12 +210,12 @@ class PipelineService:
         mode: str,
         sl,
         finalize_job_state: bool = True,
-    ) -> dict:
+    ) -> PhaseOutcome:
         cancellation = CancellationToken(job.id, probe=self._is_cancel_requested)
         if cancellation.requested:
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.CANCELLED)
-            return {"error": "Traitement annulé", "step": "transcription", "cancelled": True}
+            return PhaseOutcome(OutcomeKind.CANCELLED, phase="transcription", reason="Traitement annulé")
 
         effective_config = self._config_for_mode(mode, job)
 
@@ -244,7 +252,6 @@ class PipelineService:
             checkpoints.checkpoint("preprocess")
 
         # ── Transcription (STT) ──
-        transcribe_result: dict = {}
         if checkpoints.is_done("transcription"):
             sl.info("Transcription déjà faite — reprise (skip STT)")
         else:
@@ -269,7 +276,8 @@ class PipelineService:
                 # l'exécuteur qui re-queue le job (reprise auto, sans refaire ce qui est fait).
                 return self._vram_wait_result(transcribe_result, step="transcription")
             if transcribe_result.get("error"):
-                return {"error": transcribe_result["error"], "step": "transcription"}
+                return PhaseOutcome(OutcomeKind.FAILED, phase="transcription",
+                                    reason=transcribe_result["error"])
             # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
             StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
             self._record_stage_timing(_timing_profile_id, _audio_seconds, "transcribe", transcribe_elapsed)
@@ -285,7 +293,7 @@ class PipelineService:
             if cancellation.requested:
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.CANCELLED)
-                return {"error": "Traitement annulé", "step": name, "cancelled": True}
+                return PhaseOutcome(OutcomeKind.CANCELLED, phase=name, reason="Traitement annulé")
             t0 = time.monotonic()
             method = step_cfg["method"]
             sl.info("Étape en cours", step=name)
@@ -316,7 +324,7 @@ class PipelineService:
                          duree=round(elapsed, 1))
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.FAILED, result["error"])
-                return {"error": result["error"], "step": name}
+                return PhaseOutcome(OutcomeKind.FAILED, phase=name, reason=result["error"])
             if result.get("skipped") and result.get("retryable"):
                 # Skip TRANSITOIRE (ressource momentanément indisponible — ex. relecture
                 # finale best-effort sautée car LLM occupée par un autre job). On ne le
@@ -334,7 +342,10 @@ class PipelineService:
 
         if finalize_job_state:
             JobStore.update_state(job.id, JobState.COMPLETED)
-        return {"status": "completed", "transcription": transcribe_result}
+        # Le succès ne porte plus la transcription complète : aucun appelant ne la
+        # lisait (vérifié sur l'arbre entier + le script E2E), et la trimballer jusqu'à
+        # l'exécuteur coûtait une copie de tout le contenu du job pour rien.
+        return PhaseOutcome(OutcomeKind.SUCCESS, phase="pipeline")
 
     def _publish_step_progress(self, job: Job, step_name: str, *, starting: bool) -> None:
         messages = {

@@ -18,6 +18,7 @@ from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.store import QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
+from transcria.workflow.outcomes import PhaseOutcome
 
 
 @pytest.fixture()
@@ -42,9 +43,18 @@ def harness(app, owner_id, monkeypatch):
 
 
 def _run_with_result(svc, job_id, monkeypatch, result: dict) -> None:
+    """Joue un dict historique à travers l'adaptateur, puis l'exécuteur.
+
+    Depuis que `run_process` renvoie un `PhaseOutcome` natif (vague B2), le dict ne
+    peut plus être rendu tel quel — mais les cas figés ici gardent tout leur sens :
+    ils couvrent d'un seul geste la PRIORITÉ encodée par `from_legacy_dict` (toujours
+    utilisée par le producteur d'étape, qui renvoie encore des dicts) ET la décision
+    de l'exécuteur pour chaque issue. Les corps de test sont restés inchangés — c'est
+    ce que ces goldens promettaient."""
+    outcome = PhaseOutcome.from_legacy_dict(result)
     monkeypatch.setattr(
         "transcria.services.pipeline_service.PipelineService.run_process",
-        lambda self, job, audio_path, mode, finalize_job_state=False: result,
+        lambda self, job, audio_path, mode, finalize_job_state=False: outcome,
     )
     svc._run_process(job_id, "/tmp/a.wav", "quality")
 

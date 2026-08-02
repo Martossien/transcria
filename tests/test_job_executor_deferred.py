@@ -11,6 +11,7 @@ from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.store import QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
+from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 
 
 def test_deferred_result_requeues_without_failing(app, owner_id, monkeypatch):
@@ -26,9 +27,9 @@ def test_deferred_result_requeues_without_failing(app, owner_id, monkeypatch):
         # Le pipeline renvoie un verdict différé (ressources distantes injoignables).
         monkeypatch.setattr(
             "transcria.services.pipeline_service.PipelineService.run_process",
-            lambda self, job, audio_path, mode, finalize_job_state=False: {
-                "deferred": True, "retry_after_s": 45, "reason": "nœud injoignable"
-            },
+            lambda self, job, audio_path, mode, finalize_job_state=False: PhaseOutcome(
+                OutcomeKind.DEFERRED, retry_after_s=45, reason="nœud injoignable"
+            ),
         )
 
         svc._run_process(job_id, "/tmp/a.wav", "quality")

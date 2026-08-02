@@ -16,6 +16,7 @@ from fakes import FakeJobStore, FakeWorkflowRunner
 from transcria.jobs.models import JobState
 from transcria.services import pipeline_service
 from transcria.services.pipeline_service import PipelineService
+from transcria.workflow.outcomes import OutcomeKind
 
 # Séquence attendue du profil `dossier_qualite` (mode legacy « quality ») — la
 # table unique de séquencement est verrouillée par les goldens B2 ; on n'affirme
@@ -63,8 +64,8 @@ def test_pipeline_runs_without_flask_pg_gpu(tmp_path, monkeypatch):
 
     result = svc.run_process(job, str(audio), mode="quality")
 
-    assert result.get("error") is None
-    assert result["status"] == "completed"
+    assert result.reason is None
+    assert result.kind is OutcomeKind.SUCCESS
     assert svc.runner.calls == _EXPECTED_CALLS
     # Provenance persistée via le store (mécanique de reprise réelle, pas un mock).
     assert store.completed_phases(job.id) == ["preprocess"] + _EXPECTED_CALLS
@@ -80,12 +81,12 @@ def test_pipeline_resume_skips_all_completed_phases(tmp_path, monkeypatch):
     audio.write_bytes(b"RIFF fake wav")
 
     first = svc.run_process(job, str(audio), mode="quality")
-    assert first["status"] == "completed"
+    assert first.kind is OutcomeKind.SUCCESS
     calls_after_first = list(svc.runner.calls)
 
     second = svc.run_process(job, str(audio), mode="quality")
 
-    assert second["status"] == "completed"
+    assert second.kind is OutcomeKind.SUCCESS
     assert svc.runner.calls == calls_after_first  # aucune phase rejouée
 
 
@@ -106,8 +107,9 @@ def test_pipeline_stops_on_failed_step_without_infra(tmp_path, monkeypatch):
 
     result = svc.run_process(job, str(audio), mode="quality")
 
-    assert result["error"] == "LLM indisponible (scripté)"
-    assert result["step"] == "correction"
+    assert result.kind is OutcomeKind.FAILED
+    assert result.reason == "LLM indisponible (scripté)"
+    assert result.phase == "correction"
     assert "final_review" not in svc.runner.calls
     assert "export" not in svc.runner.calls
     assert any(state is JobState.FAILED for _, state, _ in store.state_updates)

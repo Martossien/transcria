@@ -105,7 +105,7 @@ Ces chantiers ont déjà été commencés. Les laisser à mi-chemin coûte plus 
 finir : le code porte alors **deux conventions**, et chaque lecteur doit deviner laquelle
 s'applique.
 
-### Q2.1 — Terminer `PhaseOutcome`
+### Q2.1 — Terminer `PhaseOutcome`  ✅ **LIVRÉE** (gate E2E GPU restant)
 
 `workflow/outcomes.py` annonce la disparition des adaptateurs, mais `job_executor` et
 `pipeline_service` convertissent encore des dictionnaires et réinterprètent `vram_wait`,
@@ -122,11 +122,46 @@ seulement aux frontières HTTP.
 d'entre eux portent des données hors contrat (`transcription`, `processing_seconds`), ce qui
 demande un champ `details` sur `PhaseOutcome`.
 
-**Non livrée dans cette passe, et c'est délibéré :** ces six points sont le cœur de
-l'exécution, et la règle du projet est qu'un changement de pipeline se valide par l'**E2E GPU
-réel**, pas par la seule suite unitaire. La faire en fin de session sans ce gate reviendrait à
-troquer un risque connu (une faute de clé silencieuse) contre un risque inconnu.
-**Prochaine session, avec l'E2E.**
+**Livrée.** Le pipeline renvoie un `PhaseOutcome` de bout en bout : `run_process`,
+`_execute_pipeline`, `_run_pipeline_steps`, `_vram_wait_result` et le pré-vol des ressources
+distantes. L'exécuteur consomme le type directement ; `from_legacy_dict` ne sert plus qu'au
+**seul producteur encore dictionnaire**, le runner d'étape (résumé / détection / affinage),
+et son emploi est désormais visible à l'endroit exact où ce producteur est appelé.
+
+Le périmètre réel s'est révélé **plus petit que prévu**, et dans le bon sens :
+
+- **le champ `details` n'a pas été nécessaire.** Le retour de succès portait
+  `{"status": "completed", "transcription": …}` — et la vérification sur l'arbre entier (plus
+  le script E2E) montre que **personne ne lisait `transcription`**. On trimballait une copie
+  du contenu du job jusqu'à l'exécuteur pour rien. Elle est supprimée, pas déplacée dans un
+  champ fourre-tout ;
+- **`to_legacy_dict` est mort avec la migration.** Plus aucun appelant de production ; il ne
+  restait que ses propres tests. Le garder aurait entretenu la seconde convention que cette
+  migration devait précisément fermer.
+
+Les goldens de la machine à états (`test_job_executor_outcomes_golden.py`) promettaient de
+« rester verts, inchangés, après la migration ». Ils le sont **littéralement** : seule leur
+fonction d'aide change, pour faire passer le dict par l'adaptateur — ce que fait exactement le
+producteur d'étape. Les cas figés couvrent donc toujours d'un seul geste la priorité entre
+clés *et* la décision de l'exécuteur.
+
+**Le gate qui manque, et il manque vraiment :** la règle du projet est qu'un changement de
+pipeline se valide par l'**E2E GPU réel**, lequel exige d'arrêter le service — action qui m'a
+été refusée. La suite complète (5 755 tests) et toutes les gates de la CI sont vertes, mais
+elles ne remplacent pas ce passage. **À jouer avant de considérer Q2.1 close :**
+`systemctl stop transcria && venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3`.
+
+**Trouvé en chemin — une fuite de capacité de la file.** En vérifiant qu'aucun job ne
+tournait avant de lancer l'E2E, une entrée de file est apparue bloquée en `running` pour un
+job `failed` **depuis la veille**. La réconciliation ne pouvait pas la voir : elle ne
+regarde que `execution.status`, et celui-ci n'était plus « running ».
+
+Ce n'est pas cosmétique. La capacité vaut `effective_max - count_running()` : chaque
+orpheline retire **définitivement** une place d'exécution, en silence. Deux ou trois
+terminaisons anormales suffisent à paralyser une file de quatre. La réconciliation libère
+désormais ces entrées avec le statut correspondant à la fin réelle du job (`failed` /
+`done` / `cancelled`), sans jamais confondre « orpheline » et « interrompue » — deux tests
+le prouvent, et échouent sans le correctif.
 
 ### Q2.2 — Une seule porte pour les transitions d'état  ✅ **LIVRÉE**
 

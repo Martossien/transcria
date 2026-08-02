@@ -5,11 +5,14 @@ Remplace les dictionnaires de forme libre (``{"vram_wait": True}``, ``{"deferred
 ``job_executor`` ré-interprétait clé par clé. Le contrat couvre EXACTEMENT les neuf clés
 observées dans le code historique (relevé du plan qualité §3.3) — ni plus, ni moins.
 
-Les adaptateurs ``from_legacy_dict``/``to_legacy_dict`` sont le pont de migration : ils
-encodent la PRIORITÉ historique entre clés (cancelled > deferred > vram_wait > error >
-succès — figée par tests/test_job_executor_outcomes_golden.py) et permettent de migrer le
-consommateur et les producteurs séparément. Ils meurent quand les deux bouts sont typés
-(vague B2).
+``from_legacy_dict`` est ce qui reste du pont de migration : il encode la PRIORITÉ
+historique entre clés (cancelled > deferred > vram_wait > error > succès — figée par
+tests/test_job_executor_outcomes_golden.py) et sert au SEUL producteur encore
+dictionnaire, le runner d'étape (résumé / détection de locuteurs / affinage).
+
+``to_legacy_dict`` a été retiré : le pipeline renvoie désormais un ``PhaseOutcome``
+natif de bout en bout, et plus aucun appelant n'avait besoin de la forme historique.
+Le garder aurait entretenu la seconde convention que cette migration devait fermer.
 """
 from __future__ import annotations
 
@@ -71,32 +74,3 @@ class PhaseOutcome:
             required_vram_mb=required,
             processing_seconds=processing,
         )
-
-    def to_legacy_dict(self) -> dict:
-        """Ré-émet la forme historique (pour les appelants non migrés) — inverse de
-        ``from_legacy_dict`` sur toutes les formes observées."""
-        out: dict = {}
-        if self.phase is not None:
-            out["phase"] = self.phase
-            out["step"] = self.phase
-        if self.retry_after_s is not None:
-            out["retry_after_s"] = self.retry_after_s
-        if self.processing_seconds is not None:
-            out["processing_seconds"] = self.processing_seconds
-        if self.kind is OutcomeKind.CANCELLED:
-            out["cancelled"] = True
-            out["error"] = self.reason or "Traitement annulé"
-        elif self.kind is OutcomeKind.DEFERRED:
-            out["deferred"] = True
-            if self.reason:
-                out["reason"] = self.reason
-        elif self.kind is OutcomeKind.WAITING_VRAM:
-            out["vram_wait"] = True
-            out["required_mb"] = self.required_vram_mb or 0
-            if self.reason:
-                out["reason"] = self.reason
-        elif self.kind is OutcomeKind.FAILED:
-            out["error"] = self.reason or "Erreur inconnue"
-        else:
-            out["status"] = "completed"
-        return out

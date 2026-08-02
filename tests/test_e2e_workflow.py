@@ -1914,6 +1914,7 @@ def main() -> int:
         from transcria.jobs.store import JobStore
         from transcria.services.job_service import JobService
         from transcria.services.pipeline_service import PipelineService
+        from transcria.workflow.outcomes import OutcomeKind
         from transcria.stt.speaker_detection import SpeakerDetector
         from transcria.workflow.runner import WorkflowRunner
         from transcria.workflow.transitions import advance_preprocessing_state
@@ -2133,16 +2134,17 @@ def main() -> int:
             gpu_checkpoint("avant-pipeline")
 
             if args.process_via_api:
+                # Passage par la file : c'est l'exécuteur qui juge l'issue, pas nous.
                 run_pipeline_via_queue_api(app, cfg, args, job.id)
-                result = {}
+                result = None
             else:
                 pipeline = PipelineService(cfg)
                 result = pipeline.run_process(job, str(audio_path), args.mode)
 
             gpu_checkpoint("apres-pipeline")
 
-            if result.get("error"):
-                raise RuntimeError(f"[{result.get('step')}] {result['error']}")
+            if result is not None and result.kind is not OutcomeKind.SUCCESS:
+                raise RuntimeError(f"[{result.phase}] {result.reason or result.kind.name}")
 
             job = JobStore.get_by_id(job_id)
             ok(f"Pipeline terminé, état={job.state}, mode={args.mode}")

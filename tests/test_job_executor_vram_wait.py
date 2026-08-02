@@ -12,10 +12,12 @@ from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.store import QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
+from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 
 
 def _vram_wait_result(self, job, audio_path, mode, finalize_job_state=False):
-    return {"vram_wait": True, "required_mb": 6000, "phase": "stt", "retry_after_s": 30}
+    return PhaseOutcome(OutcomeKind.WAITING_VRAM, phase="stt",
+                        required_vram_mb=6000, retry_after_s=30)
 
 
 def test_vram_wait_requeues_without_failing_and_alerts_admin_once(app, owner_id, monkeypatch):
