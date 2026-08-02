@@ -56,6 +56,7 @@ from transcria.diagnostics.checks.deployment import (  # noqa: F401 — façade
     check_web_gpu_statefulness,
 )
 from transcria.diagnostics.checks.identity import (  # noqa: F401 — façade
+    check_config_permissions,
     check_identity_backend,
     check_transport_security,
 )
@@ -125,6 +126,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_stt_instances_vram,
     check_identity_backend,
     check_transport_security,
+    check_config_permissions,
     check_inference_node_gpus,
     check_local_models,
     check_storage,

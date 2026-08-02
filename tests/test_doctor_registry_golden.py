@@ -31,6 +31,10 @@ GOLDEN_ALL_CHECKS = [
     "check_stt_instances_vram",
     "check_identity_backend",
     "check_transport_security",
+    # Ajout 2026-08-02 (passe qualité Q1.4) : le fichier de configuration porte des
+    # secrets ; `save_config` pose 0600 mais un fichier ANTÉRIEUR au correctif garde
+    # ses permissions tant que personne n'enregistre depuis l'interface.
+    "check_config_permissions",
     "check_inference_node_gpus",
     "check_local_models",
     "check_storage",

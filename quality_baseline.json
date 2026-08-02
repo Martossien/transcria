@@ -76,7 +76,7 @@
   "transcria.diagnostics.checks.common": 2,
   "transcria.diagnostics.checks.database": 3,
   "transcria.diagnostics.checks.deployment": 2,
-  "transcria.diagnostics.checks.identity": 2,
+  "transcria.diagnostics.checks.identity": 3,
   "transcria.diagnostics.checks.llm": 4,
   "transcria.diagnostics.checks.remote": 7,
   "transcria.diagnostics.checks.storage": 2,

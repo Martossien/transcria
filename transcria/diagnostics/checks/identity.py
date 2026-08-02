@@ -1,8 +1,10 @@
 """Doctor — identité (local/OIDC/proxy/LDAP) et transport HTTP(S)."""
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
+from transcria.config.loader import get_config_path
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 
 
@@ -116,3 +118,34 @@ def check_transport_security(cfg: dict) -> CheckResult:
         return CheckResult(name, WARN, _t("transport_federated_insecure", backend=backend),
                            hint=_t("transport_hint"))
     return CheckResult(name, OK, _t("transport_ok", secure="oui" if secure else "non (local/HTTP)"))
+
+
+def check_config_permissions(cfg: dict, *, config_path: str | None = None,
+                             stat_fn: Callable[[str], int] | None = None) -> CheckResult:
+    """Le fichier de configuration porte des SECRETS — il ne doit pas être lisible
+    par les autres comptes de la machine.
+
+    `save_config` pose désormais `0600` à chaque écriture, mais un fichier créé
+    AVANT ce correctif (ou par un `cp` manuel, ou par une restauration de
+    sauvegarde) garde ses permissions d'origine tant que personne n'enregistre
+    depuis l'interface. Le contrôle regarde donc l'état réel sur disque, pas ce
+    que le code aurait dû faire : c'est exactement l'écart qui a produit le
+    `0644` constaté sur une installation réelle.
+
+    WARN et non FAIL : le portail fonctionne parfaitement dans cet état — c'est
+    une exposition, pas une panne, et un FAIL ferait échouer le doctor sur des
+    installations par ailleurs saines.
+    """
+    name = _t("chk_config_perms")
+    chemin = config_path or get_config_path()
+    lire = stat_fn or (lambda p: os.stat(p).st_mode)
+    try:
+        mode = lire(chemin) & 0o777
+    except OSError:
+        # Pas de fichier = installation qui tourne sur les défauts : rien à protéger.
+        return CheckResult(name, OK, _t("cfgperm_absent"))
+    trop_large = mode & 0o077
+    if trop_large:
+        return CheckResult(name, WARN, _t("cfgperm_large", mode=f"{mode:04o}"),
+                           hint=_t("cfgperm_hint", chemin=chemin))
+    return CheckResult(name, OK, _t("cfgperm_ok", mode=f"{mode:04o}"))

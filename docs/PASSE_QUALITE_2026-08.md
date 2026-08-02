@@ -79,7 +79,14 @@ sauvegarde interrompue qui laisse une configuration tronquée.
 **Correction :** écriture atomique (temporaire + `replace`), `chmod(0600)` à chaque
 écriture — y compris sur un fichier existant trop permissif, cas des installations déjà
 déployées — et nettoyage du temporaire en cas d'échec.
-**Livré**, six tests. **Reste :** le contrôle au doctor.
+**Livré**, six tests — **et le contrôle au doctor**, qui complète le correctif au bon
+endroit : `save_config` garantit `0600` à l'écriture, mais ne dit rien des fichiers **déjà
+sur disque**. Une installation antérieure au correctif, une restauration de sauvegarde ou une
+copie manuelle gardent leurs permissions tant que personne n'enregistre depuis l'interface —
+c'est précisément l'écart qui a produit le `0644` observé. `check_config_permissions` regarde
+l'état réel, refuse aussi le seul bit de groupe (`0640` suffit à lire les secrets sur une
+machine partagée), et reste en WARN : c'est une exposition, pas une panne. Il a signalé le
+`0644` de la machine de développement à la première exécution.
 
 ### Q1.5 — Une ressource non fermée
 

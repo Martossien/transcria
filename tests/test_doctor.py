@@ -947,3 +947,49 @@ class TestCheckIdentityBackend:
             admin_counter=lambda: 1, ldap_prober=lambda host, port: True)
         assert res.status == doc.WARN
         assert "clair" in res.detail                          # canal non chiffré signalé
+
+
+# --- Q1.4 : permissions du fichier de configuration ------------------------------------
+#
+# `save_config` pose 0600 à chaque écriture, mais ça ne dit rien des fichiers DÉJÀ sur
+# disque : une installation antérieure au correctif, une restauration de sauvegarde ou un
+# `cp` manuel gardent leurs permissions tant que personne n'enregistre depuis l'interface.
+# Le contrôle regarde donc l'état RÉEL — c'est ce qui a produit le 0644 constaté.
+
+def test_config_permissions_signale_un_fichier_lisible_par_les_autres(tmp_path):
+    from transcria.diagnostics.checks.identity import check_config_permissions
+
+    fichier = tmp_path / "config.yaml"
+    fichier.write_text("a: 1", encoding="utf-8")
+    fichier.chmod(0o644)
+    result = check_config_permissions({}, config_path=str(fichier))
+    assert result.status == "warn"
+    assert "0644" in doc._t(result.detail, mode="0644")
+
+
+def test_config_permissions_accepte_0600(tmp_path):
+    from transcria.diagnostics.checks.identity import check_config_permissions
+
+    fichier = tmp_path / "config.yaml"
+    fichier.write_text("a: 1", encoding="utf-8")
+    fichier.chmod(0o600)
+    assert check_config_permissions({}, config_path=str(fichier)).status == "ok"
+
+
+def test_config_permissions_refuse_aussi_le_bit_groupe_seul(tmp_path):
+    """0640 est déjà trop : le groupe suffit à lire les secrets sur une machine partagée."""
+    from transcria.diagnostics.checks.identity import check_config_permissions
+
+    fichier = tmp_path / "config.yaml"
+    fichier.write_text("a: 1", encoding="utf-8")
+    fichier.chmod(0o640)
+    assert check_config_permissions({}, config_path=str(fichier)).status == "warn"
+
+
+def test_config_permissions_ok_sans_fichier(tmp_path):
+    """Pas de config.yaml = installation sur les valeurs par défaut : rien à protéger,
+    et surtout pas un WARN qui ferait croire à un problème."""
+    from transcria.diagnostics.checks.identity import check_config_permissions
+
+    result = check_config_permissions({}, config_path=str(tmp_path / "absent.yaml"))
+    assert result.status == "ok"
