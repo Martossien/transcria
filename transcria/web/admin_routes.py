@@ -40,6 +40,7 @@ from transcria.ingestion.runner_kit import (
     build_kit_script,
     mint_remote_runner_token,
     repo_pin,
+    safe_portal_url,
     valid_runner_name,
 )
 from transcria.ingestion.runner_provisioning import (
@@ -624,8 +625,13 @@ def admin_runner_kit():
     if not valid_runner_name(name):
         flash(_("Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."), "error")
         return redirect("/admin/connecteurs")
-    if not portal_url.startswith(("http://", "https://")):
-        flash(_("URL du portail invalide — celle que la machine DISTANTE peut joindre."), "error")
+    try:
+        # Contrôle STRICT (schéma, hôte, pas de userinfo, pas de caractère de contrôle) :
+        # cette valeur part dans un script exécuté en root sur une autre machine.
+        portal_url = safe_portal_url(portal_url)
+    except ValueError as exc:
+        flash(_("URL du portail invalide (%(motif)s) — indiquez celle que la machine "
+                "DISTANTE peut joindre.", motif=str(exc)), "error")
         return redirect("/admin/connecteurs")
     token = mint_remote_runner_token(name)
     if token is None:

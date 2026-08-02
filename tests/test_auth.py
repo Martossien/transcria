@@ -234,3 +234,47 @@ class TestUnauthenticatedResponses:
         assert login.status_code == 302
         cookies = login.headers.getlist("Set-Cookie")
         assert any(c.startswith("transcria_session=") for c in cookies)
+
+
+# --- Passe sécurité S1.3 : la révocation de session, ÉPINGLÉE ---------------------------
+#
+# Ces tests ne corrigent pas un trou : ils en ferment un futur. La protection existait déjà,
+# mais nulle part dans ce projet — `flask_login.UserMixin.is_authenticated` retourne
+# `self.is_active`, et le modèle `User` définit `is_active` en colonne. Autrement dit, la
+# révocation d'un compte désactivé reposait ENTIÈREMENT sur un détail d'implémentation d'une
+# bibliothèque tierce.
+#
+# Le jour où quelqu'un définit un `is_authenticated` sur le modèle — pour une double
+# authentification, par exemple — la protection disparaîtrait sans qu'aucun test ne rougisse.
+# C'est ce test-là qui rougira.
+
+def test_desactiver_un_compte_coupe_sa_session_en_cours(app, client):
+    from transcria.auth.models import Role
+    from transcria.auth.store import UserStore
+
+    with app.app_context():
+        user = UserStore.create_user("parti", "mot-de-passe-长-1", Role.OPERATOR)
+        user_id = user.id
+
+    r = client.post("/login", data={"username": "parti", "password": "mot-de-passe-长-1"},
+                    follow_redirects=False)
+    assert r.status_code in (301, 302)                      # connecté
+    assert client.get("/api/resources/status").status_code != 401       # la session porte
+
+    with app.app_context():
+        assert UserStore.deactivate_user(user_id) is True
+
+    # La MÊME session, sans se reconnecter : elle ne doit plus rien pouvoir.
+    assert client.get("/api/resources/status").status_code == 401
+
+
+def test_un_compte_actif_nest_pas_affecte(app, client):
+    """Contre-épreuve : la garde ne doit pas déconnecter tout le monde."""
+    from transcria.auth.models import Role
+    from transcria.auth.store import UserStore
+
+    with app.app_context():
+        UserStore.create_user("reste", "mot-de-passe-长-2", Role.OPERATOR)
+
+    client.post("/login", data={"username": "reste", "password": "mot-de-passe-长-2"})
+    assert client.get("/api/resources/status").status_code != 401

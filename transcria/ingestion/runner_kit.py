@@ -16,8 +16,10 @@ compte de service `svc-runner` du provisionnement local (jamais un compte par ma
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from transcria.auth.api_tokens import create_token
 from transcria.auth.store import UserStore
@@ -25,6 +27,64 @@ from transcria.ingestion.runner_provisioning import RUNNER_ACCOUNT
 
 _REPO_URL = "https://github.com/Martossien/transcria"
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+#: Hôte : étiquettes DNS, ou une adresse IPv4. Volontairement restrictif — cette valeur
+#: finit dans un script exécuté en root sur une autre machine.
+_HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
+#: Chemin : le portail peut vivre sous un préfixe (reverse-proxy), rien de plus.
+_PATH_RE = re.compile(r"^(/[A-Za-z0-9._~-]+)*/?$")
+
+
+def _est_ipv6(hote: str) -> bool:
+    import ipaddress
+    try:
+        ipaddress.IPv6Address(hote)
+    except ValueError:
+        return False
+    return True
+
+
+def safe_portal_url(raw: str) -> str:
+    """URL du portail NORMALISÉE, ou ``ValueError`` avec le motif.
+
+    Cette valeur part dans un script shell exécuté EN ROOT sur une autre machine, par
+    quelqu'un qui n'est pas forcément l'admin du portail. Un simple contrôle de préfixe
+    ``http://`` laissait passer ``https://x";$(commande);"`` — qui sort du guillemet.
+
+    Deux défenses, volontairement redondantes :
+
+    1. ici, on ACCEPTE une forme, au lieu de rejeter des caractères connus. L'URL est
+       reconstruite depuis ses composants analysés : ce que `urlsplit` n'a pas compris
+       n'existe plus dans le résultat ;
+    2. à l'injection, `shlex.quote` (voir `build_kit_script`) — pour que la sûreté ne
+       dépende pas de la seule exhaustivité de cette fonction.
+    """
+    brut = (raw or "").strip()
+    if not brut:
+        raise ValueError("URL du portail vide")
+    if any(ord(c) < 32 or ord(c) == 127 for c in brut):
+        raise ValueError("caractère de contrôle dans l'URL du portail")
+    parts = urlsplit(brut)
+    if parts.scheme not in ("http", "https"):
+        raise ValueError(f"schéma non autorisé : {parts.scheme or '(aucun)'} — http ou https")
+    if not parts.hostname:
+        raise ValueError("URL du portail sans nom d'hôte")
+    if parts.username or parts.password:
+        raise ValueError("identifiants dans l'URL (userinfo) — non autorisés")
+    if parts.query or parts.fragment:
+        raise ValueError("l'URL du portail ne prend ni paramètres ni ancre")
+    # `urlsplit` ne VALIDE pas l'hôte : il découpe. `https://x";$(id);"` lui rend
+    # tranquillement un hostname contenant guillemet et substitution de commande. C'est
+    # donc ici, et pas dans le découpage, que la forme est exigée.
+    hote_nu = parts.hostname
+    if not (_HOST_RE.match(hote_nu) or _est_ipv6(hote_nu)):
+        raise ValueError(f"nom d'hôte invalide : {hote_nu!r}")
+    if not _PATH_RE.match(parts.path):
+        raise ValueError("chemin d'URL invalide (lettres, chiffres, ., _, -, ~, / attendus)")
+    # IPv6 : `urlsplit` retire les crochets, il faut les remettre — sans quoi
+    # `https://[::1]:8080` ressortirait en `https://::1:8080`, qui n'est plus une URL.
+    litteral = f"[{hote_nu}]" if _est_ipv6(hote_nu) else hote_nu
+    hote = litteral if parts.port is None else f"{litteral}:{parts.port}"
+    return urlunsplit((parts.scheme, hote, parts.path.rstrip("/"), "", ""))
 
 
 def valid_runner_name(name: str) -> bool:
@@ -68,10 +128,15 @@ def build_kit_script(*, portal_url: str, token: str, runner_name: str,
     unité rechargée."""
     if not valid_runner_name(runner_name):
         raise ValueError(f"nom d'exécutant invalide : {runner_name!r}")
-    portal = portal_url.rstrip("/")
+    portal = safe_portal_url(portal_url)
     pin_line = pin_commit or "main"
     pin_note = ("commit du portail au moment de la génération" if pin_commit
                 else "ATTENTION : portail sans clone git — branche par défaut, non épinglée")
+    # Seconde défense (cf. `safe_portal_url`) : aucune de ces valeurs n'est écrite entre
+    # guillemets à la main — `shlex.quote` produit lui-même la forme sûre. Ainsi la
+    # sûreté ne repose pas sur la seule exhaustivité du contrôle en amont.
+    portal_q, runner_name_q = shlex.quote(portal), shlex.quote(runner_name)
+    token_q, repo_url_q, pin_q = shlex.quote(token), shlex.quote(repo_url), shlex.quote(pin_line)
     return f"""#!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # TranscrIA — kit « exécutant distant » (généré par {portal})
@@ -84,11 +149,11 @@ def build_kit_script(*, portal_url: str, token: str, runner_name: str,
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PORTAL_URL="{portal}"
-RUNNER_NAME="{runner_name}"
-TOKEN="{token}"
-REPO_URL="{repo_url}"
-PIN="{pin_line}"                 # {pin_note}
+PORTAL_URL={portal_q}
+RUNNER_NAME={runner_name_q}
+TOKEN={token_q}
+REPO_URL={repo_url_q}
+PIN={pin_q}                 # {pin_note}
 DEST="${{TRANSCRIA_RUNNER_HOME:-/opt/transcria-runner}}"
 CONF_DIR=/etc/transcria
 UNIT=/etc/systemd/system/transcria-meeting-runner.service

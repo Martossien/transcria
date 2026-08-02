@@ -6,7 +6,7 @@ remplace pas, il liste **ce qui manque encore** et, tout aussi important, **ce q
 faire**.
 
 Chaque constat ci-dessous a été **vérifié dans le code**, pas déduit d'une lecture rapide :
-les références de fichier et de ligne ont été ouvertes une par une. Trois affirmations
+les références de fichier et de ligne ont été ouvertes une par une. Quatre affirmations
 plausibles de l'audit source ont été écartées à la vérification — elles sont listées en fin de
 document, pour qu'elles ne reviennent pas.
 
@@ -112,7 +112,7 @@ quoi faire, pas un warning qu'on ne lit jamais.
 + `127.0.0.1` + drapeau dev → démarre avec un avertissement visible (test) ; clé présente →
 comportement actuel (test de non-régression).
 
-### S1.2 — Le kit runner interpole une URL dans du Bash
+### S1.2 — Le kit runner interpole une URL dans du Bash  ✅ **LIVRÉE**
 
 `transcria/ingestion/runner_kit.py` — `build_kit_script()` construit le script d'installation
 par f-string :
@@ -138,31 +138,36 @@ Le YAML produit passe par un sérialiseur, pas par une f-string.
 **Critère d'acceptation :** tests négatifs sur guillemet, `$(…)`, backtick, CR, LF, `@` de
 userinfo, schéma `file://`. Chacun refusé **avant** génération.
 
-### S1.3 — Désactiver un compte ne ferme pas ses sessions
+### S1.3 — La révocation de session tient à un fil (et l'audit se trompait)  ✅ **LIVRÉE**
 
-`transcria/app_services.py:232` :
+L'audit annonçait qu'une désactivation de compte ne coupait pas les sessions en cours.
+**C'est faux, et la vérification a été instructive.** `flask_login.UserMixin` définit :
 
 ```python
-@login_manager.user_loader
-def load_user(user_id: str) -> User | None:
-    return UserStore.get_by_id(user_id)
+@property
+def is_authenticated(self):
+    return self.is_active
 ```
 
-Aucune vérification de `is_active`. `UserStore.deactivate_user()` pose bien le drapeau en base,
-mais **la session en cours continue de fonctionner** jusqu'à son expiration — jusqu'à 12 h. Même
-chose après un changement de mot de passe : les sessions ouvertes ailleurs survivent.
+Or le modèle `User` possède une **colonne** `is_active`, qui écrase cette propriété.
+`@login_required` teste `is_authenticated` — donc un compte désactivé est déjà rejeté à la
+requête suivante. Mesuré : `User(is_active=False).is_authenticated` vaut `False`.
 
-**Ce que ça vaut :** c'est le geste qu'on fait quand quelqu'un part, ou quand on soupçonne un
-compte compromis. Qu'il n'ait pas d'effet immédiat est exactement le contraire de ce que
-l'administrateur croit avoir fait. C'est le défaut le moins spectaculaire de la liste et
-probablement le plus fréquemment rencontré en vrai.
+**Ce qui reste vrai, et qui est le vrai sujet :** cette protection n'est écrite **nulle part
+dans le projet**. Elle repose entièrement sur un détail d'implémentation d'une bibliothèque
+tierce, que personne ne relit. Le jour où quelqu'un définit un `is_authenticated` sur le
+modèle — pour gérer la double authentification, par exemple — la révocation disparaît **sans
+qu'aucun test ne rougisse**.
 
-**Correction (une ligne, plus un test) :** `load_user` retourne `None` si le compte est inactif.
-Pour le changement de mot de passe, la voie propre est un compteur de version d'identité dans
-`get_id()` — plus intrusive ; à trancher séparément, la désactivation étant le cas urgent.
+**Correction (défense de ceinture, pas un correctif de trou) :** le chargeur de session
+refuse explicitement un compte inactif, et **deux tests épinglent le comportement** — c'est
+eux qui comptent. Un test qui échoue le jour où la propriété est redéfinie vaut mieux qu'une
+protection invisible.
 
-**Critère d'acceptation :** session ouverte + désactivation → la requête suivante est
-redirigée vers la connexion (test) ; le compte actif n'est pas affecté (test).
+**Reste, et non traité ici :** un **changement de mot de passe** ne ferme pas les sessions
+ouvertes ailleurs (`is_active` ne bouge pas). La voie propre est un compteur de version
+d'identité dans `get_id()`. C'est un vrai chantier de session, pas une ligne ; à trancher
+séparément — la désactivation était le cas urgent, et il était déjà couvert.
 
 ### S1.4 — Le compte d'amorçage `CHANGE-ME`
 
@@ -331,7 +336,7 @@ révolution, et distinguer la sécurité nécessaire de la sur-sécurité.
 
 ---
 
-## Trois affirmations de l'audit source non retenues
+## Quatre affirmations de l'audit source non retenues
 
 Elles sont plausibles à la lecture, fausses ou trompeuses à la vérification. Les consigner évite
 qu'elles reviennent.
@@ -342,7 +347,11 @@ qu'elles reviennent.
 2. **« Le fichier de configuration est écrit sans `chmod` ni atomicité »** — c'était vrai au
    moment de l'audit ; **corrigé depuis** par Q1.4, avec en plus un contrôle au doctor qui
    regarde l'état réel sur disque.
-3. **« Édition de prompt → exécution de script »** — les prompts sont une **liste fermée**
+3. **« Désactiver un compte ne révoque pas ses sessions »** — faux : `UserMixin.
+   is_authenticated` délègue à `is_active`, que le modèle définit en colonne. La protection
+   existe ; ce qui manquait, c'est qu'elle soit **écrite et testée** plutôt que déduite d'une
+   bibliothèque tierce (voir S1.3).
+4. **« Édition de prompt → exécution de script »** — les prompts sont une **liste fermée**
    (`prompt_files.PROMPT_FILES`), avec garde non-vide et sauvegarde `.bak`. Le trajet réel vers
    l'exécution passe par le mode YAML brut de la configuration (S1.6), pas par les prompts.
 
@@ -350,8 +359,8 @@ qu'elles reviennent.
 
 ## Ordre proposé
 
-1. **S1.3** (une ligne), **S1.2** (`shlex` + `urlsplit`) — le meilleur rapport effet/effort du
-   document.
+1. **S1.2** (`shlex` + `urlsplit`) et **S1.3** (épinglage par test) — le meilleur rapport
+   effet/effort du document. **Faits** : voir la section « Déjà livré ».
 2. **S1.1** et **S1.4** — inverser deux défauts dangereux ; courts, mais ils changent le
    comportement au boot, donc à faire avec leurs tests de non-régression.
 3. **S1.5** puis **S1.6** — les deux qui demandent de lire des routes et des chemins.

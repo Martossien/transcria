@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-01 22:28+0200\n"
+"POT-Creation-Date: 2026-08-02 09:48+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,215 +18,215 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: transcria/app_services.py:383
+#: transcria/app_services.py:393
 msgid "Accès refusé"
 msgstr "Access denied"
 
-#: transcria/app_services.py:383
+#: transcria/app_services.py:393
 msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 msgstr "You do not have the required permissions to access this page."
 
-#: transcria/app_services.py:384
+#: transcria/app_services.py:394
 msgid "Page introuvable"
 msgstr "Page not found"
 
-#: transcria/app_services.py:384
+#: transcria/app_services.py:394
 msgid "La page demandée n'existe pas ou a été déplacée."
 msgstr "The requested page does not exist or has been moved."
 
-#: transcria/app_services.py:385
+#: transcria/app_services.py:395
 msgid "Action non autorisée"
 msgstr "Action not allowed"
 
-#: transcria/app_services.py:385
+#: transcria/app_services.py:395
 msgid "Cette action n'est pas permise sur cette page."
 msgstr "This action is not permitted on this page."
 
-#: transcria/app_services.py:386
+#: transcria/app_services.py:396
 msgid "Fichier trop volumineux"
 msgstr "File too large"
 
-#: transcria/app_services.py:386
+#: transcria/app_services.py:396
 msgid "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 msgstr "The file exceeds the maximum allowed size (see security.max_upload_size_mb). Compress it or raise the limit."
 
-#: transcria/app_services.py:388
+#: transcria/app_services.py:398
 msgid "Trop de tentatives"
 msgstr "Too many attempts"
 
-#: transcria/app_services.py:388
+#: transcria/app_services.py:398
 msgid "Vous avez fait trop de tentatives. Patientez quelques minutes."
 msgstr "You have made too many attempts. Please wait a few minutes."
 
-#: transcria/app_services.py:389
+#: transcria/app_services.py:399
 msgid "Erreur interne"
 msgstr "Internal error"
 
-#: transcria/app_services.py:389
+#: transcria/app_services.py:399
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "An unexpected error occurred. Try again or contact an administrator."
 
-#: transcria/auth/routes.py:59
+#: transcria/auth/routes.py:73
 #, python-format
 msgid "Le mot de passe doit contenir au moins %(n)s caractères."
 msgstr "The password must contain at least %(n)s characters."
 
-#: transcria/auth/routes.py:61
+#: transcria/auth/routes.py:75
 msgid "La confirmation du mot de passe ne correspond pas."
 msgstr "The password confirmation does not match."
 
-#: transcria/auth/routes.py:127 transcria/auth/routes.py:190
+#: transcria/auth/routes.py:141 transcria/auth/routes.py:212
 msgid "Trop de tentatives. Réessayez dans quelques minutes."
 msgstr "Too many attempts. Try again in a few minutes."
 
-#: transcria/auth/routes.py:139
+#: transcria/auth/routes.py:153
 msgid "Annuaire d'entreprise indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Enterprise directory unavailable. Try again later or use the break-glass local account."
 
-#: transcria/auth/routes.py:157 transcria/auth/routes.py:261
-#: transcria/auth/routes.py:304
+#: transcria/auth/routes.py:177 transcria/auth/routes.py:283
+#: transcria/auth/routes.py:326
 msgid "Accès non attribué : contactez votre administrateur."
 msgstr "Access not granted: contact your administrator."
 
-#: transcria/auth/routes.py:192
+#: transcria/auth/routes.py:214
 msgid "Identifiant ou mot de passe incorrect."
 msgstr "Identifier"
 
-#: transcria/auth/routes.py:221 transcria/auth/routes.py:245
+#: transcria/auth/routes.py:243 transcria/auth/routes.py:267
 msgid "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Identity provider unavailable. Try again later or use the local break-glass account."
 
-#: transcria/auth/routes.py:250
+#: transcria/auth/routes.py:272
 msgid "Connexion refusée."
 msgstr "Sign-in refused."
 
-#: transcria/auth/routes.py:295
+#: transcria/auth/routes.py:317
 msgid "Aucune identité transmise par le proxy d'authentification. Utilisez le compte local de secours."
 msgstr "No identity forwarded by the authentication proxy. Use the break-glass local account."
 
-#: transcria/auth/routes.py:339
+#: transcria/auth/routes.py:361
 msgid "Session du portail fermée. La session du proxy d'authentification reste active : déconnectez-vous aussi du proxy pour changer d'identité."
 msgstr "Portal session closed. The authentication proxy session is still active: also sign out from the proxy to switch identity."
 
-#: transcria/auth/routes.py:342
+#: transcria/auth/routes.py:364
 msgid "Vous avez été déconnecté."
 msgstr "You have been logged out."
 
-#: transcria/auth/routes.py:355
+#: transcria/auth/routes.py:377
 msgid "Mot de passe actuel incorrect."
 msgstr "Current password is incorrect."
 
-#: transcria/auth/routes.py:365
+#: transcria/auth/routes.py:387
 msgid "Mot de passe mis à jour."
 msgstr "Password updated."
 
-#: transcria/auth/routes.py:392
+#: transcria/auth/routes.py:414
 msgid "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
 msgstr "Invalid validity period (1 to 3650 days, or empty = no expiry)."
 
-#: transcria/auth/routes.py:399
+#: transcria/auth/routes.py:421
 msgid "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
 msgstr "Token created — copy it now: it will never be shown again."
 
-#: transcria/auth/routes.py:414
+#: transcria/auth/routes.py:436
 msgid "Jeton introuvable."
 msgstr "Token not found."
 
-#: transcria/auth/routes.py:419
+#: transcria/auth/routes.py:441
 msgid "Jeton révoqué."
 msgstr "Token revoked."
 
-#: transcria/auth/routes.py:444
+#: transcria/auth/routes.py:466
 msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
 msgstr "Username and password are required."
 
-#: transcria/auth/routes.py:448
+#: transcria/auth/routes.py:470
 msgid "Ce nom d'utilisateur existe déjà."
 msgstr "This username already exists."
 
-#: transcria/auth/routes.py:466
+#: transcria/auth/routes.py:488
 #, python-format
 msgid "Utilisateur %(u)s créé."
 msgstr "User %(u)s created."
 
-#: transcria/auth/routes.py:478
+#: transcria/auth/routes.py:500
 msgid "Utilisateur introuvable."
 msgstr "User not found."
 
-#: transcria/auth/routes.py:500
+#: transcria/auth/routes.py:522
 msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 msgstr "Action denied: this account is the last active administrator. Promote another administrator first."
 
-#: transcria/auth/routes.py:532
+#: transcria/auth/routes.py:554
 msgid "Utilisateur mis à jour."
 msgstr "User updated."
 
-#: transcria/auth/routes.py:556 transcria/auth/routes.py:588
+#: transcria/auth/routes.py:578 transcria/auth/routes.py:610
 msgid "Le nom du groupe est obligatoire."
 msgstr "The group name is required."
 
-#: transcria/auth/routes.py:559 transcria/auth/routes.py:590
+#: transcria/auth/routes.py:581 transcria/auth/routes.py:612
 msgid "Ce groupe existe déjà."
 msgstr "This group already exists."
 
-#: transcria/auth/routes.py:566
+#: transcria/auth/routes.py:588
 #, python-format
 msgid "Groupe %(g)s créé."
 msgstr "Group %(g)s created."
 
-#: transcria/auth/routes.py:576
+#: transcria/auth/routes.py:598
 msgid "Groupe introuvable."
 msgstr "Group not found."
 
-#: transcria/auth/routes.py:597
+#: transcria/auth/routes.py:619
 msgid "Groupe mis à jour."
 msgstr "Group updated."
 
-#: transcria/auth/routes.py:616 transcria/auth/routes.py:638
+#: transcria/auth/routes.py:638 transcria/auth/routes.py:660
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "The group must keep at least one group admin."
 
-#: transcria/auth/routes.py:618
+#: transcria/auth/routes.py:640
 msgid "Utilisateur introuvable ou inactif."
 msgstr "User not found or inactive."
 
-#: transcria/auth/routes.py:624
+#: transcria/auth/routes.py:646
 msgid "Membre ajouté au groupe."
 msgstr "Member added to the group."
 
-#: transcria/auth/routes.py:631
+#: transcria/auth/routes.py:653
 msgid "Un admin de groupe ne peut pas se retirer lui-même."
 msgstr "A group admin cannot remove themselves."
 
-#: transcria/auth/routes.py:645
+#: transcria/auth/routes.py:667
 msgid "Membre retiré du groupe."
 msgstr "Member removed from the group."
 
-#: transcria/auth/routes.py:654
+#: transcria/auth/routes.py:676
 msgid "Groupe supprimé."
 msgstr "Group deleted."
 
-#: transcria/context/central_lexicon_routes.py:69
+#: transcria/context/central_lexicon_routes.py:67
 msgid "Lexique créé."
 msgstr "Glossary created."
 
-#: transcria/context/central_lexicon_routes.py:135
+#: transcria/context/central_lexicon_routes.py:133
 msgid "Lexique mis à jour."
 msgstr "Glossary updated."
 
-#: transcria/context/central_lexicon_routes.py:186
+#: transcria/context/central_lexicon_routes.py:184
 msgid "Lexique supprimé."
 msgstr "Glossary deleted."
 
-#: transcria/context/central_lexicon_routes.py:223
+#: transcria/context/central_lexicon_routes.py:221
 msgid "Entrée enregistrée."
 msgstr "Entry saved."
 
-#: transcria/context/central_lexicon_routes.py:265
+#: transcria/context/central_lexicon_routes.py:263
 msgid "Entrée supprimée."
 msgstr "Entry deleted."
 
-#: transcria/context/central_lexicon_routes.py:299
+#: transcria/context/central_lexicon_routes.py:297
 #, python-format
 msgid "Import terminé : %(i)s entrée(s), %(r)s rejet(s)."
 msgstr "Import finished: %(i)s entry(ies), %(r)s rejected."
@@ -1171,7 +1171,7 @@ msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "A restorable version will be created (you can revert)."
 
 #: transcria/i18n/js_catalog.py:244 transcria/notifications/mailer.py:258
-#: transcria/notifications/mailer.py:306 transcria/queue/routes.py:37
+#: transcria/notifications/mailer.py:306 transcria/queue/routes.py:41
 msgid "Erreur"
 msgstr "Error"
 
@@ -1291,83 +1291,83 @@ msgstr "GB"
 msgid "téléchargement…"
 msgstr "downloading…"
 
-#: transcria/ingestion/runner_provisioning.py:55
+#: transcria/ingestion/runner_provisioning.py:56
 #, fuzzy, python-format
 msgid "Compte de service créé : %(name)s"
 msgstr "Service account DN"
 
-#: transcria/ingestion/runner_provisioning.py:63
+#: transcria/ingestion/runner_provisioning.py:64
 #, python-format
 msgid "Jeton d'exécutant déposé : %(path)s"
 msgstr "Runner token written: %(path)s"
 
-#: transcria/ingestion/runner_provisioning.py:77
+#: transcria/ingestion/runner_provisioning.py:78
 msgid "Réunions en ligne activées (façade temps réel incluse)."
 msgstr "Online meetings enabled (live facade included)."
 
-#: transcria/ingestion/runner_provisioning.py:86
+#: transcria/ingestion/runner_provisioning.py:87
 #, fuzzy
 msgid "Réunions en ligne désactivées."
 msgstr "Imported from an online meeting"
 
-#: transcria/ingestion/runner_provisioning.py:125
+#: transcria/ingestion/runner_provisioning.py:126
 #, fuzzy
 msgid "Fonctionnalité activée"
 msgstr "final VAD enabled"
 
-#: transcria/ingestion/runner_provisioning.py:126
+#: transcria/ingestion/runner_provisioning.py:127
 msgid "Utiliser le bouton « Activer » ci-dessus."
 msgstr "Use the “Enable” button above."
 
-#: transcria/ingestion/runner_provisioning.py:127
+#: transcria/ingestion/runner_provisioning.py:128
 #, fuzzy
 msgid "Façade temps réel active"
 msgstr "Real-time STT facade"
 
-#: transcria/ingestion/runner_provisioning.py:128
+#: transcria/ingestion/runner_provisioning.py:129
 msgid "Réactiver via le bouton « Activer » (elle est incluse)."
 msgstr "Re-enable via the “Enable” button (it is included)."
 
-#: transcria/ingestion/runner_provisioning.py:129
+#: transcria/ingestion/runner_provisioning.py:130
 msgid "Clé de chiffrement présente (.env)"
 msgstr "Encryption key present (.env)"
 
-#: transcria/ingestion/runner_provisioning.py:130
+#: transcria/ingestion/runner_provisioning.py:131
 msgid "Relancer l'installation (elle la génère) puis redémarrer le service."
 msgstr "Re-run the installer (it generates it) then restart the service."
 
-#: transcria/ingestion/runner_provisioning.py:131
+#: transcria/ingestion/runner_provisioning.py:132
 msgid "Compte et jeton d'exécutant provisionnés"
 msgstr "Runner account and token provisioned"
 
-#: transcria/ingestion/runner_provisioning.py:132
+#: transcria/ingestion/runner_provisioning.py:133
 msgid "Utiliser le bouton « Activer » — le portail les crée lui-même."
 msgstr "Use the “Enable” button — the portal creates them itself."
 
-#: transcria/ingestion/runner_provisioning.py:133
+#: transcria/ingestion/runner_provisioning.py:134
 msgid "Exécutant vivant (vu < 2 min)"
 msgstr "Runner alive (seen < 2 min)"
 
-#: transcria/ingestion/runner_provisioning.py:134
+#: transcria/ingestion/runner_provisioning.py:135
 msgid "Démarrer le service : systemctl enable --now transcria-meeting-runner"
 msgstr "Start the service: systemctl enable --now transcria-meeting-runner"
 
-#: transcria/ingestion/runner_provisioning.py:154
+#: transcria/ingestion/runner_provisioning.py:153
 #, python-format
 msgid "%(name)s couverte par un exécutant"
 msgstr "%(name)s covered by a runner"
 
-#: transcria/ingestion/runner_provisioning.py:155
+#: transcria/ingestion/runner_provisioning.py:154
 #, python-format
 msgid "Vérifier `platforms: [%(id)s]` dans runner.yaml puis redémarrer l'exécutant."
 msgstr "Check `platforms: [%(id)s]` in runner.yaml then restart the runner."
 
-#: transcria/ingestion/runner_provisioning.py:170
+#: transcria/ingestion/runner_provisioning.py:169
 #, python-format
 msgid "Image de bot %(name)s présente sur l'exécutant"
 msgstr "%(name)s bot image present on the runner"
 
-#: transcria/ingestion/runner_provisioning.py:171
+#: transcria/ingestion/runner_provisioning.py:170
 #, python-format
 msgid "Elle se télécharge/construit toute seule (auto-réparation) ; sinon : docker build -f %(dockerfile)s"
 msgstr "It downloads/builds itself (self-repair); otherwise: docker build -f %(dockerfile)s"
@@ -1515,271 +1515,272 @@ msgstr "The job has not failed: it will resume automatically as soon as VRAM is 
 msgid "Votre transcription a échoué."
 msgstr "Your transcription failed."
 
-#: transcria/queue/routes.py:32 transcria/web/templates/queue.html:42
+#: transcria/queue/routes.py:36 transcria/web/templates/queue.html:42
 msgid "En attente"
 msgstr "Waiting"
 
-#: transcria/queue/routes.py:33
+#: transcria/queue/routes.py:37
 msgid "En pause"
 msgstr "Paused"
 
-#: transcria/queue/routes.py:34 transcria/web/templates/queue.html:50
+#: transcria/queue/routes.py:38 transcria/web/templates/queue.html:50
 msgid "En cours"
 msgstr "Running"
 
-#: transcria/queue/routes.py:35 transcria/web/templates/job_result.html:4
+#: transcria/queue/routes.py:39 transcria/web/templates/job_result.html:4
 #: transcria/web/ui_labels.py:35
 msgid "Terminé"
 msgstr "Completed"
 
-#: transcria/queue/routes.py:36 transcria/web/ui_labels.py:37
+#: transcria/queue/routes.py:40 transcria/web/ui_labels.py:37
 msgid "Annulé"
 msgstr "Cancelled"
 
-#: transcria/queue/routes.py:41
+#: transcria/queue/routes.py:45
 msgid "Bloquer les nouveaux départs"
 msgstr "Block new starts"
 
-#: transcria/queue/routes.py:42
+#: transcria/queue/routes.py:46
 msgid "Limiter les jobs simultanés"
 msgstr "Limit concurrent jobs"
 
-#: transcria/queue/routes.py:43
+#: transcria/queue/routes.py:47
 msgid "Prioriser les traitements (récupération GPU agressive)"
 msgstr "Prioritize processing (aggressive GPU reclaim)"
 
-#: transcria/queue/routes.py:44
+#: transcria/queue/routes.py:48
 msgid "Aucune règle"
 msgstr "No rule"
 
-#: transcria/queue/routes.py:48
+#: transcria/queue/routes.py:52
 msgid "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
 msgstr "Jobs already running continue, but no new job starts during this slot."
 
-#: transcria/queue/routes.py:49
+#: transcria/queue/routes.py:53
 msgid "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
 msgstr "The scheduler temporarily reduces the maximum number of jobs running in parallel."
 
-#: transcria/queue/routes.py:51
+#: transcria/queue/routes.py:55
 msgid "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
 msgstr "If the first phase lacks VRAM, TranscrIA may free a GPU by killing only the external processes allowed by the configuration."
 
-#: transcria/queue/routes.py:54
+#: transcria/queue/routes.py:58
 msgid "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
 msgstr "The slot is kept as a time marker, without changing the queue behavior."
 
-#: transcria/voice/routes.py:81
+#: transcria/voice/routes.py:79
 msgid "Voix créée. Ajoutez maintenant le consentement signé."
 msgstr "Voice created. Now add the signed consent."
 
-#: transcria/voice/routes.py:131
+#: transcria/voice/routes.py:129
 msgid "Informations de la voix mises à jour."
 msgstr "Voice information updated."
 
-#: transcria/voice/routes.py:183
+#: transcria/voice/routes.py:181
 msgid "Preuve de consentement obligatoire."
 msgstr "Proof of consent is required."
 
-#: transcria/voice/routes.py:201
+#: transcria/voice/routes.py:199
 msgid "Consentement enregistré."
 msgstr "Consent saved."
 
-#: transcria/voice/routes.py:220
+#: transcria/voice/routes.py:218
 msgid "Consentement actif requis avant tout upload audio."
 msgstr "Active consent required before any audio upload."
 
-#: transcria/voice/routes.py:224
+#: transcria/voice/routes.py:222
 msgid "Fichier audio de référence obligatoire."
 msgstr "Reference audio file is required."
 
-#: transcria/voice/routes.py:235
+#: transcria/voice/routes.py:233
 msgid "Empreinte vocale générée."
 msgstr "Voice fingerprint generated."
 
-#: transcria/voice/routes.py:238
+#: transcria/voice/routes.py:236
 #, python-format
 msgid "Génération impossible : %(e)s"
 msgstr "Generation failed: %(e)s"
 
-#: transcria/voice/routes.py:254
+#: transcria/voice/routes.py:252
 msgid "Voix désactivée."
 msgstr "Voice disabled."
 
-#: transcria/web/admin_routes.py:166 transcria/web/admin_routes.py:225
+#: transcria/web/admin_routes.py:167 transcria/web/admin_routes.py:226
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s validation error(s). Save cancelled."
 
-#: transcria/web/admin_routes.py:170
+#: transcria/web/admin_routes.py:171
 msgid "Réglages sauvegardés."
 msgstr "Settings saved."
 
-#: transcria/web/admin_routes.py:175
+#: transcria/web/admin_routes.py:176
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Identity backend changed: restart the service to apply it (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:201
+#: transcria/web/admin_routes.py:202
 msgid "Aucun prompt modifié."
 msgstr "No prompt modified."
 
-#: transcria/web/admin_routes.py:208
+#: transcria/web/admin_routes.py:209
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Invalid YAML: %(e)s"
 
-#: transcria/web/admin_routes.py:212
+#: transcria/web/admin_routes.py:213
 msgid "La configuration doit être un objet YAML racine."
 msgstr "The configuration must be a root YAML object."
 
-#: transcria/web/admin_routes.py:228
+#: transcria/web/admin_routes.py:229
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration saved to %(p)s."
 
-#: transcria/web/admin_routes.py:277
+#: transcria/web/admin_routes.py:278
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Scheduled backup enabled (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:282
+#: transcria/web/admin_routes.py:283
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Scheduled backup disabled."
 
-#: transcria/web/admin_routes.py:284
+#: transcria/web/admin_routes.py:285
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Scheduling failed: %(e)s"
 
-#: transcria/web/admin_routes.py:298
+#: transcria/web/admin_routes.py:299
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation required: restoring replaces the data and restarts the service."
 
-#: transcria/web/admin_routes.py:301
+#: transcria/web/admin_routes.py:302
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "The re-entered name does not match the archive — restore cancelled."
 
-#: transcria/web/admin_routes.py:309
+#: transcria/web/admin_routes.py:310
 msgid "Archive invalide — restauration refusée : "
 msgstr "Invalid archive — restore denied: "
 
-#: transcria/web/admin_routes.py:321
+#: transcria/web/admin_routes.py:322
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restore started. The service will stop, restore, then restart — sign back in within a minute or so."
 
-#: transcria/web/admin_routes.py:324
+#: transcria/web/admin_routes.py:325
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:433
+#: transcria/web/admin_routes.py:434
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Meeting removed: %(m)s — its subscription is left in place until it expires (7 days)."
 
-#: transcria/web/admin_routes.py:437
+#: transcria/web/admin_routes.py:438
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Meeting added: %(m)s — the service will create the subscription on its next cycle."
 
-#: transcria/web/admin_routes.py:440
+#: transcria/web/admin_routes.py:441
 msgid "Cette réunion est déjà surveillée."
 msgstr "This meeting is already being watched."
 
-#: transcria/web/admin_routes.py:442
+#: transcria/web/admin_routes.py:443
 msgid "Aucun lien de réunion fourni."
 msgstr "No meeting link provided."
 
-#: transcria/web/admin_routes.py:515
+#: transcria/web/admin_routes.py:516
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "%(id)s test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:534
+#: transcria/web/admin_routes.py:535
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Zoom test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:564
+#: transcria/web/admin_routes.py:565
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "“%(label)s” file rejected: %(raison)s"
 
-#: transcria/web/admin_routes.py:601
+#: transcria/web/admin_routes.py:602
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "“%(name)s” credentials saved — handed to runners at the next claim."
 
-#: transcria/web/admin_routes.py:602
+#: transcria/web/admin_routes.py:603
 msgid "Aucun changement."
 msgstr "No change."
 
-#: transcria/web/admin_routes.py:620
+#: transcria/web/admin_routes.py:621
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Enable the feature first (“Enable” button)."
 
-#: transcria/web/admin_routes.py:625
+#: transcria/web/admin_routes.py:626
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Invalid runner name (letters/digits/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:628
-msgid "URL du portail invalide — celle que la machine DISTANTE peut joindre."
-msgstr "Invalid portal URL — use the one the REMOTE machine can reach."
+#: transcria/web/admin_routes.py:633
+#, python-format
+msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
+msgstr "Invalid portal URL (%(motif)s) — use the one the REMOTE machine can reach."
 
-#: transcria/web/admin_routes.py:632
+#: transcria/web/admin_routes.py:638
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Service account missing — use the “Enable” button first."
 
-#: transcria/web/admin_routes.py:651
+#: transcria/web/admin_routes.py:657
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Runner “%(name)s” revoked."
 
-#: transcria/web/admin_routes.py:668
+#: transcria/web/admin_routes.py:674
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:673
+#: transcria/web/admin_routes.py:679
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:676
+#: transcria/web/admin_routes.py:682
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:690
+#: transcria/web/admin_routes.py:696
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:699
+#: transcria/web/admin_routes.py:705
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:702
+#: transcria/web/admin_routes.py:708
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:704
+#: transcria/web/admin_routes.py:710
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:727
+#: transcria/web/admin_routes.py:733
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:761
+#: transcria/web/admin_routes.py:767
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:766
+#: transcria/web/admin_routes.py:772
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:772
+#: transcria/web/admin_routes.py:778
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2494,54 +2495,54 @@ msgstr "New job created."
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
-#: transcria/web/prompt_files.py:30
+#: transcria/web/prompt_files.py:31
 msgid "Résumé structuré"
 msgstr "Structured summary"
 
-#: transcria/web/prompt_files.py:31
+#: transcria/web/prompt_files.py:32
 msgid "Prompt système de la génération du résumé (étape « Résumé » du wizard)."
 msgstr "System prompt for summary generation (“Summary” step of the wizard)."
 
-#: transcria/web/prompt_files.py:36
+#: transcria/web/prompt_files.py:37
 msgid "Correction de la transcription"
 msgstr "Transcription correction"
 
-#: transcria/web/prompt_files.py:37
+#: transcria/web/prompt_files.py:38
 msgid "Prompt système de la correction LLM du SRT (phase d'arbitrage)."
 msgstr "System prompt for the LLM correction of the SRT (arbitration phase)."
 
-#: transcria/web/prompt_files.py:42
+#: transcria/web/prompt_files.py:43
 msgid "Relecture finale"
 msgstr "Final review"
 
-#: transcria/web/prompt_files.py:43
+#: transcria/web/prompt_files.py:44
 msgid "Prompt système de la passe de relecture finale (harmonisation glossaire)."
 msgstr "System prompt for the final review pass (glossary harmonization)."
 
-#: transcria/web/prompt_files.py:51
+#: transcria/web/prompt_files.py:52
 msgid "Lancement de la LLM d'arbitrage"
 msgstr "Launching the arbitration LLM"
 
-#: transcria/web/prompt_files.py:52
+#: transcria/web/prompt_files.py:53
 msgid "Arrêt de la LLM d'arbitrage"
 msgstr "Stopping the arbitration LLM"
 
-#: transcria/web/prompt_files.py:98
+#: transcria/web/prompt_files.py:99
 #, python-format
 msgid "Prompt inconnu : %(name)s"
 msgstr "Unknown prompt: %(name)s"
 
-#: transcria/web/prompt_files.py:101
+#: transcria/web/prompt_files.py:102
 #, python-format
 msgid "%(label)s : contenu vide refusé (le prompt serait inopérant)."
 msgstr "%(label)s: empty content refused (the prompt would be inoperative)."
 
-#: transcria/web/prompt_files.py:103
+#: transcria/web/prompt_files.py:104
 #, python-format
 msgid "%(label)s : contenu trop volumineux (max %(kb)s Ko)."
 msgstr "%(label)s: content too large (max %(kb)s KB)."
 
-#: transcria/web/prompt_files.py:123
+#: transcria/web/prompt_files.py:122
 #, python-format
 msgid "%(label)s : prompt sauvegardé (copie de secours .bak conservée)."
 msgstr "%(label)s: prompt saved (.bak backup kept)."

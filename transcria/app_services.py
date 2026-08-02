@@ -231,7 +231,17 @@ def build_login_manager(app: Flask) -> LoginManager:
 
     @login_manager.user_loader
     def load_user(user_id: str) -> User | None:
-        return UserStore.get_by_id(user_id)
+        """Charge l'utilisateur de la session — et REFUSE un compte désactivé.
+
+        Sans ce contrôle, `deactivate_user()` posait bien le drapeau en base mais la
+        session déjà ouverte continuait de fonctionner jusqu'à son expiration (12 h).
+        Or c'est le geste qu'on fait quand quelqu'un part ou qu'un compte est suspect :
+        qu'il n'ait pas d'effet immédiat est exactement le contraire de ce que
+        l'administrateur croit avoir fait. La connexion, elle, vérifiait déjà
+        `is_active` (`identity/local.py`) — le chargeur de session ne le faisait pas.
+        """
+        user = UserStore.get_by_id(user_id)
+        return user if user is not None and user.is_active else None
 
     return login_manager
 
