@@ -430,7 +430,7 @@ Rien ici ne mérite un chantier. Tout mérite d'être fait pendant qu'on a le fi
 
 | Point | Correction |
 |---|---|
-| **`/ready` divulgue l'erreur de base BRUTE, sans authentification** — `health_routes.py:113` n'a aucun `@login_required` et renvoie `str(exc)` de l'exception SQLAlchemy, qui porte l'URI de connexion : hôte, port, utilisateur, nom de base. `/metrics` est anonyme aussi. | statut binaire pour l'anonyme, détail réservé aux comptes authentifiés |
+| **`/ready` divulgue l'erreur de base BRUTE, sans authentification** — `health_routes.py:113` n'a aucun `@login_required` et renvoie `str(exc)` de l'exception SQLAlchemy, qui porte l'URI de connexion : hôte, port, utilisateur, nom de base. `/metrics` est anonyme aussi. | statut binaire pour l'anonyme, détail réservé aux **administrateurs** |
 | **Injection de formule dans les exports CSV** — `audit/routes.py:132` écrit `target_label` (= le **titre du job**, donc une valeur d'utilisateur) et `actor_username` sans échappement. Une valeur commençant par `=`, `+`, `-` ou `@` est exécutée par le tableur qui l'ouvre. | préfixer d'une apostrophe les cellules commençant par ces caractères |
 | **Budget de décompression des documents** — `document_extractor.py` borne l'entrée (25 Mo) et le texte retenu (12 000 caractères), mais pas la taille **décompressée** d'un DOCX/PPTX | plafonner la somme des `file_size` de l'archive avant extraction |
 | **Upload lu intégralement en mémoire** — `wizard_api.py:139` fait `file.read()` avec `MAX_CONTENT_LENGTH` à **1 Gio** | écrire par blocs vers le disque |
@@ -449,7 +449,9 @@ déclenche sans le vouloir, en envoyant trois gros fichiers en parallèle.
 l'écriture a précisé :
 
 - **`/ready` ne supprime pas l'information, il la RÉSERVE.** La sonde anonyme garde son
-  oui/non ; un compte authentifié voit toujours le motif technique. Supprimer purement et
+  oui/non ; un **administrateur** voit toujours le motif technique. (Première version :
+  tout compte authentifié — restreint au troisième passage, l'URI de connexion étant de la
+  topologie d'infrastructure, pas une information de travail.) Supprimer purement et
   simplement aurait forcé l'administrateur à aller lire les journaux du serveur pour
   diagnostiquer une base tombée — on aurait échangé une fuite contre une gêne ;
 - **la garde CSV préfixe, elle ne remplace pas.** La valeur reste entièrement lisible.
@@ -634,7 +636,8 @@ facultatif que personne ne découvre ne protège personne.
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
-séparément avec ses tests et la CI verte avant d'enchaîner.
+séparément avec ses tests et la CI verte avant d'enchaîner — puis **trois passages de
+relecture externe**, qui ont trouvé de vrais défauts à chaque fois.
 
 | | Sujet | Tests |
 |---|---|---:|
@@ -643,9 +646,9 @@ séparément avec ses tests et la CI verte avant d'enchaîner.
 | S1.3 ✅ | Révocation de session épinglée (l'audit se trompait) | 2 |
 | S1.4 ✅ | Plus de mot de passe d'amorçage publié | 7 |
 | S1.5 ✅ | Lecture et écriture séparées sur les jobs | 13 |
-| S1.6 ✅ | Racine allowlistée pour les scripts exécutés en root | 16 |
+| S1.6 ✅ | Scripts en root : racine hors config **+** interdiction des zones inscriptibles | 26 |
 | S2.1 ✅ | Transport rattaché aux connecteurs à webhook (FAIL) | 6 |
-| S2.2 ✅ | Requête sortante bornée — **durcie** : résolution, notations numériques, redirections | 31 |
+| S2.2 ✅ | Requête sortante bornée — **durcie** : résolution, notations numériques, redirections | 37 |
 | S3 ✅ | `/health` **et** `/ready`, formules CSV, décompression, upload en flux | 26 |
 | **S2.3 ⏸** | **Un principal par exécutant** | **différée** |
 
@@ -655,10 +658,24 @@ d'usage qui lui donnerait sa forme. **À reprendre le jour où un deuxième exé
 posé.** Voir aussi la section « Écarté volontairement », qui n'est pas une liste d'attente :
 ces points sont refusés, pas reportés.
 
-**Le second audit a trouvé cinq défauts réels**, dont trois miens — corrigés, et consignés
-dans la section « Reprise après second audit » : deux corrections d'instance au lieu de
-classe (`/health`, l'arrêt de l'arbitrage), une garde dont l'administrateur réglait lui-même
-les bornes, et une garde SSRF qui regardait la forme plutôt que la destination.
+**Trois passages de relecture externe, trois séries de vrais défauts.** C'est le
+renseignement le plus utile de ce document :
+
+| Passage | Ce qu'il a trouvé |
+|---|---|
+| 2ᵉ | deux corrections d'**instance au lieu de classe** (`/health` oublié à côté de `/ready`, l'arrêt de l'arbitrage à côté de son lancement) ; une allowlist que l'administrateur réglait lui-même ; une garde SSRF jugeant la forme écrite plutôt que la destination |
+| 3ᵉ | la chaîne S1.6 **toujours ouverte** (écrire un prompt *dans* une racine autorisée) ; le détail SQL visible de tout compte authentifié ; `TRANSCRIA_SCRIPT_ROOTS` absente des unités et guides ; **pollution d'environnement entre mes tests** |
+| exploitant | « un LAN n'est pas forcément en adressage privé » — le code tenait, la **justification** était fausse |
+
+Aucun de ces passages n'a produit un faux positif sur le fond. Trois de mes correctifs
+étaient incomplets, et je ne l'aurais pas vu seul : les deux premiers parce que j'avais
+corrigé ce qu'on me montrait plutôt que la classe du défaut, le troisième parce qu'une
+garde ne vaut que si l'on cherche activement par où on l'aurait contournée.
+
+**Deux ajouts au diagnostic** que ces passages ont motivés : un contrôle qui **échoue** si
+un connecteur à webhook public tourne sans TLS, et un rappel de l'allowlist sortante Visio
+quand elle n'est pas posée — un mécanisme facultatif que personne ne découvre ne protège
+personne.
 
 **Un changement cassant**, documenté au CHANGELOG : un nœud d'inférence dont la variable de
 clé a disparu ne démarre plus. Le portail tout-en-un n'est pas concerné.
