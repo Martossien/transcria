@@ -6,10 +6,10 @@ import pwd
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
-from typing import Callable
 
 from transcria.installer.messages import t
 

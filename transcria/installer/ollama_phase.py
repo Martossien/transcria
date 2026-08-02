@@ -58,7 +58,7 @@ def _default_daemon_probe(url: str) -> ProbeFn:
     return probe
 
 
-def _daemon_env(plan: "OllamaPlan") -> dict[str, str]:
+def _daemon_env(plan: OllamaPlan) -> dict[str, str]:
     """Env du démon Ollama pour ce palier : contexte (KV) + spread multi-GPU.
 
     `OLLAMA_CONTEXT_LENGTH` fixe le contexte par palier (variable selon la VRAM) ;
@@ -114,7 +114,7 @@ class OllamaPlan:
 class OllamaResult:
     actions: list[str] = field(default_factory=list)
 
-    def record(self, action: str) -> "OllamaResult":
+    def record(self, action: str) -> OllamaResult:
         self.actions.append(action)
         return self
 
@@ -156,7 +156,7 @@ def _write_backend_config(plan: OllamaPlan) -> None:
         )
 
 
-def _measure_ollama_vram(plan: "OllamaPlan") -> int:
+def _measure_ollama_vram(plan: OllamaPlan) -> int:
     """Mesure la taille du modèle Ollama via /api/tags et dérive l'empreinte VRAM.
 
     Retourne poids (Mo) + KV estimé (contexte du palier, fp16 = 2 octets) + marge 12%.

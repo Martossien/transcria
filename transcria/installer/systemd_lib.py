@@ -4,9 +4,9 @@ import argparse
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from transcria.installer.messages import t
 

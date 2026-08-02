@@ -3,8 +3,9 @@ import mimetypes
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, TextIO
+from typing import Any, TextIO
 
 
 class JobFilesystem:
@@ -53,7 +54,7 @@ class JobFilesystem:
         path = self._json_path(relative)
         if not path.is_file():
             return None
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             return json.load(fh)
 
     def save_text(self, relative: str, content: str) -> None:
@@ -63,7 +64,7 @@ class JobFilesystem:
         path = self._json_path(relative)
         if not path.is_file():
             return None
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
 
     def save_upload(self, file_data: bytes, filename: str) -> dict:

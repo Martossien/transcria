@@ -7,9 +7,9 @@ import pwd
 import shlex
 import shutil
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from transcria.installer.messages import t
 

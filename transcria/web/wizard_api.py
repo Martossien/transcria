@@ -424,7 +424,7 @@ def _document_summary(doc: dict) -> dict:
         "pages": doc.get("pages", 0),
         "slides": doc.get("slides", 0),
         "images_skipped": doc.get("images_skipped", 0),
-        "chars": len((doc.get("text") or "")),
+        "chars": len(doc.get("text") or ""),
         "truncated": bool(doc.get("truncated")),
         "warnings": doc.get("warnings") or [],
     }

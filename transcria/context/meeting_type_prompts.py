@@ -37,7 +37,7 @@ def _hint_line(name: str, hints: list[str]) -> str:
     return f"  `{name}` si on entend {quoted} ;"
 
 
-def build_prompt_substitutions(owner: "User | None" = None,
+def build_prompt_substitutions(owner: User | None = None,
                                chosen_custom_type: dict | None = None) -> dict[str, str]:
     """Valeurs des trois placeholders pour un job donné.
 

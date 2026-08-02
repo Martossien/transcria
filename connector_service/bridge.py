@@ -47,7 +47,7 @@ class JobsApiBridge:
 
     async def ingest_recording(
         self,
-        audio: "bytes | BinaryIO",
+        audio: bytes | BinaryIO,
         filename: str,
         *,
         idempotency_key: str,

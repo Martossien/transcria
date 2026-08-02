@@ -1,7 +1,7 @@
 """Doctor — identité (local/OIDC/proxy/LDAP) et transport HTTP(S)."""
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 
@@ -9,9 +9,9 @@ from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 def check_identity_backend(
     cfg: dict,
     *,
-    discovery_prober: "Callable[[str], bool] | None" = None,
-    admin_counter: "Callable[[], int] | None" = None,
-    ldap_prober: "Callable[[str, int], bool] | None" = None,
+    discovery_prober: Callable[[str], bool] | None = None,
+    admin_counter: Callable[[], int] | None = None,
+    ldap_prober: Callable[[str, int], bool] | None = None,
 ) -> CheckResult:
     """Chantier identité : backend fédéré actif → IdP joignable ET break-glass garanti.
 

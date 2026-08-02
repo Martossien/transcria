@@ -56,7 +56,7 @@ def _probe_reachable(client: InferenceClient) -> bool:
         return True   # le service répond (4xx) → joignable
 
 
-def _stt_loopback_backends(config: dict) -> "list[str]":
+def _stt_loopback_backends(config: dict) -> list[str]:
     """Backends STT routés vers une URL loopback, parmi le PRINCIPAL et celui de la
     PHASE RÉSUMÉ (lot 2 — ils peuvent différer : ex. cohere natif + qwen3asr servi
     pour le résumé). Détection par urlparse, sans résolution DNS."""
@@ -74,7 +74,7 @@ def _stt_loopback_backends(config: dict) -> "list[str]":
     return loopback
 
 
-def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> "GateVerdict | None":
+def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> GateVerdict | None:
     """Assure EN PROCESS un moteur STT servi localement (all-in-one).
 
     Ne s'active QUE si l'URL du backend pointe loopback ET qu'un moteur homonyme est
@@ -125,7 +125,7 @@ def prepare_remote_resources(
     *,
     unavailable_since: float | None = None,
     now: float | None = None,
-    client_factory: Callable[[dict], "InferenceClient | None"] | None = None,
+    client_factory: Callable[[dict], InferenceClient | None] | None = None,
     supervisor_factory=None,
 ) -> GateVerdict:
     now = now if now is not None else time.time()

@@ -24,8 +24,8 @@ import os
 import tempfile
 import threading
 import time
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Iterable, Iterator
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import insert as sa_insert
@@ -108,7 +108,7 @@ def _load_manifest(job_dir: Path) -> dict:
     if not path.is_file():
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
         return data if isinstance(data, dict) else {}
     except (json.JSONDecodeError, OSError):

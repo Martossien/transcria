@@ -69,7 +69,7 @@ class EnsureResult:
         return self.status in ("ready", "launched")
 
 
-def probe_engine_health(prober: "HealthProber", spec: "EngineSpec") -> bool:
+def probe_engine_health(prober: HealthProber, spec: EngineSpec) -> bool:
     """Sonde un moteur en honorant son `health_mode` (compat : les probers/fakes
     historiques à un seul argument restent acceptés)."""
     try:
@@ -85,7 +85,7 @@ Launcher = Callable[[EngineSpec, int], bool]
 Stopper = Callable[[EngineSpec], bool]
 
 
-def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> "SttEngineSupervisor":
+def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> SttEngineSupervisor:
     """Superviseur câblé en production : planificateur (VRAMManager) + sonde HTTP +
     lanceur de script. `auto_relocate` défaut = `resource_node.vram.auto_relocate`.
     """
@@ -138,7 +138,7 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
     return specs
 
 
-def specs_for_backend(specs: "list[EngineSpec]", backend: str) -> "list[EngineSpec]":
+def specs_for_backend(specs: list[EngineSpec], backend: str) -> list[EngineSpec]:
     """Moteurs servant `backend` : nom exact OU champ `backend` (multi-instance §2.9).
 
     L'appariement historique par nom reste couvert (backend défaut = name)."""

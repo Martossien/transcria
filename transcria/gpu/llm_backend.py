@@ -140,7 +140,7 @@ class LLMBackend(ABC):
         if not log_path or not os.path.isfile(log_path):
             return f"(aucun log de lancement disponible: {log_path or 'sortie non capturée'})"
         try:
-            with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+            with open(log_path, encoding="utf-8", errors="replace") as fh:
                 lines = fh.readlines()
         except OSError as exc:
             return f"(impossible de lire {log_path}: {exc})"

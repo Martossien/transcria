@@ -459,7 +459,7 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
         sl.warning("Réconciliation: erreur ignorée", error=str(exc))
 
 
-def _holds_scheduler_lock(service: "JobExecutorService | None") -> bool:
+def _holds_scheduler_lock(service: JobExecutorService | None) -> bool:
     """Ce process est-il l'ordonnanceur RÉEL ? Faux si un autre détient le verrou.
 
     Sans ordonnanceur du tout (file désactivée), il n'y a personne d'autre pour réconcilier :

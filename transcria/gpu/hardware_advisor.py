@@ -10,8 +10,8 @@ Cas d'usage moteur : l'utilisateur qui a amélioré son PC APRÈS l'installation
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from transcria.gpu.llm_placement import recommend
 from transcria.gpu.stt_instance_planner import (

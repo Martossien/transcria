@@ -1,7 +1,7 @@
 """Doctor — base de données : schéma vivant vs modèles, encodage serveur."""
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from transcria.database import MODEL_MODULES, db
 from transcria.diagnostics.checks.common import (

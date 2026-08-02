@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Protocol
 
 from transcria.installer.messages import t
 from transcria.installer.paths import directory_specs_for_kind, ensure_directories

@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 from transcria.diagnostics.checks.probes import _probe_openai_models

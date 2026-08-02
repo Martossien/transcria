@@ -41,7 +41,7 @@ class PhaseOutcome:
     processing_seconds: float | None = None
 
     @classmethod
-    def from_legacy_dict(cls, result: dict) -> "PhaseOutcome":
+    def from_legacy_dict(cls, result: dict) -> PhaseOutcome:
         """Interprète un dict historique — même priorité que l'ancien if/elif de l'exécuteur."""
         phase: str | None = result.get("phase") or result.get("step") or None
         reason: str | None = result.get("error") or result.get("reason") or None

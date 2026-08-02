@@ -18,9 +18,9 @@ import argparse
 import os
 import sys
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Sequence
 
 from transcria.installer.i18n_phase import I18nPlan, apply_i18n
 from transcria.installer.postgres_phase import _default_query

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from inference_service.errors import GpuBusyError, UnprocessableError
 from inference_service.load import SerializedLoadTracker

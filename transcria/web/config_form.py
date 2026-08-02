@@ -291,8 +291,7 @@ CONFIG_FORM_SECTIONS: list[dict] = [
 def iter_fields(sections: list[dict]):
     """Itère sur tous les champs de toutes les sections."""
     for section in sections:
-        for field in section.get("fields", []):
-            yield field
+        yield from section.get("fields", [])
 
 
 def get_dotted(data: dict, path: str, default=None):

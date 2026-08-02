@@ -226,7 +226,7 @@ def _add_summary_parser(sub: argparse._SubParsersAction) -> None:
                    help="durée totale de l'installation (métrique time-to-first-job)")
 
 
-def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
+def _make_confirm(interactive: bool) -> Callable[[str], bool]:
     def confirm(prompt: str) -> bool:
         if not interactive:
             return False

@@ -4,8 +4,10 @@ line-length = 140
 [tool.ruff.lint]
 # `B` (flake8-bugbear) ajouté à la passe qualité d'août 2026 — il attrape des pièges que
 # E,W,F ne voient pas, au premier chef `zip()` sans `strict=` qui TRONQUE en silence.
-# Paliers suivants prévus séparément : `UP` (68 occurrences) puis `SIM` (73).
-select = ["E", "W", "F", "I", "B"]
+# `UP` ajouté ensuite (68 occurrences, toutes mécaniques : `typing.Callable` →
+# `collections.abc`, annotations déquotées, modes d'ouverture redondants). Palier suivant
+# prévu séparément : `SIM` (73).
+select = ["E", "W", "F", "I", "B", "UP"]
 
 # Tri d'imports déterministe entre local et CI. Le dossier racine `alembic/`
 # (migrations, sans __init__.py) est auto-détecté comme first-party par certaines

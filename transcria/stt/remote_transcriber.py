@@ -119,11 +119,11 @@ class RemoteTranscriber(BaseTranscriber):
 
     def transcribe(
         self,
-        audio_path: "Path | None",
+        audio_path: Path | None,
         language: str = "fr",
         chunk_length_s: int = 30,
         progress_callback=None,
-        audio_array: "numpy.ndarray | None" = None,
+        audio_array: numpy.ndarray | None = None,
         sample_rate: int = _SR,
     ) -> list[dict]:
         if self._client is None:
@@ -320,7 +320,7 @@ class RemoteTranscriber(BaseTranscriber):
             )
         return builders.get(self.backend)
 
-    def _get_local(self) -> "BaseTranscriber | None":
+    def _get_local(self) -> BaseTranscriber | None:
         """Construit (une fois) le transcripteur natif de repli, sans récursion.
         Retourne None si aucun repli natif n'est résoluble (cf. _resolve_fallback_builder)."""
         if self._local is not None:

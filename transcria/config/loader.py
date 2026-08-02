@@ -1023,7 +1023,7 @@ def load_config(config_path: str | None = None) -> dict:
         config_path = os.environ.get(_CONFIG_PATH_ENV, _DEFAULT_CONFIG_PATH)
 
     if os.path.isfile(config_path):
-        with open(config_path, "r", encoding="utf-8") as fh:
+        with open(config_path, encoding="utf-8") as fh:
             user_cfg = yaml.safe_load(fh)
         if user_cfg:
             user_cfg = _normalize_legacy_user_config(user_cfg)

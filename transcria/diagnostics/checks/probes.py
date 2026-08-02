@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from typing import Callable
+from collections.abc import Callable
 
 
 def _probe_server_encoding(uri: str) -> str:

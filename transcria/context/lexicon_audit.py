@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Iterable
+from collections.abc import Iterable
 
 PERSON_TITLE_RE = re.compile(
     r"^\s*(dr|docteur|pr|professeur|m|mr|mme|madame|monsieur|mlle|melle)\.?\s+",

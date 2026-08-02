@@ -92,7 +92,7 @@ class SttVramPlanner:
         self.headroom_mb = int(headroom_mb)
 
     @classmethod
-    def from_vram_manager(cls, vram_manager, *, headroom_mb: int | None = None) -> "SttVramPlanner":
+    def from_vram_manager(cls, vram_manager, *, headroom_mb: int | None = None) -> SttVramPlanner:
         """Planificateur câblé sur l'état GPU réel via `VRAMManager.get_gpu_info`.
 
         Marge par défaut = `gpu.min_free_vram_mb` du manager (P1.d) : LA marge unique

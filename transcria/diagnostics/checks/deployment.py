@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from transcria.diagnostics.checks.common import (
     _VALID_PROFILES,

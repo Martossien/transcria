@@ -23,7 +23,7 @@ class ExecutionMode(Enum):
         return self in (ExecutionMode.SUMMARY, ExecutionMode.SPEAKER_DETECTION, ExecutionMode.REFINEMENT)
 
     @classmethod
-    def from_string(cls, mode: str) -> "ExecutionMode":
+    def from_string(cls, mode: str) -> ExecutionMode:
         for member in cls:
             if member.value == mode:
                 return member

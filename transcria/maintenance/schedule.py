@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 SERVICE_UNIT = "transcria-backup.service"
 TIMER_UNIT = "transcria-backup.timer"
@@ -52,7 +52,7 @@ class BackupSchedule:
         install_dir: str | None = None,
         service_user: str | None = None,
         python_bin: str | None = None,
-    ) -> "BackupSchedule":
+    ) -> BackupSchedule:
         maint = cfg.get("maintenance", {}) or {}
         sched = maint.get("schedule", {}) or {}
         resolved_install = install_dir or str(Path(__file__).resolve().parents[2])
@@ -129,7 +129,7 @@ class PurgeSchedule:
         install_dir: str | None = None,
         service_user: str | None = None,
         python_bin: str | None = None,
-    ) -> "PurgeSchedule":
+    ) -> PurgeSchedule:
         maint = cfg.get("maintenance", {}) or {}
         sched = maint.get("schedule", {}) or {}
         resolved_install = install_dir or str(Path(__file__).resolve().parents[2])

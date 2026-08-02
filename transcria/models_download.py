@@ -13,9 +13,9 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 from transcria.models_catalog import ModelSpec, disk_free_bytes, resolve_hf_home, resolve_models_dir, resolve_runtimes_dir
 

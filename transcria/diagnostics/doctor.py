@@ -24,8 +24,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from transcria.diagnostics.checks.common import (  # noqa: F401 — façade
     _LABELS,

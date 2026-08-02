@@ -42,6 +42,6 @@ class FederatedIdentity:
 class PasswordBackend(Protocol):
     """Backend à formulaire identifiant/mot de passe (local, LDAP)."""
 
-    def authenticate(self, username: str, password: str) -> "User | FederatedIdentity | None":
+    def authenticate(self, username: str, password: str) -> User | FederatedIdentity | None:
         """Vérifie les identifiants. Voir le contrat des trois issues en tête de module."""
         ...

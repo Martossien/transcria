@@ -143,7 +143,7 @@ def load_scripts(cfg: dict) -> list[dict]:
         executable = bool(path and exists and os.access(path, os.X_OK))
         if exists and path is not None:
             try:
-                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                with open(path, encoding="utf-8", errors="replace") as fh:
                     content = fh.read(MAX_SCRIPT_DISPLAY_BYTES)
             except OSError:
                 exists = False

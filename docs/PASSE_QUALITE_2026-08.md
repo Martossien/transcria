@@ -190,7 +190,7 @@ Sur ce dernier j'ai soupçonné un défaut visible — un champ vide à l'écran
 avant de « corriger »** : le remplissage se fait plus bas avec `textContent`. C'était bien du
 code mort, pas un bug.
 
-### Q3.2 — Durcir l'outillage par paliers  🔶 **PALIER 1 LIVRÉ**
+### Q3.2 — Durcir l'outillage par paliers  🔶 **PALIERS 1 ET 2 LIVRÉS**
 
 Ruff ne sélectionne que `E,W,F,I`. Activer `B` (pièges), `UP` (modernisation) et `SIM`
 (simplifications) apporte un vrai retour — à condition de le faire **paquet par paquet avec
@@ -210,7 +210,14 @@ Poser `strict=False` partout aurait silencié la règle sans rien corriger.
 Un `B009` délibéré (contournement d'un stub `transformers` manquant) est marqué `noqa` avec
 sa justification, plutôt que « simplifié » au prix d'une erreur mypy.
 
-**Paliers suivants**, séparément : `UP` (68) puis `SIM` (73), et côté mypy
+**Palier 2 — `UP` (pyupgrade) : LIVRÉ.** 68 occurrences, toutes mécaniques et sans effet
+d'exécution : `typing.Callable` → `collections.abc.Callable` (30), annotations déquotées
+(29), modes d'ouverture redondants (7), et un `yield` sur boucle devenu `yield from`.
+Contrairement à `B`, rien n'exigeait d'arbitrage — d'où l'ordre : le palier qui **corrige des
+pièges** d'abord, celui qui **modernise** ensuite.
+
+**Paliers suivants**, séparément : `SIM` (73 occurrences — celui-là demandera des
+arbitrages, une « simplification » n'est pas toujours plus lisible), et côté mypy
 `warn_unused_ignores` puis `disallow_untyped_defs` sur `auth`, `ingestion`, `queue`.
 **Critère :** chaque palier vert avant le suivant.
 

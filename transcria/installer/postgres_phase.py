@@ -23,11 +23,12 @@ from __future__ import annotations
 import io
 import os
 import subprocess
+from collections.abc import Callable
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Protocol
 
 from transcria.installer.messages import t
 from transcria.installer.postgres_lib import (
@@ -128,7 +129,7 @@ def _emit_text(console: _ConsoleLike, text: str) -> None:
             console.info(line)
 
 
-def _scalar_int(value: "str | None") -> int:
+def _scalar_int(value: str | None) -> int:
     if value is None:
         return 0
     try:
@@ -137,7 +138,7 @@ def _scalar_int(value: "str | None") -> int:
         return 0
 
 
-def _default_query(dsn: str, sql: str) -> "str | None":
+def _default_query(dsn: str, sql: str) -> str | None:
     """Lit un scalaire via SQLAlchemy ; toute erreur (table absente, connexion) → None.
 
     Reproduit fidèlement `psql -At -c … 2>/dev/null || défaut` : une requête qui échoue
