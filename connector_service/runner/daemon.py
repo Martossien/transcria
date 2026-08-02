@@ -24,6 +24,8 @@ import logging
 import os
 from typing import Any
 
+from connector_service.runner.commands import supported_platforms
+
 logger = logging.getLogger("connector_service.runner")
 
 
@@ -73,8 +75,19 @@ class MeetingRunnerDaemon:
         free = self._cfg.capacity - self.active_count
         if free <= 0:
             return
+        # Ne réclamer que ce qu'on sait RÉELLEMENT lancer : croisement de ce que
+        # l'exploitant déclare dans runner.yaml et de ce pour quoi une image existe. Une
+        # plateforme déclarée sans image serait prise puis échouerait sur « aucune image de
+        # bot » — en attendant, l'intention reste invisible aux exécutants capables.
+        lançables = set(supported_platforms(self._cfg.images))
+        plateformes = sorted(set(self._cfg.platforms) & lançables)
+        if not plateformes:
+            logger.warning("aucune plateforme lançable (déclarées=%s, images=%s) — pas de claim",
+                           list(self._cfg.platforms), sorted(lançables))
+            return
         status, body = await self._post("/v1/meetings/claim",
-                                        {"runner": self._cfg.runner_name, "max": free})
+                                        {"runner": self._cfg.runner_name, "max": free,
+                                         "platforms": plateformes})
         if status != 200:
             return
         for intent in body.get("sessions", []):

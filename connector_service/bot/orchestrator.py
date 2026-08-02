@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from connector_service.outbound_guard import url_expurgee
+
 _log = logging.getLogger(__name__)
 
 
@@ -100,7 +102,9 @@ class BotSession:
                 await self._driver.leave()
             return BotOutcome(admitted=True, reason=reason)
         except Exception:                            # le cycle de vie ne crashe pas l'appelant
-            _log.exception("échec du cycle de vie du bot (%s)", meeting_url)
+            # URL EXPURGÉE : la query porte souvent un jeton (`?jwt=`, `?pwd=`), et un
+            # journal finit en pièce jointe d'un rapport d'incident.
+            _log.exception("échec du cycle de vie du bot (%s)", url_expurgee(meeting_url))
             with contextlib.suppress(Exception):
                 await self._driver.leave()
             return BotOutcome(admitted=admitted_flag, reason="error")

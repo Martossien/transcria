@@ -44,7 +44,12 @@ from urllib.parse import urlsplit
 #: Noms d'hôte qui désignent la machine elle-même, quelle que soit la résolution.
 _NOMS_LOCAUX = {"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"}
 
-CLE_ALLOWLIST = "VISIO_ALLOWED_HOSTS"
+#: Allowlist GÉNÉRIQUE : elle vaut pour tout bot qui vise une URL fournie par un
+#: utilisateur — la requête `urlopen` de Visio comme la navigation Chromium de Jitsi.
+CLE_ALLOWLIST = "BOT_ALLOWED_HOSTS"
+#: Nom historique, encore honoré : une installation qui l'a posé ne doit pas perdre sa
+#: protection au motif qu'on a élargi le concept.
+CLE_ALLOWLIST_HERITEE = "VISIO_ALLOWED_HOSTS"
 
 
 class HoteRefuse(RuntimeError):
@@ -52,9 +57,38 @@ class HoteRefuse(RuntimeError):
 
 
 def allowlist_depuis_environnement() -> list[str]:
-    """Hôtes autorisés, lus dans ``VISIO_ALLOWED_HOSTS`` (séparés par des virgules)."""
-    brut = os.environ.get(CLE_ALLOWLIST, "")
+    """Hôtes autorisés (séparés par des virgules) — clé générique, repli sur l'historique."""
+    brut = os.environ.get(CLE_ALLOWLIST, "") or os.environ.get(CLE_ALLOWLIST_HERITEE, "")
     return [h.strip().lower() for h in brut.split(",") if h.strip()]
+
+
+def url_expurgee(url: str) -> str:
+    """`schéma://hôte/chemin` — sans query, sans fragment, sans identifiants.
+
+    Une URL de réunion porte souvent un secret dans sa query (`?jwt=`, `?pwd=`) et parfois
+    de la configuration dans son fragment. La journaliser entière met ce secret dans un
+    fichier que tout le monde lit — y compris quand ce journal part en pièce jointe d'un
+    rapport d'incident. On garde ce qui sert au diagnostic : où l'on allait.
+    """
+    try:
+        parts = urlsplit((url or "").strip())
+        if not parts.scheme or not parts.hostname:
+            return "(url illisible)"
+        hote = parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
+        return f"{parts.scheme}://{hote}{parts.path}"
+    except ValueError:
+        return "(url illisible)"
+
+
+def verifier_url_de_reunion(url: str, *, allowlist: list[str] | None = None) -> bool:
+    """Garde des URL de réunion visées par un BOT — `urlopen` comme `page.goto`.
+
+    Le bot Jitsi navigue vers l'URL fournie par l'utilisateur, et son conteneur tourne en
+    `--network host` quand le portail est local : le pivot est le même que pour une requête
+    HTTP, seul l'outil diffère. Même politique, donc — refuser ce qui n'est jamais une
+    salle de réunion, honorer l'allowlist quand elle existe.
+    """
+    return verifier_hote_sortant(url, allowlist=allowlist)
 
 
 def _adresse_interdite(adresse: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

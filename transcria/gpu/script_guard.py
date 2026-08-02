@@ -64,9 +64,14 @@ CLE_ENV_RACINES = "TRANSCRIA_SCRIPT_ROOTS"
 #: liste fermée, le CONTENU est libre — puis désigne le fichier obtenu comme script
 #: d'arbitrage. Le pré-lancement LLM l'exécute. Déplacer l'allowlist hors de portée de
 #: l'admin ne suffisait pas : il pouvait écrire À L'INTÉRIEUR.
+#: TROIS oublis successifs sur cette liste (prompts, puis jobs, puis les empreintes
+#: vocales) : chaque correctif traitait l'instance qu'on me montrait. `test_script_guard`
+#: la tient désormais à jour par RECENSEMENT — un répertoire de configuration non tranché
+#: fait rougir la suite.
 _ZONES_INSCRIPTIBLES = (
-    ("workflow", "prompts_dir"),     # contenu libre, écrit depuis /admin/config
-    ("storage", "jobs_dir"),         # reçoit des fichiers d'utilisateurs
+    ("workflow", "prompts_dir"),         # contenu libre, écrit depuis /admin/config
+    ("storage", "jobs_dir"),             # reçoit les fichiers audio des utilisateurs
+    ("voice_enrollment", "storage_dir"), # reçoit les enregistrements d'empreinte vocale
 )
 
 
@@ -110,7 +115,12 @@ def zones_inscriptibles_en_conflit(config: dict) -> list[tuple[str, Path, Path]]
     conflits: list[tuple[str, Path, Path]] = []
     racines = allowed_script_roots()
     for section, cle in _ZONES_INSCRIPTIBLES:
-        brut = (config.get(section, {}) or {}).get(cle)
+        # Une section peut être n'importe quoi dans une config invalide (le validateur de
+        # schéma passe justement des sections mutées) : on ne suppose pas le dictionnaire.
+        bloc = config.get(section)
+        if not isinstance(bloc, dict):
+            continue
+        brut = bloc.get(cle)
         if not brut:
             continue
         try:

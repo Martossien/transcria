@@ -745,6 +745,51 @@ rien, reçoit tout comme avant — on ne casse pas un runner déjà déployé.
 
 ---
 
+## Sixième passage (2026-08-02) — dont une livraison que j'avais annoncée à tort
+
+### J'ai annoncé livré ce qui n'était pas écrit
+
+Le filtrage des plateformes au claim : **le daemon n'envoyait rien**. Mon script d'édition
+avait levé une exception *avant* d'enregistrer le fichier, et mes tests couvraient le
+magasin de sessions et la fabrique de commandes — **jamais le chemin réel**. Trois couches
+vertes, aucune reliée.
+
+C'est le défaut le plus grave de cette passe, parce qu'il ne porte pas sur du code mais sur
+ce que j'ai **rapporté**. Le test qui manquait part maintenant du daemon et va jusqu'au
+corps envoyé.
+
+Au passage, un mécanisme existait déjà : `runner.yaml` déclare `platforms`, et le heartbeat
+l'envoie depuis toujours. J'avais ajouté un second mécanisme sans le voir. Le claim annonce
+désormais l'**intersection** — ce que l'exploitant déclare ET ce pour quoi une image existe.
+Et `[]` signifie « je ne sais rien lancer », jamais « donne-moi tout ».
+
+### Une troisième zone d'écriture, et le recensement qui met fin à la série
+
+`voice_enrollment.storage_dir` reçoit des enregistrements d'utilisateurs. Après
+`prompts_dir` et `jobs_dir`, c'était le **troisième** oubli de la même liste — à chaque fois
+je fermais l'instance qu'on me montrait.
+
+Un test **recense** désormais les répertoires de la configuration et exige que chacun soit
+protégé ou explicitement exempté avec sa raison. Une clé nouvelle qui ressemble à une zone
+d'écriture fait rougir la suite tant que personne n'a tranché. C'est la seule façon de ne
+pas revenir une quatrième fois.
+
+### Le bot NAVIGATEUR visait aussi une URL utilisateur
+
+`page.goto(meeting_url)` : Chromium navigue vers l'URL fournie, dans un conteneur en
+`--network host` quand le portail est local. Le pivot est identique à celui de la requête
+HTTP de Visio, seul l'outil diffère — j'avais gardé l'un et pas l'autre.
+
+Même politique appliquée. L'allowlist devient **générique** (`BOT_ALLOWED_HOSTS`, avec
+`VISIO_ALLOWED_HOSTS` toujours honorée) : elle vaut pour tout bot qui vise une URL
+d'utilisateur.
+
+**Et les journaux :** l'URL complète — query comprise, donc `?jwt=` ou `?pwd=` — apparaissait
+dans le journal d'erreur de l'orchestrateur. Un journal finit en pièce jointe d'un rapport
+d'incident. Il ne porte plus que `schéma://hôte/chemin`.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
@@ -780,6 +825,7 @@ renseignement le plus utile de ce document :
 | exploitant | « un LAN n'est pas forcément en adressage privé » — le code tenait, la **justification** était fausse |
 | 4ᵉ | S1.6 contournable dans le **temps** (déposer, puis déplacer la configuration) ; le contrôle Visio du doctor cherchait des clés inexistantes ; `VISIO_ALLOWED_HOSTS` jamais relayée au conteneur bot |
 | 5ᵉ | la même chaîne par `storage.jobs_dir` ; **une régression que j'avais créée** (`/admin/config` en 500) ; aucune unité systemd ne chargeait de fichier d'environnement, rendant tout `_MACHINE_ENV` inerte |
+| 6ᵉ | **une livraison annoncée à tort** (le daemon n'envoyait pas `platforms` — l'écriture du fichier avait échoué, et aucun test ne traversait les couches) ; une troisième zone d'écriture oubliée ; le bot navigateur visait une URL utilisateur sans garde, et la journalisait entière |
 
 Aucun de ces passages n'a produit un faux positif sur le fond. Trois de mes correctifs
 étaient incomplets, et je ne l'aurais pas vu seul : les deux premiers parce que j'avais

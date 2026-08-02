@@ -263,3 +263,82 @@ class TestLanEnAdressagePublic:
                                      allowlist=["visio.exemple.test"])
         with pytest.raises(HoteRefuse, match="allowlist"):
             verifier_hote_sortant("https://ailleurs.test/x", allowlist=["visio.exemple.test"])
+
+
+# --- Le bot NAVIGATEUR vise aussi une URL utilisateur ------------------------------------
+#
+# La garde ne couvrait que la requête `urlopen` de Visio. Or le bot Jitsi fait
+# `page.goto(meeting_url)` : Chromium навigue vers l'URL fournie, et le conteneur tourne en
+# `--network host` quand le portail est local. Le pivot est le même, l'outil diffère.
+#
+# Et l'URL complète — query comprise, donc jeton éventuel — apparaissait dans le journal
+# d'erreur de l'orchestrateur.
+
+class TestUrlExpurgee:
+    @pytest.mark.parametrize("brut, attendu", [
+        ("https://meet.exemple/salle?jwt=SECRET", "https://meet.exemple/salle"),
+        ("https://meet.exemple/salle#config.x=1", "https://meet.exemple/salle"),
+        ("https://meet.exemple/salle?pwd=1234#frag", "https://meet.exemple/salle"),
+        ("https://u:p@meet.exemple/salle", "https://meet.exemple/salle"),
+        ("https://meet.exemple:8443/salle", "https://meet.exemple:8443/salle"),
+    ])
+    def test_la_query_le_fragment_et_les_identifiants_disparaissent(self, brut, attendu):
+        from connector_service.outbound_guard import url_expurgee
+
+        assert url_expurgee(brut) == attendu
+
+    def test_une_valeur_illisible_ne_fait_pas_tomber_le_journal(self):
+        from connector_service.outbound_guard import url_expurgee
+
+        assert url_expurgee("pas une url") == "(url illisible)"
+        assert url_expurgee("") == "(url illisible)"
+
+    def test_aucun_secret_ne_survit(self):
+        from connector_service.outbound_guard import url_expurgee
+
+        sortie = url_expurgee("https://meet.exemple/s?jwt=eyJhbGci&pwd=1234")
+        for secret in ("jwt", "eyJhbGci", "pwd", "1234"):
+            assert secret not in sortie
+
+
+class TestGardeDuBotNavigateur:
+    def test_une_url_de_reunion_vers_la_boucle_locale_est_refusee(self, monkeypatch):
+        from connector_service.outbound_guard import HoteRefuse, verifier_url_de_reunion
+
+        with pytest.raises(HoteRefuse):
+            verifier_url_de_reunion("http://127.0.0.1:8080/salle")
+
+    def test_une_url_de_reunion_vers_les_metadonnees_est_refusee(self):
+        from connector_service.outbound_guard import HoteRefuse, verifier_url_de_reunion
+
+        with pytest.raises(HoteRefuse):
+            verifier_url_de_reunion("http://169.254.169.254/salle")
+
+    def test_une_url_legitime_passe(self, monkeypatch):
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import verifier_url_de_reunion
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["192.168.1.20"])
+        assert verifier_url_de_reunion("https://meet.interne.exemple/salle")
+
+    def test_lallowlist_generique_est_reconnue(self, monkeypatch):
+        """`BOT_ALLOWED_HOSTS` couvre TOUS les bots ; `VISIO_ALLOWED_HOSTS` reste reconnue
+        pour ne pas casser une installation qui l'a déjà posée."""
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import HoteRefuse, verifier_url_de_reunion
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["203.0.113.9"])
+        monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
+        monkeypatch.setenv("BOT_ALLOWED_HOSTS", "meet.exemple")
+        assert verifier_url_de_reunion("https://meet.exemple/salle")
+        with pytest.raises(HoteRefuse):
+            verifier_url_de_reunion("https://ailleurs.test/salle")
+
+    def test_lancienne_variable_reste_honoree(self, monkeypatch):
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import verifier_url_de_reunion
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["203.0.113.9"])
+        monkeypatch.delenv("BOT_ALLOWED_HOSTS", raising=False)
+        monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "meet.exemple")
+        assert verifier_url_de_reunion("https://meet.exemple/salle")

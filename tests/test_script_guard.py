@@ -393,3 +393,85 @@ def test_load_prompts_ne_CASSE_pas_sur_une_config_deja_fautive(tmp_path, monkeyp
     monkeypatch.setenv(CLE_ENV_RACINES, str(racine))
     items = load_prompts({"workflow": {"prompts_dir": str(racine)}})
     assert items == [], "aucun prompt affiché — mais AUCUNE exception"
+
+
+# --- Le RECENSEMENT, pour qu'il n'y ait pas de quatrième oubli ---------------------------
+#
+# Trois fois de suite j'ai fermé une zone d'écriture et manqué la suivante : prompts_dir,
+# puis jobs_dir, puis voice_enrollment.storage_dir. Chaque correctif traitait l'instance
+# qu'on me montrait.
+#
+# Ce test inverse la charge : il ÉNUMÈRE les répertoires de la configuration et exige que
+# chacun soit soit dans la politique, soit explicitement exempté avec sa raison. Une clé
+# nouvelle qui ressemble à une zone d'écriture fait rougir la suite tant que personne n'a
+# tranché.
+
+#: Répertoires qui ne reçoivent PAS de fichier contrôlé par un utilisateur — donc hors
+#: politique, avec la raison. Toute autre clé doit être dans `_ZONES_INSCRIPTIBLES`.
+_HORS_POLITIQUE = {
+    "kroko.model_dir": "modèles téléchargés par l'admin depuis un catalogue, pas un upload",
+    "maintenance.backup_dir": "écrit par la maintenance seule ; une sauvegarde restaurée est "
+                              "déjà un acte d'administration système",
+    "services.arbitrage_log_path": "fichier de journal, pas un répertoire d'accueil",
+}
+
+
+def _repertoires_de_config():
+    from transcria.config.loader import get_default_config
+
+    def parcours(d, prefixe=""):
+        for cle, valeur in (d or {}).items():
+            chemin = f"{prefixe}{cle}"
+            if isinstance(valeur, dict):
+                yield from parcours(valeur, chemin + ".")
+            elif isinstance(valeur, str) and (cle.endswith("_dir") or cle.endswith("_path")):
+                # les identifiants de modèles HuggingFace ne sont pas des chemins locaux
+                if "/" in valeur and not valeur.startswith((".", "/")):
+                    continue
+                yield chemin
+
+    return sorted(parcours(get_default_config()))
+
+
+def test_toute_zone_de_configuration_est_TRANCHEE():
+    """Chaque répertoire de la configuration est soit protégé, soit exempté avec sa raison."""
+    from transcria.gpu.script_guard import _ZONES_INSCRIPTIBLES
+
+    protegees = {f"{section}.{cle}" for section, cle in _ZONES_INSCRIPTIBLES}
+    non_tranchees = [c for c in _repertoires_de_config()
+                     if c not in protegees and c not in _HORS_POLITIQUE]
+    assert not non_tranchees, (
+        f"Répertoires de configuration non tranchés : {non_tranchees}. Ajoutez-les à "
+        f"`_ZONES_INSCRIPTIBLES` (ils reçoivent des fichiers d'utilisateurs) ou à "
+        f"`_HORS_POLITIQUE` de ce test, AVEC la raison."
+    )
+
+
+#: Clés VALIDES mais sans valeur par défaut : elles n'apparaissent qu'une fois posées par
+#: l'exploitant, donc l'énumération des défauts ne les voit pas.
+_OPTIONNELLES = {"workflow.prompts_dir": "surcharge facultative (_get_prompts_dir)"}
+
+
+def test_les_zones_de_la_politique_existent_vraiment():
+    """Contre-épreuve : une politique qui protège des clés disparues ne protège rien."""
+    from transcria.gpu.script_guard import _ZONES_INSCRIPTIBLES
+
+    connues = set(_repertoires_de_config()) | set(_OPTIONNELLES)
+    fantomes = [f"{s}.{c}" for s, c in _ZONES_INSCRIPTIBLES if f"{s}.{c}" not in connues]
+    assert not fantomes, f"clés absentes de la configuration : {fantomes}"
+
+
+def test_la_cle_optionnelle_est_bien_LUE_par_le_code():
+    """Une clé déclarée optionnelle doit exister quelque part, sinon c'est un fantôme."""
+    from transcria.llm_tools.prompt_locator import _get_prompts_dir
+
+    assert _get_prompts_dir({"workflow": {"prompts_dir": "/ailleurs"}}) == "/ailleurs"
+
+
+def test_la_zone_des_empreintes_vocales_est_protegee(racine, tmp_path):
+    """`voice_enrollment.storage_dir` reçoit des enregistrements d'utilisateurs — un faux
+    fichier audio y est un fichier arbitraire."""
+    (racine / "faux.wav").write_text("#!/bin/bash\ncharge\n")
+    with pytest.raises(ScriptRefuse, match="inscriptible par l'application"):
+        safe_script_path(str(racine / "faux.wav"),
+                         {"voice_enrollment": {"storage_dir": str(racine)}})

@@ -97,7 +97,11 @@ class MeetingSessionStore:
         `None` = aucune annonce : comportement d'avant, à l'identique — on ne casse pas un
         exécutant déjà déployé qui ne connaît pas encore ce champ.
         """
-        supportees = {str(p).strip() for p in platforms if str(p).strip()} if platforms else None
+        # `None` = l'exécutant n'annonce rien (version antérieure) → comportement d'avant.
+        # `[]` = il annonce ne rien savoir lancer → on ne lui donne RIEN. Confondre les deux
+        # ferait ramasser toutes les réunions à un runner mal configuré.
+        supportees = (None if platforms is None
+                      else {str(p).strip() for p in platforms if str(p).strip()})
         now = now or _utcnow()
         MeetingSessionStore.release_expired_leases(now=now)   # opportuniste, à chaque claim
         horizon = now + timedelta(seconds=join_margin_s)

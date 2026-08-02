@@ -18,6 +18,7 @@ from connector_service.bot.platforms.jitsi_state import (
     ConferencePhase,
     interpret_conference_state,
 )
+from connector_service.outbound_guard import verifier_url_de_reunion
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 # Résolveur d'identité SPÉCIFIQUE à Jitsi : traduit une piste WebRTC en participant nommé,
@@ -193,6 +194,11 @@ class JitsiDriver:
         # Salle PROTÉGÉE : le code est semé dans le localStorage dès la première visite —
         # jitsi-meet l'envoie à prosody et l'invite de mot de passe ne s'affiche jamais
         # (canal de Jibri ; cf. `_local_storage_url`). Sans code : URL muette habituelle.
+        # `page.goto` vise une URL fournie par un UTILISATEUR, et ce conteneur tourne en
+        # `--network host` quand le portail est local : Chromium peut donc atteindre un
+        # service interne. Même politique que les requêtes HTTP sortantes du bot Visio —
+        # refus de la boucle locale et du lien-local, allowlist honorée si posée.
+        verifier_url_de_reunion(meeting_url)
         base = meeting_url.split("#")[0]
         seed = self._local_storage_seed()
         await self._page.goto(_local_storage_url(base, seed) if seed else _muted_url(meeting_url))

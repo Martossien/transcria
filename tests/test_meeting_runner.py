@@ -340,3 +340,63 @@ def test_les_images_personnalisees_elargissent_la_liste():
     from connector_service.runner.commands import supported_platforms
 
     assert "teams" in supported_platforms({"teams": "mon-image-teams:latest"})
+
+
+# --- Le CÂBLAGE, pas seulement les couches ----------------------------------------------
+#
+# J'ai annoncé ce filtrage livré au tour précédent. Il ne l'était pas : l'écriture du
+# fichier daemon avait échoué (exception dans mon script), et mes tests couvraient le store
+# et `commands` — jamais le chemin réel. Trois couches vertes, aucune reliée.
+#
+# Celui-ci part du daemon et va jusqu'au corps envoyé.
+
+class TestLeDaemonAnnonceVraiment:
+    def _corps_du_claim(self, cfg_platforms, images):
+        """Capture le corps POSTÉ sur /v1/meetings/claim par un vrai `run_once`."""
+        import asyncio
+        from types import SimpleNamespace
+
+        from connector_service.runner.daemon import MeetingRunnerDaemon
+
+        envoyes: list[tuple[str, dict]] = []
+
+        cfg = SimpleNamespace(runner_name="r1", capacity=4, platforms=cfg_platforms,
+                              images=images, portal_url="http://x", token="t",
+                              poll_interval_s=1)
+        daemon = MeetingRunnerDaemon.__new__(MeetingRunnerDaemon)
+        daemon._cfg = cfg
+        daemon._active = {}
+        daemon._procs = {}
+        daemon._probe_images = None
+
+        async def _post(chemin, corps):
+            envoyes.append((chemin, corps))
+            return 200, {"sessions": [], "cancelled_sessions": []}
+
+        daemon._post = _post
+        asyncio.get_event_loop_policy().new_event_loop().run_until_complete(daemon.run_once())
+        return next(c for chemin, c in envoyes if chemin.endswith("/claim"))
+
+    def test_le_claim_porte_les_plateformes(self):
+        corps = self._corps_du_claim(("jitsi", "visio"), {})
+        assert "platforms" in corps, "le daemon doit annoncer ce qu'il sait lancer"
+        assert set(corps["platforms"]) == {"jitsi", "visio"}
+
+    def test_une_plateforme_declaree_SANS_image_nest_pas_annoncee(self):
+        """L'exploitant peut déclarer `teams` dans runner.yaml sans avoir l'image : on
+        croise sa déclaration avec ce qui est réellement lançable."""
+        corps = self._corps_du_claim(("jitsi", "teams"), {})
+        assert set(corps["platforms"]) == {"jitsi"}
+
+    def test_une_image_personnalisee_rend_la_plateforme_annonçable(self):
+        corps = self._corps_du_claim(("jitsi", "teams"), {"teams": "mon-teams:latest"})
+        assert set(corps["platforms"]) == {"jitsi", "teams"}
+
+
+def test_une_liste_VIDE_ne_reclame_rien(app):
+    """`[]` = « je ne sais rien lancer », et non « donne-moi tout ». La distinction avec
+    l'absence de champ (exécutant plus ancien) doit être nette."""
+    from transcria.ingestion.session_store import MeetingSessionStore
+
+    with app.app_context():
+        assert MeetingSessionStore.claim_due("r-vide", 5, platforms=[]) == []
