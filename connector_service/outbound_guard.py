@@ -188,3 +188,17 @@ def verifier_hote_sortant(url: str, *, allowlist: list[str] | None = None) -> bo
             f"hôte hors allowlist : {hote} (voir {CLE_ALLOWLIST})"
         )
     return True
+
+
+def verifier_destination_atteinte(url_finale: str, *, allowlist: list[str] | None = None) -> bool:
+    """Revérifie l'URL RÉELLEMENT atteinte après navigation.
+
+    Un navigateur suit les redirections, comme `urlopen` le faisait avant qu'on les lui
+    retire. Contrôler l'URL de départ puis laisser Chromium aller ailleurs, c'est ne pas
+    contrôler : un hôte légitime qui répond `302 Location: http://127.0.0.1/` ramène le
+    pivot par la porte de service.
+
+    On ne peut pas interdire la redirection à un navigateur — une salle de réunion en
+    émet légitimement (authentification, bascule de nœud). On vérifie donc l'arrivée.
+    """
+    return verifier_hote_sortant(url_finale, allowlist=allowlist)

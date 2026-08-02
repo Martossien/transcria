@@ -24,7 +24,12 @@ _MACHINE_ENV = (
     "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
     "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET",       # app Meeting SDK (propriété machine)
     "VISIO_API_BASE", "BOT_HIDDEN",               # visio : API séparée (dev) / bot invisible (opt-in)
-    "VISIO_ALLOWED_HOSTS",                        # allowlist des requêtes SORTANTES du bot :
+    "BOT_ALLOWED_HOSTS",                          # allowlist GÉNÉRIQUE des cibles sortantes
+                                                  # (urlopen Visio ET navigation Chromium) —
+                                                  # renommée sans être relayée d'abord : la
+                                                  # documentation demandait de poser une
+                                                  # variable qui n'arrivait jamais
+    "VISIO_ALLOWED_HOSTS",                        # nom historique, toujours honoré :
                                                   # posée sur l'hôte, elle doit ATTEINDRE le
                                                   # conteneur — sinon la garde y voit une
                                                   # liste vide et ne borne rien (même oubli

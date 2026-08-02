@@ -342,3 +342,68 @@ class TestGardeDuBotNavigateur:
         monkeypatch.delenv("BOT_ALLOWED_HOSTS", raising=False)
         monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "meet.exemple")
         assert verifier_url_de_reunion("https://meet.exemple/salle")
+
+
+# --- Terminer ce que j'avais à moitié fait -----------------------------------------------
+#
+# Trois angles morts, tous du même motif : j'avais corrigé un site et manqué son jumeau.
+
+def test_lallowlist_GENERIQUE_est_relayee_au_conteneur(monkeypatch):
+    """J'ai renommé l'allowlist en `BOT_ALLOWED_HOSTS` et je l'ai documentée — mais seule
+    l'ancienne était relayée. Un exploitant qui suit la documentation posait donc une
+    variable qui n'atteignait jamais le bot : le renommage avait rendu la documentation
+    TROMPEUSE, ce qui est pire que de n'avoir rien renommé."""
+    from connector_service.runner.commands import docker_argv
+
+    monkeypatch.setenv("BOT_ALLOWED_HOSTS", "meet.exemple,visio.exemple")
+    _argv, env = docker_argv({"provider": "jitsi", "job_id": "j1",
+                              "meeting_ref": "https://meet.exemple/salle"},
+                             portal_url="https://portail.exemple", token="tia_x")
+    assert env.get("BOT_ALLOWED_HOSTS") == "meet.exemple,visio.exemple"
+
+
+def test_lancienne_variable_est_relayee_AUSSI(monkeypatch):
+    """Compatibilité : une installation qui l'a déjà posée ne perd rien."""
+    from connector_service.runner.commands import docker_argv
+
+    monkeypatch.delenv("BOT_ALLOWED_HOSTS", raising=False)
+    monkeypatch.setenv("VISIO_ALLOWED_HOSTS", "visio.exemple")
+    _argv, env = docker_argv({"provider": "visio", "job_id": "j1",
+                              "meeting_ref": "https://visio.exemple/salle"},
+                             portal_url="https://portail.exemple", token="tia_x")
+    assert env.get("VISIO_ALLOWED_HOSTS") == "visio.exemple"
+
+
+def test_le_journal_de_demarrage_nexpose_pas_lurl(monkeypatch, caplog):
+    """J'avais expurgé le journal d'EXCEPTION de l'orchestrateur et manqué celui du CLI —
+    lequel s'écrit à CHAQUE démarrage de bot. Le cas rare corrigé, le cas systématique
+    laissé ouvert."""
+    import logging
+
+    from connector_service.bot.cli import ligne_de_demarrage
+
+    with caplog.at_level(logging.INFO):
+        message = ligne_de_demarrage("https://meet.exemple/salle?jwt=SECRET&pwd=1234")
+    for fuite in ("jwt", "SECRET", "pwd", "1234"):
+        assert fuite not in message, f"« {fuite} » ne doit pas atteindre le journal"
+    assert "meet.exemple/salle" in message      # le diagnostic reste possible
+
+
+def test_une_redirection_du_navigateur_vers_linterne_est_refusee(monkeypatch):
+    """`page.goto` suit les redirections comme `urlopen` : valider la première URL et
+    laisser le navigateur aller ailleurs, c'est ne pas valider. La destination FINALE est
+    revérifiée après navigation."""
+    from connector_service.outbound_guard import HoteRefuse, verifier_destination_atteinte
+
+    # Pas de stub ici : une IP littérale « se résout » en elle-même (cf. la fixture), et
+    # stuber la résolution neutraliserait justement ce que ce test vérifie.
+    with pytest.raises(HoteRefuse):
+        verifier_destination_atteinte("http://127.0.0.1:8080/interne")
+
+
+def test_une_redirection_vers_un_hote_legitime_passe(monkeypatch):
+    import connector_service.outbound_guard as og
+    from connector_service.outbound_guard import verifier_destination_atteinte
+
+    monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+    assert verifier_destination_atteinte("https://meet.exemple/salle-finale")

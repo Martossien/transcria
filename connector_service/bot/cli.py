@@ -28,6 +28,7 @@ from connector_service.bot.runner import run_bot_session
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live.facade_client import facade_transcriber
 from connector_service.live.facade_stt import FacadeTranscriber
+from connector_service.outbound_guard import url_expurgee
 
 logger = logging.getLogger("connector_service.bot")
 
@@ -183,7 +184,8 @@ async def run(args: argparse.Namespace) -> int:
         recording = RecordingTee(transcriber)
         transcriber = recording
 
-    logger.info("Bot en route | réunion=%s durée_max=%.0fs nom=« %s »%s", args.meeting_url,
+    logger.info("%s | durée_max=%.0fs nom=« %s »%s",
+                ligne_de_demarrage(args.meeting_url),
                 args.max_duration_s,
                 compose_display_name(explicit=args.name, initiator=args.initiator),
                 f" job={target_job_id}" if target_job_id else "")
@@ -204,6 +206,16 @@ async def run(args: argparse.Namespace) -> int:
         await ingest_recording(args.transcria_url, args.token or "", occurrence,
                                recording, target_job_id)
     return exit_code_for(outcome.admitted, outcome.reason)
+
+
+def ligne_de_demarrage(meeting_url: str) -> str:
+    """Ligne de journal du démarrage, URL EXPURGÉE.
+
+    Celle-ci s'écrit à CHAQUE lancement de bot — c'est donc la fuite la plus fréquente, pas
+    la plus rare. Une URL de réunion porte souvent un jeton dans sa query (`?jwt=`, `?pwd=`)
+    et un journal finit en pièce jointe d'un rapport d'incident. On garde ce qui sert au
+    diagnostic : vers où l'on allait."""
+    return f"Bot en route | réunion={url_expurgee(meeting_url)}"
 
 
 def main(argv: list[str] | None = None) -> int:

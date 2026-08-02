@@ -790,6 +790,36 @@ d'incident. Il ne porte plus que `schéma://hôte/chemin`.
 
 ---
 
+## Septième passage (2026-08-02) — terminer ce que j'avais à moitié fait
+
+Trois angles morts, tous du **même motif** : un site corrigé, son jumeau manqué. Faits non
+pour les points, mais parce que deux d'entre eux rendaient mon travail précédent *faux*.
+
+- **`BOT_ALLOWED_HOSTS` n'était pas relayée au conteneur.** J'avais renommé l'allowlist en
+  générique et je l'avais **documentée** — seule l'ancienne était transmise. Un exploitant
+  qui suivait la documentation posait donc une variable qui n'arrivait jamais. Le renommage
+  avait rendu la documentation **trompeuse** : pire que de n'avoir rien renommé.
+- **Le journal de démarrage exposait l'URL entière.** J'avais expurgé le journal
+  d'*exception* de l'orchestrateur et manqué celui d'*info* du CLI — lequel s'écrit à
+  **chaque** lancement de bot. J'avais corrigé le cas rare et laissé le cas systématique.
+- **Chromium suivait les redirections sans revalidation.** J'avais retiré ce comportement à
+  `urlopen` et pas au navigateur. On ne peut pas interdire la redirection à un navigateur —
+  une salle en émet légitimement — donc on vérifie **où l'on a atterri**.
+
+### Ce qu'un rituel d'E2E aurait coûté, et pourquoi il est écarté
+
+L'audit proposait un E2E des quatre connecteurs avant chaque release. **Écarté, sur
+l'argument de l'exploitant** : il exige des comptes Zoom, Teams, un tenant Google Workspace
+et une instance LiveKit — aucun de ces secrets ne peut vivre dans une CI publique. Ce serait
+donc un **rituel manuel**, c'est-à-dire une chose qu'on saute sous pression tout en gardant
+la case cochée. On aurait payé le coût sans obtenir la garantie.
+
+La forme retenue : un E2E **par connecteur, joué quand ce connecteur change**. Le coût suit
+le risque. Les quatre connecteurs portent déjà une validation réelle **datée**, ce qui vaut
+mieux qu'une promesse récurrente.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
@@ -825,6 +855,7 @@ renseignement le plus utile de ce document :
 | exploitant | « un LAN n'est pas forcément en adressage privé » — le code tenait, la **justification** était fausse |
 | 4ᵉ | S1.6 contournable dans le **temps** (déposer, puis déplacer la configuration) ; le contrôle Visio du doctor cherchait des clés inexistantes ; `VISIO_ALLOWED_HOSTS` jamais relayée au conteneur bot |
 | 5ᵉ | la même chaîne par `storage.jobs_dir` ; **une régression que j'avais créée** (`/admin/config` en 500) ; aucune unité systemd ne chargeait de fichier d'environnement, rendant tout `_MACHINE_ENV` inerte |
+| 7ᵉ | trois jumeaux manqués : l'allowlist générique non relayée (**documentation rendue trompeuse**), le journal de démarrage non expurgé (le cas systématique, pas le rare), les redirections du navigateur non revalidées |
 | 6ᵉ | **une livraison annoncée à tort** (le daemon n'envoyait pas `platforms` — l'écriture du fichier avait échoué, et aucun test ne traversait les couches) ; une troisième zone d'écriture oubliée ; le bot navigateur visait une URL utilisateur sans garde, et la journalisait entière |
 
 Aucun de ces passages n'a produit un faux positif sur le fond. Trois de mes correctifs

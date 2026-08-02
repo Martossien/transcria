@@ -18,7 +18,10 @@ from connector_service.bot.platforms.jitsi_state import (
     ConferencePhase,
     interpret_conference_state,
 )
-from connector_service.outbound_guard import verifier_url_de_reunion
+from connector_service.outbound_guard import (
+    verifier_destination_atteinte,
+    verifier_url_de_reunion,
+)
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 # Résolveur d'identité SPÉCIFIQUE à Jitsi : traduit une piste WebRTC en participant nommé,
@@ -202,6 +205,10 @@ class JitsiDriver:
         base = meeting_url.split("#")[0]
         seed = self._local_storage_seed()
         await self._page.goto(_local_storage_url(base, seed) if seed else _muted_url(meeting_url))
+        # Le navigateur SUIT les redirections : on ne peut pas les lui interdire (une salle
+        # en émet légitimement), donc on vérifie où l'on a ATTERRI. Sans cela, un hôte
+        # légitime répondant `302 Location: http://127.0.0.1/` ramènerait le pivot.
+        verifier_destination_atteinte(self._page.url)
 
     async def request_join(self, display_name: str) -> None:
         page = self._page
