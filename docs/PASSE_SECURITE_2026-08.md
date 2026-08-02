@@ -1,6 +1,7 @@
 # Passe sécurité — août 2026
 
 État de référence : `132ddfd` sur `main`, après la passe qualité (`docs/PASSE_QUALITE_2026-08.md`).
+**Passe terminée le 2026-08-02** (`ef156cf`) — voir le *Bilan* en fin de document.
 Le modèle de sécurité existant est décrit dans `docs/SECURITY_MODEL.md` ; ce document ne le
 remplace pas, il liste **ce qui manque encore** et, tout aussi important, **ce qu'on refuse de
 faire**.
@@ -74,7 +75,7 @@ fait perdre du temps sur des sujets réglés.
 
 ---
 
-## Vague S1 — vrais défauts, même sur une machine locale
+## Vague S1 — vrais défauts, même sur une machine locale  ✅ **LIVRÉE**
 
 Six points. Ils ont en commun de ne dépendre d'aucune exposition réseau : ils sont faux
 aujourd'hui, sur l'installation telle qu'elle tourne — et le resteraient si le portail ne
@@ -319,7 +320,7 @@ discret : il vient d'un manifeste, pas d'un champ que l'on regarde.
 
 ---
 
-## Vague S2 — ce qui devient nécessaire à l'exposition
+## Vague S2 — ce qui devient nécessaire à l'exposition  ✅ **LIVRÉE** (sauf S2.3, différée)
 
 Ces trois points ne sont pas urgents tant que le portail reste local. Ils le deviennent le jour
 où Zoom RTMS ou Teams est activé — c'est-à-dire le jour où une URL du portail est publiée. Les
@@ -495,15 +496,46 @@ qu'elles reviennent.
 
 ---
 
-## Ordre proposé
+## Bilan
 
-1. **S1.2** (`shlex` + `urlsplit`) et **S1.3** (épinglage par test) — le meilleur rapport
-   effet/effort du document. **Faits** : voir la section « Déjà livré ».
-2. **S1.1** et **S1.4** — inverser deux défauts dangereux ; courts, mais ils changent le
-   comportement au boot, donc à faire avec leurs tests de non-régression.
-3. **S1.5** puis **S1.6** — les deux qui demandent de lire des routes et des chemins.
-4. **S3** en passant.
-5. **S2** avant d'activer Zoom RTMS ou Teams en production — pas après.
+**Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
+séparément avec ses tests et la CI verte avant d'enchaîner.
 
-Aucun de ces points ne demande de refonte. C'est délibéré : une passe sécurité qui exige une
-réécriture n'est pas appliquée, et une passe sécurité non appliquée ne protège de rien.
+| | Sujet | Tests |
+|---|---|---:|
+| S1.1 ✅ | Service d'inférence fail-closed (clé + `file_ref` borné) | 11 |
+| S1.2 ✅ | URL du kit runner validée puis échappée | 19 |
+| S1.3 ✅ | Révocation de session épinglée (l'audit se trompait) | 2 |
+| S1.4 ✅ | Plus de mot de passe d'amorçage publié | 7 |
+| S1.5 ✅ | Lecture et écriture séparées sur les jobs | 13 |
+| S1.6 ✅ | Racine allowlistée pour les scripts exécutés en root | 16 |
+| S2.1 ✅ | Transport rattaché aux connecteurs à webhook (FAIL) | 6 |
+| S2.2 ✅ | Requête sortante bornée (boucle locale, métadonnées) | 21 |
+| S3 ✅ | `/ready`, formules CSV, décompression, upload en flux | 22 |
+| **S2.3 ⏸** | **Un principal par exécutant** | **différée** |
+
+**Ce qui reste, et pourquoi :** S2.3 seulement. Il n'y a qu'un seul exécutant — le défaut
+est nul en pratique, et le corriger maintenant produirait une abstraction écrite sans le cas
+d'usage qui lui donnerait sa forme. **À reprendre le jour où un deuxième exécutant est
+posé.** Voir aussi la section « Écarté volontairement », qui n'est pas une liste d'attente :
+ces points sont refusés, pas reportés.
+
+**Un changement cassant**, documenté au CHANGELOG : un nœud d'inférence dont la variable de
+clé a disparu ne démarre plus. Le portail tout-en-un n'est pas concerné.
+
+**Ce que la méthode a rapporté.** Écrire les tests négatifs *avant* le correctif, et vérifier
+qu'ils échouent sans lui, a changé trois conclusions :
+
+- **S1.3 n'était pas un défaut.** Le test est passé sans le correctif :
+  `flask_login.UserMixin.is_authenticated` délègue à `is_active`. La protection existait —
+  mais nulle part dans ce projet, suspendue à un détail d'une bibliothèque tierce. Elle est
+  désormais écrite et testée ;
+- **deux tests de S2.2 ne prouvaient rien.** `resolve_livekit_room` attrape `Exception` pour
+  retomber sur le slug : un espion qui *lève* est avalé par ce repli, et le test passait avec
+  ET sans la garde ;
+- **le périmètre a bougé dans les deux sens.** S1.6 touchait **trois** sources de chemins
+  exécutables, pas une. À l'inverse, sur les 26 routes mutantes de S1.5, **trois n'étaient
+  pas vulnérables** — elles portaient déjà une permission que le `VIEWER` n'a pas.
+
+Aucun de ces points n'a demandé de refonte. C'était délibéré : une passe sécurité qui exige
+une réécriture n'est pas appliquée, et une passe sécurité non appliquée ne protège de rien.
