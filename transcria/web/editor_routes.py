@@ -32,7 +32,7 @@ from transcria.exports.package_builder import PackageBuilder
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
-from transcria.web.job_access import get_job_for_api
+from transcria.web.job_access import get_job_for_api, get_job_for_edit
 from transcria.web.refine_shared import refine_running
 from transcria.workflow.refine_store import RefineStore
 from transcria.workflow.srt_editor import (
@@ -62,8 +62,17 @@ def _fs(job_id: str) -> JobFilesystem:
 
 
 def _get_job(job_id: str):
-    """Accès identique au reste des pages job (propriétaire/groupes/admin)."""
+    """LECTURE : accès identique au reste des pages job (propriétaire/groupes/admin)."""
     return get_job_for_api(job_id)
+
+
+def _get_job_editable(job_id: str):
+    """ÉCRITURE : l'éditeur RÉÉCRIT le livrable — un droit de regard ne suffit pas (S1.5).
+
+    C'est ici que le défaut était le plus net : `PUT /draft`, `POST /save` et
+    `POST /sync-summary` remplacent le sous-titrage d'un job, et ne portaient que la
+    garde de lecture. Un VIEWER du même groupe pouvait donc réécrire le travail d'autrui."""
+    return get_job_for_edit(job_id)
 
 
 def _effective_srt_text(fs: JobFilesystem) -> str | None:
@@ -241,7 +250,7 @@ def editor_draft_get(job_id: str):
 @editor_bp.route("/api/jobs/<job_id>/editor/draft", methods=["PUT"])
 @login_required
 def editor_draft_put(job_id: str):
-    job, error = _get_job(job_id)
+    job, error = _get_job_editable(job_id)
     if error:
         return error
     fs = _fs(job_id)
@@ -275,7 +284,7 @@ def editor_draft_put(job_id: str):
 @editor_bp.route("/api/jobs/<job_id>/editor/draft", methods=["DELETE"])
 @login_required
 def editor_draft_delete(job_id: str):
-    job, error = _get_job(job_id)
+    job, error = _get_job_editable(job_id)
     if error:
         return error
     draft_path = _fs(job_id).job_dir / _DRAFT_REL
@@ -289,7 +298,7 @@ def editor_draft_delete(job_id: str):
 @editor_bp.route("/api/jobs/<job_id>/editor/save", methods=["POST"])
 @login_required
 def editor_save(job_id: str):
-    job, error = _get_job(job_id)
+    job, error = _get_job_editable(job_id)
     if error:
         return error
     fs = _fs(job_id)
@@ -412,7 +421,7 @@ def editor_sync_summary(job_id: str):
     garde-fous déterministes, snapshot de version AVANT write-back, reconstruction
     du package. Le web ne fait que composer la demande et enfiler — jamais
     automatique, toujours au clic de l'utilisateur."""
-    job, error = _get_job(job_id)
+    job, error = _get_job_editable(job_id)
     if error:
         return error
     if not _sync_summary_available(job):

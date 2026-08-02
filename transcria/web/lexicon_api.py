@@ -23,7 +23,7 @@ from transcria.context.lexicon import LexiconManager
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.web.blueprint import web_bp
-from transcria.web.job_access import get_job_for_api
+from transcria.web.job_access import get_job_for_api, get_job_for_edit
 from transcria.web.lexicon_views import enrich_lexicon_context_audio, promote_groups_view
 from transcria.web.request_helpers import json_body
 from transcria.workflow.transitions import advance_preprocessing_state
@@ -37,7 +37,7 @@ def api_lexicon_promote(job_id: str):
     """Étape 6 : pousser une forme validée du lexique de SESSION vers un lexique
     CENTRAL (existant ou créé à la volée) — même périmètre de droits que la gestion
     des lexiques (admin de groupe / admin)."""
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     if not CentralLexiconStore.can_manage_lexicons(current_user):
@@ -93,7 +93,7 @@ def api_lexicon_promote(job_id: str):
 @login_required
 def api_lexicon(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -161,7 +161,7 @@ def api_available_lexicons(job_id: str):
 @login_required
 def api_selected_lexicons(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     payload = request.get_json(silent=True) or {}

@@ -41,7 +41,7 @@ from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backend
 from transcria.voice.matching import VoiceMatchingService
 from transcria.web.blueprint import web_bp
-from transcria.web.job_access import get_job_for_api
+from transcria.web.job_access import get_job_for_edit
 from transcria.web.request_helpers import DEFAULT_JOB_TITLE, api_stable, bearer_token_allowed, clean_job_title, json_body
 from transcria.workflow import profiles, resume
 from transcria.workflow.profile_availability import compute_profiles_view
@@ -120,7 +120,7 @@ def _summary_vram_profile(cfg: dict) -> dict:
 def api_upload(job_id: str):
     """Dépose le fichier audio d'un job fraîchement créé (contrat scriptable)."""
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     if job.state != JobState.CREATED.value:
@@ -205,7 +205,7 @@ def _maybe_autostart_summary(cfg: dict, job_id: str) -> None:
 @login_required
 def api_analyze(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -231,7 +231,7 @@ def api_analyze(job_id: str):
 @login_required
 def api_summary(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -370,7 +370,7 @@ def api_speaker_hint(job_id: str):
     de temps pyannote, meilleur comptage) et basculer automatiquement de Sortformer
     vers pyannote si le maximum dépasse 4 locuteurs.
     """
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -393,7 +393,7 @@ def api_meeting_invite(job_id: str):
     dériver l'orthographe des noms puis sont retirées — seuls le brief sans e-mail et
     la liste de noms sont conservés (minimisation des données personnelles).
     """
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -458,7 +458,7 @@ def api_meeting_invite_document(job_id: str):
     l'invitation collée. Les formats binaires hérités (.doc/.ppt) ne sont pas gérés.
     """
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -523,7 +523,7 @@ def api_meeting_invite_document(job_id: str):
 @login_required
 def api_meeting_invite_document_delete(job_id: str, index: int):
     """Retire un document joint (par position dans la liste)."""
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -552,7 +552,7 @@ def api_meeting_invite_document_delete(job_id: str, index: int):
 @login_required
 def api_context(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -605,7 +605,7 @@ def api_context(job_id: str):
 @login_required
 def api_participants(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -623,7 +623,7 @@ def api_participants(job_id: str):
 @login_required
 def api_speakers_detect(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -667,7 +667,7 @@ def api_speakers_detect(job_id: str):
 @login_required
 def api_speakers_map(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -694,7 +694,7 @@ def api_speakers_map(job_id: str):
 @login_required
 def api_speakers_voice_match(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -722,7 +722,7 @@ def api_set_profile(job_id: str):
     Distinct du lancement (`/process`) : ici on ne fait QUE mémoriser le contrat produit, sans
     enfiler le job. Le profil doit être valide ET réellement disponible sur cette installation.
     """
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 

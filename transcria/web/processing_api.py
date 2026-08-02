@@ -31,7 +31,7 @@ from transcria.queue.wait_estimate import queue_wait_estimates
 from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
-from transcria.web.job_access import can_manage_queue_job, get_job_for_api
+from transcria.web.job_access import can_manage_queue_job, get_job_for_api, get_job_for_edit
 from transcria.web.meetings_views import sessions_for_jobs
 from transcria.web.request_helpers import api_stable, bearer_token_allowed
 from transcria.workflow import profiles
@@ -159,7 +159,7 @@ def api_resources_status():
 def api_process(job_id: str):
     """Lance le traitement complet du job (mise en file — contrat scriptable)."""
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -371,7 +371,7 @@ _REPROCESSABLE_STATES = {
 def api_reprocess(job_id: str):
     """Relance le traitement d'un job déjà terminé (lexique modifié, prompt mis à jour…)."""
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -442,7 +442,7 @@ def api_reprocess(job_id: str):
 @login_required
 def api_quality(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
@@ -455,7 +455,7 @@ def api_quality(job_id: str):
 @login_required
 def api_export(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 

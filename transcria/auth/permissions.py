@@ -28,6 +28,10 @@ class Permission(str, enum.Enum):
     # (connectors.meetings.runner_usernames), jamais par un rôle : claim des intentions
     # (références de réunion déchiffrées), relais d'états, rattachement d'audio.
     OPERATE_MEETING_RUNNER = "operate_meeting_runner"
+    #: Modifier un job PARTAGÉ (dont on n'est pas propriétaire) : réécrire le SRT, changer
+    #: le contexte, relancer un traitement. Sécurité S1.5 — c'est ce qui sépare une équipe
+    #: qui travaille ensemble d'un lecteur à qui l'on a donné à voir. Le VIEWER ne l'a pas.
+    EDIT_SHARED_JOBS = "edit_shared_jobs"
 
 
 _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
@@ -43,6 +47,7 @@ _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.VIEW_QUALITY_REPORTS,
         Permission.RETRY_PROCESSING,
         Permission.MANAGE_SCHEDULE,
+        Permission.EDIT_SHARED_JOBS,
     },
     Role.MANAGER: {
         Permission.SCHEDULE_MEETINGS,
@@ -51,10 +56,12 @@ _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.DOWNLOAD_EXPORTS,
         Permission.VIEW_QUALITY_REPORTS,
         Permission.RETRY_PROCESSING,
+        Permission.EDIT_SHARED_JOBS,
     },
     Role.OPERATOR: {
         Permission.SCHEDULE_MEETINGS,
         Permission.CREATE_JOBS,
+        Permission.EDIT_SHARED_JOBS,
         Permission.DOWNLOAD_EXPORTS,
         Permission.VIEW_QUALITY_REPORTS,
     },

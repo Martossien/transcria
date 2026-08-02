@@ -304,7 +304,11 @@ class TestJobAccessControl:
         for method, path, kwargs in endpoints:
             response = getattr(client, method)(path, **kwargs)
             assert response.status_code == 403, path
-            assert json.loads(response.data)["error"] == "Accès interdit"
+            # Depuis S1.5, le refus porte le motif exact : « Accès interdit » quand la
+            # LECTURE est refusée, « Modification interdite » quand c'est l'écriture. Ici
+            # les deux sont légitimes — l'étranger n'a ni l'un ni l'autre.
+            assert json.loads(response.data)["error"] in (
+                "Accès interdit", "Modification interdite"), path
 
     def test_admin_can_delete_foreign_job(self, app, admin_client):
         _, _, _, job_id, _ = self._create_operator_with_job(app, "DeleteByAdmin")

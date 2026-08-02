@@ -229,7 +229,7 @@ d'amorçage, devenu une sentinelle. Les tests qui se connectent comme administra
 ont reçu un vrai secret ; ceux qui testent le **bandeau** « mot de passe par défaut » gardent
 la sentinelle — ils portent sur un compte existant, cas qui n'a pas changé.
 
-### S1.5 — Lire et modifier un job passent par la même porte
+### S1.5 — Lire et modifier un job passent par la même porte  ✅ **LIVRÉE**
 
 `transcria/web/job_access.py` n'offre qu'une garde, `can_access_job` : propriétaire, admin, ou
 **membre d'un groupe commun avec le propriétaire**. Les routes mutantes de l'éditeur
@@ -247,9 +247,28 @@ d'écriture**. Les routes mutantes l'utilisent. On ne construit pas une matrice
 route × rôle × relation automatique : ce serait de la sur-ingénierie ici — quatre verbes
 suffisent à couvrir le besoin réel.
 
-**Critère d'acceptation :** un `VIEWER` membre du même groupe obtient 200 en lecture et **403**
-sur chaque route mutante (test paramétré sur la liste des routes) ; le propriétaire et l'admin
-conservent leur accès (test).
+**Critère d'acceptation :** un `VIEWER` du même groupe lit (200) et se voit refuser (403) la
+réécriture du SRT, la relance d'un traitement et la modification du contexte ; propriétaire,
+admin, `OPERATOR` et `MANAGER` conservent leurs droits. **13 tests**, dont les trois de route
+vérifiés en échec sans le correctif.
+
+**Le périmètre réel, mesuré :** un balayage AST des routes mutantes utilisant la garde de
+lecture en a trouvé **26**. Sur ces 26, **trois n'étaient pas vulnérables** et n'ont pas été
+touchées — elles portent déjà une permission que le `VIEWER` n'a pas (`SCHEDULE_MEETINGS` pour
+annuler/replanifier une réunion, `DELETE_JOBS` pour supprimer un job). L'affirmation générale
+de l'audit ne s'appliquait donc pas partout ; les vérifier une par une valait mieux que
+convertir en masse. **23 routes** basculées, plus **4 de l'éditeur SRT** — invisibles au
+premier balayage parce qu'elles passent par une aide locale, et pourtant le cas le plus net :
+elles remplacent le livrable.
+
+**Une permission plutôt qu'un test de rôle :** `Permission.EDIT_SHARED_JOBS`, accordée à
+`ADMIN`, `MANAGER` et `OPERATOR`. Écrire `role != VIEWER` aurait marché aujourd'hui et cassé
+au premier rôle ajouté ; la matrice de permissions existait, elle méritait la réponse.
+
+**Deux nuances retenues dans la règle :** le propriétaire garde toujours la main sur son
+propre job, même rétrogradé depuis (lui retirer son travail serait une surprise, pas une
+protection) ; et le message de refus dit maintenant *lequel* des deux droits manque —
+« Accès interdit » ou « Modification interdite ».
 
 ### S1.6 — Un chemin de script libre, exécuté en root
 

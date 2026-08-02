@@ -21,7 +21,7 @@ from transcria.exports.package_builder import PackageBuilder
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
 from transcria.web.blueprint import web_bp
-from transcria.web.job_access import get_job_for_api
+from transcria.web.job_access import get_job_for_api, get_job_for_edit
 from transcria.web.refine_shared import REFINE_READY_STATES, refine_running, refine_store_for
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 @login_required
 def api_refine_submit(job_id: str):
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     refine_cfg = cfg.get("workflow", {}).get("refine_chat", {}) or {}
@@ -108,7 +108,7 @@ def api_refine_render_options(job_id: str):
     (restauration possible comme pour une application LLM).
     """
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     if job.state not in REFINE_READY_STATES:
@@ -143,7 +143,7 @@ def api_refine_render_options(job_id: str):
 def api_refine_revert(job_id: str):
     """Restaure un snapshot pris AVANT une application (retour arrière utilisateur)."""
     cfg = get_config()
-    job, error_response = get_job_for_api(job_id)
+    job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
     data = request.get_json(silent=True) or {}
