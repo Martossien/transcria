@@ -86,3 +86,45 @@ class TestMeetingRefCrypto:
         monkeypatch.setenv("TRANSCRIA_MEETING_REF_KEY", Fernet.generate_key().decode())
         with pytest.raises(ValueError, match="indéchiffrable"):
             decrypt_meeting_ref(stored)
+
+
+# --- Le claim ne rend que ce que l'exécutant sait lancer ---------------------------------
+#
+# Sans filtre, un exécutant réclame une intention Teams qu'il ne peut pas honorer : la
+# session est PRISE (donc invisible pour les autres), puis échoue sur « aucune image de
+# bot ». L'intention doit rester disponible pour un exécutant capable.
+
+class TestClaimFiltrePlateformes:
+    def _planifier(self, app, provider):
+        from transcria.ingestion.session_store import MeetingSessionStore
+        from transcria.jobs.store import JobStore
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            u = UserStore.list_users()[0]
+            job = JobStore.create_job(u.id, f"Réunion {provider}")
+            return MeetingSessionStore.create(owner_id=u.id, job_id=job.id, provider=provider,
+                                              meeting_ref=f"https://x.exemple/{provider}",
+                                              title=f"T-{provider}")
+
+    def test_une_plateforme_non_supportee_nest_PAS_rendue(self, app):
+        from transcria.ingestion.session_store import MeetingSessionStore
+        self._planifier(app, "teams")
+        with app.app_context():
+            rendus = MeetingSessionStore.claim_due("runner-a", 5, platforms=["jitsi", "visio"])
+        assert all(s["provider"] != "teams" for s in rendus)
+
+    def test_une_plateforme_supportee_est_rendue(self, app):
+        from transcria.ingestion.session_store import MeetingSessionStore
+        self._planifier(app, "jitsi")
+        with app.app_context():
+            rendus = MeetingSessionStore.claim_due("runner-a", 5, platforms=["jitsi"])
+        assert any(s["provider"] == "jitsi" for s in rendus)
+
+    def test_sans_liste_le_comportement_est_INCHANGE(self, app):
+        """Compatibilité : un exécutant plus ancien, qui n'annonce rien, reçoit tout —
+        comme avant. On ne casse pas un runner déjà déployé."""
+        from transcria.ingestion.session_store import MeetingSessionStore
+        self._planifier(app, "teams")
+        with app.app_context():
+            rendus = MeetingSessionStore.claim_due("runner-vieux", 5)
+        assert any(s["provider"] == "teams" for s in rendus)

@@ -85,10 +85,19 @@ class MeetingSessionStore:
     @staticmethod
     def claim_due(runner: str, max_n: int, *, now: datetime | None = None,
                   join_margin_s: int = DEFAULT_JOIN_MARGIN_S,
-                  late_max_s: int = DEFAULT_LATE_MAX_S) -> list[dict]:
+                  late_max_s: int = DEFAULT_LATE_MAX_S,
+                  platforms: list[str] | None = None) -> list[dict]:
         """Claim atomique des sessions DUES. Rend les intentions COMPLÈTES (référence
         déchiffrée — seul endroit du code). Les sessions trop en retard sont closes
-        honnêtement au passage (« aucun exécutant disponible à l'heure »)."""
+        honnêtement au passage (« aucun exécutant disponible à l'heure »).
+
+        `platforms` : ce que l'exécutant sait RÉELLEMENT lancer (il l'annonce au claim).
+        Sans ce filtre, il réclame une intention qu'il ne peut pas honorer — la session est
+        prise, donc invisible pour les autres, puis échoue sur « aucune image de bot ».
+        `None` = aucune annonce : comportement d'avant, à l'identique — on ne casse pas un
+        exécutant déjà déployé qui ne connaît pas encore ce champ.
+        """
+        supportees = {str(p).strip() for p in platforms if str(p).strip()} if platforms else None
         now = now or _utcnow()
         MeetingSessionStore.release_expired_leases(now=now)   # opportuniste, à chaque claim
         horizon = now + timedelta(seconds=join_margin_s)
@@ -105,6 +114,8 @@ class MeetingSessionStore:
             .limit(max_n)
             .with_for_update(skip_locked=True)
         )
+        if supportees is not None:
+            stmt = stmt.where(MeetingSession.provider.in_(supportees))
         claimed: list[dict] = []
         for session in db.session.execute(stmt).scalars():
             if (session.scheduled_at is not None

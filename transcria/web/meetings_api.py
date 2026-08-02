@@ -311,7 +311,11 @@ def v1_meetings_claim():
     if not name:
         return jsonify({"error": "Nom de runner requis"}), 400
     max_n = min(max(int(body.get("max") or 1), 0), 8)
-    sessions = MeetingSessionStore.claim_due(name, max_n)
+    # Plateformes annoncées par l'exécutant : on ne lui confie que ce qu'il sait lancer.
+    # Absent = exécutant plus ancien → comportement d'avant, à l'identique.
+    brut = body.get("platforms")
+    plateformes = [str(p)[:32] for p in brut if str(p).strip()][:16] if isinstance(brut, list) else None
+    sessions = MeetingSessionStore.claim_due(name, max_n, platforms=plateformes)
     for intent in sessions:
         env = _platform_env_for(str(intent.get("provider") or ""))
         if env:

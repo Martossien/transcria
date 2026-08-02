@@ -35,6 +35,18 @@ _MACHINE_ENV = (
 )
 
 
+def supported_platforms(images: dict | None = None) -> list[str]:
+    """Plateformes que CET exécutant sait réellement lancer — celles pour lesquelles il a
+    une image.
+
+    Annoncées au claim : sans cela, un exécutant réclame une intention qu'il ne peut pas
+    honorer (Teams, par exemple), la session est prise, puis échoue sur « aucune image de
+    bot ». Autant ne pas la prendre — l'intention reste disponible pour un exécutant
+    capable.
+    """
+    return sorted({*DEFAULT_IMAGES, *(images or {})})
+
+
 def _portal_is_local(portal_url: str) -> bool:
     host = urlsplit(portal_url).hostname or ""
     return host in ("127.0.0.1", "localhost", "::1")
@@ -80,14 +92,14 @@ def docker_argv(intent: dict, *, portal_url: str, token: str,
         argv += ["--shm-size=1g"]          # Chromium sature les 64 Mo par défaut
     for name in env:
         argv += ["-e", name]               # valeur héritée de l'environnement, pas d'argv
-    # Référence de réunion : positionnelle pour les bots qui la prennent ainsi (jitsi,
-    # visio) ; par l'ENVIRONNEMENT pour Zoom (son parser n'a pas de positionnel — vécu au
-    # premier gate runner : « unrecognized arguments » en boucle) — et un lien Zoom porte
-    # un ?pwd= qui n'a rien à faire dans argv (visible de tout `ps`).
-    ref_env = {"zoom-sdk": "ZOOM_MEETING"}.get(provider)
-    if ref_env:
-        env[ref_env] = str(intent["meeting_ref"])
-        argv += ["-e", ref_env, image]
-        return argv, env
-    argv += [image, str(intent["meeting_ref"])]
+    # Référence de réunion : par l'ENVIRONNEMENT pour TOUS les bots.
+    #
+    # Elle était positionnelle pour jitsi et visio — or c'est LA saisie utilisateur, et ce
+    # module se donne déjà la règle « jamais une saisie utilisateur, jamais dans argv
+    # (visible de tout `ps` de la machine) ». Un lien porte parfois un jeton dans sa query,
+    # comme le `?pwd=` de Zoom qui avait motivé l'exception. Les deux bots acceptent déjà
+    # `MEETING_URL` en repli du positionnel : le changement est ici seul.
+    ref_env = {"zoom-sdk": "ZOOM_MEETING"}.get(provider, "MEETING_URL")
+    env[ref_env] = str(intent["meeting_ref"])
+    argv += ["-e", ref_env, image]
     return argv, env

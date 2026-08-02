@@ -716,6 +716,35 @@ filet a fait exactement son travail : m'empêcher d'abîmer l'architecture pour 
 
 ---
 
+## Deux durcissements de confort (2026-08-02)
+
+Ni l'un ni l'autre n'est une faille — ils ferment des angles morts que le code se
+reprochait déjà à lui-même.
+
+### La référence de réunion ne passe plus par `argv`
+
+`runner/commands.py` porte la règle en commentaire depuis longtemps : *« jamais une saisie
+utilisateur, jamais dans argv (visible de tout `ps`) »*. Elle était appliquée aux identités
+machine et au code d'accès de salle — mais **pas à la référence de réunion**, qui est
+pourtant *la* saisie utilisateur. Seul Zoom faisait exception, parce que son lien porte un
+`?pwd=`… ce qui était l'argument exact pour traiter les autres pareil : un lien Jitsi ou
+Visio peut porter un jeton dans sa query.
+
+Correction côté runner **seul** : les deux bots acceptaient déjà `MEETING_URL` en repli du
+positionnel. Trois tests, dont un paramétré sur les trois plateformes.
+
+### Un exécutant ne réclame plus ce qu'il ne sait pas lancer
+
+Le claim n'annonçait pas les plateformes supportées. Un exécutant pouvait donc réclamer une
+intention Teams, la **prendre** — donc la rendre invisible aux autres — puis échouer sur
+« aucune image de bot ». L'intention doit rester disponible pour un exécutant capable.
+
+`supported_platforms()` dérive la liste des images réellement présentes ; le claim l'annonce,
+le portail filtre. **Compatibilité préservée** : un exécutant plus ancien, qui n'annonce
+rien, reçoit tout comme avant — on ne casse pas un runner déjà déployé.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé

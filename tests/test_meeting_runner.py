@@ -289,3 +289,54 @@ def test_lunite_posee_par_linstalleur_charge_aussi(tmp_path):
     texte = _unit_text(repo_root="/opt/transcria", venv_python="/opt/transcria/venv/bin/python",
                        config_path="/etc/transcria/runner.yaml")
     assert "EnvironmentFile=-" in texte
+
+
+# --- Durcissement : la référence de réunion ne passe plus par argv -----------------------
+#
+# Le module se donnait déjà la règle — « jamais une saisie utilisateur, jamais dans argv
+# (visible de tout `ps`) » — et l'appliquait aux identités machine et au code d'accès. La
+# référence de réunion, elle, restait positionnelle pour jitsi et visio. Or c'est LA saisie
+# utilisateur, et un lien porte parfois un jeton dans sa query.
+#
+# Les deux bots acceptent déjà `MEETING_URL` en repli : le changement est côté runner seul.
+
+@pytest.mark.parametrize("provider", ["jitsi", "visio", "zoom-sdk"])
+def test_la_reference_de_reunion_nest_jamais_dans_argv(provider):
+    from connector_service.runner.commands import docker_argv
+
+    ref = "https://reunion.exemple/salle-secrete?jwt=valeur-sensible"
+    argv, env = docker_argv({"provider": provider, "job_id": "j1", "meeting_ref": ref},
+                            portal_url="https://portail.exemple", token="tia_x")
+    assert ref not in argv, f"{provider} : la référence est visible de tout `ps`"
+    assert not any(ref in str(a) for a in argv)
+    # …mais elle atteint bien le conteneur
+    assert ref in env.values()
+
+
+@pytest.mark.parametrize("provider", ["jitsi", "visio"])
+def test_la_reference_est_transmise_par_MEETING_URL(provider):
+    """Les deux bots lisent déjà cette variable en repli du positionnel."""
+    from connector_service.runner.commands import docker_argv
+
+    _argv, env = docker_argv({"provider": provider, "job_id": "j1",
+                              "meeting_ref": "https://reunion.exemple/salle"},
+                             portal_url="https://portail.exemple", token="tia_x")
+    assert env["MEETING_URL"] == "https://reunion.exemple/salle"
+
+
+# --- Durcissement : ne réclamer que ce que l'on sait lancer -------------------------------
+
+def test_le_claim_annonce_les_plateformes_supportees():
+    """Sans cela, un exécutant réclame une intention Teams qu'il ne peut pas lancer : la
+    session est prise, puis échoue sur « aucune image de bot ». Autant ne pas la prendre."""
+    from connector_service.runner.commands import supported_platforms
+
+    plateformes = supported_platforms()
+    assert "jitsi" in plateformes and "visio" in plateformes
+    assert "teams" not in plateformes          # aucune image → non réclamable
+
+
+def test_les_images_personnalisees_elargissent_la_liste():
+    from connector_service.runner.commands import supported_platforms
+
+    assert "teams" in supported_platforms({"teams": "mon-image-teams:latest"})
