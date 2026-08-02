@@ -310,11 +310,12 @@ discret : il vient d'un manifeste, pas d'un champ que l'on regarde.
 - **pas d'exigence de propriété root** : sur le déploiement de référence le dépôt appartient à
   l'utilisateur applicatif et le service tourne en root — l'exiger aurait tout cassé pour un
   gain nul ;
-- **la clé vit sous `security.allowed_script_roots`**, et non sous `services` ou `gpu` : la
-  même règle couvre les trois sources. La rattacher à l'une d'elles aurait obligé à la
-  tripler. Les racines configurées **s'ajoutent** à `<dépôt>/scripts`, qui reste toujours
-  autorisée — sans quoi le premier exploitant qui range ses lanceurs ailleurs perdrait ceux
-  du dépôt.
+- ~~la clé vit sous `security.allowed_script_roots`~~ → **CORRIGÉ** : c'était le défaut de
+  conception de cette première version. Une clé de configuration est éditable par
+  l'administrateur applicatif lui-même, donc l'allowlist ne contraignait pas l'acteur
+  qu'elle visait. Les racines viennent désormais de l'**environnement du service**
+  (`TRANSCRIA_SCRIPT_ROOTS`) et la clé de configuration est supprimée — voir « Reprise après
+  second audit ». Elles **s'ajoutent** toujours à `<dépôt>/scripts`, qui reste autorisée.
 
 **Toujours écarté :** le passage des services en non-root. Voir la section « Écarté ».
 
@@ -379,7 +380,9 @@ retirée dans la semaine. D'où deux niveaux :
 1. **toujours refusé** — ce qui n'est *jamais* une instance de visioconférence : boucle
    locale, adresse « toutes interfaces », lien-local (les **métadonnées cloud**). Ce sont les
    deux pivots réels : atteindre un service qui n'écoute que sur la machine, ou lire des
-   identifiants d'instance ;
+   identifiants d'instance. **La décision porte sur l'adresse RÉSOLUE**, pas sur la forme
+   écrite — la première version comparait le texte et cinq notations la contournaient (voir
+   « Reprise après second audit ») ;
 2. **allowlist stricte** (`VISIO_ALLOWED_HOSTS`) quand l'exploitant la pose — et elle ne peut
    pas rouvrir le niveau 1 : déclarer `localhost` par mégarde ne redonne pas le pivot.
 
