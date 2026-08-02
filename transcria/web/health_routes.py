@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 PROCESS_START_TIME = time.time()
 
 
+def _peut_voir_le_detail() -> bool:
+    """Vrai pour un compte authentifié. Faux pour la sonde anonyme."""
+    try:
+        from flask_login import current_user
+        return bool(getattr(current_user, "is_authenticated", False))
+    except Exception:  # noqa: BLE001 — hors contexte de requête : on ne divulgue pas
+        return False
+
+
 def _check_database_health() -> tuple[bool, str | None]:
     try:
         db.session.execute(db.select(1)).scalar()
@@ -123,7 +132,12 @@ def ready():
         "database": {"status": "ok" if db_ok else "error"},
         "worker": runtime or {"healthy": False},
     }
-    if db_error:
+    if db_error and _peut_voir_le_detail():
+        # Le motif technique porte l'URI de connexion (hôte, port, utilisateur, base) :
+        # c'est `str(exc)` de SQLAlchemy. Cette route est ANONYME et destinée à une sonde
+        # de supervision, qui n'a besoin que d'un oui/non (sécurité S3). On ne supprime
+        # pas l'information — on la réserve, pour qu'un administrateur puisse encore
+        # diagnostiquer sans aller lire les journaux du serveur.
         payload["database"]["error"] = db_error
     return jsonify(payload), (200 if ready_ok else 503)
 

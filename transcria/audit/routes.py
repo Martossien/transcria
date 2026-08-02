@@ -11,6 +11,7 @@ from transcria.audit.models import AuditAction, audit_action_label
 from transcria.audit.store import AuditStore
 from transcria.auth.permissions import Permission, requires
 from transcria.auth.store import UserStore
+from transcria.exports.csv_safe import ligne_sure
 
 audit_bp = Blueprint("audit", __name__)
 
@@ -129,7 +130,9 @@ def audit_export_csv():
         "target_id", "target_label", "ip_address",
     ])
     for row in rows:
-        writer.writerow([
+        # `ligne_sure` : le libellé porte le TITRE DU JOB, donc une valeur d'utilisateur.
+        # Sans elle, un titre commençant par `=` s'exécute à l'ouverture du fichier (S3).
+        writer.writerow(ligne_sure([
             row.timestamp.isoformat(),
             row.actor_username,
             row.action,
@@ -137,7 +140,7 @@ def audit_export_csv():
             row.target_id or "",
             row.target_label,
             row.ip_address,
-        ])
+        ]))
 
     return Response(
         output.getvalue(),

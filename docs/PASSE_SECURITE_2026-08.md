@@ -381,7 +381,7 @@ deuxième exécutant existera vraiment.
 
 ---
 
-## Vague S3 — trois lignes chacun, à faire en passant
+## Vague S3 — trois lignes chacun, à faire en passant  ✅ **LIVRÉE**
 
 Rien ici ne mérite un chantier. Tout mérite d'être fait pendant qu'on a le fichier ouvert.
 
@@ -401,6 +401,24 @@ trois lignes, pas parce que l'enjeu est faible.
 
 L'upload, lui, est le seul point du document qu'un **utilisateur parfaitement légitime**
 déclenche sans le vouloir, en envoyant trois gros fichiers en parallèle.
+
+**Livré — 22 tests, les cinq décisifs vérifiés en échec sans leur correctif.** Ce que
+l'écriture a précisé :
+
+- **`/ready` ne supprime pas l'information, il la RÉSERVE.** La sonde anonyme garde son
+  oui/non ; un compte authentifié voit toujours le motif technique. Supprimer purement et
+  simplement aurait forcé l'administrateur à aller lire les journaux du serveur pour
+  diagnostiquer une base tombée — on aurait échangé une fuite contre une gêne ;
+- **la garde CSV préfixe, elle ne remplace pas.** La valeur reste entièrement lisible.
+  Remplacer ou supprimer aurait abîmé des libellés légitimes (« budget -- révisé ») et la
+  garde aurait fini désactivée. Les blancs de tête sont couverts : `"\t=1+1"` s'exécute
+  aussi, un tableur les retire **avant** d'interpréter ;
+- **le budget de décompression lit l'en-tête du ZIP**, sans rien décompresser : c'est la
+  somme des tailles *déclarées* qui décide. Plafond volontairement généreux (200 Mo) — un
+  support de réunion volumineux mais légitime doit passer ;
+- **l'upload accepte toujours des `bytes`.** Le flux est recopié par blocs de 1 Mio, mais
+  les appelants historiques n'ont pas eu à changer. Le test le prouve avec un flux qui
+  **refuse** d'être lu d'un coup, plutôt que d'espérer le bon comportement.
 
 ---
 

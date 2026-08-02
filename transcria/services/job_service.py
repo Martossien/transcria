@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any
 
 from transcria.audio.analyzer import AudioAnalyzer
 from transcria.audio.preflight import AudioPreflightAnalyzer
@@ -25,7 +26,9 @@ class JobService:
         return {"job_id": job.id, "title": job.title, "state": job.state}
 
     @staticmethod
-    def upload(job_id: str, file_data: bytes, filename: str, jobs_dir: str) -> dict:
+    def upload(job_id: str, file_data: bytes | Any, filename: str, jobs_dir: str) -> dict:
+        """Enregistre l'audio d'un job. `file_data` : des `bytes`, ou un FLUX lisible par
+        blocs (cf. `JobFilesystem.save_upload`, sécurité S3.4)."""
         job = JobStore.get_by_id(job_id)
         if job is None:
             return {"error": "Job introuvable"}

@@ -66,11 +66,32 @@ class JobFilesystem:
         with open(path, encoding="utf-8") as fh:
             return fh.read()
 
-    def save_upload(self, file_data: bytes, filename: str) -> dict:
+    #: Taille des blocs de recopie d'un upload. 1 Mio : assez grand pour que le coût des
+    #: appels système soit négligeable, assez petit pour que trois envois simultanés ne
+    #: pèsent rien en mémoire.
+    UPLOAD_CHUNK = 1024 * 1024
+
+    def save_upload(self, file_data: bytes | Any, filename: str) -> dict:
+        """Écrit l'audio reçu. Accepte des `bytes` OU un flux (`.read(taille)`).
+
+        Le flux est recopié PAR BLOCS (sécurité S3) : la route faisait `file.read()` avec
+        `MAX_CONTENT_LENGTH` à 1 Gio, donc un fichier entier en mémoire. Ce n'est pas une
+        faille d'authentification — c'est un déni de service qu'un utilisateur parfaitement
+        légitime déclenche sans le vouloir, en envoyant plusieurs gros fichiers en
+        parallèle. Les `bytes` restent acceptés : les appelants historiques (tests,
+        ingestion) n'ont pas à changer.
+        """
         ext = Path(filename).suffix.lower()
         dest = self.job_dir / "input" / f"original{ext}"
         with open(dest, "wb") as fh:
-            fh.write(file_data)
+            if isinstance(file_data, (bytes, bytearray, memoryview)):
+                fh.write(file_data)
+            else:
+                while True:
+                    bloc = file_data.read(self.UPLOAD_CHUNK)
+                    if not bloc:
+                        break
+                    fh.write(bloc)
         size_bytes = dest.stat().st_size
         mime, _ = mimetypes.guess_type(str(dest))
         return {

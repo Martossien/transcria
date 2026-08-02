@@ -147,6 +147,32 @@ def _extract_txt(data: bytes) -> str:
         return data.decode("latin-1", errors="replace")
 
 
+#: Plafond de la taille DÉCOMPRESSÉE d'un DOCX/PPTX (archives ZIP). La taille d'entrée est
+#: déjà bornée (`security.max_document_size_mb`, 25 Mo) et le texte retenu aussi
+#: (`max_document_chars`), mais rien ne bornait l'expansion : une archive de quelques
+#: kilo-octets peut déclarer des centaines de mégaoctets. Généreux à dessein — un support
+#: de réunion volumineux mais légitime doit passer (sécurité S3).
+MAX_DECOMPRESSE_MO = 200
+
+
+def _refuser_si_archive_explosive(data: bytes) -> None:
+    """Refuse une archive dont le contenu DÉCLARÉ dépasse le budget.
+
+    On lit l'en-tête central du ZIP — donc sans rien décompresser, et sans faire confiance
+    au ratio annoncé : c'est la somme des tailles déclarées qui décide."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            total = sum(info.file_size for info in archive.infolist())
+    except (zipfile.BadZipFile, OSError):
+        return   # pas une archive lisible : les extracteurs diront pourquoi, plus finement
+    if total > MAX_DECOMPRESSE_MO * 1024 * 1024:
+        raise DocumentExtractionError(
+            f"Document refusé : son contenu décompressé dépasse {MAX_DECOMPRESSE_MO} Mo "
+            f"({total // (1024 * 1024)} Mo annoncés) pour {len(data) // 1024} Ko de fichier. "
+            f"Une telle expansion n'est pas celle d'un support de réunion."
+        )
+
+
 def extract_document_text(
     data: bytes, filename: str, *, max_chars: int = DEFAULT_MAX_CHARS
 ) -> ExtractedDocument:
@@ -168,6 +194,9 @@ def extract_document_text(
             f"Format non géré : « {ext or filename} ». Formats acceptés : "
             f"{', '.join(SUPPORTED_EXTENSIONS)} (convertissez les .doc/.ppt hérités)."
         )
+
+    if ext in (".docx", ".pptx"):
+        _refuser_si_archive_explosive(data)
 
     warnings: list[str] = []
     if ext == ".pdf":

@@ -16,6 +16,7 @@ from transcria.config import get_config
 from transcria.context.central_lexicon_store import CentralLexiconAccessError, CentralLexiconStore, CentralLexiconValidationError
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
+from transcria.exports.csv_safe import ligne_sure
 
 central_lexicon_bp = Blueprint("central_lexicon", __name__)
 logger = logging.getLogger(__name__)
@@ -333,7 +334,8 @@ def lexicon_export_csv(lexicon_id: str):
     writer = csv.writer(output)
     writer.writerow(["term", "variants", "category", "priority", "replace_by", "comment", "source"])
     for entry in entries:
-        writer.writerow([
+        # Termes, remplacements et commentaires sont saisis par des utilisateurs (S3).
+        writer.writerow(ligne_sure([
             entry.term,
             "; ".join(entry.variants),
             entry.category,
@@ -341,7 +343,7 @@ def lexicon_export_csv(lexicon_id: str):
             entry.replace_by,
             entry.comment,
             entry.source,
-        ])
+        ]))
     safe_name = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in lexicon.name).strip("_") or "lexique"
     return Response(
         output.getvalue(),

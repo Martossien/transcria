@@ -135,7 +135,9 @@ def api_upload(job_id: str):
     if ext not in allowed:
         return jsonify({"error": f"Format non supporté: {ext}"}), 400
 
-    info = JobService.upload(job.id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
+    # Le FLUX, pas son contenu (sécurité S3.4) : `file.read()` chargeait jusqu'à 1 Gio en
+    # mémoire (`MAX_CONTENT_LENGTH`). `save_upload` recopie par blocs.
+    info = JobService.upload(job.id, file.stream, file.filename, cfg["storage"]["jobs_dir"])
     if job.title == DEFAULT_JOB_TITLE:
         job.title = clean_job_title(Path(file.filename).stem or file.filename)
     # Provenance de l'entrée (couture 2 « source audio ») : le micro direct poste
