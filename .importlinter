@@ -116,3 +116,19 @@ source_modules =
     inference_service
 forbidden_modules =
     connector_service
+
+# Passe qualité (2026-08) — l'inversion STT → workflow est ROMPUE : `track_fusion` (module
+# pur d'intervalles) a rejoint `audio/`, et l'import différé qui la masquait a disparu. Ce
+# contrat empêche qu'elle revienne : la chaîne STT est appelée PAR l'orchestration, jamais
+# l'inverse. Un module pur dont les deux couches ont besoin va dans `audio/`.
+[importlinter:contract:stt-sans-orchestration]
+name = La chaîne STT n'importe pas l'orchestration
+type = forbidden
+source_modules =
+    transcria.stt
+forbidden_modules =
+    transcria.workflow
+    transcria.queue
+ignore_imports =
+    transcria.audio.analyzer -> transcria.workflow.timing_model
+    transcria.jobs.models -> transcria.workflow.steps

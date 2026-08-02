@@ -1,5 +1,15 @@
 """Fusion des transcriptions PAR PISTE en une timeline globale — module PUR (vague 5, lot B).
 
+DÉMÉNAGÉ DEPUIS `workflow/` (passe qualité, août 2026). Ce module ne dépend de rien : il
+manipule des intervalles et des segments. Le laisser sous `workflow/` obligeait `stt/` à
+l'importer DE FAÇON DIFFÉRÉE pour éviter un cycle — non parce que le module posait problème,
+mais parce que `workflow/__init__` tire tout l'orchestrateur au passage.
+
+Un import différé qui contourne une inversion de couche se paie deux fois : à la lecture (on
+se demande pourquoi), et au prochain contrat d'imports (il faut l'excepter). Le remède n'était
+pas de le tolérer mais de ranger le module là où il aurait toujours dû être — `audio/`, dont
+l'`__init__` reste léger et que les deux couches peuvent importer sans se croiser.
+
 Le principe qui rend ce module trivial (cadrage `docs/VAGUE5_PISTES_SEPAREES.md`, D5.1) :
 chaque piste est ALIGNÉE sur la timeline commune de la réunion dès la capture — les
 timestamps du STT d'une piste SONT ceux de la réunion. La fusion est donc un TRI, pas un

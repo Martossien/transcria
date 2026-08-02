@@ -7,6 +7,7 @@ GPU/LLM, via les coutures du runner.
 """
 import logging
 
+from transcria.audio.track_fusion import overlapping_indices
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
@@ -18,7 +19,6 @@ from transcria.workflow.multi_stt_review import (
     texts_equivalent,
 )
 from transcria.workflow.refine_llm import chat_completion
-from transcria.workflow.track_fusion import overlapping_indices
 
 logger = logging.getLogger(__name__)
 

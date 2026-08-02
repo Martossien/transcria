@@ -2,6 +2,7 @@ import logging
 import re
 from pathlib import Path
 
+from transcria.audio.track_fusion import overlap_seconds
 from transcria.ingestion.manifest import parse_participants_manifest
 from transcria.ingestion.manifest_turns import turns_from_manifest
 from transcria.jobs.filesystem import JobFilesystem
@@ -217,7 +218,6 @@ class SpeakerDetector:
     _SUBDIAR_BLEED_OVERLAP = 0.5
 
     def _minority_is_bleed(self, minority, participant, manifest) -> bool | None:
-        from transcria.workflow.track_fusion import overlap_seconds
 
         total = sum(b - a for a, b in minority)
         if total <= 0:

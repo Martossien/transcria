@@ -5,6 +5,11 @@ from pathlib import Path
 
 import numpy as np
 
+from transcria.audio.track_fusion import (
+    fuse_track_segments,
+    merge_windows,
+    subtract_intervals,
+)
 from transcria.audio.vad import SileroVAD
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
 from transcria.ingestion.manifest import parse_participants_manifest
@@ -637,14 +642,6 @@ class Transcriber:
         piste manquante, ou zéro segment — le repli est TOUJOURS possible, jamais un
         échec (le mix couvre tout).
         """
-        # Différé : transcria.workflow.__init__ tire le runner → cycle stt↔workflow ;
-        # le module lui-même est PUR, seul le paquet pose problème.
-        from transcria.workflow.track_fusion import (
-            fuse_track_segments,
-            merge_windows,
-            subtract_intervals,
-        )
-
         raw = fs.load_json("metadata/participants_manifest.json")
         if not isinstance(raw, dict) or raw.get("version") != 2:
             return None

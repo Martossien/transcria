@@ -134,15 +134,21 @@ ouverte pour tenir le verrou consultatif ; un process qui s'arrête sans `releas
 laissait ouverte. Un finaliseur la ferme désormais — donc libère aussi le verrou, sans quoi un
 verrou pouvait survivre à son propriétaire et empêcher tout autre ordonnanceur de démarrer.
 
-### Q2.3 — Rompre l'inversion STT → workflow
+### Q2.3 — Rompre l'inversion STT → workflow  ✅ **LIVRÉE**
 
 `stt/transcription.py` importe `workflow.track_fusion` de façon différée pour éviter un cycle
 dû à un `__init__` trop chargé. Un import différé qui contourne une inversion est une dette
 qui se paie deux fois : à la lecture, et au prochain contrat d'import.
 
-**Correction :** déplacer les algorithmes purs concernés dans un paquet neutre, alléger
-l'`__init__`, puis ajouter le contrat `stt !-> workflow`.
-**Effort :** M. **Critère :** l'import différé disparaît et le contrat est vert.
+**Correction :** `track_fusion` (module pur d'intervalles) rejoint `audio/`, dont l'`__init__`
+reste léger et que les deux couches peuvent importer sans se croiser. L'import différé
+redevient un import normal, en tête de fichier.
+
+**Livré**, contrat `stt !-> workflow` ajouté — **6 contrats tenus**. Il a révélé deux
+inversions résiduelles (`audio.analyzer → workflow.timing_model`,
+`jobs.models → workflow.steps`), exceptées NOMMÉMENT plutôt que de renoncer au contrat :
+toute nouvelle inversion est refusée dès aujourd'hui, et les deux restantes se règlent par le
+même remède — déplacer un module pur.
 
 ---
 
