@@ -11,6 +11,7 @@ Sécurité :
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import tempfile
@@ -115,10 +116,8 @@ def save_prompt(cfg: dict, name: str, content: str, language: str = "fr") -> tup
             os.fsync(fh.fileno())
         os.replace(tmp, path)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
     return True, _("%(label)s : prompt sauvegardé (copie de secours .bak conservée).", label=spec["label"])
 

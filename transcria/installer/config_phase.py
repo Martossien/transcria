@@ -17,6 +17,7 @@ près ceux de `transcria.installer.summary_lib` (texte audité et déjà testé)
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -179,10 +180,8 @@ def _default_proxy_confirm(proxy_https: str) -> bool:
 def _best_effort_chown(path: Path, service_user: str) -> None:
     import shutil
 
-    try:
+    with contextlib.suppress(LookupError, PermissionError, OSError):
         shutil.chown(path, user=service_user)
-    except (LookupError, PermissionError, OSError):
-        pass
 
 
 def apply_proxy(

@@ -24,7 +24,7 @@ import io
 import os
 import subprocess
 from collections.abc import Callable
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -206,10 +206,8 @@ def _best_effort_chown(path: Path, service_user: str) -> None:
     """chown best-effort du `.env` vers l'utilisateur du service (fidèle à secure_env_file)."""
     import shutil
 
-    try:
+    with suppress(LookupError, PermissionError, OSError):
         shutil.chown(path, user=service_user)
-    except (LookupError, PermissionError, OSError):
-        pass
 
 
 def _write_dsn(plan: PostgresPlan, console: _ConsoleLike, dsn: str, chown: Chown, result: PostgresResult) -> None:

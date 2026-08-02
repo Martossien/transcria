@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import secrets
 import sys
@@ -80,10 +81,8 @@ def atomic_write_text(path: Path, content: str, *, mode: int = 0o600) -> None:
         os.chmod(tmp_path, mode)
         os.replace(tmp_path, path)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def update_env_file(path: Path, key: str, value: str, *, backup: bool = True, comment: str | None = None) -> Path | None:

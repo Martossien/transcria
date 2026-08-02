@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import io
 from datetime import datetime, timezone
@@ -29,19 +30,15 @@ def audit_page():
 
     since_dt = None
     if since:
-        try:
+        with contextlib.suppress(ValueError):
             since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
 
     until_dt = None
     if until:
-        try:
+        with contextlib.suppress(ValueError):
             until_dt = datetime.strptime(until, "%Y-%m-%d").replace(
                 hour=23, minute=59, second=59, tzinfo=timezone.utc
             )
-        except ValueError:
-            pass
 
     actor_id = None
     if actor:
@@ -99,19 +96,15 @@ def audit_export_csv():
 
     since_dt = None
     if since:
-        try:
+        with contextlib.suppress(ValueError):
             since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
 
     until_dt = None
     if until:
-        try:
+        with contextlib.suppress(ValueError):
             until_dt = datetime.strptime(until, "%Y-%m-%d").replace(
                 hour=23, minute=59, second=59, tzinfo=timezone.utc
             )
-        except ValueError:
-            pass
 
     rows = AuditStore.query(
         since=since_dt, until=until_dt, limit=100_000, offset=0,

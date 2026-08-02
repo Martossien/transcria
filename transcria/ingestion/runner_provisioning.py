@@ -18,6 +18,7 @@ une phrase — « l'admin voit facilement si c'est bon ».
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import secrets
@@ -135,10 +136,8 @@ def meetings_checklist(cfg: dict) -> list[dict]:
     ]
     covered = set()
     for r in runners:
-        try:
+        with contextlib.suppress(ValueError):
             covered.update(json.loads(r.platforms_json))
-        except ValueError:
-            pass
     # Couverture et image PAR PLATEFORME (lots V1/V2 : Visio et Zoom rejoignent Jitsi).
     # Jitsi (zéro identifiant requis) est TOUJOURS affichée — c'est l'attendu d'une
     # installation neuve ; les autres n'apparaissent que si un exécutant les annonce :

@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import subprocess
@@ -296,10 +297,8 @@ class ScriptLLMBackend(LLMBackend):
         logger.info("Arrêt LLM port %d...", self.port)
         if self._pid:
             import os as _os
-            try:
+            with contextlib.suppress(Exception):
                 _os.kill(self._pid, 15)
-            except Exception:
-                pass
             self._pid = None
 
         import os as _os

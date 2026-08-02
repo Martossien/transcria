@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import pwd
 import shlex
@@ -164,10 +165,8 @@ def _best_effort_chown_tree(path: Path, service_user: str) -> None:
     for root, dirs, files in os.walk(path):
         for name in [".", *dirs, *files]:
             target = Path(root) if name == "." else Path(root) / name
-            try:
+            with contextlib.suppress(OSError):
                 os.chown(target, user.pw_uid, user.pw_gid)
-            except OSError:
-                pass
 
 
 def install_opencode_binary(

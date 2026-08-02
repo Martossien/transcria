@@ -75,9 +75,7 @@ class AudioAnalyzer:
             return True
         if channels != 1 and channels != 0:
             return True
-        if sample_rate not in (16000, 0):
-            return True
-        return False
+        return sample_rate not in (16000, 0)
 
     @staticmethod
     def _estimate_time(info: dict) -> tuple[float | None, int]:

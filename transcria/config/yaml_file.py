@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import tempfile
@@ -63,10 +64,8 @@ def atomic_write_yaml(path: Path, data: dict[str, Any]) -> None:
             os.fsync(fh.fileno())
         os.replace(tmp_path, path)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def atomic_write_text(path: Path, content: str) -> None:
@@ -81,10 +80,8 @@ def atomic_write_text(path: Path, content: str) -> None:
             os.fsync(fh.fileno())
         os.replace(tmp_path, path)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def backup_yaml_file(path: Path, suffix: str) -> Path:

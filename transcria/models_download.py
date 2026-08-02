@@ -9,6 +9,7 @@ Tout est injectable (``hf_download``/``popen``) pour tester sans réseau ni sous
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -39,10 +40,8 @@ def _dir_size(path: Path) -> int:
     total = 0
     for root, _dirs, files in os.walk(path):
         for name in files:
-            try:
+            with contextlib.suppress(OSError):
                 total += (Path(root) / name).stat().st_size
-            except OSError:
-                pass
     return total
 
 

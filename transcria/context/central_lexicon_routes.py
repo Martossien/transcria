@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _require_lexicon_admin():
-    if not CentralLexiconStore.can_manage_lexicons(current_user):
-        return False
-    return True
+    return CentralLexiconStore.can_manage_lexicons(current_user)
 
 
 def _can_export_lexicons() -> bool:

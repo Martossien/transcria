@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _require_voice_admin():
-    if not VoiceStore.can_manage_voices(current_user):
-        return False
-    return True
+    return VoiceStore.can_manage_voices(current_user)
 
 
 def _storage_root(cfg: dict) -> Path:

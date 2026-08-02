@@ -69,7 +69,7 @@ jobs:
         # par une : `strict=True` là où un écart est un bug, `strict=False` là où la
         # troncature est voulue, avec sa raison écrite. Les paliers UP et SIM (68 et 73
         # occurrences) viendront séparément — cf. docs/PASSE_QUALITE_2026-08.md.
-        run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I,B,UP
+        run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I,B,UP,SIM103,SIM113,SIM114
 
       - name: Type check (mypy)
         run: mypy transcria/ inference_service/ connector_service/ --ignore-missing-imports

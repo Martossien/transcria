@@ -52,9 +52,7 @@ def request_needs_csrf() -> bool:
     et quand la protection est désactivée en config (géré par l'appelant)."""
     if request.method in _SAFE_METHODS:
         return False
-    if request.headers.get("Authorization", "").startswith("Bearer "):
-        return False
-    return True
+    return not request.headers.get("Authorization", "").startswith("Bearer ")
 
 
 def validate_csrf() -> bool:

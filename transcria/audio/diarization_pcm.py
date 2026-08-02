@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import logging
 import os
@@ -89,10 +90,8 @@ class DiarizationPcmPreparer:
             return target_path
         except Exception as exc:  # noqa: BLE001 — optimisation best-effort
             logger.warning("Diarization PCM: conversion ignorée, audio original conservé: %s", exc)
-            try:
+            with contextlib.suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
             fs.save_json(
                 "speakers/diarization_audio.json",
                 {

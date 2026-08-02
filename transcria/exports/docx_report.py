@@ -851,7 +851,6 @@ class DocxReport:
             row = table.rows[row_i + 1]
             bg = self.theme.light if row_i % 2 == 0 else _WHITE
 
-            col = 0
             data: list[tuple[str, bool, RGBColor]] = []  # (text, bold, color)
 
             data.append((participant["name"], True, self.theme.primary))
@@ -870,7 +869,7 @@ class DocxReport:
             if has_animator:
                 data.append(("★ Animateur" if participant["is_animator"] else "", True, self.theme.accent))
 
-            for text, bold, color in data:
+            for col, (text, bold, color) in enumerate(data):
                 cell = row.cells[col]
                 _cell_bg(cell, bg)
                 _cell_margins(cell, top=60, bottom=60, left=100, right=100)
@@ -880,7 +879,6 @@ class DocxReport:
                 run.font.bold = bold
                 run.font.color.rgb = color
                 run.font.name = "Calibri"
-                col += 1
 
     # ── Section 3 : Transcription ─────────────────────────────────────────────
 

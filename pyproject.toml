@@ -5,9 +5,19 @@ line-length = 140
 # `B` (flake8-bugbear) ajouté à la passe qualité d'août 2026 — il attrape des pièges que
 # E,W,F ne voient pas, au premier chef `zip()` sans `strict=` qui TRONQUE en silence.
 # `UP` ajouté ensuite (68 occurrences, toutes mécaniques : `typing.Callable` →
-# `collections.abc`, annotations déquotées, modes d'ouverture redondants). Palier suivant
-# prévu séparément : `SIM` (73).
-select = ["E", "W", "F", "I", "B", "UP"]
+# `collections.abc`, annotations déquotées, modes d'ouverture redondants).
+#
+# De `SIM`, seules TROIS sous-règles sont retenues — les autres ont été examinées et
+# écartées, avec leur raison (cf. docs/PASSE_QUALITE_2026-08.md) :
+#   · SIM108 (if/else → ternaire, 11) : souvent MOINS lisible sur une condition métier ;
+#   · SIM115 (open sans contexte, 8) : FAUX POSITIFS ici — descripteurs volontairement
+#     longue durée (flux d'envoi, journaux de sous-processus, timeline possédée) ;
+#   · SIM105 (try/except/pass → suppress, 39) : les 24 sites SANS justification ont été
+#     convertis, les 15 qui en portent une gardent leur `try/except` — la justification y
+#     est visible, et `contextlib.suppress(Exception)` masquerait la nature aveugle de la
+#     capture à un futur palier `BLE`.
+# Un linter n'a pas toujours raison ; l'accepter en bloc aurait produit du bruit.
+select = ["E", "W", "F", "I", "B", "UP", "SIM103", "SIM113", "SIM114"]
 
 # Tri d'imports déterministe entre local et CI. Le dossier racine `alembic/`
 # (migrations, sans __init__.py) est auto-détecté comme first-party par certaines

@@ -49,11 +49,7 @@ class WorkflowState:
         elif raw in (JobState.UPLOADED.value,):
             statuses["file"] = StepStatus.DONE
             statuses["analyze"] = StepStatus.IN_PROGRESS
-        elif raw == JobState.ANALYZED.value:
-            statuses["file"] = StepStatus.DONE
-            statuses["analyze"] = StepStatus.DONE
-            statuses["summary"] = StepStatus.IN_PROGRESS
-        elif raw in (JobState.SUMMARY_RUNNING.value,):
+        elif raw == JobState.ANALYZED.value or raw in (JobState.SUMMARY_RUNNING.value,):
             statuses["file"] = StepStatus.DONE
             statuses["analyze"] = StepStatus.DONE
             statuses["summary"] = StepStatus.IN_PROGRESS
@@ -81,15 +77,8 @@ class WorkflowState:
         elif raw == JobState.LEXICON_DONE.value:
             for s in ("file", "analyze", "summary", "context", "participants", "lexicon"):
                 statuses[s] = StepStatus.DONE
-        elif raw == JobState.READY_TO_PROCESS.value:
-            for s in ("file", "analyze", "summary", "context", "participants", "lexicon"):
-                statuses[s] = StepStatus.DONE
-            statuses["processing"] = StepStatus.IN_PROGRESS
-        elif raw == JobState.TRANSCRIBING.value:
-            for s in ("file", "analyze", "summary", "context", "participants", "lexicon"):
-                statuses[s] = StepStatus.DONE
-            statuses["processing"] = StepStatus.IN_PROGRESS
-        elif raw in (JobState.DIARIZING.value, JobState.ARBITRATING.value):
+        elif raw in (JobState.READY_TO_PROCESS.value, JobState.TRANSCRIBING.value,
+                     JobState.DIARIZING.value, JobState.ARBITRATING.value):
             for s in ("file", "analyze", "summary", "context", "participants", "lexicon"):
                 statuses[s] = StepStatus.DONE
             statuses["processing"] = StepStatus.IN_PROGRESS

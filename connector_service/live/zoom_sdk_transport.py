@@ -537,10 +537,8 @@ def zoom_sdk_demux_source(
                          started_raw_recording=started_raw_recording)
                 stop.set()
                 pump_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await pump_task
-                except asyncio.CancelledError:
-                    pass
 
         return _open()
     return _factory

@@ -11,6 +11,7 @@ Tout est injectable (``run``/``write``) pour être testé sans systemd ni privil
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 from collections.abc import Callable
@@ -115,10 +116,8 @@ def _chown_tree(path: Path, uid_gid: tuple[int, int]) -> None:
     for root, dirs, files in os.walk(path):
         for name in [".", *dirs, *files]:
             target = Path(root) if name == "." else Path(root) / name
-            try:
+            with contextlib.suppress(OSError):
                 os.chown(target, uid, gid)
-            except OSError:
-                pass
 
 
 def apply_pending_restore(

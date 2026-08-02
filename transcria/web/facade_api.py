@@ -20,6 +20,7 @@ d'API personnel (``Authorization: Bearer tia_…``, chantier identité lot 4) :
 Ce module respecte ``routes-independantes`` (import-linter) : il n'importe aucun
 autre module de routes, seulement des helpers partagés et les couches métier.
 """
+import contextlib
 import functools
 import json
 import logging
@@ -256,10 +257,8 @@ def facade_transcriptions():
         logger.exception("[façade] Transcription échouée (backend=%s)", backend)
         return jsonify({"error": "Moteur STT indisponible ou transcription échouée"}), 503
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp.name)
-        except OSError:
-            pass
 
     # Provenance : sortie de la chaîne live = suivi, jamais la référence (couture 1).
     stamp_provenance(segments, FINAL_LIVE)

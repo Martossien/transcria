@@ -190,7 +190,7 @@ Sur ce dernier j'ai soupçonné un défaut visible — un champ vide à l'écran
 avant de « corriger »** : le remplissage se fait plus bas avec `textContent`. C'était bien du
 code mort, pas un bug.
 
-### Q3.2 — Durcir l'outillage par paliers  🔶 **PALIERS 1 ET 2 LIVRÉS**
+### Q3.2 — Durcir l'outillage par paliers  🔶 **RUFF LIVRÉ, MYPY À VENIR**
 
 Ruff ne sélectionne que `E,W,F,I`. Activer `B` (pièges), `UP` (modernisation) et `SIM`
 (simplifications) apporte un vrai retour — à condition de le faire **paquet par paquet avec
@@ -216,10 +216,22 @@ d'exécution : `typing.Callable` → `collections.abc.Callable` (30), annotation
 Contrairement à `B`, rien n'exigeait d'arbitrage — d'où l'ordre : le palier qui **corrige des
 pièges** d'abord, celui qui **modernise** ensuite.
 
-**Paliers suivants**, séparément : `SIM` (73 occurrences — celui-là demandera des
-arbitrages, une « simplification » n'est pas toujours plus lisible), et côté mypy
-`warn_unused_ignores` puis `disallow_untyped_defs` sur `auth`, `ingestion`, `queue`.
-**Critère :** chaque palier vert avant le suivant.
+**Palier 3 — `SIM` : TRIÉ, pas avalé.** C'est le palier annoncé comme demandant des
+arbitrages, et il en a demandé. Sur ses 73 occurrences, **trois sous-règles retenues**
+(`SIM103` bool inutile, `SIM113` compteur manuel → `enumerate`, `SIM114` branches
+identiques), **trois écartées avec leur raison** :
+
+| Sous-règle | Volume | Décision |
+|---|---:|---|
+| `SIM108` if/else → ternaire | 11 | **écartée** — souvent moins lisible sur une condition métier |
+| `SIM115` `open()` sans contexte | 8 | **écartée** — faux positifs : descripteurs volontairement longue durée (flux d'envoi, journaux de sous-processus, timeline possédée). Les huit ont été lus un par un. |
+| `SIM105` try/except/pass | 39 | **partagée** — les 24 sites SANS justification convertis en `contextlib.suppress` ; les 15 qui en portent une gardent leur `try/except`, où la raison reste visible et où un futur palier `BLE` verra encore la capture aveugle |
+
+Un linter n'a pas toujours raison. L'accepter en bloc aurait produit du bruit — et, sur
+`SIM115`, huit `# noqa` pour rien.
+
+**Reste :** côté mypy, `warn_unused_ignores` puis `disallow_untyped_defs` sur `auth`,
+`ingestion`, `queue` — les paquets où un type manquant coûte le plus cher.
 
 ### Q3.3 — Un cliquet qui converge  ✅ **LIVRÉE**
 

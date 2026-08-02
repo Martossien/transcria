@@ -17,6 +17,7 @@ Garanties :
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -126,10 +127,8 @@ def _save_manifest(job_dir: Path, manifest: dict) -> None:
             os.fsync(fh.fileno())
         os.replace(tmp, job_dir / MANIFEST_NAME)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 
@@ -435,10 +434,8 @@ def _materialize_once(file_id: int, sha: str, chunk_count: int, dest: Path) -> N
             raise ArtifactIntegrityError(f"sha256 inattendu pour file_id={file_id}")
         os.replace(tmp, dest)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 

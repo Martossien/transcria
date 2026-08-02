@@ -31,6 +31,7 @@ NI dans l'arbre du dépôt) :
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -222,10 +223,8 @@ class AgentWorkspace:
                 os.fsync(fh.fileno())
             os.replace(tmp, target)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     def _hash_watched(self) -> dict[str, str]:

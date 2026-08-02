@@ -1,3 +1,4 @@
+import contextlib
 import json
 import mimetypes
 import os
@@ -38,10 +39,8 @@ class JobFilesystem:
                 os.fsync(fh.fileno())
             os.replace(tmp, path)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     def save_json(self, relative: str, data: dict | list) -> None:

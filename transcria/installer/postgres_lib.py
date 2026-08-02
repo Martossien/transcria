@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import re
 import secrets
@@ -378,10 +379,8 @@ def rewrite_pg_hba_file(path: Path) -> int:
         os.chmod(tmp_path, mode)
         os.replace(tmp_path, path)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
     return changed
 
 
