@@ -234,6 +234,9 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "transport_federated_insecure": "backend fédéré '{backend}' sans cookie sécurisé ni proxy TLS — transport en clair possible",
         "transport_hint": "Derrière HTTPS : activer security.behind_tls_proxy (implique le cookie Secure), puis security.hsts_enabled.",
         "transport_ok": "cookie sécurisé / proxy TLS : {secure}",
+        "transport_webhook_insecure": "connecteur(s) à point d'entrée PUBLIC configuré(s) "
+                                      "({connecteurs}) sans TLS — un webhook en clair "
+                                      "transporte des jetons de plateforme",
         "chk_config_perms": "Permissions de la configuration",
         "cfgperm_large": "config.yaml en {mode} — lisible par les autres comptes de la machine, "
                          "alors qu'il porte des secrets (OIDC, LDAP, SMTP, plateformes)",
@@ -495,6 +498,9 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "transport_federated_insecure": "federated backend '{backend}' without secure cookie or TLS proxy — cleartext transport possible",
         "transport_hint": "Behind HTTPS: enable security.behind_tls_proxy (implies the Secure cookie), then security.hsts_enabled.",
         "transport_ok": "secure cookie / TLS proxy: {secure}",
+        "transport_webhook_insecure": "connector(s) with a PUBLIC entry point configured "
+                                      "({connecteurs}) without TLS — a cleartext webhook "
+                                      "carries platform tokens",
         "chk_config_perms": "Configuration file permissions",
         "cfgperm_large": "config.yaml is {mode} — readable by other accounts on this machine, "
                          "while it holds secrets (OIDC, LDAP, SMTP, meeting platforms)",

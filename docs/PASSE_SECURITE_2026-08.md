@@ -326,7 +326,7 @@ où Zoom RTMS ou Teams est activé — c'est-à-dire le jour où une URL du port
 poser avant évite d'avoir à les poser dans l'urgence, au moment précis où l'on a autre chose à
 faire.
 
-### S2.1 — Les défauts de transport, et ce que le doctor doit en dire
+### S2.1 — Les défauts de transport, et ce que le doctor doit en dire  ✅ **LIVRÉE**
 
 Tout existe (`SECURITY_MODEL.md` §7) : `Secure`, HSTS, contrôle d'`Origin`, jetons CSRF, CSP.
 Tout est **désactivé par défaut**, ce qui est le bon choix pour un usage local en HTTP — un
@@ -343,7 +343,16 @@ transport non sécurisé → **FAIL**, pas WARN. Et documenter en un paragraphe 
 **Pourquoi FAIL et pas WARN :** un webhook public en HTTP clair transporte des jetons de
 plateforme. Ce n'est pas une posture perfectible, c'est une erreur de déploiement.
 
-### S2.2 — Requêtes sortantes pilotées par une valeur d'utilisateur
+**Livré — et le catalogue portait déjà le bon signal.** Plutôt que de coder « zoom » et
+« teams » en dur, le contrôle lit `path: webhook` dans `meeting_connectors.yaml` : c'est
+exactement « exige un point d'entrée HTTPS public ». Tout connecteur futur déclaré ainsi sera
+couvert sans qu'on y pense. Un connecteur dont les identifiants ne sont qu'à moitié saisis ne
+déclenche rien — des champs en cours de remplissage ne sont pas un déploiement exposé. Meet,
+qui fonctionne en *pull*, n'est pas concerné : c'est précisément ce que la lecture de `path`
+permet de distinguer. **6 tests**, dont la non-régression du WARN fédéré historique et la
+priorité du plus grave quand les deux se présentent.
+
+### S2.2 — Requêtes sortantes pilotées par une valeur d'utilisateur  ✅ **LIVRÉE**
 
 `connector_service/bot/visio.py:79-108` : le lien de réunion fourni détermine l'hôte interrogé.
 
@@ -360,11 +369,31 @@ Reste que la requête part, vers un réseau interne potentiellement.
 instances il utilise), et refus des plages d'adresses privées/locales quand l'allowlist est
 vide. Journaliser l'hôte contacté.
 
-**Critère d'acceptation :** lien pointant vers `127.0.0.1`, `169.254.169.254`, une plage RFC1918
-ou un hôte hors allowlist → aucune requête émise (test avec ouvreur factice qui échoue si
-appelé).
+**Critère d'acceptation revu à l'écriture — et c'est le point important.** La recette
+habituelle anti-SSRF (refuser toutes les adresses privées) est **fausse ici** : TranscrIA est
+auto-hébergé, et l'instance Visio d'un exploitant vit très probablement sur son LAN
+(`192.168.x`, `10.x`). L'appliquer aurait cassé le cas le plus courant, et la garde aurait été
+retirée dans la semaine. D'où deux niveaux :
 
-### S2.3 — Tous les exécutants partagent un seul principal
+1. **toujours refusé** — ce qui n'est *jamais* une instance de visioconférence : boucle
+   locale, adresse « toutes interfaces », lien-local (les **métadonnées cloud**). Ce sont les
+   deux pivots réels : atteindre un service qui n'écoute que sur la machine, ou lire des
+   identifiants d'instance ;
+2. **allowlist stricte** (`VISIO_ALLOWED_HOSTS`) quand l'exploitant la pose — et elle ne peut
+   pas rouvrir le niveau 1 : déclarer `localhost` par mégarde ne redonne pas le pivot.
+
+**La garde ne s'applique PAS à `VISIO_API_BASE`** : c'est une valeur d'*exploitant*, qui vise
+légitimement la machine locale (la stack de développement officielle). La contrôler
+reviendrait à se protéger de soi-même. Distinguer les deux est tout l'objet du correctif : on
+borne ce que l'**utilisateur** choisit, pas ce que l'exploitant règle. Un test existant l'a
+signalé — ma première version débordait.
+
+**Piège de test rencontré :** `resolve_livekit_room` attrape `Exception` pour retomber sur le
+slug. Un espion qui *lève* est donc avalé par ce repli — mes deux tests d'intégration
+passaient avec ET sans la garde, c'est-à-dire ne prouvaient rien. Ils **enregistrent**
+désormais l'appel et vérifient qu'il n'a pas eu lieu. **21 tests.**
+
+### S2.3 — Tous les exécutants partagent un seul principal  ⏸ **DIFFÉRÉE, à raison**
 
 `runner_kit.py:55` émet chaque jeton pour le **même compte**, `RUNNER_ACCOUNT` (`svc-runner`).
 Deux exécutants sur deux machines différentes sont indiscernables côté portail : même identité,
@@ -378,6 +407,11 @@ en a deux — et le kit existe précisément pour qu'il y en ait plusieurs.
 correspondance jeton ↔ exécutant dans l'interface et de permettre la révocation **par exécutant**.
 Un principal distinct par runner est la version propre, plus lourde ; à trancher quand un
 deuxième exécutant existera vraiment.
+
+**Non livrée, et c'est le bon choix :** il n'y a aujourd'hui **qu'un seul exécutant**. Le
+défaut est donc nul en pratique, et toute correction serait écrite sans le cas d'usage qui
+lui donnerait sa forme — c'est ainsi qu'on produit une abstraction qui ne sert pas. À
+reprendre **le jour où un deuxième exécutant est posé**, pas avant.
 
 ---
 

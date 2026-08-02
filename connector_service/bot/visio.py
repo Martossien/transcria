@@ -49,6 +49,7 @@ from connector_service.live.livekit_transport import livekit_demux_source
 from connector_service.live.media import LiveAudioProvider
 from connector_service.live.recorder import RecordingTee
 from connector_service.live.session import LiveSession
+from connector_service.outbound_guard import HoteRefuse, verifier_hote_sortant
 
 logger = logging.getLogger("connector_service.bot.visio")
 
@@ -91,8 +92,21 @@ def resolve_livekit_room(meeting_ref: str, opener=None) -> str:
     parts = urlsplit(meeting_ref)
     # VISIO_API_BASE : stack de DEV officielle = front (3000) et API Django (8071) sur des
     # ports distincts — les vraies instances servent tout sur le même hôte (défaut).
-    base = os.environ.get("VISIO_API_BASE", "").rstrip("/") or f"{parts.scheme}://{parts.netloc}"
+    base_exploitant = os.environ.get("VISIO_API_BASE", "").rstrip("/")
+    base = base_exploitant or f"{parts.scheme}://{parts.netloc}"
     api = f"{base}/api/v1.0/rooms/{slug}/"
+
+    # S2.2 — la garde ne s'applique QUE si l'hôte vient du lien de l'utilisateur.
+    # `VISIO_API_BASE` est une valeur d'EXPLOITANT : elle vise légitimement la machine
+    # locale (c'est la stack de développement officielle, front 3000 / API 8071), et la
+    # contrôler reviendrait à se protéger de soi-même. La distinction est tout l'objet de
+    # ce correctif : on borne ce que l'utilisateur choisit, pas ce que l'exploitant règle.
+    if not base_exploitant:
+        try:
+            verifier_hote_sortant(api)
+        except HoteRefuse as exc:
+            logger.warning("Résolution de salle refusée (%s) — room = slug « %s »", exc, slug)
+            return slug
 
     def _default(url):
         with urllib.request.urlopen(url, timeout=10) as resp:

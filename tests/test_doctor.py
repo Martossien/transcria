@@ -993,3 +993,61 @@ def test_config_permissions_ok_sans_fichier(tmp_path):
 
     result = check_config_permissions({}, config_path=str(tmp_path / "absent.yaml"))
     assert result.status == "ok"
+
+
+# --- Passe sécurité S2.1 : le transport, rattaché à l'EXPOSITION -------------------------
+#
+# Tout le durcissement HTTP(S) existe déjà (Secure, HSTS, Origin, CSRF, CSP) et il est
+# opt-in — ce qui est le bon choix pour un usage local en HTTP : un défaut qui casse
+# l'installation d'essai est un défaut qu'on désactive sans lire.
+#
+# Ce qui manquait, c'est le SIGNAL qui les rattache à l'exposition. Le contrôle avertissait
+# déjà sur un backend d'identité fédéré ; il ne disait rien quand un connecteur de réunion
+# EXIGEANT UN POINT D'ENTRÉE HTTPS PUBLIC est configuré. Or un webhook en clair transporte
+# des jetons de plateforme : ce n'est pas une posture perfectible, c'est une erreur de
+# déploiement — d'où FAIL et non WARN.
+
+def _cfg_connecteur(**platform_env):
+    return {"connectors": {"meetings": {"enabled": True, "platform_env": platform_env}}}
+
+
+def test_connecteur_webhook_sans_TLS_est_un_ECHEC(app):
+    """Zoom RTMS : `path: webhook` dans le catalogue = point d'entrée public requis."""
+    cfg = _cfg_connecteur(ZOOM_RTMS_CLIENT_ID="x", ZOOM_RTMS_CLIENT_SECRET="y",
+                          ZOOM_WEBHOOK_SECRET_TOKEN="z")
+    result = doc.check_transport_security(cfg)
+    assert result.status == "fail"
+
+
+def test_connecteur_webhook_avec_TLS_est_OK(app):
+    cfg = _cfg_connecteur(ZOOM_RTMS_CLIENT_ID="x", ZOOM_RTMS_CLIENT_SECRET="y",
+                          ZOOM_WEBHOOK_SECRET_TOKEN="z")
+    cfg["security"] = {"behind_tls_proxy": True}
+    assert doc.check_transport_security(cfg).status == "ok"
+
+
+def test_un_connecteur_webhook_INCOMPLET_ne_declenche_rien(app):
+    """Des identifiants à moitié saisis ne sont pas un déploiement exposé."""
+    cfg = _cfg_connecteur(ZOOM_RTMS_CLIENT_ID="x")     # secret et jeton manquants
+    assert doc.check_transport_security(cfg).status == "ok"
+
+
+def test_un_connecteur_SANS_webhook_ne_declenche_rien(app):
+    """Meet fonctionne en PULL (Pub/Sub) : il n'expose rien. Le distinguer est tout
+    l'intérêt de lire `path` dans le catalogue plutôt que de coder les noms en dur."""
+    cfg = _cfg_connecteur(MEET_SERVICE_ACCOUNT_JSON="{}", MEET_IMPERSONATE_USER="a@b.test")
+    assert doc.check_transport_security(cfg).status == "ok"
+
+
+def test_le_backend_federe_avertit_toujours(app):
+    """Non-régression : le comportement historique (WARN) est préservé."""
+    result = doc.check_transport_security({"auth": {"backend": "oidc"}})
+    assert result.status == "warn"
+
+
+def test_lechec_du_connecteur_prime_sur_lavertissement_federe(app):
+    """Les deux à la fois : on remonte le plus grave, pas le premier trouvé."""
+    cfg = _cfg_connecteur(ZOOM_RTMS_CLIENT_ID="x", ZOOM_RTMS_CLIENT_SECRET="y",
+                          ZOOM_WEBHOOK_SECRET_TOKEN="z")
+    cfg["auth"] = {"backend": "oidc"}
+    assert doc.check_transport_security(cfg).status == "fail"

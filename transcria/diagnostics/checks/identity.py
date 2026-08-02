@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from transcria.config.loader import get_config_path
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
+from transcria.web.connector_catalog import load_catalog
 
 
 def check_identity_backend(
@@ -106,17 +107,62 @@ def _check_ldap_reachability(cfg: dict, ldap_prober) -> list[str]:
             problems.append(_t("idn_ldap_unreachable", host=host, port=port))
     return problems
 
+def _connecteurs_exposes(cfg: dict) -> list[str]:
+    """Connecteurs CONFIGURÉS qui exigent un point d'entrée HTTPS **public**.
+
+    On lit `path: webhook` dans le catalogue plutôt que de coder « zoom » et « teams » en
+    dur : tout connecteur futur déclaré ainsi sera couvert sans qu'on y pense. Un
+    connecteur dont les identifiants ne sont qu'à moitié saisis ne compte pas — des
+    champs en cours de remplissage ne sont pas un déploiement exposé.
+
+    `connector_catalog` vit sous `web/` pour des raisons historiques mais ne dépend ni de
+    Flask ni du web : c'est un lecteur de données. Le dupliquer ici ferait deux lecteurs
+    du même fichier, qui divergeraient.
+    """
+    meetings = ((cfg.get("connectors", {}) or {}).get("meetings", {}) or {})
+    if not meetings.get("enabled", False):
+        return []
+    fournis = {k: str(v) for k, v in (meetings.get("platform_env") or {}).items() if str(v).strip()}
+    if not fournis:
+        return []
+    try:
+        catalogue = load_catalog()
+    except Exception:  # noqa: BLE001 — catalogue illisible : on ne bloque pas le doctor
+        return []
+    exposes = []
+    for connecteur in catalogue:
+        if connecteur.path != "webhook" or not connecteur.requires:
+            continue
+        if all(champ.key in fournis for champ in connecteur.requires):
+            exposes.append(connecteur.name)
+    return exposes
+
+
 def check_transport_security(cfg: dict) -> CheckResult:
-    """Posture HTTP(S) : un backend d'auth FÉDÉRÉ (mots de passe d'annuaire, jetons
-    OIDC) sans cookie sécurisé ni proxy TLS déclaré = identifiants d'entreprise sur un
-    transport potentiellement en clair. WARN ciblé (le HTTP reste légitime en dev/local)."""
+    """Posture HTTP(S), rattachée à ce qui est réellement exposé.
+
+    Deux niveaux, du plus grave au moins grave :
+
+    - un **connecteur à webhook** (Zoom RTMS, Teams) configuré sans TLS → **FAIL**. Un
+      point d'entrée public en clair transporte des jetons de plateforme : ce n'est pas
+      une posture perfectible, c'est une erreur de déploiement (sécurité S2.1) ;
+    - un **backend d'identité fédéré** sans cookie sécurisé ni proxy TLS → WARN ciblé
+      (le HTTP reste légitime en dev/local).
+    """
     name = _t("chk_transport")
     sec = (cfg.get("security", {}) or {})
     backend = str(((cfg.get("auth", {}) or {}).get("backend")) or "local").strip().lower()
     secure = bool(sec.get("session_cookie_secure", False)) or bool(sec.get("behind_tls_proxy", False))
-    if backend in ("oidc", "proxy", "ldap") and not secure:
-        return CheckResult(name, WARN, _t("transport_federated_insecure", backend=backend),
-                           hint=_t("transport_hint"))
+
+    if not secure:
+        exposes = _connecteurs_exposes(cfg)
+        if exposes:
+            return CheckResult(name, FAIL,
+                               _t("transport_webhook_insecure", connecteurs=", ".join(exposes)),
+                               hint=_t("transport_hint"))
+        if backend in ("oidc", "proxy", "ldap"):
+            return CheckResult(name, WARN, _t("transport_federated_insecure", backend=backend),
+                               hint=_t("transport_hint"))
     return CheckResult(name, OK, _t("transport_ok", secure="oui" if secure else "non (local/HTTP)"))
 
 
