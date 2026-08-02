@@ -230,7 +230,7 @@ class TestUnauthenticatedResponses:
         app écrase le cookie et déconnecte TranscrIA en silence."""
         assert app.config["SESSION_COOKIE_NAME"] == "transcria_session"
         client = app.test_client()
-        login = client.post("/login", data={"username": "admin", "password": "admin-change-me"})
+        login = client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"})
         assert login.status_code == 302
         cookies = login.headers.getlist("Set-Cookie")
         assert any(c.startswith("transcria_session=") for c in cookies)

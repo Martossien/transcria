@@ -10,7 +10,7 @@ class TestAuthentication:
         assert r.status_code == 200
 
     def test_login_redirects_to_index(self, client):
-        r = client.post("/login", data={"username": "admin", "password": "admin-change-me"})
+        r = client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"})
         assert r.status_code == 302
 
     def test_login_invalid_credentials(self, client):
@@ -223,7 +223,7 @@ class TestAdminConfig:
         assert r.status_code == 200
         assert b"Configuration" in r.data
         assert b"server:" in r.data
-        assert b"admin-change-me" not in r.data
+        assert b"mdp-admin-de-test" not in r.data
         assert b"********" in r.data
 
     def test_operator_cannot_access_config(self, operator_client):

@@ -71,7 +71,7 @@ def _test_config(database_url: str):
         },
         "auth": {
             "first_admin_username": "admin",
-            "first_admin_password": "admin-change-me",
+            "first_admin_password": "mdp-admin-de-test",
         },
         "server": {"debug": False},
         "workflow": {
@@ -124,7 +124,7 @@ def app(_pg_database):
         # Robustesse à l'ordre d'exécution : si un autre module (ex. flux OIDC
         # lot 1, qui crée ses apps AVANT cette fixture de session) a déjà peuplé
         # la base, ensure_admin saute la création (c'est son contrat). La suite
-        # repose pourtant sur le compte admin/admin-change-me — on le garantit.
+        # repose pourtant sur le compte admin/mdp-admin-de-test — on le garantit.
         if UserStore.get_by_username(cfg["auth"]["first_admin_username"]) is None:
             from transcria.auth.models import Role
             UserStore.create_user(username=cfg["auth"]["first_admin_username"],
@@ -156,7 +156,7 @@ def client(app):
 @pytest.fixture
 def admin_client(app):
     c = app.test_client()
-    c.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+    c.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
     return c
 
 

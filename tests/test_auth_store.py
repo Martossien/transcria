@@ -1,7 +1,12 @@
 
+import logging
+from pathlib import Path
+
+import pytest
+
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupRole, Role, User
-from transcria.auth.store import UserStore
+from transcria.auth.store import DEFAULT_ADMIN_PASSWORDS, UserStore
 from transcria.database import db
 
 
@@ -134,7 +139,10 @@ class TestUserStore:
                     {"auth": {"first_admin_username": "admin", "first_admin_password": "admin-change-me"}}
                 )
 
-                assert "mot de passe par défaut" in caplog.text
+                # S1.4 : plus de « créé avec le mot de passe par défaut » — il n'y a
+                # PLUS de mot de passe par défaut. On génère, et on l'affiche une fois.
+                assert "mot de passe généré" in caplog.text
+                assert not UserStore.get_by_username("admin").check_password("admin-change-me")
             finally:
                 _restore_users(snapshot)
 
@@ -194,3 +202,79 @@ class TestGroupStore:
 
             assert GroupStore.users_share_group(user_a.id, user_b.id) is True
             assert GroupStore.users_share_group(user_a.id, user_c.id) is False
+
+
+# --- Passe sécurité S1.4 : plus de mot de passe d'amorçage PUBLIÉ ------------------------
+#
+# `config.example.yaml` publiait `first_admin_password: "CHANGE-ME"`, le chargeur le
+# reprenait en défaut, et le compte était RÉELLEMENT créé avec. Le secret initial de toute
+# installation qui n'avait rien changé était donc écrit dans un dépôt public, avec un
+# identifiant connu (`admin`). L'avertissement au démarrage ne comptait pas : un
+# avertissement dans le journal d'un service qu'on ne regarde jamais n'est pas une
+# protection.
+#
+# Choix retenu : GÉNÉRER un secret aléatoire plutôt que refuser le démarrage. Refuser
+# aurait laissé l'exploitant dehors le jour de son installation ; générer supprime le
+# problème sans rien lui demander.
+
+class TestAmorçageSansSecretPublie:
+    @pytest.fixture()
+    def base_vierge(self, app):
+        """`ensure_admin` est un no-op dès qu'un compte existe : ces tests ont besoin
+        d'une base réellement vide, puis la rendent telle qu'ils l'ont trouvée."""
+        with app.app_context():
+            snapshot = _snapshot_users()
+            _empty_all_tables()
+            try:
+                yield
+            finally:
+                _restore_users(snapshot)
+
+    def _admin(self, mdp):
+        UserStore.ensure_admin({"auth": {"first_admin_username": "root",
+                                         "first_admin_password": mdp}})
+        return UserStore.get_by_username("root")
+
+    @pytest.mark.parametrize("sentinelle", ["CHANGE-ME", "admin-change-me", ""])
+    def test_une_sentinelle_ne_devient_JAMAIS_le_mot_de_passe(self, base_vierge, sentinelle):
+        user = self._admin(sentinelle)
+        assert user is not None
+        for interdit in DEFAULT_ADMIN_PASSWORDS:
+            assert not user.check_password(interdit)
+
+    def test_le_secret_genere_est_affiche_UNE_fois_et_utilisable(self, base_vierge, caplog):
+        import re
+        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
+            user = self._admin("CHANGE-ME")
+        trouve = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)
+        assert len(trouve) == 1, f"le secret doit être journalisé exactement une fois : {caplog.text}"
+        assert user.check_password(trouve[0])
+
+    def test_le_secret_genere_est_solide(self, base_vierge, caplog):
+        import re
+        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
+            self._admin("")
+        secret = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
+        assert len(secret) >= 20
+
+    def test_deux_installations_ne_partagent_pas_le_meme_secret(self, base_vierge, caplog):
+        import re
+        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
+            self._admin("CHANGE-ME")
+            premier = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
+            _empty_all_tables()
+            caplog.clear()
+            self._admin("CHANGE-ME")
+            second = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
+        assert premier != second
+
+    def test_un_mot_de_passe_choisi_par_lexploitant_est_RESPECTE(self, base_vierge):
+        """Contre-épreuve : qui configure vraiment un secret garde la main."""
+        assert self._admin("un-vrai-secret-choisi").check_password("un-vrai-secret-choisi")
+
+
+def test_lexemple_public_ne_contient_plus_de_mot_de_passe_utilisable():
+    """Le dépôt est PUBLIC : `config.example.yaml` ne doit plus livrer de secret initial."""
+    import yaml
+    exemple = yaml.safe_load(Path("config.example.yaml").read_text(encoding="utf-8"))
+    assert not (exemple.get("auth", {}) or {}).get("first_admin_password")

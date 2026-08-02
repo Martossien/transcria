@@ -51,7 +51,7 @@ _DEFAULT_CONFIG = {
             "log_match_scores": True,
         },
     },
-    "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME",
+    "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "",
              "session_lifetime_hours": 12,
              # Backend d'identité (docs/GESTION_IDENTITE.md) : local = historique.
              # Valeurs futures par lot : proxy, ldap — REFUSÉES tant que non livrées.

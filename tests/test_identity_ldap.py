@@ -367,7 +367,7 @@ class TestRouteLdap:
 
         monkeypatch.setattr("transcria.auth.routes.get_password_backend", gpb)
         with app.test_client() as client:
-            r = client.post("/login?local=1", data={"username": "admin", "password": "admin-change-me"})
+            r = client.post("/login?local=1", data={"username": "admin", "password": "mdp-admin-de-test"})
             assert r.status_code == 302
             assert consulted["ldap"] is False              # ?local=1 force le backend LOCAL
 

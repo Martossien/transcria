@@ -19,12 +19,23 @@ _IMPLEMENTED_AUTH_BACKENDS = ("local", "oidc", "proxy", "ldap")  # GESTION_IDENT
 def _check_auth(auth: dict, r: ValidationResult) -> None:
     _check_bool(auth, "enabled", "auth.enabled", r)
     _check_str(auth, "first_admin_username", "auth.first_admin_username", r)
-    _check_str(auth, "first_admin_password", "auth.first_admin_password", r)
-    pwd = auth.get("first_admin_password", "")
-    if isinstance(pwd, str) and pwd in ("CHANGE-ME", "admin-change-me", ""):
+    # `first_admin_password` VIDE est désormais la valeur normale (sécurité S1.4) : au
+    # premier démarrage, TranscrIA génère un secret aléatoire et l'affiche une fois. On
+    # ne peut donc plus exiger une chaîne non vide — mais on refuse toujours autre chose
+    # qu'une chaîne, et on avertit sur les sentinelles historiques, qui traînent encore
+    # dans les configurations copiées depuis l'ancien exemple public.
+    # ABSENTE reste une erreur (clé oubliée) ; VIDE est un choix explicite.
+    if "first_admin_password" not in auth or auth["first_admin_password"] is None:
+        r.add_error("auth.first_admin_password: valeur manquante")
+        return
+    pwd = auth["first_admin_password"]
+    if not isinstance(pwd, str):
+        r.add_error(f"auth.first_admin_password: doit être une chaîne (reçu {type(pwd).__name__})")
+    elif pwd in ("CHANGE-ME", "admin-change-me"):
         r.add_warning(
-            "Sécurité : auth.first_admin_password utilise la valeur par défaut. "
-            "Changez-la dès que possible."
+            "Sécurité : auth.first_admin_password porte encore une valeur d'exemple. "
+            "Laissez-la VIDE — un secret aléatoire sera généré et affiché une fois au "
+            "premier démarrage."
         )
 
 def _check_auth_backend(auth: dict, r: ValidationResult) -> None:

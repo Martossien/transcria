@@ -199,7 +199,7 @@ def test_gpu_e2e_install_matrix():
         topo, distro, _REPO / "tests" / "test2.mp3",
         profile=os.environ.get("TRANSCRIA_GPU_E2E_PROFILE"),
         username=os.environ.get("TRANSCRIA_ADMIN_USER", "admin"),
-        password=os.environ.get("TRANSCRIA_ADMIN_PASSWORD", "admin-change-me"),
+        password=os.environ.get("TRANSCRIA_ADMIN_PASSWORD", "mdp-admin-de-test"),
         cuda=os.environ.get("TRANSCRIA_GPU_E2E_CUDA"),
         keep_up=False,
     )

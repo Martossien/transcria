@@ -14,7 +14,7 @@ from transcria.diagnostics import doctor as doc
 def _app(_pg_database, **security):
     os.environ["TRANSCRIA_DATABASE_URL"] = _pg_database
     cfg = deepcopy(get_default_config())
-    cfg["auth"]["first_admin_password"] = "admin-change-me"   # même graine que conftest
+    cfg["auth"]["first_admin_password"] = "mdp-admin-de-test"   # même graine que conftest
     cfg["security"].update(security)
     cfg.setdefault("storage", {})["jobs_dir"] = "/tmp/transcria-sec-tests"
     from app import create_app

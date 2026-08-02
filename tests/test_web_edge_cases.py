@@ -67,7 +67,7 @@ class TestAuthEdgeCases:
             assert r.status_code in (302, 401, 404)
 
     def test_login_then_logout_then_protected(self, client):
-        client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+        client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
         r = client.get("/")
         assert r.status_code == 200
         client.post("/logout")

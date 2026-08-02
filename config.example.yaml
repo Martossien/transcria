@@ -74,7 +74,12 @@ voice_enrollment:
 auth:
   enabled: true
   first_admin_username: "admin"
-  first_admin_password: "CHANGE-ME"
+  # LAISSER VIDE : au tout premier démarrage sur une base vierge, TranscrIA génère un
+  # mot de passe aléatoire et l'affiche UNE FOIS dans le journal de démarrage
+  # (journalctl -u transcria). Ce fichier est un exemple PUBLIC — y écrire un secret
+  # d'amorçage reviendrait à le publier. N'y mettez une valeur que si vous voulez
+  # imposer le vôtre, et retirez-la ensuite.
+  first_admin_password: ""
   # ── SSO d'entreprise (docs/GESTION_IDENTITE.md) — décommenter pour activer ──
   # backend: oidc                    # défaut: local (comptes historiques)
   # oidc:

@@ -144,7 +144,7 @@ def test_reprocess_route_resets_resume_state(app, monkeypatch):
     monkeypatch.setattr("transcria.web.processing_api.get_job_executor", lambda: _Stub())
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
 
     with app.app_context():
         from transcria.auth.store import UserStore

@@ -191,7 +191,7 @@ ouvertes ailleurs (`is_active` ne bouge pas). La voie propre est un compteur de 
 d'identité dans `get_id()`. C'est un vrai chantier de session, pas une ligne ; à trancher
 séparément — la désactivation était le cas urgent, et il était déjà couvert.
 
-### S1.4 — Le compte d'amorçage `CHANGE-ME`
+### S1.4 — Le compte d'amorçage `CHANGE-ME`  ✅ **LIVRÉE**
 
 `config.example.yaml:77` publie `first_admin_password: "CHANGE-ME"`, `config/loader.py:54` le
 reprend en défaut, et le compte est **réellement créé**. `config/checks/auth.py` ne produit
@@ -207,9 +207,27 @@ génère un secret aléatoire **affiché une seule fois** dans le journal de dé
 qu'il soit fourni par l'environnement. La sentinelle `CHANGE-ME` fait **refuser le boot** hors
 mode debug.
 
-**Critère d'acceptation :** boot avec la sentinelle hors debug → refus explicite (test) ; boot
-sans administrateur → secret aléatoire généré, journalisé une fois, non stocké en clair dans la
-configuration (test).
+**Critère d'acceptation :** aucune sentinelle ne devient jamais le mot de passe ; le secret
+généré est solide, affiché **une seule fois**, différent à chaque installation ; un mot de passe
+réellement choisi par l'exploitant est respecté ; l'exemple public ne contient plus de secret
+utilisable. **7 tests**, vérifiés en échec sans le correctif.
+
+**Un arbitrage revu : générer plutôt que refuser.** Le document proposait de faire *refuser le
+boot* sur la sentinelle. À l'écriture, c'est le mauvais choix : refuser laisse l'exploitant
+dehors le jour de son installation, pour un gain nul — le problème n'est pas qu'il démarre,
+c'est que le secret soit **public**. La génération le supprime sans rien lui demander. Le
+refus aurait aussi transformé une mise à jour en panne pour les installations existantes.
+
+**Effet de bord assumé :** `first_admin_password` **vide** devient la valeur normale, donc le
+validateur de schéma ne peut plus exiger une chaîne non vide. Il distingue désormais *absente*
+(erreur : clé oubliée) de *vide* (choix explicite), et avertit sur les sentinelles héritées de
+l'ancien exemple. Le golden du schéma, lui, est resté intact — c'est ce qui a rendu la
+distinction évidente.
+
+**Note sur la suite de tests :** elle utilisait `admin-change-me` comme mot de passe
+d'amorçage, devenu une sentinelle. Les tests qui se connectent comme administrateur d'amorçage
+ont reçu un vrai secret ; ceux qui testent le **bandeau** « mot de passe par défaut » gardent
+la sentinelle — ils portent sur un compte existant, cas qui n'a pas changé.
 
 ### S1.5 — Lire et modifier un job passent par la même porte
 

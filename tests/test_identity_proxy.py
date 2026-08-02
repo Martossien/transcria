@@ -30,7 +30,7 @@ def _make_app(_pg_database, **auth_overrides):
     cfg = _deep_merge(cfg, {
         "auth": {"backend": "proxy",
                  # Même graine admin que conftest (robustesse à l'ordre des modules).
-                 "first_admin_password": "admin-change-me",
+                 "first_admin_password": "mdp-admin-de-test",
                  "proxy": {"trusted_ips": ["127.0.0.1"]},
                  "role_mapping": _MAPPING,
                  **auth_overrides},

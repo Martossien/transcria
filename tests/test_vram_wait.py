@@ -155,7 +155,7 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
     monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
 
     with app.app_context():
         from transcria.auth.store import UserStore
@@ -210,7 +210,7 @@ def test_api_summary_routes_to_worker_when_role_web(app, monkeypatch):
     monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
 
     with app.app_context():
         from transcria.auth.store import UserStore
@@ -258,7 +258,7 @@ def test_api_speakers_detect_routes_to_worker_when_role_web(app, monkeypatch):
     monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
 
     with app.app_context():
         from transcria.auth.store import UserStore

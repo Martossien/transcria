@@ -1,4 +1,5 @@
 import logging
+import secrets
 from typing import Any
 
 from sqlalchemy import func
@@ -111,10 +112,25 @@ class UserStore:
 
     @staticmethod
     def ensure_admin(config: dict) -> None:
+        """Crée le PREMIER administrateur si la base est vierge.
+
+        Sécurité S1.4 — plus aucun secret d'amorçage publié. `config.example.yaml`
+        livrait `CHANGE-ME`, le chargeur le reprenait en défaut et le compte était
+        RÉELLEMENT créé avec : le secret initial de toute installation qui n'avait rien
+        changé était donc écrit dans un dépôt public, sous un identifiant connu.
+
+        Quand la valeur configurée est une sentinelle (ou vide), on GÉNÈRE un secret
+        aléatoire et on le journalise une fois, en évidence. Refuser le démarrage aurait
+        été l'autre option : elle laisse l'exploitant dehors le jour de son installation,
+        pour un gain nul — générer supprime le problème sans rien lui demander.
+        """
         if UserStore.count_users() > 0:
             return
         username = config.get("auth", {}).get("first_admin_username", "admin")
-        password = config.get("auth", {}).get("first_admin_password", "admin-change-me")
+        password = str(config.get("auth", {}).get("first_admin_password") or "")
+        genere = password in DEFAULT_ADMIN_PASSWORDS
+        if genere:
+            password = secrets.token_urlsafe(18)
         try:
             UserStore.create_user(username=username, password=password, display_name="Administrateur", role=Role.ADMIN)
         except IntegrityError:
@@ -128,8 +144,13 @@ class UserStore:
             logger.info("ensure_admin : admin déjà créé en parallèle (course de premier "
                         "démarrage) — ignoré.")
             return
-        if password in DEFAULT_ADMIN_PASSWORDS:
+        if genere:
+            # Journalisé UNE fois, au démarrage, en évidence : c'est le seul moment où ce
+            # secret est lisible — il n'est stocké nulle part en clair.
             logger.warning(
-                "Premier compte admin créé avec un mot de passe par défaut ou vide. "
-                "Changez immédiatement auth.first_admin_password puis le mot de passe du compte admin."
+                "\n%s\n  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
+                "  identifiant : %s\n  mot de passe généré : %s\n"
+                "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
+                "  première connexion (/account/password).\n%s",
+                "=" * 72, username, password, "=" * 72,
             )

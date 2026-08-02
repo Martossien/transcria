@@ -44,7 +44,7 @@ def oidc_app(idp, _pg_database):
                  # Même graine admin que conftest : cette app démarre AVANT la
                  # fixture de session `app`, et ensure_admin (au boot) sème le
                  # premier admin — il doit porter le mot de passe de la suite.
-                 "first_admin_password": "admin-change-me",
+                 "first_admin_password": "mdp-admin-de-test",
                  "oidc": {"issuer": idp, "client_id": "transcria-tests",
                           "client_secret": "secret-tests"},
                  "role_mapping": _MAPPING},
@@ -117,7 +117,7 @@ class TestIdpEnPanne:
         cfg = load_config()
         cfg = _deep_merge(cfg, {
             "auth": {"backend": "oidc",
-                     "first_admin_password": "admin-change-me",  # même graine que conftest
+                     "first_admin_password": "mdp-admin-de-test",  # même graine que conftest
                      "oidc": {"issuer": "http://127.0.0.1:9",  # port fermé
                               "client_id": "x", "client_secret": "y"},
                      "role_mapping": _MAPPING}})
