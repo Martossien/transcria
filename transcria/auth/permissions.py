@@ -1,6 +1,7 @@
 import enum
 from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from flask import abort
 from flask_login import current_user
@@ -63,7 +64,7 @@ _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
 }
 
 
-def get_user_permissions(user) -> set[Permission]:
+def get_user_permissions(user: Any) -> set[Permission]:
     if not user or not user.is_authenticated:
         return set()
     perms = set(_ROLE_PERMISSIONS.get(user.role_enum, set()))
@@ -88,7 +89,7 @@ def _is_runner_account(username: str) -> bool:
 def requires(permission: Permission) -> Callable:
     def decorator(fn: Callable) -> Callable:
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not current_user.is_authenticated:
                 abort(401)
             if permission not in get_user_permissions(current_user):

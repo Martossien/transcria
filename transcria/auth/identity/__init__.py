@@ -9,6 +9,8 @@ savoir).
 """
 from __future__ import annotations
 
+from types import ModuleType
+
 from transcria.auth.identity.base import FederatedIdentity, IdentityUnavailable, PasswordBackend
 from transcria.auth.identity.local import LocalBackend
 
@@ -49,7 +51,7 @@ def get_password_backend(config: dict) -> PasswordBackend:
     raise ValueError(f"auth.backend='{name}' non disponible pour le formulaire local.")
 
 
-def get_identity_backend(config: dict):
+def get_identity_backend(config: dict) -> PasswordBackend | ModuleType:
     name = identity_backend_name(config)
     if name in ("local", "ldap"):
         # local et ldap sont des backends à MOT DE PASSE : leur flux vit dans la

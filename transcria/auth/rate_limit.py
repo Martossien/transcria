@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 
@@ -27,7 +28,7 @@ class LoginRateLimiter:
     ``block_s``. Un succès efface le compteur de la clé."""
 
     def __init__(self, *, max_attempts: int = 5, window_s: float = 300.0,
-                 block_s: float = 300.0, now_fn=time.monotonic) -> None:
+                 block_s: float = 300.0, now_fn: Callable[[], float] = time.monotonic) -> None:
         self.max_attempts = max_attempts
         self.window_s = window_s
         self.block_s = block_s

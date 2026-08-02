@@ -32,6 +32,8 @@ qu'aucun socket ne s'ouvre.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from ldap3 import FIRST, SUBTREE, Connection, Server, ServerPool, Tls
 from ldap3.core.exceptions import LDAPException
@@ -113,7 +115,7 @@ class LdapBackend:
 
     source = "ldap"
 
-    def __init__(self, config: dict, *, connection_factory=None):
+    def __init__(self, config: dict, *, connection_factory: Callable[..., Connection] | None = None) -> None:
         self._cfg = ldap_config(config)
         # Dernière cause de refus (code AD) — lue par la route pour l'audit admin.
         # Instance créée par requête (get_password_backend) : aucun partage d'état.
@@ -136,14 +138,14 @@ class LdapBackend:
     def _start_tls(self) -> bool:
         return bool(self._cfg.get("start_tls", False))
 
-    def _default_connection(self, server, user: str, password: str) -> Connection:
+    def _default_connection(self, server: Server | ServerPool, user: str, password: str) -> Connection:
         # raise_exceptions=False : un bind refusé revient en False (pas d'exception)
         # pour distinguer « mauvais mot de passe » d'« annuaire injoignable » (socket).
         return Connection(server, user=user, password=password, auto_bind=False,
                           auto_referrals=False, raise_exceptions=False,
                           receive_timeout=int(self._cfg.get("receive_timeout_s", 10)))
 
-    def _build_server(self):
+    def _build_server(self) -> Server | ServerPool:
         import ssl
 
         tls = None
@@ -267,7 +269,7 @@ class LdapBackend:
             self._safe_unbind(conn)
 
     # ── recherche & attributs ────────────────────────────────────────────
-    def _search_user(self, conn: Connection, username: str):
+    def _search_user(self, conn: Connection, username: str) -> Any:
         base_dn = str(self._cfg.get("base_dn") or "").strip()
         template = str(self._cfg.get("user_filter") or "(&(objectClass=user)(sAMAccountName={username}))")
         flt = build_user_filter(template, username)
@@ -283,7 +285,7 @@ class LdapBackend:
             return None
         return entries[0]
 
-    def _resolve_groups(self, conn: Connection, entry, user_dn: str) -> tuple[str, ...]:
+    def _resolve_groups(self, conn: Connection, entry: Any, user_dn: str) -> tuple[str, ...]:
         if bool(self._cfg.get("resolve_nested_groups", False)):
             base_dn = str(self._cfg.get("base_dn") or "").strip()
             flt = f"(member:{_MATCHING_RULE_IN_CHAIN}:={escape_filter_chars(user_dn)})"
@@ -291,7 +293,7 @@ class LdapBackend:
             return tuple(e.entry_dn for e in conn.entries)
         return tuple(str(v) for v in self._attr_values(entry, "memberOf"))
 
-    def _build_identity(self, entry, user_dn: str, groups: tuple[str, ...]) -> FederatedIdentity:
+    def _build_identity(self, entry: Any, user_dn: str, groups: tuple[str, ...]) -> FederatedIdentity:
         # subject STABLE : objectGUID (survit aux renommages/déplacements AD) sinon
         # le DN normalisé — jamais le username ni l'email (§3.5).
         subject = self._stable_subject(entry) or user_dn.lower()
@@ -302,7 +304,7 @@ class LdapBackend:
                                  display_name=str(display_name), email=str(email),
                                  groups=groups, source="ldap")
 
-    def _stable_subject(self, entry) -> str | None:
+    def _stable_subject(self, entry: Any) -> str | None:
         values = self._attr_values(entry, self._attr("id_attr", "objectGUID"))
         if not values:
             return None
@@ -316,7 +318,7 @@ class LdapBackend:
         return str(self._cfg.get(key) or default)
 
     @staticmethod
-    def _attr_values(entry, name: str) -> list:
+    def _attr_values(entry: Any, name: str) -> list:
         try:
             attr = entry[name]
         except (KeyError, LDAPException):
@@ -324,12 +326,12 @@ class LdapBackend:
         values = getattr(attr, "values", None)
         return list(values) if values else []
 
-    def _first(self, entry, name: str) -> str:
+    def _first(self, entry: Any, name: str) -> str:
         values = self._attr_values(entry, name)
         return str(values[0]) if values else ""
 
     @staticmethod
-    def _safe_unbind(conn) -> None:
+    def _safe_unbind(conn: Connection | None) -> None:
         try:
             if conn is not None:
                 conn.unbind()

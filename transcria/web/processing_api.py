@@ -446,7 +446,7 @@ def api_quality(job_id: str):
     if error_response:
         return error_response
 
-    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    runner = WorkflowRunner(JobStore, cfg)
     result = runner.run_quality_checks(job, cfg)
     return jsonify(result)
 
@@ -459,7 +459,7 @@ def api_export(job_id: str):
     if error_response:
         return error_response
 
-    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    runner = WorkflowRunner(JobStore, cfg)
     result = runner.build_export(job, cfg)
     return jsonify(result)
 

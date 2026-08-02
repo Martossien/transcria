@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 SCHEDULER_ADVISORY_LOCK_KEY = 0x7A5C4ED1
 
 
-def _close_quietly(conn) -> None:
+def _close_quietly(conn: Connection) -> None:
     """Ferme une connexion sans jamais lever — appelé par le ramasse-miettes, où une
     exception ne serait ni attrapable ni utile."""
     with contextlib.suppress(Exception):

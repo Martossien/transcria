@@ -8,10 +8,12 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestration n'importe pas Flask (§8.2)
     from flask import Flask
+
+    from transcria.queue.models import JobQueueEntry
 
 from transcria.config.views import QueueView
 from transcria.database import db
@@ -265,7 +267,7 @@ class QueueScheduler:
                 dispatched += 1
         return dispatched
 
-    def _materialize_job_inputs(self, job_id: str):
+    def _materialize_job_inputs(self, job_id: str) -> Path | None:
         """Matérialise `input/` depuis la base (backend `pg`) et re-résout l'audio.
 
         Retourne le chemin audio, ou None (backend `fs`, blob absent, ou erreur — loguée :
@@ -280,7 +282,7 @@ class QueueScheduler:
             return None
         return JobFilesystem(self.jobs_dir, job_id).get_original_audio_path()
 
-    def _resources_available(self, entry, remote_capabilities: dict | None = None) -> bool:
+    def _resources_available(self, entry: JobQueueEntry, remote_capabilities: dict | None = None) -> bool:
         profile = entry.get_vram_profile()
         remote_vram = remote_vram_admits(self.config, remote_capabilities, profile)
         if remote_vram is False:
@@ -336,7 +338,7 @@ class QueueScheduler:
             logger.warning("Reclaim LLM d'arbitrage (admission) impossible: %s", exc)
             return False
 
-    def _vram_manager(self):
+    def _vram_manager(self) -> VRAMManager:
         """VRAMManager paresseux (config seule, sans effet GPU à la construction)."""
         vram = getattr(self, "_vram", None)
         if vram is None:
@@ -344,7 +346,7 @@ class QueueScheduler:
             self._vram = vram
         return vram
 
-    def _first_phase_resources_available(self, entry) -> bool:
+    def _first_phase_resources_available(self, entry: JobQueueEntry) -> bool:
         # Compatibilité tests/appels historiques : B6.3 utilise désormais
         # `_resources_available`, qui couvre aussi le peak local et la VRAM distante.
         return self._resources_available(entry)
@@ -427,7 +429,7 @@ class QueueScheduler:
         return phases
 
     @staticmethod
-    def _positive_int(value) -> int:
+    def _positive_int(value: Any) -> int:
         try:
             parsed = int(value)
         except (TypeError, ValueError):

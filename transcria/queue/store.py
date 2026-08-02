@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import cast
+from typing import Any, cast
 
 from sqlalchemy import case, func, or_, text, update
 from sqlalchemy.engine import CursorResult
@@ -171,7 +171,7 @@ class QueueStore:
         )
 
     @staticmethod
-    def get_visible_queue(user, limit: int = 100) -> list[JobQueueEntry]:
+    def get_visible_queue(user: Any, limit: int = 100) -> list[JobQueueEntry]:
         query = db.select(JobQueueEntry).join(Job)
         if not user.has_role(Role.ADMIN):
             group_ids = GroupStore.user_group_ids(user.id, admin_only=True)

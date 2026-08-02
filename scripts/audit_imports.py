@@ -282,6 +282,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.write_baseline:
         payload = {k: v for k, v in metrics.items() if k not in ("cycles_detail", "init_cycles_detail")}
+        # `_targets` (la cible à atteindre, avec sa date) est ÉCRIT À LA MAIN et ne se
+        # recalcule pas : le régénérer depuis les métriques l'effacerait, et le cliquet
+        # perdrait silencieusement son cap. On le reporte depuis la baseline existante.
+        if args.write_baseline.exists():
+            ancien = json.loads(args.write_baseline.read_text(encoding="utf-8"))
+            payload.update({k: v for k, v in ancien.items() if k.startswith("_")})
         args.write_baseline.write_text(json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"[audit] baseline écrite : {args.write_baseline}")
         return 0

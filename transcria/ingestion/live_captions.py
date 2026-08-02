@@ -19,7 +19,7 @@ _MAX_TEXT_CHARS = 500
 _MAX_SPEAKER_CHARS = 120
 
 
-def sanitize_caption(raw) -> dict | None:
+def sanitize_caption(raw: object) -> dict | None:
     """Un tour candidat → enregistrement sûr, ou None (jamais une exception) : le runner
     relaie ce que le bot a émis, le serveur reste le juge de ce qui entre dans le fichier."""
     if not isinstance(raw, dict):

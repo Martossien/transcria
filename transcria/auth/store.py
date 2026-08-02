@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +13,7 @@ DEFAULT_ADMIN_PASSWORDS = {"admin-change-me", "CHANGE-ME", ""}
 
 class UserStore:
     @staticmethod
-    def record_login(user) -> None:
+    def record_login(user: User) -> None:
         from datetime import datetime, timezone
         user.last_login = datetime.now(timezone.utc)
         db.session.commit()
@@ -57,7 +58,7 @@ class UserStore:
         return list(db.session.execute(q.order_by(User.username)).scalars().all())
 
     @staticmethod
-    def update_user(user_id: str, **kwargs) -> User | None:
+    def update_user(user_id: str, **kwargs: Any) -> User | None:
         user = db.session.get(User, user_id)
         if user is None:
             return None

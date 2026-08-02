@@ -196,7 +196,7 @@ class JobExecutorService:
                     # serveur) : le runner gère lui-même l'état du job (SUMMARY_DONE /
                     # SPEAKER_DETECTION_DONE / FAILED). L'exécuteur ne libère que la file.
 
-                    runner = WorkflowRunner(JobStore, self.config)  # type: ignore[arg-type]
+                    runner = WorkflowRunner(JobStore, self.config)
                     if mode == SUMMARY_MODE:
                         result = runner.run_summary(job, audio_path, self.config)
                     elif mode == REFINE_MODE:

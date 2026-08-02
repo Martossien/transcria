@@ -41,7 +41,7 @@ class PipelineService:
 
     def __init__(self, config: dict):
         self.config = config
-        self.runner = WorkflowRunner(JobStore, config)  # type: ignore[arg-type]
+        self.runner = WorkflowRunner(JobStore, config)
         self._progress = WorkflowProgressReporter(config)
 
     @property

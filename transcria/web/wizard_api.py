@@ -286,7 +286,7 @@ def api_summary(job_id: str):
         )
         return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
 
-    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    runner = WorkflowRunner(JobStore, cfg)
     result = runner.run_summary(job, str(audio_path), cfg)
 
     if result.get("vram_wait"):
@@ -658,7 +658,7 @@ def api_speakers_detect(job_id: str):
         )
         return jsonify({"queued": True, "message": _SPEAKER_QUEUED_MESSAGE})
 
-    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    runner = WorkflowRunner(JobStore, cfg)
     result = runner.run_speaker_detection(job, str(audio_path), cfg)
     return jsonify(result)
 

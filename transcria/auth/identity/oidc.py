@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
+from flask import Flask
+from flask.typing import ResponseReturnValue
 
 from transcria.auth.identity.base import FederatedIdentity, IdentityUnavailable
 
@@ -41,7 +44,7 @@ def resolve_client_secret(cfg: dict) -> str:
     return str(cfg.get("client_secret") or "")
 
 
-def init_oidc(app, config: dict) -> None:
+def init_oidc(app: Flask, config: dict) -> None:
     """Enregistre le client OIDC au boot (appelé UNIQUEMENT si backend=oidc).
 
     La découverte (`{issuer}/.well-known/openid-configuration`) est chargée
@@ -69,7 +72,7 @@ def init_oidc(app, config: dict) -> None:
     )
 
 
-def _client():
+def _client() -> Any:
     from flask import current_app
 
     oauth = current_app.extensions.get(_EXTENSION_KEY)
@@ -78,7 +81,7 @@ def _client():
     return oauth.idp
 
 
-def authorize_redirect(redirect_uri: str):
+def authorize_redirect(redirect_uri: str) -> ResponseReturnValue:
     """Étape 1 : redirection vers l'IdP (state/nonce/PKCE posés en session par Authlib)."""
     try:
         return _client().authorize_redirect(redirect_uri)

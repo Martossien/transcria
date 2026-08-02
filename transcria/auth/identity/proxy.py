@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+from typing import Protocol
 
 from transcria.auth.identity.base import FederatedIdentity
 
@@ -48,7 +49,18 @@ def is_trusted_addr(remote_addr: str | None, cfg: dict) -> bool:
     return False
 
 
-def extract_identity(headers, remote_addr: str | None, config: dict) -> FederatedIdentity | None:
+class _EnTetes(Protocol):
+    """Ce que cette fonction demande VRAIMENT aux en-têtes : savoir lire une clé.
+
+    Un Protocol et non ``Mapping[str, str]`` : ``werkzeug.datastructures.Headers``
+    n'est pas un Mapping (il est multi-valeurs), et un simple ``dict`` doit rester
+    acceptable côté tests. On décrit l'usage, pas une classe.
+    """
+
+    def get(self, key: str, /) -> str | None: ...
+
+
+def extract_identity(headers: _EnTetes, remote_addr: str | None, config: dict) -> FederatedIdentity | None:
     """Lit l'identité des en-têtes du proxy — ou None si rien de crédible.
 
     Garde non négociable (§3.7) : des en-têtes d'identité portés par une

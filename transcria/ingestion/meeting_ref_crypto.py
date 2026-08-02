@@ -21,6 +21,10 @@ jamais sur du clair.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # import différé à l'appel (cryptography n'est pas requis au boot)
+    from cryptography.fernet import Fernet
 
 _ENV_KEY = "TRANSCRIA_MEETING_REF_KEY"
 _PREFIX = "enc1:"          # versionné : une rotation/changement d'algo introduira enc2:
@@ -30,7 +34,7 @@ class MeetingRefKeyMissing(RuntimeError):
     """Clé absente ou invalide — message SANS la valeur fautive, pointant la procédure."""
 
 
-def _fernet():
+def _fernet() -> Fernet:
     from cryptography.fernet import Fernet
 
     raw = (os.environ.get(_ENV_KEY) or "").strip()

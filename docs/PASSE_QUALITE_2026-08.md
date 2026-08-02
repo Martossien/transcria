@@ -190,7 +190,7 @@ Sur ce dernier j'ai soupçonné un défaut visible — un champ vide à l'écran
 avant de « corriger »** : le remplissage se fait plus bas avec `textContent`. C'était bien du
 code mort, pas un bug.
 
-### Q3.2 — Durcir l'outillage par paliers  🔶 **RUFF LIVRÉ, MYPY À VENIR**
+### Q3.2 — Durcir l'outillage par paliers  ✅ **LIVRÉE**
 
 Ruff ne sélectionne que `E,W,F,I`. Activer `B` (pièges), `UP` (modernisation) et `SIM`
 (simplifications) apporte un vrai retour — à condition de le faire **paquet par paquet avec
@@ -230,8 +230,45 @@ identiques), **trois écartées avec leur raison** :
 Un linter n'a pas toujours raison. L'accepter en bloc aurait produit du bruit — et, sur
 `SIM115`, huit `# noqa` pour rien.
 
-**Reste :** côté mypy, `warn_unused_ignores` puis `disallow_untyped_defs` sur `auth`,
-`ingestion`, `queue` — les paquets où un type manquant coûte le plus cher.
+**Palier 4 — mypy : LIVRÉ.** Deux durcissements, mesurés avant d'être décidés.
+
+`warn_unused_ignores` d'abord : **8 `# type: ignore` ne masquaient plus rien**. C'est de la
+fausse protection — un `ignore` périmé fait croire à une difficulté résolue *et* peut avaler
+une vraie erreur apparue depuis. Cinq des huit couvraient un `arg-type` sur
+`WorkflowRunner(JobStore, config)` corrigé entre-temps ; l'annotation était restée.
+
+`disallow_untyped_defs` ensuite, sur `auth` / `ingestion` / `queue` — **ce qui a le droit
+d'entrer, ce qui vient des plateformes, ce qui part sur le GPU**. Le volume brut annonçait
+695 erreurs ; en ne comptant que celles **situées dans** ces paquets (le reste étant du
+dommage collatéral d'imports suivis), le vrai travail était de **69 signatures**. La mesure
+avant l'effort a évité d'écarter le palier comme « trop gros ».
+
+Sur ces 69, l'essentiel était mécanique — 32 vues Flask reçoivent
+`flask.typing.ResponseReturnValue`. Le reste a demandé de lire le code, et a rapporté trois
+choses qu'aucune annotation de confort n'aurait données :
+
+- **un angle mort réel dans `_handle_login_post`** : `user` était typé
+  `User | FederatedIdentity`, parce que la restriction de type portait sur `result`, pas sur
+  `user`. Aucun bug à l'exécution — mais rien n'empêchait une branche ajoutée plus tard de
+  laisser filer une identité fédérée **non provisionnée** jusqu'à `login_user`. La variable
+  est désormais déclarée `User | None`, et c'est le typeur qui tient la garantie ;
+- **une erreur de ma propre passe** : le script d'annotation en masse a pris
+  `inject_user_context` pour une vue alors que c'est un `context_processor` — il retourne des
+  variables Jinja, pas une réponse. mypy l'a refusée. La gate a fait son travail sur moi ;
+- **deux contrats structurels rendus vérifiables** : `_removes_last_active_admin` décrivait
+  dans son docstring ce qu'il exigeait de `user` (« doit exposer `role_enum` et `is_active` ») ;
+  c'est maintenant un `Protocol`. Idem pour les en-têtes de `extract_identity` — un `Protocol`
+  et non `Mapping[str, str]`, parce que `werkzeug.Headers` n'est pas un Mapping et qu'un
+  `dict` de test doit rester acceptable. On décrit l'usage, pas une classe.
+
+Le durcissement **s'arrête à ces trois paquets, volontairement** : étendu à l'arbre entier il
+produirait des centaines d'annotations mécaniques sans rapport avec le risque. La règle est
+posée en `[[tool.mypy.overrides]]`, élargissable un paquet à la fois.
+
+**Effet de bord corrigé au passage :** `--write-baseline` **effaçait le bloc `_targets`** des
+deux cliquets — la cible et sa date, écrites à la main, disparaissaient à la première
+régénération. Le cap se serait perdu en silence. Les deux scripts reportent désormais les
+clés méta de la baseline existante.
 
 ### Q3.3 — Un cliquet qui converge  ✅ **LIVRÉE**
 

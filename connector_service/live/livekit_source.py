@@ -37,7 +37,7 @@ def livekit_access_token(api_key: str, api_secret: str, room: str, *,
     Dépend de `livekit-api` (importé paresseusement) ; confirmé au gate manuel."""
     # `livekit.api` est un paquet-espace de noms (livekit-api) : l'analyse statique
     # ne le résout pas, mais l'import fonctionne à l'exécution (vérifié).
-    from livekit import api  # type: ignore[attr-defined]  # dép opt-in
+    from livekit import api  # dép opt-in
 
     # `can_publish=False` : refus AU NIVEAU DU SERVEUR. Le bot n'émet rien ; même un
     # bug de code ne pourrait pas diffuser d'audio dans la réunion.

@@ -6,6 +6,7 @@ relecture de l'existant (cf. `QueueStore.enqueue`). Aucun `on_conflict` dialecte
 """
 import hashlib
 import logging
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
@@ -30,7 +31,7 @@ class MeetingImportStore:
         )
 
     @staticmethod
-    def get_or_create(dedup_key: str, **meta) -> tuple[MeetingImport, bool]:
+    def get_or_create(dedup_key: str, **meta: Any) -> tuple[MeetingImport, bool]:
         """Retourne `(import, created)`. `created=True` ⇒ CET appel a gagné l'INSERT
         (et est donc responsable de créer le job) ; `created=False` ⇒ un import existait
         déjà (doublon / rejeu / course perdue) — l'appelant ne doit PAS créer un 2e job.

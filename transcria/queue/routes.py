@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from flask import Blueprint, jsonify, render_template, request
+from flask.typing import ResponseReturnValue
 from flask_babel import gettext
 from flask_login import current_user, login_required
 
@@ -15,6 +18,7 @@ from transcria.i18n import N_
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.calendar import DAY_TO_INDEX, SchedulingCalendar, SchedulingWindowStore
+from transcria.queue.models import SchedulingWindow
 from transcria.queue.store import QueueStore
 from transcria.queue.wait_estimate import queue_wait_estimates
 from transcria.services.config_service import ConfigService
@@ -76,7 +80,7 @@ def _can_manage_queue() -> bool:
 
 @queue_pages_bp.route("/admin/queue")
 @login_required
-def queue_page():
+def queue_page() -> ResponseReturnValue:
     if not _can_manage_queue():
         return ("Accès refusé", 403)
     entries = QueueStore.get_visible_queue(current_user, limit=200)
@@ -102,7 +106,7 @@ def queue_page():
     )
 
 
-def _week_strip_segments(windows) -> list[dict]:
+def _week_strip_segments(windows: list[SchedulingWindow]) -> list[dict]:
     """Segments de la frise hebdomadaire 7 j × 24 h, calculés SERVEUR (aucun JS) :
     par jour et par créneau, position/largeur en % de la journée — les fenêtres à
     cheval sur minuit produisent deux segments (soir + matin du lendemain)."""
@@ -139,7 +143,7 @@ def _week_strip_segments(windows) -> list[dict]:
 @queue_pages_bp.route("/admin/schedule")
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def schedule_page():
+def schedule_page() -> ResponseReturnValue:
     cfg = get_config()
     calendar = SchedulingCalendar(cfg.get("workflow", {}).get("scheduling", {}) or {})
     windows = SchedulingWindowStore.list_windows()
@@ -162,7 +166,7 @@ def schedule_page():
     # « Saturday » attrapé par la revue visuelle du banc C3.6).
     jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 
-    def _fr(dt):
+    def _fr(dt: datetime | None) -> str | None:
         if dt is None:
             return None
         now_local = calendar.now()
@@ -195,7 +199,7 @@ def schedule_page():
 @queue_api_bp.route("/api/schedule/enabled", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def api_schedule_toggle():
+def api_schedule_toggle() -> ResponseReturnValue:
     """Activer/désactiver l'AGENDA ENTIER depuis la page (constat audit C3.6 : on
     pouvait créer des créneaux alors que l'agenda était éteint en config, sans
     aucun contrôle visible). Écrit la config via le circuit validé."""
@@ -214,7 +218,7 @@ def api_schedule_toggle():
 
 @queue_api_bp.route("/api/queue/status")
 @login_required
-def api_queue_status():
+def api_queue_status() -> ResponseReturnValue:
     executor = get_job_executor()
     runtime = executor.get_runtime_snapshot() if executor else {"healthy": False}
     return jsonify(runtime)
@@ -222,7 +226,7 @@ def api_queue_status():
 
 @queue_api_bp.route("/api/queue/<job_id>/move-up", methods=["POST"])
 @login_required
-def api_queue_move_up(job_id: str):
+def api_queue_move_up(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     ok = QueueStore.move_up(job_id)
@@ -234,7 +238,7 @@ def api_queue_move_up(job_id: str):
 
 @queue_api_bp.route("/api/queue/<job_id>/move-down", methods=["POST"])
 @login_required
-def api_queue_move_down(job_id: str):
+def api_queue_move_down(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     ok = QueueStore.move_down(job_id)
@@ -246,7 +250,7 @@ def api_queue_move_down(job_id: str):
 
 @queue_api_bp.route("/api/queue/<job_id>/pause", methods=["POST"])
 @login_required
-def api_queue_pause(job_id: str):
+def api_queue_pause(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     ok = QueueStore.pause(job_id, current_user.id)
@@ -257,7 +261,7 @@ def api_queue_pause(job_id: str):
 
 @queue_api_bp.route("/api/queue/<job_id>/resume", methods=["POST"])
 @login_required
-def api_queue_resume(job_id: str):
+def api_queue_resume(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     ok = QueueStore.resume(job_id)
@@ -268,7 +272,7 @@ def api_queue_resume(job_id: str):
 
 @queue_api_bp.route("/api/queue/<job_id>/priority", methods=["POST"])
 @login_required
-def api_queue_priority(job_id: str):
+def api_queue_priority(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     data = request.get_json(silent=True) or {}
@@ -282,7 +286,7 @@ def api_queue_priority(job_id: str):
 
 @queue_api_bp.route("/api/queue/<job_id>/cancel", methods=["POST"])
 @login_required
-def api_queue_cancel(job_id: str):
+def api_queue_cancel(job_id: str) -> ResponseReturnValue:
     if not _can_manage_queue_job(job_id):
         return jsonify({"error": "Accès refusé"}), 403
     request_execution_cancel(job_id)
@@ -299,7 +303,7 @@ def api_queue_cancel(job_id: str):
 
 @queue_api_bp.route("/api/queue/e2e-test-jobs/purge", methods=["POST"])
 @login_required
-def api_purge_e2e_test_jobs():
+def api_purge_e2e_test_jobs() -> ResponseReturnValue:
     if not current_user.has_role(Role.ADMIN):
         return jsonify({"error": "Accès refusé"}), 403
     cfg = get_config()
@@ -351,14 +355,14 @@ def api_purge_e2e_test_jobs():
 @queue_api_bp.route("/api/schedule/windows", methods=["GET"])
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def api_schedule_windows():
+def api_schedule_windows() -> ResponseReturnValue:
     return jsonify({"windows": [window.to_dict() for window in SchedulingWindowStore.list_windows()]})
 
 
 @queue_api_bp.route("/api/schedule/windows", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def api_schedule_create():
+def api_schedule_create() -> ResponseReturnValue:
     data = request.get_json(silent=True) or {}
     error = _validate_window_payload(data)
     if error:
@@ -377,7 +381,7 @@ def api_schedule_create():
 @queue_api_bp.route("/api/schedule/windows/<int:window_id>", methods=["PUT"])
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def api_schedule_update(window_id: int):
+def api_schedule_update(window_id: int) -> ResponseReturnValue:
     data = request.get_json(silent=True) or {}
     error = _validate_window_payload(data, partial=True)
     if error:
@@ -398,7 +402,7 @@ def api_schedule_update(window_id: int):
 @queue_api_bp.route("/api/schedule/windows/<int:window_id>", methods=["DELETE"])
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
-def api_schedule_delete(window_id: int):
+def api_schedule_delete(window_id: int) -> ResponseReturnValue:
     window = SchedulingWindowStore.get(window_id)
     target_label = window.name if window else ""
     if not SchedulingWindowStore.delete(window_id):
@@ -437,7 +441,7 @@ def _validate_window_payload(data: dict, partial: bool = False) -> str | None:
     return None
 
 
-def _valid_time(value) -> bool:
+def _valid_time(value: object) -> bool:
     if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
         return False
     try:

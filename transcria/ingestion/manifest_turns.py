@@ -13,12 +13,12 @@ séparées (vague 5). PUR, testé sans GPU.
 """
 from __future__ import annotations
 
-from transcria.ingestion.manifest import ParticipantsManifest
+from transcria.ingestion.manifest import ManifestParticipant, ParticipantsManifest
 
 
-def _speaker_id(participant) -> str:
+def _speaker_id(participant: ManifestParticipant) -> str:
     """Identifiant AFFICHABLE : le nom du participant quand la plateforme le connaît —
-    l'étape 5 montre « Martossien », pas « SPEAKER_00 » ni un id de flux."""
+    l'étape 5 montre le NOM de la personne, pas « SPEAKER_00 » ni un id de flux."""
     return participant.name or f"PISTE_{participant.id}"
 
 

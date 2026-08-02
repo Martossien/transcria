@@ -64,7 +64,7 @@ def read_gguf_arch(path: str | Path) -> dict | None:
     E/S + dépendance optionnelle : on n'échoue jamais (retourne None → l'appelant retombe
     sur la mesure au load)."""
     try:
-        from gguf import GGUFReader  # type: ignore[import-not-found]
+        from gguf import GGUFReader
     except Exception:
         return None
     try:

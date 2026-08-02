@@ -1,6 +1,8 @@
 import logging
+from typing import Any, Protocol
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask.typing import ResponseReturnValue
 from flask_babel import gettext as _
 from flask_login import current_user, login_required, login_user, logout_user
 
@@ -10,7 +12,7 @@ from transcria.auth.groups import GroupStore
 from transcria.auth.identity import LocalBackend, get_password_backend, identity_backend_name
 from transcria.auth.identity.base import FederatedIdentity, IdentityUnavailable
 from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
-from transcria.auth.models import GroupRole, Role
+from transcria.auth.models import GroupRole, Role, User
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.rate_limit import login_rate_limiter
 from transcria.auth.store import DEFAULT_ADMIN_PASSWORDS, UserStore
@@ -21,7 +23,19 @@ auth_bp = Blueprint("auth", __name__)
 MIN_PASSWORD_LENGTH = 8
 
 
-def _removes_last_active_admin(user, new_role: Role, new_active: bool, active_admin_count: int) -> bool:
+class _CompteEditable(Protocol):
+    """Le contrat structurel que la fonction pure ci-dessous exige de `user`.
+
+    Il était déjà écrit dans le docstring ; l'exprimer en Protocol le rend
+    VÉRIFIABLE — un appelant qui passerait un objet sans `role_enum` est refusé
+    à la vérification de types, plus à l'exécution.
+    """
+
+    role_enum: Role
+    is_active: bool
+
+
+def _removes_last_active_admin(user: _CompteEditable, new_role: Role, new_active: bool, active_admin_count: int) -> bool:
     """Vrai si l'édition retirerait le dernier administrateur global actif.
 
     Fonction pure : `user` doit exposer `role_enum` et `is_active`. Bloque la
@@ -62,7 +76,7 @@ def _password_validation_error(password: str, confirmation: str | None = None) -
     return None
 
 
-def _login_page(status: int = 200, *, force_break_glass: bool = False):
+def _login_page(status: int = 200, *, force_break_glass: bool = False) -> ResponseReturnValue:
     """Rendu UNIQUE de la page de connexion — la logique d'affichage vit ici pour
     qu'aucune branche (GET, 401, 403, 503) ne diverge.
 
@@ -90,7 +104,7 @@ def _login_page(status: int = 200, *, force_break_glass: bool = False):
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
-def login():
+def login() -> ResponseReturnValue:
     if current_user.is_authenticated:
         return redirect(url_for("web.index"))
     if request.method == "POST":
@@ -105,7 +119,7 @@ def login():
     return _login_page()
 
 
-def _handle_login_post():
+def _handle_login_post() -> ResponseReturnValue:
     """POST du formulaire identifiant/mot de passe — commun à local et ldap.
 
     Backend résolu : ``?local=1`` force le LOCAL (break-glass) ; sinon le backend
@@ -141,7 +155,13 @@ def _handle_login_post():
         return _login_page(503, force_break_glass=True)
 
     # Backend fédéré à mot de passe (ldap) : identité vérifiée → provisionnement JIT.
-    user = result
+    #
+    # `user` est annoté `User | None` et JAMAIS `FederatedIdentity` : une identité
+    # fédérée n'est pas un compte, elle doit passer par provision_federated avant
+    # d'atteindre login_user. L'annotation explicite fait porter la garantie au
+    # typeur — sans elle, une branche ajoutée ici pourrait laisser filer une
+    # identité non provisionnée jusqu'à la session.
+    user: User | None = None
     matched_group = None
     if isinstance(result, FederatedIdentity):
         try:
@@ -156,6 +176,8 @@ def _handle_login_post():
                                "received_groups": list(exc.decision.received_groups) if exc.decision else []})
             flash(_("Accès non attribué : contactez votre administrateur."), "error")
             return _login_page(403)
+    else:
+        user = result
 
     if user is not None:
         login_rate_limiter.record_success(client_ip, username)
@@ -194,7 +216,7 @@ def _handle_login_post():
 
 
 @auth_bp.route("/auth/oidc/login")
-def oidc_login():
+def oidc_login() -> ResponseReturnValue:
     """Chantier identité lot 1 : départ du flux Authorization Code + PKCE.
 
     Refusé si le backend n'est pas oidc (pas de SSO « caché » activable par URL).
@@ -223,7 +245,7 @@ def oidc_login():
 
 
 @auth_bp.route("/auth/oidc/callback")
-def oidc_callback():
+def oidc_callback() -> ResponseReturnValue:
     """Retour de l'IdP : validation complète, JIT, session — ou refus audité."""
     from authlib.integrations.base_client.errors import OAuthError
 
@@ -273,7 +295,7 @@ def oidc_callback():
 
 
 @auth_bp.route("/auth/proxy/login")
-def proxy_login():
+def proxy_login() -> ResponseReturnValue:
     """Chantier identité lot 3 : connexion par en-têtes de proxy de confiance.
 
     La confiance repose sur l'adresse SOCKET (`request.remote_addr` ∈
@@ -319,7 +341,7 @@ def proxy_login():
 
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
-def logout():
+def logout() -> ResponseReturnValue:
     # Compte OIDC : déconnexion RP-initiated chez l'IdP APRÈS la session locale
     # (best-effort — sans end_session_endpoint, le logout local suffit).
     source = getattr(current_user, "identity_source", "local")
@@ -345,7 +367,7 @@ def logout():
 
 @auth_bp.route("/account/password", methods=["GET", "POST"])
 @login_required
-def change_own_password():
+def change_own_password() -> ResponseReturnValue:
     if request.method == "POST":
         current_password = request.form.get("current_password", "")
         new_password = request.form.get("new_password", "")
@@ -370,7 +392,7 @@ def change_own_password():
 
 @auth_bp.route("/account/tokens", methods=["GET", "POST"])
 @login_required
-def account_tokens():
+def account_tokens() -> ResponseReturnValue:
     """Chantier identité lot 4 : jetons d'API personnels (« Mon compte »).
 
     Le secret complet n'est affiché qu'UNE fois, dans la réponse du POST de
@@ -403,7 +425,7 @@ def account_tokens():
 
 @auth_bp.route("/account/tokens/<token_id>/revoke", methods=["POST"])
 @login_required
-def account_token_revoke(token_id: str):
+def account_token_revoke(token_id: str) -> ResponseReturnValue:
     """Révoque un de MES jetons (soft : revoked_at posé, la trace d'audit reste)."""
     from transcria.auth.api_tokens import list_for_user, revoke_token
 
@@ -423,7 +445,7 @@ def account_token_revoke(token_id: str):
 @auth_bp.route("/admin/users")
 @login_required
 @requires(Permission.MANAGE_USERS)
-def user_list():
+def user_list() -> ResponseReturnValue:
     users = UserStore.list_users(active_only=False)
     return render_template("users.html", users=users, roles=Role)
 
@@ -431,7 +453,7 @@ def user_list():
 @auth_bp.route("/admin/users/new", methods=["GET", "POST"])
 @login_required
 @requires(Permission.MANAGE_USERS)
-def user_create():
+def user_create() -> ResponseReturnValue:
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -472,7 +494,7 @@ def user_create():
 @auth_bp.route("/admin/users/<user_id>/edit", methods=["GET", "POST"])
 @login_required
 @requires(Permission.MANAGE_USERS)
-def user_edit(user_id: str):
+def user_edit(user_id: str) -> ResponseReturnValue:
     user = UserStore.get_by_id(user_id)
     if user is None:
         flash(_("Utilisateur introuvable."), "error")
@@ -537,7 +559,7 @@ def user_edit(user_id: str):
 
 @auth_bp.route("/admin/groups")
 @login_required
-def group_list():
+def group_list() -> ResponseReturnValue:
     if not GroupStore.is_group_admin(current_user):
         return ("Accès interdit", 403)
     groups = GroupStore.list_for_admin(current_user)
@@ -548,7 +570,7 @@ def group_list():
 @auth_bp.route("/admin/groups/new", methods=["GET", "POST"])
 @login_required
 @requires(Permission.MANAGE_USERS)
-def group_create():
+def group_create() -> ResponseReturnValue:
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         description = request.form.get("description", "").strip()
@@ -570,7 +592,7 @@ def group_create():
 
 @auth_bp.route("/admin/groups/<group_id>/edit", methods=["GET", "POST"])
 @login_required
-def group_edit(group_id: str):
+def group_edit(group_id: str) -> ResponseReturnValue:
     group = GroupStore.get_by_id(group_id)
     if group is None:
         flash(_("Groupe introuvable."), "error")
@@ -666,7 +688,7 @@ def group_edit(group_id: str):
     )
 
 
-def inject_user_context():
+def inject_user_context() -> dict[str, Any]:
     cfg = get_config()
     if current_user.is_authenticated:
         return {

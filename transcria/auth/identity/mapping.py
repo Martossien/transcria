@@ -86,7 +86,7 @@ def validate_role_mapping(mapping_cfg: dict) -> list[str]:
     return errors
 
 
-def _coerce_role(value) -> Role | None:
+def _coerce_role(value: object) -> Role | None:
     try:
         return Role(str(value).strip().lower())
     except (ValueError, AttributeError):

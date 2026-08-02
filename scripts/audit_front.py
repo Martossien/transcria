@@ -105,8 +105,14 @@ def main(argv: list[str] | None = None) -> int:
         args.check_baseline = DEFAULT_BASELINE
 
     if args.write_baseline:
+        payload = dict(metrics)
+        # Même garde que `audit_imports` : les clés méta écrites à la main (`_targets`…)
+        # ne se recalculent pas — les régénérer les effacerait sans bruit.
+        if args.write_baseline.exists():
+            ancien = json.loads(args.write_baseline.read_text(encoding="utf-8"))
+            payload.update({k: v for k, v in ancien.items() if k.startswith("_")})
         args.write_baseline.write_text(
-            json.dumps(metrics, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+            json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         print(f"[audit-front] baseline écrite : {args.write_baseline}")
         return 0
