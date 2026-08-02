@@ -41,11 +41,11 @@ par le champ `status` de `transcria/data/meeting_connectors.yaml`, que la page
 | Plateforme | Voie | État | Réseau exigé |
 |---|---|---|---|
 | **Zoom** | bot SDK natif | ✅ **éprouvé en réunion réelle** (compte GRATUIT) : 9 879 trames, locuteur nommé, 48 segments, 0 hallucination | sortant seul |
-| **Jitsi** | bot navigateur | ✅ éprouvé | sortant seul |
-| **Visio** (La Suite) | transport natif LiveKit | ✅ éprouvé | sortant seul |
+| **Jitsi** | bot navigateur | ✅ éprouvé, puis **banc automatisé** jouant la chaîne jusqu'au DOCX sans humain | sortant seul |
+| **Visio** (La Suite) | transport natif LiveKit | ✅ éprouvé (six correctifs nés du terrain), puis **banc automatisé** | sortant seul |
 | **Zoom RTMS** | webhook | 🧪 code + CI, **jamais exécuté** | ⚠ entrant HTTPS |
 | **Teams** | Graph (post-réunion) | 🧪 code + CI, **jamais exécuté** | ⚠ entrant HTTPS ×2 |
-| **Meet** | Pub/Sub **pull** | 🧪 code + CI, **jamais exécuté** | **aucun entrant** |
+| **Meet** | Pub/Sub **pull** | ✅ **validé de bout en bout sur un vrai Workspace** (2026-08-01) : agenda → salle pré-réglée → enregistrement → évènement → Drive → job attribué → arrêt au contrôle humain | **aucun entrant** |
 
 « 🧪 » ne veut pas dire « presque fini ». Il veut dire : les RÈGLES sont écrites et testées, le
 transport ne l'est pas, et rien n'a jamais vu une vraie plateforme.

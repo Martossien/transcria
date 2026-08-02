@@ -1,10 +1,16 @@
 # Bot de réunion — installation, lancement, exploitation
 
 Le bot rejoint une visioconférence comme un participant, capte l'audio **par locuteur** et
-le transcrit via TranscrIA. C'est la **voie de secours** du chantier temps réel : contrairement
-aux connecteurs officiels (qui reçoivent des webhooks et exigent donc un port ouvert), le bot
-n'établit que des connexions **sortantes** — il traverse un pare-feu ou un proxy d'entreprise
-sans ouverture entrante.
+le transcrit via TranscrIA. Il n'établit que des connexions **sortantes** — il traverse un
+pare-feu ou un proxy d'entreprise sans aucune ouverture entrante.
+
+> **Correction de cadrage (0.4.0).** Ce document présentait le bot comme la « voie de
+> secours », au motif que les connecteurs officiels recevraient des webhooks et exigeraient
+> donc un port ouvert. **Ce n'est plus exact** : Google Meet fonctionne en *pull* Pub/Sub et
+> n'a besoin d'aucun port entrant, sans envoyer personne dans la réunion. Le bot n'est donc
+> pas un repli mais **l'une des voies**, choisie quand la plateforme n'offre pas de
+> récupération après coup. Seuls **Zoom RTMS** et **Teams** exigent un point d'entrée public
+> — et ce sont précisément les deux qui ne sont pas encore validés.
 
 Deux bots coexistent, parce que les plateformes n'ouvrent pas la même porte :
 
@@ -359,6 +365,30 @@ Pour éviter d'avoir à admettre le bot et à accepter l'autorisation à chaque 
 la salle d'attente (**Sécurité** dans la réunion) et passer le bot **co-hôte**.
 
 ---
+
+## 6-bis. Piège : Jitsi auto-hébergé et la LLM d'arbitrage se disputent le port 8080
+
+Constaté en jouant l'E2E pendant la préparation de la 0.4.0. Le **pont vidéo** de la pile
+Jitsi (`jitsi-stack-jvb-1`) publie `127.0.0.1:8080` — exactement le port par défaut de la
+**LLM d'arbitrage** de TranscrIA (`services.arbitrage_llm_port`).
+
+Sur une machine qui héberge les deux, la LLM ne démarre donc jamais : le serveur sort
+immédiatement avec `couldn't bind HTTP server socket`, et le pipeline échoue à la phase de
+correction avec « LLM d'arbitrage non disponible ». Rien dans le message ne pointe vers
+Jitsi — d'où cette note.
+
+**Diagnostic** — si la LLM refuse de démarrer :
+
+```bash
+ss -lntp | grep :8080          # qui écoute ?
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep 8080
+```
+
+**Correction** — déplacer l'un des deux, jamais les laisser se marcher dessus :
+
+- côté TranscrIA : `services.arbitrage_llm_port: 8081` (et le script de lancement suit) ;
+- côté Jitsi : retirer la publication `8080` du `jvb` si vous n'exploitez pas sa page de
+  statistiques (elle n'est pas nécessaire au fonctionnement du pont).
 
 ## 7. Limites connues
 

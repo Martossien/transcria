@@ -12,6 +12,7 @@ groupe** (appartenance à un groupe avec droit d'administration, orthogonal au r
 | Permission | Viewer | Operator | Manager | Admin |
 |---|:---:|:---:|:---:|:---:|
 | Télécharger les livrables | ✅ | ✅ | ✅ | ✅ |
+| **Modifier un traitement PARTAGÉ** | | ✅ | ✅ | ✅ |
 | Créer un traitement | | ✅ | ✅ | ✅ |
 | Voir les rapports qualité | | ✅ | ✅ | ✅ |
 | Voir TOUS les traitements | | | ✅ | ✅ |
@@ -25,6 +26,13 @@ groupe** (appartenance à un groupe avec droit d'administration, orthogonal au r
 Les **lexiques centraux** et le **partage de types de réunion** sont gérés par les
 admins de groupe (et les admins) — voir `CentralLexiconStore.can_manage_lexicons`.
 Un utilisateur ne voit que les traitements de ses groupes (sauf `VIEW_ALL_JOBS`).
+
+**Voir et modifier sont deux droits distincts** (0.4.0). Jusque-là, les routes mutantes se
+contentaient de la garde de LECTURE — un compte `VIEWER` partageant un groupe avec le
+propriétaire pouvait donc **réécrire le sous-titrage** d'un travail qui n'était pas le sien.
+`can_edit_job` exige désormais `EDIT_SHARED_JOBS` en plus du lien de groupe, et le refus
+indique lequel des deux droits manque. Le propriétaire garde la main sur son propre travail,
+même si son rôle a été rétrogradé depuis.
 
 **Garde de non-régression** : chaque route mutante est protégée par `@requires(...)`
 ou `@login_required` ; les tests RBAC couvrent les refus (403) par rôle.
@@ -171,3 +179,76 @@ fonctionnel) et se règle depuis Administration → Configuration → « Durciss
 Le préflight `doctor` (`Transport HTTP(S)`) émet un WARN si un backend d'auth **fédéré**
 (OIDC/proxy/LDAP — identifiants d'entreprise) tourne sans cookie sécurisé ni proxy TLS
 déclaré.
+
+---
+
+## 8. Postures qui échouent FERMÉ (0.4.0)
+
+Une passe de sécurité dédiée a inversé plusieurs défauts qui « échouaient ouvert » : le
+système continuait de fonctionner en ayant perdu sa protection, sans que rien ne le signale.
+Le raisonnement complet, y compris ce qui a été **refusé** et pourquoi, vit dans
+[`archive/PASSE_SECURITE_2026-08.md`](archive/PASSE_SECURITE_2026-08.md).
+
+### Service d'inférence — plus de démarrage ouvert
+
+Sa garde de clé API était un **no-op** quand aucune clé n'était configurée. Comme la clé se
+lit d'abord dans une variable d'environnement, une variable disparue au déploiement
+transformait *en silence* un service authentifié en service ouvert — sur un port qui écoute
+en `0.0.0.0:8002`. Désormais :
+
+- `inference.auth.api_key_env` **déclarée mais variable absente** → refus de démarrer, même
+  si le mode ouvert est demandé par ailleurs (la configuration se contredirait) ;
+- **aucune clé** → mode ouvert seulement s'il est explicitement demandé
+  (`inference.auth.allow_unauthenticated`), avec un avertissement bruyant.
+
+Le transport `file_ref` est borné de la même façon : sans `inference.allowed_audio_roots`,
+la racine est déduite de `storage.jobs_dir`. Un chemin hors racine répond **403 avant 404** —
+répondre « introuvable » ferait du service un oracle d'existence de fichiers.
+
+### Amorçage — plus de secret publié
+
+`config.example.yaml` livrait un mot de passe d'amorçage, et le compte était réellement créé
+avec. TranscrIA **génère** maintenant un secret aléatoire, affiché **une seule fois** dans le
+journal de démarrage et stocké nulle part en clair.
+
+### Scripts exécutés depuis la configuration
+
+Trois clés désignent un fichier lancé avec `bash` par un service qui tourne en root, et
+`/admin/config` propose un mode YAML brut. Trois garde-fous, tous nécessaires :
+
+1. les racines autorisées viennent de la variable d'environnement **`TRANSCRIA_SCRIPT_ROOTS`**
+   (unité systemd), **jamais de la configuration** — une allowlist que l'acteur visé règle
+   lui-même ne contraint personne ;
+2. un exécutable **ne vit pas dans une zone où l'application écrit** (`workflow.prompts_dir`,
+   `storage.jobs_dir`, `voice_enrollment.storage_dir`) — sinon il suffit d'y déposer un
+   fichier. Un test **recense** ces zones : une clé de configuration nouvelle qui ressemble à
+   un répertoire d'accueil fait rougir la suite tant que personne n'a tranché ;
+3. le chemin **résolu** est vérifié, et c'est lui qui est exécuté — sans quoi un lien
+   symbolique sortant passerait.
+
+### Requêtes sortantes d'un bot
+
+Un bot vise une URL fournie par un **utilisateur**. La garde refuse ce qui n'est jamais une
+salle de réunion — boucle locale, adresse « toutes interfaces », lien-local (métadonnées
+cloud) — en décidant sur l'**adresse résolue**, jamais sur la forme écrite (`2130706433` et
+`127.1` désignent la boucle locale). Les navigations interdites sont **abandonnées avant
+émission** (interception de route), redirections comprises.
+
+**Aucune plage privée ou publique n'est bornée**, et c'est délibéré : *l'adresse ne dit pas
+si l'on est chez soi*. Une organisation disposant d'un bloc public l'utilise en interne. Le
+seul mécanisme qui sache distinguer « mon réseau » d'Internet est l'allowlist
+**`BOT_ALLOWED_HOSTS`** — le diagnostic la rappelle quand un connecteur est configuré sans
+elle.
+
+### Fichier de configuration
+
+Écriture **atomique** et `0600` à chaque enregistrement — y compris sur un fichier existant
+trop permissif. Un contrôle au doctor regarde l'état **réel** sur disque : le code corrigé ne
+dit rien des fichiers créés avant lui.
+
+### Sondes et exports
+
+`/health` et `/ready` ne divulguent plus l'URI de connexion à la base (hôte, port,
+utilisateur) : le détail est réservé aux **administrateurs**, la sonde anonyme garde son
+oui/non. Les exports CSV neutralisent les formules (`=`, `+`, `-`, `@`) — le titre d'un job
+est une valeur d'utilisateur, et un tableur l'exécute à l'ouverture.

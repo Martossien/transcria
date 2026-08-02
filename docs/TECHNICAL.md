@@ -463,7 +463,14 @@ Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutilis
 **Gestion des mots de passe :** les utilisateurs authentifiés changent leur mot de passe via `/account/password`, avec vérification du mot de passe actuel, confirmation et minimum de 8 caractères. En cas d'oubli, le chemin prévu est le reset par un admin global dans `/admin/users/<id>/edit`; il n'y a pas de reset email tant qu'aucune configuration SMTP/tokens n'est définie.
 Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte admin initial est créé avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide.
 
-**Règle de visibilité jobs par groupe :** un job reste propriété d'un utilisateur (`jobs.owner_id`). Les membres d'un même groupe voient les jobs des autres membres via `JobStore.list_for_user()` et `_can_access_job()`. Il n'y a pas encore de partage job par job ni de notion de groupe propriétaire.
+**Règle d'accès aux jobs — VOIR et MODIFIER sont deux droits distincts** (durci en 0.4.0). Un job reste propriété d'un utilisateur (`jobs.owner_id`).
+
+- **Voir** (`can_access_job`) : le propriétaire, un administrateur, ou tout membre d'un groupe commun avec le propriétaire.
+- **Modifier** (`can_edit_job`) : le propriétaire, un administrateur, ou un membre d'un groupe commun **qui a le droit de produire** (`Permission.EDIT_SHARED_JOBS` — `ADMIN`, `MANAGER`, `OPERATOR`). Un compte `VIEWER` voit et télécharge, il ne réécrit pas.
+
+Jusqu'à la 0.4.0 les deux passaient par la même garde : un `VIEWER` partageant un groupe pouvait réécrire le sous-titrage d'un job qui ne lui appartenait pas. Les routes mutantes utilisent désormais `get_job_for_edit`, et le refus dit lequel des deux droits manque.
+
+Il n'y a toujours pas de partage job par job ni de notion de groupe propriétaire.
 
 ---
 

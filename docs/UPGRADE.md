@@ -157,6 +157,50 @@ venv/bin/python -m transcria.maintenance.cli upgrade
 Si une étape échoue, la mise à niveau **s'arrête** et affiche les étapes déjà faites ;
 restaurez la sauvegarde initiale pour revenir en arrière.
 
+### Notes spécifiques 0.3.9.x → 0.4.0
+
+Aucune migration de base. **Un changement cassant, et il ne concerne pas tout le monde.**
+
+1. ⚠️ **Le service d'inférence refuse désormais de démarrer sans posture d'authentification
+   explicite.** Il échouait auparavant *ouvert* : sans clé configurée, la garde était un
+   no-op — et comme la clé se lit d'abord dans une variable d'environnement, une variable
+   disparue au déploiement transformait en silence un service authentifié en service ouvert,
+   sur un port qui écoute en `0.0.0.0:8002`.
+
+   **Vous n'êtes concerné que si vous faites tourner `transcria-inference`** (topologies
+   « frontale + nœud GPU » ou nœud de ressources). Le portail tout-en-un ne l'est pas.
+
+   Avant de redémarrer, vérifiez l'un des deux :
+
+   ```bash
+   # soit la clé existe réellement dans l'environnement du service
+   systemctl show transcria-inference -p Environment | grep TRANSCRIA_INFERENCE_API_KEY
+   # soit vous assumez le mode ouvert (développement, écoute en loopback UNIQUEMENT)
+   #   config.yaml → inference.auth.allow_unauthenticated: true
+   ```
+
+   Note : `inference.auth.api_key_env` **vide** est désormais le défaut. La déclarer est un
+   acte volontaire — et si elle est déclarée sans que la variable existe, le service refuse,
+   y compris avec le mode ouvert. C'est délibéré : la configuration se contredirait.
+
+2. **`file_ref` est borné.** Le transport de fichiers du service d'inférence n'accepte plus
+   n'importe quel chemin : sans `inference.allowed_audio_roots` explicite, la borne est
+   déduite de `storage.jobs_dir`. Si vous rangez l'audio ailleurs, déclarez la racine.
+
+3. **Scripts exécutés depuis la configuration.** `services.arbitrage_script`,
+   `services.stop_script` et `resource_node.engines[].script` ne peuvent plus désigner
+   n'importe quel fichier : ils doivent vivre sous `<dépôt>/scripts` ou sous une racine
+   déclarée dans la variable d'environnement **`TRANSCRIA_SCRIPT_ROOTS`** du service (jamais
+   dans `config.yaml` — ce serait laisser l'administrateur applicatif fixer ses propres
+   limites). Si vos lanceurs sont ailleurs, ajoutez la ligne à l'unité systemd.
+
+4. **Connecteurs de réunion** — tout est opt-in, rien ne change sans action de votre part.
+   `connectors.meetings.enabled: true` ouvre l'API et la carte « Réunion » ; les identités de
+   plateforme se saisissent depuis `/admin/connecteurs`. Si vous activez **Zoom RTMS** ou
+   **Teams**, le diagnostic **échoue** tant que le transport n'est pas sécurisé : ce sont les
+   deux seuls connecteurs qui exigent un point d'entrée HTTPS public, et un webhook en clair
+   transporte des jetons de plateforme.
+
 ### Notes spécifiques 0.3.7 → 0.3.8
 
 Aucune migration de base. Tout est opt-in, trois points d'attention :

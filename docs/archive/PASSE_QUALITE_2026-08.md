@@ -105,7 +105,7 @@ Ces chantiers ont déjà été commencés. Les laisser à mi-chemin coûte plus 
 finir : le code porte alors **deux conventions**, et chaque lecteur doit deviner laquelle
 s'applique.
 
-### Q2.1 — Terminer `PhaseOutcome`  ✅ **LIVRÉE** (gate E2E GPU restant)
+### Q2.1 — Terminer `PhaseOutcome`  ✅ **LIVRÉE ET VALIDÉE E2E**
 
 `workflow/outcomes.py` annonce la disparition des adaptateurs, mais `job_executor` et
 `pipeline_service` convertissent encore des dictionnaires et réinterprètent `vram_wait`,
@@ -145,11 +145,14 @@ fonction d'aide change, pour faire passer le dict par l'adaptateur — ce que fa
 producteur d'étape. Les cas figés couvrent donc toujours d'un seul geste la priorité entre
 clés *et* la décision de l'exécuteur.
 
-**Le gate qui manque, et il manque vraiment :** la règle du projet est qu'un changement de
-pipeline se valide par l'**E2E GPU réel**, lequel exige d'arrêter le service — action qui m'a
-été refusée. La suite complète (5 755 tests) et toutes les gates de la CI sont vertes, mais
-elles ne remplacent pas ce passage. **À jouer avant de considérer Q2.1 close :**
-`systemctl stop transcria && venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3`.
+**Le gate a été joué — et il est passé.** La règle du projet est qu'un changement de pipeline
+se valide par l'**E2E GPU réel**, pas par la seule suite unitaire. Fait le 2026-08-03 lors de
+la préparation de la 0.4.0 : **16 contrôles OK, 0 échec**, DOCX produit, score qualité
+95/100. `PhaseOutcome` est donc validé sur un vrai passage GPU, pas seulement en unitaire.
+
+Le premier essai avait échoué pour une raison étrangère au code — le pont vidéo de la pile
+Jitsi occupe `127.0.0.1:8080`, le port de la LLM d'arbitrage. Consigné dans
+`docs/BOT_REUNION.md` §6-bis, parce que le message d'erreur ne pointe nulle part vers Jitsi.
 
 **Trouvé en chemin — une fuite de capacité de la file.** En vérifiant qu'aucun job ne
 tournait avant de lancer l'E2E, une entrée de file est apparue bloquée en `running` pour un
