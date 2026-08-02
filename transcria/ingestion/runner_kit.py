@@ -209,6 +209,10 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=$DEST
 Environment=TRANSCRIA_RUNNER_CONFIG=$CONF_DIR/runner.yaml
+# Environnement MACHINE relayé aux conteneurs de bots (VISIO_ALLOWED_HOSTS, VISIO_API_BASE,
+# BOT_HIDDEN…) : systemd ne le peuple pas tout seul. Sans cette ligne, ces variables sont
+# posées quelque part et n'atteignent jamais le bot. « - » = fichier facultatif.
+EnvironmentFile=-$CONF_DIR/runner.env
 ExecStart=$DEST/venv/bin/python -m connector_service.runner
 Restart=always
 RestartSec=10

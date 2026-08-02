@@ -10,7 +10,7 @@
  },
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 98,
+ "deferred_internal_imports": 99,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -53,7 +53,7 @@
   "transcria.config": 3,
   "transcria.config.checks.audio": 1,
   "transcria.config.checks.auth": 2,
-  "transcria.config.checks.orchestration": 3,
+  "transcria.config.checks.orchestration": 4,
   "transcria.config.checks.platform": 1,
   "transcria.config.checks.stt": 1,
   "transcria.config.config_schema": 6,

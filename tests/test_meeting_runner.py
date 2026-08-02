@@ -268,3 +268,24 @@ def test_sans_allowlist_rien_nest_transmis(monkeypatch):
         {"provider": "visio", "job_id": "j1", "meeting_ref": "https://visio.exemple/salle"},
         portal_url="https://portail.exemple", token="tia_x")
     assert "VISIO_ALLOWED_HOSTS" not in env
+
+
+def test_lunite_systemd_du_runner_charge_un_fichier_denvironnement():
+    """Sans `EnvironmentFile`, tout `_MACHINE_ENV` est INERTE sous l'installation nominale.
+
+    `VISIO_ALLOWED_HOSTS`, `VISIO_API_BASE`, `BOT_HIDDEN`… sont lues dans l'environnement
+    du process runner pour être relayées au conteneur. systemd ne peuple pas cet
+    environnement depuis `.env` tout seul : le relais fonctionnait, la source était vide."""
+    from transcria.ingestion.runner_kit import build_kit_script
+
+    script = build_kit_script(portal_url="https://portail.exemple",
+                              token="tia_x", runner_name="salle-a")
+    assert "EnvironmentFile=-" in script, "l'unité doit charger un fichier d'environnement"
+
+
+def test_lunite_posee_par_linstalleur_charge_aussi(tmp_path):
+    from transcria.installer.connectors_phase import _unit_text
+
+    texte = _unit_text(repo_root="/opt/transcria", venv_python="/opt/transcria/venv/bin/python",
+                       config_path="/etc/transcria/runner.yaml")
+    assert "EnvironmentFile=-" in texte

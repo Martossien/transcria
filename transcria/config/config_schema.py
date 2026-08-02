@@ -47,13 +47,9 @@ from transcria.config.checks.base import (  # noqa: F401 — façade
     _check_str,
     _check_time_string,
 )
-from transcria.config.checks.orchestration import (  # noqa: F401 — façade
-    _check_execution_section,
-    _check_llm_section,
-    _check_progress_section,
-    _check_queue_section,
-    _check_scheduling_section,
+from transcria.config.checks.orchestration import (
     _check_workflow,
+    _check_zones_executables,  # noqa: F401 — façade
 )
 from transcria.config.checks.platform import (  # noqa: F401 — façade
     _KNOWN_LOCALES,
@@ -116,6 +112,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
+    _check_zones_executables(cfg, result)
     _check_maintenance(cfg.get("maintenance", {}), result)
     _check_i18n(cfg.get("i18n", {}), result)
     _check_live(cfg.get("live", {}), result)

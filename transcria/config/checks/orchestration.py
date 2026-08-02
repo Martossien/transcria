@@ -187,3 +187,25 @@ def _check_scheduling_section(sched_cfg: dict, r: ValidationResult) -> None:
                 if day not in valid_days:
                     r.add_error(f"workflow.scheduling.windows[{i}].days: jour invalide '{day}'")
         _check_bool(window, "enabled", f"workflow.scheduling.windows[{i}].enabled", r)
+
+
+def _check_zones_executables(cfg: dict, r: ValidationResult) -> None:
+    """Une zone où l'application ÉCRIT ne doit pas chevaucher une racine EXÉCUTABLE.
+
+    Sécurité S1.6. Un fichier déposé là (prompt au contenu libre, audio uploadé) pourrait
+    ensuite être désigné comme script et lancé en root. Le refus est ICI, à la validation :
+    le mauvais réglage n'entre jamais, et `/admin/config` répond une erreur lisible au lieu
+    de tomber en 500 — c'est la personne qui doit corriger qui consulte cette page.
+    """
+    # Import DIFFÉRÉ, et c'est nécessaire : en tête, il crée un cycle inter-paquets
+    # (gpu → vram_manager → config → config_schema → orchestration → gpu). Le détecteur de
+    # cycles l'a refusé — la seule raison pour laquelle cette ligne coûte un point au
+    # cliquet des imports différés, et une raison qui vaut mieux que le cycle.
+    from transcria.gpu.script_guard import zones_inscriptibles_en_conflit
+
+    for cle, zone, racine in zones_inscriptibles_en_conflit(cfg):
+        r.add_error(
+            f"{cle} ({zone}) est sous une racine EXÉCUTABLE ({racine}) : un fichier déposé "
+            f"là pourrait être lancé comme script. Choisissez un répertoire hors des "
+            f"racines de scripts."
+        )

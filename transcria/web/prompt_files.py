@@ -12,6 +12,7 @@ Sécurité :
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import shutil
 import tempfile
@@ -53,6 +54,7 @@ SCRIPT_CONFIG_KEYS: tuple[tuple[str, object], ...] = (
     ("services.arbitrage_script", _l("Lancement de la LLM d'arbitrage")),
     ("services.stop_script", _l("Arrêt de la LLM d'arbitrage")),
 )
+logger = logging.getLogger(__name__)
 MAX_SCRIPT_DISPLAY_BYTES = 64 * 1024
 
 
@@ -88,6 +90,20 @@ def prompts_dir(cfg: dict) -> Path:
     return verifier_repertoire_prompts(cfg)
 
 
+def _base_lisible(cfg: dict) -> Path | None:
+    """Répertoire des prompts, ou ``None`` si la configuration est intenable.
+
+    Le refus vit à la VALIDATION (`config_schema`), donc un mauvais réglage n'entre plus.
+    Mais une installation peut déjà en porter un — placer le refus sur le chemin de
+    LECTURE renverrait alors 500 sur /admin/config, c'est-à-dire enfermerait dehors la
+    personne qui doit corriger. On dégrade : aucun prompt affiché, aucune exception."""
+    try:
+        return verifier_repertoire_prompts(cfg)
+    except PromptDirRefuse:
+        logger.error("workflow.prompts_dir intenable — prompts masqués, configuration à corriger")
+        return None
+
+
 def _prompt_path(base: Path, filename: str, language: str) -> Path:
     """Chemin d'ÉDITION du prompt pour ``language``. Non-français ⇒ sous-dossier
     ``<base>/<lang>/`` (même convention que la résolution runtime des livrables, Axe B) ;
@@ -102,8 +118,10 @@ def load_prompts(cfg: dict, language: str = "fr") -> list[dict]:
     """Charge les prompts pour l'affichage : [{name, label, help, path, content, exists,
     language}]. ``language`` = locale de l'interface → édition du jeu de prompts effectif
     de cette langue (racine pour fr, ``<base>/<lang>/`` sinon)."""
-    base = prompts_dir(cfg)
+    base = _base_lisible(cfg)
     items: list[dict] = []
+    if base is None:
+        return items
     for spec in PROMPT_FILES:
         path = _prompt_path(base, spec["filename"], language)
         content = ""

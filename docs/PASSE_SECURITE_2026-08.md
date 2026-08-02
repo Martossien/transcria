@@ -676,6 +676,46 @@ dont un qui vérifie que la **valeur** ne passe pas par `argv` (visible de tout 
 
 ---
 
+## Cinquième passage (2026-08-02) — dont une régression que j'avais créée
+
+### `/admin/config` répondait 500, à cause de ma propre garde
+
+Le pire endroit où placer un refus. Ma garde levait au **chargement** des prompts, donc la
+page d'administration tombait — et l'administrateur ne pouvait même plus corriger le
+réglage fautif. Un refus sur un chemin de lecture enferme dehors la personne qui doit
+réparer.
+
+**Deux places, deux rôles :** refus à la **validation** (le mauvais réglage n'entre jamais,
+et l'interface affiche une erreur lisible comme pour n'importe quelle clé) ; **dégradation**
+à la **lecture** (une installation qui porte déjà le mauvais réglage reste affichable et
+corrigeable — aucun prompt montré, aucune exception).
+
+### La même chaîne existait par `storage.jobs_dir`
+
+J'avais corrigé les prompts. `storage.jobs_dir` reçoit des fichiers d'**utilisateurs** : le
+même trajet marchait avec un audio uploadé. Encore une fois, j'avais traité l'instance et
+pas la classe. La vérification est désormais **généralisée à toutes** les zones
+inscriptibles, en un seul endroit (`zones_inscriptibles_en_conflit`), appelé par la
+validation de configuration.
+
+### Tout `_MACHINE_ENV` était inerte sous l'installation nominale
+
+Le quatrième passage avait fait relayer `VISIO_ALLOWED_HOSTS` du runner vers le conteneur.
+Mais **aucune unité systemd ne chargeait de fichier d'environnement** : la variable — comme
+`VISIO_API_BASE`, `BOT_HIDDEN` et les identités machine — n'atteignait jamais le processus
+runner. Le relais fonctionnait, la source était vide. `EnvironmentFile=-` ajouté aux trois
+unités (kit runner, installeur runner, service Meet), avec deux tests qui l'exigent.
+
+### Ce que le cliquet d'architecture a refusé
+
+En voulant éviter un import différé (qui coûte un point au cliquet), j'ai remonté l'import
+en tête de module. Le détecteur de cycles l'a refusé : `gpu → vram_manager → config →
+config_schema → orchestration → gpu`. J'ai donc gardé l'import différé et **assumé le
+point** — un cycle inter-paquets coûte infiniment plus cher qu'une ligne de métrique. Le
+filet a fait exactement son travail : m'empêcher d'abîmer l'architecture pour un chiffre.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
@@ -710,6 +750,7 @@ renseignement le plus utile de ce document :
 | 3ᵉ | la chaîne S1.6 **toujours ouverte** (écrire un prompt *dans* une racine autorisée) ; le détail SQL visible de tout compte authentifié ; `TRANSCRIA_SCRIPT_ROOTS` absente des unités et guides ; **pollution d'environnement entre mes tests** |
 | exploitant | « un LAN n'est pas forcément en adressage privé » — le code tenait, la **justification** était fausse |
 | 4ᵉ | S1.6 contournable dans le **temps** (déposer, puis déplacer la configuration) ; le contrôle Visio du doctor cherchait des clés inexistantes ; `VISIO_ALLOWED_HOSTS` jamais relayée au conteneur bot |
+| 5ᵉ | la même chaîne par `storage.jobs_dir` ; **une régression que j'avais créée** (`/admin/config` en 500) ; aucune unité systemd ne chargeait de fichier d'environnement, rendant tout `_MACHINE_ENV` inerte |
 
 Aucun de ces passages n'a produit un faux positif sur le fond. Trois de mes correctifs
 étaient incomplets, et je ne l'aurais pas vu seul : les deux premiers parce que j'avais

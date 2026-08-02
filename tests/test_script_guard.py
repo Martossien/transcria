@@ -346,3 +346,50 @@ def test_un_repertoire_de_prompts_normal_est_accepte(tmp_path, monkeypatch):
     (tmp_path / "scripts").mkdir()
     monkeypatch.setenv(CLE_ENV_RACINES, str(tmp_path / "scripts"))
     assert verifier_repertoire_prompts({"workflow": {"prompts_dir": str(tmp_path / "prompts")}})
+
+
+# --- Reprise n°4 : refuser à la VALIDATION, dégrader à la LECTURE ------------------------
+#
+# Ma garde levait au chargement des prompts. Conséquence : /admin/config renvoyait 500 —
+# et l'administrateur ne pouvait même plus corriger la configuration fautive. Un refus
+# placé sur le chemin de lecture enferme dehors celui qui doit réparer.
+#
+# Refus à la SAUVEGARDE (le mauvais réglage n'entre jamais), dégradation à la LECTURE (une
+# configuration déjà fautive reste affichable et corrigeable).
+
+def test_la_validation_de_config_refuse_un_prompts_dir_executable(tmp_path, monkeypatch):
+    from transcria.config.config_schema import validate_config
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+
+    (tmp_path / "scripts").mkdir()
+    monkeypatch.setenv(CLE_ENV_RACINES, str(tmp_path / "scripts"))
+    from transcria.config.loader import get_default_config
+    cfg = get_default_config()
+    cfg["workflow"]["prompts_dir"] = str(tmp_path / "scripts")
+    resultat = validate_config(cfg)
+    assert any("prompts_dir" in e for e in resultat.errors), resultat.errors
+
+
+def test_la_validation_accepte_un_prompts_dir_normal(tmp_path, monkeypatch):
+    from transcria.config.config_schema import validate_config
+    from transcria.config.loader import get_default_config
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+
+    (tmp_path / "scripts").mkdir()
+    monkeypatch.setenv(CLE_ENV_RACINES, str(tmp_path / "scripts"))
+    cfg = get_default_config()
+    cfg["workflow"]["prompts_dir"] = str(tmp_path / "prompts")
+    assert not [e for e in validate_config(cfg).errors if "prompts_dir" in e]
+
+
+def test_load_prompts_ne_CASSE_pas_sur_une_config_deja_fautive(tmp_path, monkeypatch):
+    """Le cas d'une installation où le mauvais réglage est déjà en place : la page doit
+    s'afficher, sinon on ne peut plus rien réparer depuis l'interface."""
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+    from transcria.web.prompt_files import load_prompts
+
+    racine = tmp_path / "scripts"
+    racine.mkdir()
+    monkeypatch.setenv(CLE_ENV_RACINES, str(racine))
+    items = load_prompts({"workflow": {"prompts_dir": str(racine)}})
+    assert items == [], "aucun prompt affiché — mais AUCUNE exception"

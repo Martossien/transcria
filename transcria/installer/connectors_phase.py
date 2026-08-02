@@ -70,6 +70,12 @@ Type=simple
 WorkingDirectory={repo_root}
 Environment=PYTHONPATH={repo_root}
 Environment=TRANSCRIA_RUNNER_CONFIG={config_path}
+# Environnement MACHINE relayé aux conteneurs de bots (`_MACHINE_ENV` de
+# `runner/commands.py`) : VISIO_ALLOWED_HOSTS, VISIO_API_BASE, BOT_HIDDEN, identités
+# LiveKit/Jitsi… systemd ne peuple PAS cet environnement tout seul — sans cette ligne, ces
+# variables sont posées quelque part et n'atteignent jamais le runner, donc jamais le bot.
+# Le « - » rend le fichier facultatif : son absence ne bloque pas le démarrage.
+EnvironmentFile=-{repo_root}/.env
 ExecStart={venv_python} -m connector_service.runner
 Restart=on-failure
 RestartSec=10
@@ -98,6 +104,7 @@ Type=simple
 WorkingDirectory={repo_root}
 Environment=PYTHONPATH={repo_root}
 Environment=TRANSCRIA_REPO_ROOT={repo_root}
+EnvironmentFile=-{repo_root}/.env
 ExecStart={venv_python} -m connector_service.meet_main
 Restart=on-failure
 RestartSec=30
@@ -190,3 +197,10 @@ def _ensure_meeting_ref_key(plan: ConnectorsPlan, console) -> None:
         fh.write("\n# Chiffrement des références de réunion (généré par la phase connectors)\n")
         fh.write(f"TRANSCRIA_MEETING_REF_KEY={Fernet.generate_key().decode()}\n")
     console.ok(f"clé de chiffrement générée et posée dans {env_path}")
+
+
+def _unit_text(*, repo_root: str, venv_python: str, config_path: str) -> str:
+    """Texte de l'unité du meeting-runner — exposé pour que les tests puissent l'inspecter
+    sans écrire dans /etc."""
+    return SYSTEMD_UNIT_TEMPLATE.format(repo_root=repo_root, venv_python=venv_python,
+                                        config_path=config_path)

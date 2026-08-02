@@ -95,6 +95,35 @@ def allowed_script_roots(config: dict | None = None) -> list[Path]:
     return racines
 
 
+def zones_inscriptibles_en_conflit(config: dict) -> list[tuple[str, Path, Path]]:
+    """Zones d'écriture qui chevauchent une racine EXÉCUTABLE : `(clé, zone, racine)`.
+
+    Pensée pour la VALIDATION de configuration, où un refus est utile (il empêche le
+    mauvais réglage d'entrer) plutôt que sur un chemin de lecture, où il enferme dehors
+    la personne qui doit corriger.
+
+    Généralisée à toutes les zones de `_ZONES_INSCRIPTIBLES` — le premier correctif ne
+    couvrait que les prompts, alors que `storage.jobs_dir` reçoit des fichiers
+    d'UTILISATEURS : uploader un audio dans une racine exécutable, puis déplacer
+    `jobs_dir`, laissait le fichier derrière avec le même effet.
+    """
+    conflits: list[tuple[str, Path, Path]] = []
+    racines = allowed_script_roots()
+    for section, cle in _ZONES_INSCRIPTIBLES:
+        brut = (config.get(section, {}) or {}).get(cle)
+        if not brut:
+            continue
+        try:
+            zone = Path(str(brut)).resolve()
+        except (OSError, RuntimeError):
+            continue
+        for racine in racines:
+            if zone == racine or racine in zone.parents:
+                conflits.append((f"{section}.{cle}", zone, racine))
+                break
+    return conflits
+
+
 def safe_script_path(raw: str, config: dict) -> Path:
     """Chemin de script VÉRIFIÉ, prêt à être exécuté — ou ``ScriptRefuse``."""
     brut = str(raw or "").strip()
