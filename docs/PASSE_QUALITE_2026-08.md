@@ -174,15 +174,29 @@ pures** et l'adaptateur `fetch`, et ne tester que celles-là. **Pas** de réécr
 gros fichiers : on couvre ce qui casse, on ne redessine pas.
 **Effort :** M. **Critère :** le linter passe en CI et les fonctions extraites sont couvertes.
 
-### Q3.2 — Durcir l'outillage par paliers
+### Q3.2 — Durcir l'outillage par paliers  🔶 **PALIER 1 LIVRÉ**
 
 Ruff ne sélectionne que `E,W,F,I`. Activer `B` (pièges), `UP` (modernisation) et `SIM`
 (simplifications) apporte un vrai retour — à condition de le faire **paquet par paquet avec
 une baseline**, jamais d'un coup sur tout l'arbre.
 
-Côté mypy, `warn_unused_ignores` puis `disallow_untyped_defs` sur les paquets les plus
-sensibles (`auth`, `ingestion`, `queue`).
-**Effort :** M, étalé. **Critère :** chaque palier est vert avant le suivant.
+**Palier 1 — `B` (flake8-bugbear) : LIVRÉ.** Volume mesuré avant de décider : `B` 16,
+`UP` 68, `SIM` 73, `C4` 8, `RET` 9. `B` d'abord parce qu'il attrape des **pièges**, pas du
+style — 14 de ses 16 occurrences étaient des `zip()` sans `strict=`, qui **tronquent en
+silence** dès que deux suites divergent.
+
+Chacune a été tranchée à la main, ce qui est tout l'intérêt de la règle :
+`strict=True` là où un écart est un bug (et où, deux fois, elle **documente un invariant que
+le `if` juste au-dessus vérifiait déjà**), `strict=False` là où la troncature est voulue — une
+fenêtre glissante sur des paires consécutives, une liste facultative — avec sa raison écrite.
+Poser `strict=False` partout aurait silencié la règle sans rien corriger.
+
+Un `B009` délibéré (contournement d'un stub `transformers` manquant) est marqué `noqa` avec
+sa justification, plutôt que « simplifié » au prix d'une erreur mypy.
+
+**Paliers suivants**, séparément : `UP` (68) puis `SIM` (73), et côté mypy
+`warn_unused_ignores` puis `disallow_untyped_defs` sur `auth`, `ingestion`, `queue`.
+**Critère :** chaque palier vert avant le suivant.
 
 ### Q3.3 — Un cliquet qui converge  ✅ **LIVRÉE**
 

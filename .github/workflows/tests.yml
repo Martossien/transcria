@@ -63,7 +63,13 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I
+        # PALIER `B` ajouté (passe qualité, août 2026) : flake8-bugbear attrape des pièges
+        # que E,W,F ne voient pas — au premier chef `zip()` sans `strict=`, qui TRONQUE en
+        # silence quand deux suites divergent. Les quatorze occurrences ont été traitées une
+        # par une : `strict=True` là où un écart est un bug, `strict=False` là où la
+        # troncature est voulue, avec sa raison écrite. Les paliers UP et SIM (68 et 73
+        # occurrences) viendront séparément — cf. docs/PASSE_QUALITE_2026-08.md.
+        run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I,B
 
       - name: Type check (mypy)
         run: mypy transcria/ inference_service/ connector_service/ --ignore-missing-imports

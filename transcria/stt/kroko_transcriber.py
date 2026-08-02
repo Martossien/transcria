@@ -336,7 +336,7 @@ class KrokoTranscriber(BaseTranscriber):
         seg_tokens: list[str] = [tokens[0]]
         seg_start = timestamps[0]
         prev_ts = timestamps[0]
-        for token, ts in zip(tokens[1:], timestamps[1:]):
+        for token, ts in zip(tokens[1:], timestamps[1:], strict=True):
             if (ts - prev_ts) > self.segment_max_gap_s or (ts - seg_start) > self.segment_max_len_s:
                 self._flush_segment(segments, seg_tokens, seg_start, prev_ts)
                 seg_tokens = [token]

@@ -234,7 +234,7 @@ class _TorchaudioCTCAligner:
         word_start: float | None = None
         scores: list[float] = []
 
-        for span, ch in zip(spans, chars):
+        for span, ch in zip(spans, chars, strict=True):
             if ch == "|":
                 self._append_word(words, current, word_start, span.start, scores, segment_start, frame_duration)
                 current = ""

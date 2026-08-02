@@ -287,7 +287,9 @@ class MossTranscriber(BaseTranscriber):
         if self.gap_alert_s <= 0:
             return []
         gaps: list[dict] = []
-        for prev, cur in zip(segments, segments[1:]):
+        # `strict=False` VOULU : fenêtre glissante sur les paires consécutives — les deux
+        # suites diffèrent d'un élément PAR CONSTRUCTION.
+        for prev, cur in zip(segments, segments[1:], strict=False):
             gap = float(cur["start"]) - float(prev["end"])
             if gap > self.gap_alert_s:
                 cur["transcription_gap_before_s"] = round(gap, 1)

@@ -209,7 +209,9 @@ def enrich_corpus_with_quality(corpus: list[dict], raw_segments: list[dict], cor
     starts = [float(b.get("start", 0.0)) for b in ordered]
 
     filled = 0
-    for row, raw in zip(corpus, raw_segments or []):
+    # `strict=False` VOULU : les segments bruts peuvent manquer (`or []`) — le corpus
+    # reste exploitable sans eux, seule l'origine du texte est alors inconnue.
+    for row, raw in zip(corpus, raw_segments or [], strict=False):
         raw_text = str(raw.get("text") or "").strip()
         if not raw_text:
             continue  # segment vide : aucun bloc SRT correspondant, on laisse None

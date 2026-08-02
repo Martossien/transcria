@@ -64,8 +64,9 @@ def run(input_path: Path, output_path: Path) -> int:
 
     # getattr (et non l'accès attribut direct) : CohereAsrForConditionalGeneration n'est
     # pas dans les stubs transformers → mypy --strict lèverait attr-defined. getattr le
-    # contourne proprement (ruff B009 n'est pas dans le périmètre CI). NE PAS « simplifier ».
-    CohereAsrForConditionalGeneration = getattr(transformers, "CohereAsrForConditionalGeneration")
+    # contourne proprement. NE PAS « simplifier » : l'accès direct casserait mypy.
+    CohereAsrForConditionalGeneration = getattr(  # noqa: B009 — cf. commentaire ci-dessus
+        transformers, "CohereAsrForConditionalGeneration")
 
     request = json.loads(input_path.read_text(encoding="utf-8"))
     arrays = np.load(request["arrays_path"])
@@ -88,7 +89,7 @@ def run(input_path: Path, output_path: Path) -> int:
         batch_meta = chunks[offset:offset + batch_size]
         audio_batch = [arrays[meta["array_key"]] for meta in batch_meta]
         texts = _generate_batch(processor, model, torch, device, audio_batch, cfg)
-        for meta, text in zip(batch_meta, texts):
+        for meta, text in zip(batch_meta, texts, strict=True):
             segments.append({
                 "start": meta["start"],
                 "end": meta["end"],

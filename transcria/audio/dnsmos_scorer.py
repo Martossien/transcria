@@ -170,7 +170,8 @@ def score_segments(
         results: list[dict] = []
         for i in range(0, len(clips), batch_size):
             batch = np.stack(clips[i: i + batch_size]).astype("float32")
-            for (start, end), sc in zip(meta[i: i + batch_size], _infer(session, batch)):
+            for (start, end), sc in zip(meta[i: i + batch_size], _infer(session, batch),
+                                        strict=True):
                 results.append({"start": start, "end": end, **sc})
         return results
     except Exception as exc:  # noqa: BLE001

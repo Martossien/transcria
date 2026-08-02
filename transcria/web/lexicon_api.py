@@ -222,12 +222,12 @@ def api_lexicon_debug(job_id: str):
     enriched_lexicon = enrich_lexicon_context_audio(raw_lexicon, summary_segments)
 
     terms_debug = []
-    for raw_term, enriched_term in zip(raw_lexicon, enriched_lexicon):
+    for raw_term, enriched_term in zip(raw_lexicon, enriched_lexicon, strict=True):
         raw_ctxs = raw_term.get("contexts") or []
         enr_ctxs = enriched_term.get("contexts") or []
 
         contexts_detail = []
-        for i, (raw_ctx, enr_ctx) in enumerate(zip(raw_ctxs, enr_ctxs)):
+        for i, (raw_ctx, enr_ctx) in enumerate(zip(raw_ctxs, enr_ctxs, strict=True)):
             repair_notes = []
             if enr_ctx.get("timecode") and not raw_ctx.get("timecode"):
                 repair_notes.append(

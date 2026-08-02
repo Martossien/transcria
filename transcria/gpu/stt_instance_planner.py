@@ -73,7 +73,8 @@ def llm_shares(indices: list[int], total_mb: int, per_gpu: list | None) -> dict[
         return {}
     if (isinstance(per_gpu, list) and len(per_gpu) == len(indices)
             and all(isinstance(mb, (int, float)) and mb > 0 for mb in per_gpu)):
-        return {int(i): int(mb) for i, mb in zip(indices, per_gpu)}
+        # `strict` documente l'invariant vérifié juste au-dessus.
+        return {int(i): int(mb) for i, mb in zip(indices, per_gpu, strict=True)}
     total_mb = int(total_mb)
     if total_mb <= 0:
         return {}

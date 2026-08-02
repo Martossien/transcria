@@ -298,7 +298,7 @@ def score_segments(
                     )
                     eff = "cpu"                       # collant : plus de tentative CUDA
                     scored = _infer(model.to(eff), batch.to(eff))
-            for (s, e), (stoi, pesq, sisdr) in zip(chunk, scored):
+            for (s, e), (stoi, pesq, sisdr) in zip(chunk, scored, strict=True):
                 results.append({
                     "start": round(s / sr, 2),
                     "end": round(e / sr, 2),

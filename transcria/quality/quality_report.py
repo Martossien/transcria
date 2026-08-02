@@ -838,7 +838,8 @@ class QualityReporter:
                 groups[folded][lowered] = groups[folded].get(lowered, 0) + 1
 
         scored: list[tuple[int, dict]] = []
-        for folded, forms in groups.items():
+        # `folded` n'est pas lu : seules les FORMES d'un même mot replié nous intéressent.
+        for forms in groups.values():
             if len(forms) < 2:
                 continue
             total = sum(forms.values())

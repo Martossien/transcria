@@ -154,7 +154,7 @@ def plan_for_tier(
         )
     used = sizes[:k]
     shares = _split_shares(footprint, k)
-    for i, (cap, share) in enumerate(zip(used, shares)):
+    for i, (cap, share) in enumerate(zip(used, shares, strict=True)):
         if cap < share + safety_margin_mb:
             return Placement(
                 tier.gb,
@@ -293,7 +293,9 @@ def evaluate_calibration(
     indices = [int(i) for i in declared_indices]
     # Part déclarée par carte : la liste explicite si fournie et alignée, sinon split égal.
     if declared_per_gpu and len(declared_per_gpu) == len(indices):
-        declared_map = {idx: int(mb) for idx, mb in zip(indices, declared_per_gpu)}
+        # `strict` documente l'invariant que le `if` ci-dessus vient de vérifier.
+        declared_map = {idx: int(mb)
+                        for idx, mb in zip(indices, declared_per_gpu, strict=True)}
     elif indices:
         share = int(declared_vram_mb) // len(indices)
         declared_map = {idx: share for idx in indices}

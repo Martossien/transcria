@@ -272,7 +272,7 @@ def _median_active_rolloff(rolloff, rms, energy_threshold: float) -> float:
     """
     active = [
         float(roll)
-        for roll, energy in zip(rolloff, rms)
+        for roll, energy in zip(rolloff, rms, strict=True)
         if energy > energy_threshold and roll > 0
     ]
     if not active:
@@ -340,7 +340,7 @@ def _classify_scene_frames(signal, sr: int, thresholds: dict) -> tuple:
             )
 
     frame_labels: list = []
-    for r, f, z in zip(rms, flatness, zcr):
+    for r, f, z in zip(rms, flatness, zcr, strict=True):
         if r <= energy_threshold:
             frame_labels.append("noEnergy")
         elif f >= noise_flatness_min:
