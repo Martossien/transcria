@@ -18,10 +18,7 @@ from connector_service.bot.platforms.jitsi_state import (
     ConferencePhase,
     interpret_conference_state,
 )
-from connector_service.outbound_guard import (
-    verifier_destination_atteinte,
-    verifier_url_de_reunion,
-)
+from connector_service.outbound_guard import filtre_de_navigation, verifier_url_de_reunion
 
 _CAPTURE_JS = Path(__file__).resolve().parent.parent / "capture.js"
 # Résolveur d'identité SPÉCIFIQUE à Jitsi : traduit une piste WebRTC en participant nommé,
@@ -187,6 +184,12 @@ class JitsiDriver:
             headless=self._headless, args=list(CHROMIUM_ARGS))
         self._page = await self._browser.new_page(
             ignore_https_errors=self._ignore_https_errors)
+        # Garde SSRF posée AVANT toute navigation : Playwright appelle ce filtre pour chaque
+        # requête, y compris CHAQUE SAUT DE REDIRECTION — une navigation interdite est
+        # abandonnée avant émission. C'est la différence entre empêcher et constater :
+        # contrôler `page.url` après coup laisse la requête atteindre le service interne.
+        # Seules les navigations sont examinées (cf. `navigation_autorisee`).
+        await self._page.route("**/*", filtre_de_navigation)
         # Injecte l'URL du pont puis le payload de capture AVANT chargement de la page.
         import json as _json
         await self._page.add_init_script(
@@ -201,14 +204,12 @@ class JitsiDriver:
         # `--network host` quand le portail est local : Chromium peut donc atteindre un
         # service interne. Même politique que les requêtes HTTP sortantes du bot Visio —
         # refus de la boucle locale et du lien-local, allowlist honorée si posée.
+        # Refus EXPLICITE de l'URL d'entrée : le filtre de route l'aurait abandonnée, mais
+        # un message clair vaut mieux qu'une page blanche inexpliquée.
         verifier_url_de_reunion(meeting_url)
         base = meeting_url.split("#")[0]
         seed = self._local_storage_seed()
         await self._page.goto(_local_storage_url(base, seed) if seed else _muted_url(meeting_url))
-        # Le navigateur SUIT les redirections : on ne peut pas les lui interdire (une salle
-        # en émet légitimement), donc on vérifie où l'on a ATTERRI. Sans cela, un hôte
-        # légitime répondant `302 Location: http://127.0.0.1/` ramènerait le pivot.
-        verifier_destination_atteinte(self._page.url)
 
     async def request_join(self, display_name: str) -> None:
         page = self._page

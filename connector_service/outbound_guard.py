@@ -36,6 +36,7 @@ D'où deux niveaux :
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import socket
 import urllib.request
@@ -46,6 +47,8 @@ _NOMS_LOCAUX = {"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loop
 
 #: Allowlist GÉNÉRIQUE : elle vaut pour tout bot qui vise une URL fournie par un
 #: utilisateur — la requête `urlopen` de Visio comme la navigation Chromium de Jitsi.
+logger = logging.getLogger(__name__)
+
 CLE_ALLOWLIST = "BOT_ALLOWED_HOSTS"
 #: Nom historique, encore honoré : une installation qui l'a posé ne doit pas perdre sa
 #: protection au motif qu'on a élargi le concept.
@@ -190,15 +193,40 @@ def verifier_hote_sortant(url: str, *, allowlist: list[str] | None = None) -> bo
     return True
 
 
-def verifier_destination_atteinte(url_finale: str, *, allowlist: list[str] | None = None) -> bool:
-    """Revérifie l'URL RÉELLEMENT atteinte après navigation.
+def navigation_autorisee(url: str, *, est_navigation: bool,
+                         allowlist: list[str] | None = None) -> bool:
+    """Décide si une requête du navigateur peut PARTIR. Ne lève pas — répond.
 
-    Un navigateur suit les redirections, comme `urlopen` le faisait avant qu'on les lui
-    retire. Contrôler l'URL de départ puis laisser Chromium aller ailleurs, c'est ne pas
-    contrôler : un hôte légitime qui répond `302 Location: http://127.0.0.1/` ramène le
-    pivot par la porte de service.
+    Vérifier `page.url` **après** `page.goto()` constate le pivot une fois la requête
+    émise : pour une SSRF, c'est trop tard, le service interne a déjà été touché. La
+    décision doit donc se prendre AVANT émission, à l'interception de route.
 
-    On ne peut pas interdire la redirection à un navigateur — une salle de réunion en
-    émet légitimement (authentification, bascule de nœud). On vérifie donc l'arrivée.
+    **Seules les navigations sont filtrées**, et c'est proportionné : la SSRF passe par
+    l'URL que l'utilisateur choisit. Les sous-ressources viennent du contenu de la page,
+    donc de l'hôte de réunion — déjà validé. Les filtrer ferait transiter tout le trafic
+    d'une visioconférence par Python pour un gain nul.
     """
-    return verifier_hote_sortant(url_finale, allowlist=allowlist)
+    if not est_navigation:
+        return True
+    try:
+        return verifier_hote_sortant(url, allowlist=allowlist)
+    except HoteRefuse:
+        return False
+
+
+async def filtre_de_navigation(route, request) -> None:
+    """Gestionnaire de route Playwright : abandonne une navigation interdite AVANT émission.
+
+    Branché sur le contexte du navigateur, il couvre `page.goto` ET **chaque saut de
+    redirection** — c'est là tout l'intérêt : un hôte légitime répondant
+    `302 Location: http://127.0.0.1/` voit son second saut refusé avant de partir.
+    """
+    try:
+        est_nav = bool(request.is_navigation_request())
+    except Exception:  # noqa: BLE001 — objet Playwright inattendu : on ne bloque pas la page
+        est_nav = False
+    if est_nav and not navigation_autorisee(request.url, est_navigation=True):
+        logger.warning("navigation REFUSÉE avant émission : %s", url_expurgee(request.url))
+        await route.abort("blockedbyclient")
+        return
+    await route.continue_()

@@ -389,21 +389,119 @@ def test_le_journal_de_demarrage_nexpose_pas_lurl(monkeypatch, caplog):
     assert "meet.exemple/salle" in message      # le diagnostic reste possible
 
 
-def test_une_redirection_du_navigateur_vers_linterne_est_refusee(monkeypatch):
-    """`page.goto` suit les redirections comme `urlopen` : valider la première URL et
-    laisser le navigateur aller ailleurs, c'est ne pas valider. La destination FINALE est
-    revérifiée après navigation."""
-    from connector_service.outbound_guard import HoteRefuse, verifier_destination_atteinte
-
-    # Pas de stub ici : une IP littérale « se résout » en elle-même (cf. la fixture), et
-    # stuber la résolution neutraliserait justement ce que ce test vérifie.
-    with pytest.raises(HoteRefuse):
-        verifier_destination_atteinte("http://127.0.0.1:8080/interne")
+# (Une `verifier_destination_atteinte` avait été écrite au passage précédent : elle
+# contrôlait `page.url` APRÈS navigation. Retirée — elle constatait le pivot une fois la
+# requête partie, et une fonction qui suggère une protection sans la fournir est pire que
+# son absence.)
 
 
-def test_une_redirection_vers_un_hote_legitime_passe(monkeypatch):
+# --- Empêcher, pas constater -------------------------------------------------------------
+#
+# Vérifier `page.url` APRÈS `page.goto()` détecte le pivot une fois la requête partie. Pour
+# une SSRF, c'est trop tard : le service interne a déjà été touché. La décision doit se
+# prendre AVANT émission — Playwright le permet par interception de route.
+#
+# La logique de décision vit ici, pure et testable sans navigateur ; le câblage Playwright
+# n'a plus qu'à l'appeler.
+
+class TestDecisionDeNavigation:
+    def test_une_navigation_vers_linterne_est_REFUSEE(self):
+        from connector_service.outbound_guard import navigation_autorisee
+
+        assert navigation_autorisee("http://127.0.0.1:8080/x", est_navigation=True) is False
+        assert navigation_autorisee("http://169.254.169.254/x", est_navigation=True) is False
+
+    def test_une_navigation_legitime_est_autorisee(self, monkeypatch):
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import navigation_autorisee
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+        assert navigation_autorisee("https://meet.exemple/salle", est_navigation=True) is True
+
+    def test_les_sous_ressources_ne_sont_PAS_filtrees(self):
+        """Proportionné : la SSRF passe par la NAVIGATION, que l'utilisateur choisit. Les
+        sous-ressources viennent du contenu de la page — donc de l'hôte de réunion, qui est
+        déjà validé. Les filtrer ferait passer tout le trafic d'une visioconférence par
+        Python, pour un gain nul."""
+        from connector_service.outbound_guard import navigation_autorisee
+
+        assert navigation_autorisee("http://127.0.0.1/style.css", est_navigation=False) is True
+
+    def test_lallowlist_sapplique_a_la_navigation(self, monkeypatch):
+        import connector_service.outbound_guard as og
+        from connector_service.outbound_guard import navigation_autorisee
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["203.0.113.5"])
+        monkeypatch.setenv("BOT_ALLOWED_HOSTS", "meet.exemple")
+        assert navigation_autorisee("https://meet.exemple/s", est_navigation=True) is True
+        assert navigation_autorisee("https://ailleurs.test/s", est_navigation=True) is False
+
+
+class TestInterceptionPlaywright:
+    """Le filtre appelé par Playwright — vérifié avec une route factice, sans navigateur."""
+
+    class _RouteFactice:
+        def __init__(self):
+            self.abandonnee = False
+            self.poursuivie = False
+
+        async def abort(self, motif=None):
+            self.abandonnee = True
+
+        async def continue_(self):
+            self.poursuivie = True
+
+    class _RequeteFactice:
+        def __init__(self, url, navigation):
+            self.url = url
+            self._nav = navigation
+
+        def is_navigation_request(self):
+            return self._nav
+
+    def _jouer(self, url, navigation):
+        import asyncio
+
+        from connector_service.outbound_guard import filtre_de_navigation
+
+        route, requete = self._RouteFactice(), self._RequeteFactice(url, navigation)
+        asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
+            filtre_de_navigation(route, requete))
+        return route
+
+    def test_la_requete_interne_est_ABANDONNEE_avant_emission(self):
+        route = self._jouer("http://127.0.0.1:8080/interne", navigation=True)
+        assert route.abandonnee and not route.poursuivie
+
+    def test_la_requete_legitime_poursuit(self, monkeypatch):
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
+        route = self._jouer("https://meet.exemple/salle", navigation=True)
+        assert route.poursuivie and not route.abandonnee
+
+    def test_une_sous_ressource_poursuit_sans_verification(self):
+        route = self._jouer("http://127.0.0.1/app.js", navigation=False)
+        assert route.poursuivie and not route.abandonnee
+
+
+def test_le_filtre_est_POSE_avant_toute_navigation():
+    """Le câblage, pas seulement la logique — leçon d'un passage précédent où trois couches
+    étaient vertes sans être reliées.
+
+    On lit la source : `page.route(...)` doit apparaître AVANT le premier `page.goto(...)`,
+    sinon la première navigation part sans garde."""
+    import pathlib
+
+    source = pathlib.Path("connector_service/bot/platforms/jitsi.py").read_text()
+    pose = source.index("self._page.route(")
+    premiere_navigation = source.index("self._page.goto(")
+    assert pose < premiere_navigation, "le filtre doit être posé avant la première navigation"
+    assert "filtre_de_navigation" in source
+
+
+def test_plus_aucun_controle_a_posteriori_ne_subsiste():
+    """Contre-épreuve : la fonction qui constatait après coup ne doit plus exister."""
     import connector_service.outbound_guard as og
-    from connector_service.outbound_guard import verifier_destination_atteinte
 
-    monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34"])
-    assert verifier_destination_atteinte("https://meet.exemple/salle-finale")
+    assert not hasattr(og, "verifier_destination_atteinte")

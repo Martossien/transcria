@@ -802,9 +802,20 @@ pour les points, mais parce que deux d'entre eux rendaient mon travail précéde
 - **Le journal de démarrage exposait l'URL entière.** J'avais expurgé le journal
   d'*exception* de l'orchestrateur et manqué celui d'*info* du CLI — lequel s'écrit à
   **chaque** lancement de bot. J'avais corrigé le cas rare et laissé le cas systématique.
-- **Chromium suivait les redirections sans revalidation.** J'avais retiré ce comportement à
-  `urlopen` et pas au navigateur. On ne peut pas interdire la redirection à un navigateur —
-  une salle en émet légitimement — donc on vérifie **où l'on a atterri**.
+- **Chromium suivait les redirections sans revalidation.** Première tentative : vérifier
+  `page.url` *après* `page.goto()`. **Insuffisant, et l'audit a eu raison de le refuser** —
+  cela CONSTATE le pivot une fois la requête émise, donc le service interne a déjà été
+  touché. Pour une SSRF, constater n'est pas empêcher.
+
+  Corrigé par **interception de route** (`page.route`) : Playwright appelle le filtre pour
+  chaque requête, **y compris chaque saut de redirection**, et une navigation interdite est
+  abandonnée **avant émission**. Seules les navigations sont examinées — la SSRF passe par
+  l'URL que l'utilisateur choisit ; les sous-ressources viennent du contenu de la page, donc
+  d'un hôte déjà validé, et les filtrer ferait transiter tout le trafic d'une
+  visioconférence par Python pour un gain nul.
+
+  La fonction de contrôle *a posteriori* a été **supprimée** plutôt que gardée en seconde
+  ligne : une fonction qui suggère une protection sans la fournir est pire que son absence.
 
 ### Ce qu'un rituel d'E2E aurait coûté, et pourquoi il est écarté
 
