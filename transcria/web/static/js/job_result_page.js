@@ -13,7 +13,9 @@
   const api = (p) => `/api/jobs/${jobId}/refine${p}`;
   const el = (id) => document.getElementById(id);
   const thread = el("refine-thread"), input = el("refine-input");
-  let busy = false, pollTimer = null;
+  // `busy` retiré : rien ne le LISAIT — c'est la désactivation des boutons
+  // ci-dessous qui empêche la double soumission.
+  let pollTimer = null;
   let lastProposal = null;   // dernière « Proposition d'application » du fil
 
   // Chaînes traduites — mêmes msgid que l'ancien bloc inline (catalogue JS window.I18N).
@@ -77,7 +79,6 @@
   }
 
   function setBusy(b) {
-    busy = b;
     el("refine-busy").classList.toggle("d-none", !b);
     el("refine-discuss").disabled = b;
     el("refine-apply").disabled = b;
@@ -128,7 +129,7 @@
       setBusy(!!data.busy);
       if (data.busy && !pollTimer) pollTimer = setInterval(refresh, 4000);
       if (!data.busy && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    } catch (e) { /* réseau : on retentera au prochain poll */ }
+    } catch { /* réseau : on retentera au prochain poll */ }
   }
 
   async function submit(kind, messageOverride) {
@@ -159,7 +160,7 @@
       if (fromInput) input.value = "";
       if (!pollTimer) pollTimer = setInterval(refresh, 4000);
       refresh();
-    } catch (e) { setBusy(false); showError(T.networkError); }
+    } catch { setBusy(false); showError(T.networkError); }
   }
 
   el("refine-discuss").addEventListener("click", () => submit("discuss"));
@@ -186,7 +187,7 @@
       const data = await r.json();
       if (!r.ok) { showError(data.error || T.invalidOptions); return; }
       refresh();
-    } catch (e) { showError(T.networkError); }
+    } catch { showError(T.networkError); }
   });
 
   el("refine-revert").addEventListener("click", async () => {
@@ -200,7 +201,7 @@
       const data = await r.json();
       if (!r.ok) { showError(data.error || T.revertFailed); return; }
       refresh();
-    } catch (e) { showError(T.networkError); }
+    } catch { showError(T.networkError); }
   });
 
   refresh();

@@ -163,16 +163,32 @@ même remède — déplacer un module pur.
 
 ## Vague 3 — filets qui manquent
 
-### Q3.1 — Un socle de test JavaScript
+### Q3.1 — Un socle de test JavaScript  ✅ **LIVRÉE**
 
 Environ 2 600 lignes de JS critique (assistant de création, éditeur SRT) sans aucun test
 propre : pas de `package.json`, pas de linter, pas de runner. Les tests Python vérifient la
 présence des éléments et les parcours, pas les fonctions.
 
-**Correction — par le bas :** ESLint + Vitest/jsdom, puis extraire d'abord les **fonctions
-pures** et l'adaptateur `fetch`, et ne tester que celles-là. **Pas** de réécriture des deux
-gros fichiers : on couvre ce qui casse, on ne redessine pas.
-**Effort :** M. **Critère :** le linter passe en CI et les fonctions extraites sont couvertes.
+**Correction — par le bas :** ESLint 9 + Vitest, un job CI `frontend`, et **une seule
+extraction** : les quatre fonctions de minutage de l'éditeur SRT (`parseTs`, `fmt`, `fmtMs`,
+`esc`) rejoignent `srt_time.js`. Onze tests, dont la propriété qui compte — *sauvegarder puis
+rouvrir ne décale rien*.
+
+Le lint est volontairement étroit : ce qui casse (variable non définie, `case` qui déborde,
+`const` réassigné), **pas** de style. Le projet n'a pas de formateur JS ; en imposer un
+maintenant produirait un diff de 4 000 lignes sans rapport avec la qualité.
+
+**Ce que la première exécution a trouvé**, en quelques secondes :
+
+- **mon propre bug** — l'extraction avait emporté `COLORS`, `state` et `audio` avec elle :
+  l'éditeur SRT était cassé, et aucun test Python ne l'aurait vu ;
+- **trois états morts** : un drapeau `busy` que personne ne lisait (la désactivation des
+  boutons faisait le travail), un décompte de quota dont le filtre `|| true` le rendait
+  toujours égal au total, et une variable `meta` en double.
+
+Sur ce dernier j'ai soupçonné un défaut visible — un champ vide à l'écran — et **vérifié
+avant de « corriger »** : le remplissage se fait plus bas avec `textContent`. C'était bien du
+code mort, pas un bug.
 
 ### Q3.2 — Durcir l'outillage par paliers  🔶 **PALIER 1 LIVRÉ**
 

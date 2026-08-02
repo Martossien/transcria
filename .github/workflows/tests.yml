@@ -196,6 +196,24 @@ jobs:
           python -m pip install --upgrade pip pip-audit
           pip-audit -r requirements.txt --desc
 
+  frontend:
+    # Premier socle JavaScript du projet (passe qualité, août 2026). Volontairement étroit :
+    # ces fichiers sont des scripts CLASSIQUES servis par Flask — pas de bundler, pas de
+    # build. On lint ce qui casse (variable non définie, retour manquant) et on teste les
+    # fonctions PURES extraites, pas l'interface.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dépendances front
+        run: npm install --no-audit --no-fund
+      - name: Lint JavaScript
+        run: npm run lint
+      - name: Tests JavaScript
+        run: npm test
+
   ui-walkthrough:
     # Parcours UI réel piloté par navigateur (Playwright, sans GPU) : login, accueil,
     # création de job + wizard, éditeur de config (onglets form/YAML + sauvegarde) et

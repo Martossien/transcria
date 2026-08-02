@@ -25,7 +25,7 @@ TranscrIA.api = function (endpoint, method, body) {
             if (text) {
                 try {
                     data = JSON.parse(text);
-                } catch (e) {
+                } catch {
                     data = { error: r.ok ? t('Réponse serveur invalide.') : t('Erreur serveur non JSON.') };
                 }
             }

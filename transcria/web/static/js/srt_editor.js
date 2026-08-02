@@ -13,9 +13,9 @@
   const root = document.getElementById("se-root");
   const JOB = root.dataset.jobId;
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
-    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-
+  // Minutages et échappement : extraits dans srt_time.js pour être TESTÉS (passe qualité,
+  // août 2026). Un défaut ici ne casse rien de visible — il décale des sous-titres.
+  const { esc, fmt, fmtMs, parseTs } = globalThis.TranscrIATime;
   // Palette locuteurs : 12 teintes calibrées (contraste AA sur fond atelier),
   // affectation STABLE par ordre de temps de parole (§7.1).
   const COLORS = ["#2563eb", "#d97706", "#059669", "#dc2626", "#7c3aed", "#0891b2",
@@ -52,18 +52,6 @@
   const audio = $("se-audio");
 
   // ── Utilitaires temps ──────────────────────────────────────────────────────
-  const fmt = (ms) => {
-    ms = Math.max(0, Math.round(ms));
-    const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60,
-          s = Math.floor(ms / 1000) % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  };
-  const fmtMs = (ms) => `${fmt(ms)},${String(Math.round(ms) % 1000).padStart(3, "0")}`;
-  const parseTs = (v) => {
-    const m = String(v).trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,3}))?$/);
-    if (!m) return null;
-    return ((+(m[1] || 0) * 60 + +m[2]) * 60 + +m[3]) * 1000 + +String(m[4] || "0").padEnd(3, "0");
-  };
 
   function speakerColor(id) {
     if (!id) return "#94a3b8";
@@ -880,7 +868,7 @@
         `<a class="btn btn-sm btn-outline-secondary ms-1" href="/jobs/${JOB}/result">` +
         esc(_t("Voir le détail dans le chat")) + `</a>`;
       $("se-banners").appendChild(div);
-    } catch (e) { setTimeout(pollSyncDone, 8000); }
+    } catch { setTimeout(pollSyncDone, 8000); }
   }
 
   // ── Événements globaux ─────────────────────────────────────────────────────

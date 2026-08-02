@@ -50,7 +50,7 @@
         var sameOrigin;
         try {
           sameOrigin = new URL(url, window.location.href).origin === window.location.origin;
-        } catch (err) {
+        } catch {
           sameOrigin = false;
         }
         if (sameOrigin) {

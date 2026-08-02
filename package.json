@@ -1,0 +1,17 @@
+{
+  "name": "transcria-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Outillage front de TranscrIA — lint et tests des fonctions JS pures. Le produit reste servi par Flask : aucun bundler, aucune étape de build.",
+  "scripts": {
+    "lint": "eslint transcria/web/static/js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4",
+    "eslint": "^9",
+    "globals": "^16",
+    "jsdom": "^27",
+    "vitest": "^4"
+  }
+}

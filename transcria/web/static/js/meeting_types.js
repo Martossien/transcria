@@ -37,8 +37,8 @@
     state.catalog = await r.json();
     renderGallery();
     renderPalettes();
-    const used = state.catalog.custom.filter(
-      (t) => t.created_by === null || true).length; // le quota exact est côté serveur
+    // Le décompte local a été retiré : son filtre `|| true` le rendait toujours égal au
+    // total, et personne ne le lisait. Le quota affiché vient du serveur, seul juge.
     $("mt-quota").textContent = _t("%(n)s type(s) visible(s) — quota : %(max)s créés/personne", { n: state.catalog.custom.length, max: state.catalog.max_per_user });
   }
 

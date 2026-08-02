@@ -108,5 +108,8 @@
 </div>
 {% endblock %}
 {% block scripts %}
+{# `srt_time.js` AVANT l'éditeur : il pose les fonctions de minutage que celui-ci consomme
+   dès son évaluation. Inverser l'ordre casserait la page au chargement. #}
+<script src="{{ asset_url('js/srt_time.js') }}"></script>
 <script src="{{ asset_url('js/srt_editor.js') }}"></script>
 {% endblock %}

@@ -105,3 +105,4 @@ models/parakeet-cpp/
 runtimes/
 docker-compose.legacy-gpu.yml
 /messages.pot
+node_modules/

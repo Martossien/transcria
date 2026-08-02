@@ -526,7 +526,7 @@ var TranscrIA = window.TranscrIA || {};
         try {
             var parsed = JSON.parse(node.textContent || '[]');
             return Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
+        } catch {
             return [];
         }
     };
@@ -642,7 +642,9 @@ var TranscrIA = window.TranscrIA || {};
             '<span class="lex-context-counter"> ' + t('· %(listened)s/%(total)s écoutés', { listened: 0, total: contexts.length }) + '</span></summary>' +
             '<div class="small mt-2">';
         contexts.forEach(function (c) {
-            var meta = (c.timecode || t('sans timecode')) + (c.speaker ? ' — ' + c.speaker : '');
+            // Le gabarit ne pose que des conteneurs VIDES : le contenu est écrit plus bas
+            // par `fillLexiconContexts` avec `textContent` (jamais d'interpolation HTML,
+            // une citation de transcription est du texte utilisateur).
             html += '<div class="lex-context-item">' +
                 '<span class="text-muted"></span>' +
                 '<div class="lex-context-quote"></div>' +
@@ -1202,7 +1204,7 @@ var TranscrIA = window.TranscrIA || {};
         if (W._profilesData === null) {
             var el = document.getElementById('profiles-data');
             try { W._profilesData = el ? JSON.parse(el.textContent) : { profiles: [] }; }
-            catch (e) { W._profilesData = { profiles: [] }; }
+            catch { W._profilesData = { profiles: [] }; }
         }
         return W._profilesData;
     }
