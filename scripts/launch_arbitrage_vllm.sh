@@ -11,7 +11,7 @@
 # Contrairement à scripts/launch_arbitrage.sh (exemple llama.cpp spécifique à une
 # machine), ce lanceur est **portable** : aucun chemin en dur, tout est paramétrable
 # par variable d'environnement, avec des défauts adaptés au nœud de ressources
-# containerisé (cf. Dockerfile.resource-node, docs/PLAN_TEST_SPLIT_VLLM.md).
+# containerisé (cf. Dockerfile.resource-node, docs/archive/PLAN_TEST_SPLIT_VLLM.md).
 #
 # CIBLE DE RÉFÉRENCE : Qwen3.6-27B-FP8 en tensor-parallel sur 4× RTX 3090.
 #   - Quantization FP8 (block-128) : sur Ampere (sm_86, pas de FP8 natif), vLLM

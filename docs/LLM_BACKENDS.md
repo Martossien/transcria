@@ -37,7 +37,7 @@ d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
   2. **KV cache q8_0** (1 octet) vs fp16 Ollama (2 octets) → **2× moins de VRAM KV** →
      tient sur de plus petites cartes (9B Q5 sur 12 Go vs 9B Q4 Ollama qui dépasse).
   3. **Déterministe** — Ollama `gemma4:12b` mode thinking = 0 production 2/3 runs (Tests 6/7).
-  4. **Ancré sur le bench** (`docs/BENCH_LLM_PALIERS.md`, lecture humaine).
+  4. **Ancré sur le bench** (`docs/archive/BENCH_LLM_PALIERS.md`, lecture humaine).
   Échelle d'obtention du binaire CUDA :
   1. détecter un `llama-server` existant ;
   2. binaire **précompilé** ai-dock (opt-in, build épinglé, **sha256 vérifié** — source

@@ -34,15 +34,15 @@ example results and the user journey.
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
 | [LLM_TIERS.md](LLM_TIERS.md) | **In English** — the benchmarked arbitration-LLM VRAM tiers (12 → 64 GB): validated model, quant and context per tier, backend recommendation |
 | [LLM_BACKENDS.md](LLM_BACKENDS.md) | Arbitration LLM backends (Ollama / llama.cpp / vLLM) and hardware-driven selection |
-| [I18N_MULTILANGUE.md](I18N_MULTILANGUE.md) | Bilingual FR/EN architecture (interface, deliverables, installer, doctor) and how to add a language |
+| [I18N_MULTILANGUE.md](archive/I18N_MULTILANGUE.md) | Bilingual FR/EN architecture (interface, deliverables, installer, doctor) and how to add a language |
 
 ## Features
 
 | Document | What it covers |
 |---|---|
-| [PROFILS_TRAITEMENT_WORKFLOW.md](PROFILS_TRAITEMENT_WORKFLOW.md) | The six processing profiles and the human-in-the-loop wizard |
-| [TYPES_REUNION_PERSONNALISES.md](TYPES_REUNION_PERSONNALISES.md) | Custom meeting types: catalog, detection, extracted fields, DOCX theming |
-| [EDITEUR_SRT_INTEGRE.md](EDITEUR_SRT_INTEGRE.md) | Built-in SRT editor: versioned transcript correction |
+| [PROFILS_TRAITEMENT_WORKFLOW.md](archive/PROFILS_TRAITEMENT_WORKFLOW.md) | The six processing profiles and the human-in-the-loop wizard |
+| [TYPES_REUNION_PERSONNALISES.md](archive/TYPES_REUNION_PERSONNALISES.md) | Custom meeting types: catalog, detection, extracted fields, DOCX theming |
+| [EDITEUR_SRT_INTEGRE.md](archive/EDITEUR_SRT_INTEGRE.md) | Built-in SRT editor: versioned transcript correction |
 | [PIPELINE_REPRISE.md](PIPELINE_REPRISE.md) | Resumable pipeline: phase checkpoints and provenance fingerprints |
 
 ## Security and compliance
@@ -56,7 +56,7 @@ example results and the user journey.
 
 | Document | What it covers |
 |---|---|
-| [STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md) | Adaptive and hybrid STT: quality-driven backend selection |
+| [STT_ADAPTATIF_ET_HYBRIDE.md](archive/STT_ADAPTATIF_ET_HYBRIDE.md) | Adaptive and hybrid STT: quality-driven backend selection |
 | [EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md) | **Served STT runtimes** — audio.cpp (`qwen3asr`) and parakeet.cpp (`nemotron`) as first-class engines: pinned installer builds, on-demand start before jobs, per-engine health, native fallback |
 
 ## Benchmarking and validation
@@ -65,21 +65,21 @@ example results and the user journey.
 |---|---|
 | [BENCHMARKING.md](BENCHMARKING.md) | How to run a reproducible bench: the `bench_audio.py` matrix runner and its four analyzers (metrics, LLM quality, WER vs reference, concurrency) |
 | [STT_BENCHMARK_REAL_MEETINGS.md](STT_BENCHMARK_REAL_MEETINGS.md) | **In English** — published STT benchmark on real French meetings vs a professional human transcript: all engines and external runtimes, traps, failure modes |
-| [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
+| [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
 
 ## Concurrency, scale, and distributed inference
 
 | Document | What it covers |
 |---|---|
 | [MIGRATION_API_SERVEUR_GPU.md](MIGRATION_API_SERVEUR_GPU.md) | Remote GPU resource-node HTTP API semantics (`inference_service`) — route list lives in [API_REFERENCE.md](API_REFERENCE.md) |
-| [PLAN_TEST_CHARGE.md](PLAN_TEST_CHARGE.md) | Load-test procedure and campaigns (mandatory net for GPU-concurrency changes) |
-| [PLAN_TEST_SPLIT_VLLM.md](PLAN_TEST_SPLIT_VLLM.md) | Split-topology (vLLM) validation procedure |
+| [PLAN_TEST_CHARGE.md](archive/PLAN_TEST_CHARGE.md) | Load-test procedure and campaigns (mandatory net for GPU-concurrency changes) |
+| [PLAN_TEST_SPLIT_VLLM.md](archive/PLAN_TEST_SPLIT_VLLM.md) | Split-topology (vLLM) validation procedure |
 
 ## Engineering plans
 
 | Document | What it covers |
 |---|---|
-| [REFACTORING_QUALITE.md](REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
+| [REFACTORING_QUALITE.md](archive/REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
 | [PISTES_AMELIORATION.md](PISTES_AMELIORATION.md) | Post-0.3.7 improvement analysis: measured time breakdown, engine choices, CPU-fallback trade-offs, UX and operations gaps, suggested roadmap |
 | [GESTION_IDENTITE.md](GESTION_IDENTITE.md) | Enterprise identity plan (validated, not yet implemented): pluggable backends — OIDC, direct LDAP/AD, trusted proxy headers, API tokens — group→role mapping, JIT provisioning, break-glass, test matrix |
 
@@ -94,4 +94,4 @@ decisions absorbed into `AGENTS.md`), the Parakeet integration scoping
 [EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md)), the VAD study
 ([VAD_OR_NOT.md](archive/VAD_OR_NOT.md), decision record) and the LLM tier validation
 records ([LLM_PROFILS_VALIDATION.md](archive/LLM_PROFILS_VALIDATION.md) — the living
-protocol is [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md)).
+protocol is [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md)).

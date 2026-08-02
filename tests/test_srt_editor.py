@@ -1,4 +1,4 @@
-"""Éditeur SRT — modèle serveur (lot A, docs/EDITEUR_SRT_INTEGRE.md §3.1).
+"""Éditeur SRT — modèle serveur (lot A, docs/archive/EDITEUR_SRT_INTEGRE.md §3.1).
 
 Le TEST D'OR : round-trip parse→serialize à l'octet près (à la normalisation unique
 du saut de ligne final près) sur des SRT au format RÉEL du pipeline — l'éditeur

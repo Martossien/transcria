@@ -77,7 +77,7 @@ Le jeton est accepté via `Authorization: Bearer tia_…` sur les routes du cont
 | `owner_id` | String(36) | FK → users.id, NOT NULL, INDEX | Propriétaire |
 | `title` | String(255) | NOT NULL, default="Réunion sans titre" | Titre du traitement |
 | `state` | String(40) | NOT NULL, default="created" | État courant (enum JobState) |
-| `processing_mode` | String(20) | nullable | Unité d'exécution legacy : "fast" ou "quality". Le **contrat produit** est le profil de traitement (`processing_profile_id`), stocké dans `extra_data.execution` (pas de colonne dédiée — choix transitoire, cf. `docs/PROFILS_TRAITEMENT_WORKFLOW.md`). |
+| `processing_mode` | String(20) | nullable | Unité d'exécution legacy : "fast" ou "quality". Le **contrat produit** est le profil de traitement (`processing_profile_id`), stocké dans `extra_data.execution` (pas de colonne dédiée — choix transitoire, cf. `docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md`). |
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
 | `updated_at` | DateTime | NOT NULL, default=utcnow, onupdate=utcnow | Dernière modification |
 | `extra_data_json` | Text | nullable | JSON libre (métadonnées étendues) |
@@ -207,7 +207,7 @@ Index `ix_job_timing_profile_stage` sur `(profile_id, stage, recorded_at)`. L'es
 
 ### Table `meeting_type_templates`
 
-Types de réunion personnalisés (cf. `docs/TYPES_REUNION_PERSONNALISES.md`). Les 18
+Types de réunion personnalisés (cf. `docs/archive/TYPES_REUNION_PERSONNALISES.md`). Les 18
 types intégrés vivent dans `transcria/data/meeting_types.yaml` (pas en base).
 
 | Colonne | Type | Contraintes | Description |

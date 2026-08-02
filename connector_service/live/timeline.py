@@ -1,6 +1,6 @@
 """Écriture d'audio sur la timeline COMMUNE d'une réunion — SUR DISQUE, RAM constante.
 
-Vague 5, lot A (cadrage `docs/VAGUE5_PISTES_SEPAREES.md`, D5.1). Deux leçons fondent ce
+Vague 5, lot A (cadrage `docs/archive/VAGUE5_PISTES_SEPAREES.md`, D5.1). Deux leçons fondent ce
 module :
 
 1. **La RAM n'est pas un magnétophone** : le mixage historique accumulait ~690 Mo/heure en

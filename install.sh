@@ -1496,7 +1496,7 @@ python_module transcria.installer.cli connectors "${CONNECTORS_ARGS[@]}" \
 
 # ── Réunions planifiées (opt-in --with-meeting-bots) ─────────────────────────
 # Délégation pure à la phase transcria/installer/connectors_phase.py (vague 4 du plan
-# docs/UI_REUNIONS_WORKFLOW.md). Jamais dans le flux par défaut : Playwright/aiortc lourds.
+# docs/archive/UI_REUNIONS_WORKFLOW.md). Jamais dans le flux par défaut : Playwright/aiortc lourds.
 if [[ "$WITH_MEETING_BOTS" = true ]]; then
     log "Réunions planifiées : dépendances connecteurs + config du meeting-runner…"
     python_module transcria.installer.cli connectors --config-dir "$INSTALL_DIR" \

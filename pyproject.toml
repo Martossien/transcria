@@ -8,7 +8,7 @@ line-length = 140
 # `collections.abc`, annotations déquotées, modes d'ouverture redondants).
 #
 # De `SIM`, seules TROIS sous-règles sont retenues — les autres ont été examinées et
-# écartées, avec leur raison (cf. docs/PASSE_QUALITE_2026-08.md) :
+# écartées, avec leur raison (cf. docs/archive/PASSE_QUALITE_2026-08.md) :
 #   · SIM108 (if/else → ternaire, 11) : souvent MOINS lisible sur une condition métier ;
 #   · SIM115 (open sans contexte, 8) : FAUX POSITIFS ici — descripteurs volontairement
 #     longue durée (flux d'envoi, journaux de sous-processus, timeline possédée) ;

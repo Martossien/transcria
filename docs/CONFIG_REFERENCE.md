@@ -512,7 +512,7 @@ Paramètres contrôlant les fonctionnalités du workflow.
 Profils de traitement présentés à l'utilisateur après l'upload (remplacent le binaire
 `fast`/`quality`). Les 7 profils (dont `srt_moss`, opt-in via `moss.enabled`) sont **codés en dur** (contrat stable) ; la config ne fait
 qu'activer/restreindre et n'altère jamais leur sémantique. Voir
-`docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
+`docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md`.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -654,7 +654,7 @@ dans `metadata/audio_preflight.json`.
 
 Le preflight peut être enrichi par trois qualifications optionnelles (sous-sections
 `squim`, `dnsmos`, `acoustic`) qui ajoutent des scores perceptifs/prédictifs et une
-`difficulty_map` par fenêtre. Détail de la conception : `docs/STT_ADAPTATIF_ET_HYBRIDE.md`.
+`difficulty_map` par fenêtre. Détail de la conception : `docs/archive/STT_ADAPTATIF_ET_HYBRIDE.md`.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -861,7 +861,7 @@ Le retrait d'hallucinations reste volontairement conservateur : il ne supprime p
 #### `workflow.stt_corpus`
 
 Corpus de calibration difficulté↔qualité STT par segment (brique 2, cf.
-`docs/STT_ADAPTATIF_ET_HYBRIDE.md`). Pour chaque job, `Transcriber` joint chaque
+`docs/archive/STT_ADAPTATIF_ET_HYBRIDE.md`). Pour chaque job, `Transcriber` joint chaque
 segment transcrit à la `difficulty_map` par fenêtre et écrit `metadata/stt_corpus.json`
 (une ligne par segment : difficulté jointe × moteur × confiance native × fiabilité,
 plus un emplacement `quality_measure` réservé à la vérité terrain/WER). Un agrégat
@@ -1029,7 +1029,7 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne (borné 1-8). En split, le dispatch est en plus plafonné par `resource_node.max_concurrent_jobs` (annoncé par le nœud). Le surplus **attend en file** (claim atomique, rien perdu). Test de charge (`docs/PLAN_TEST_CHARGE.md`) : sweet spot ≈ 4 sur 4×3090 pour une LLM 27B (au-delà, le LLM sature → latence sans gain de débit). All-in-one : laisser à 1 (LLM locale sérialisée). |
+| `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne (borné 1-8). En split, le dispatch est en plus plafonné par `resource_node.max_concurrent_jobs` (annoncé par le nœud). Le surplus **attend en file** (claim atomique, rien perdu). Test de charge (`docs/archive/PLAN_TEST_CHARGE.md`) : sweet spot ≈ 4 sur 4×3090 pour une LLM 27B (au-delà, le LLM sature → latence sans gain de débit). All-in-one : laisser à 1 (LLM locale sérialisée). |
 
 #### `workflow.summary_autostart`
 
@@ -1209,7 +1209,7 @@ options de rendu seules disposent d'une route directe **sans LLM**
 
 #### `workflow.meeting_types`
 
-Types de réunion personnalisés (cf. `docs/TYPES_REUNION_PERSONNALISES.md`) : tout
+Types de réunion personnalisés (cf. `docs/archive/TYPES_REUNION_PERSONNALISES.md`) : tout
 utilisateur crée des types privés depuis la page « Types de réunion » ; les admins les
 partagent (groupe/global). Les 18 types intégrés vivent dans
 `transcria/data/meeting_types.yaml` (non modifiables, duplicables).
@@ -1362,7 +1362,7 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `max_concurrent_jobs` | int | `1` | **Capacité d'admission** du nœud : nb de pipelines de jobs que la frontale peut lancer concurremment contre ce nœud (annoncé dans `/capabilities`, borné 1-8). Découplé de la mono-capacité des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission) ; STT/LLM vLLM batchent. Défaut 1 = séquentiel. À aligner avec `workflow.execution.max_concurrent_jobs`. Sweet spot ≈ 4 (cf. `docs/PLAN_TEST_CHARGE.md`). |
+| `max_concurrent_jobs` | int | `1` | **Capacité d'admission** du nœud : nb de pipelines de jobs que la frontale peut lancer concurremment contre ce nœud (annoncé dans `/capabilities`, borné 1-8). Découplé de la mono-capacité des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission) ; STT/LLM vLLM batchent. Défaut 1 = séquentiel. À aligner avec `workflow.execution.max_concurrent_jobs`. Sweet spot ≈ 4 (cf. `docs/archive/PLAN_TEST_CHARGE.md`). |
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
 | `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s, health_path, health_mode, backend}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
@@ -1472,7 +1472,7 @@ Envoie un email à l'utilisateur propriétaire du job à la fin du traitement (s
 
 Distinct de la **langue des livrables** (compte-rendu, corrections), qui est un réglage **par job**
 (étape Contexte, pré-rempli par la langue détectée de l'audio). Ajouter une langue : cf.
-`docs/I18N_MULTILANGUE.md`.
+`docs/archive/I18N_MULTILANGUE.md`.
 
 ---
 
@@ -1564,7 +1564,7 @@ Limites :
 | `gpu.llm_gpu_indices` | absent (= tous) | Index (visibles) des GPU que le script LLM utilise (`CUDA_VISIBLE_DEVICES` + `--tensor-split`). Doit refléter le script — l'allocateur vérifie la place sur **ces** cartes-là. Ex. `[0, 1, 2]`. Les petites phases (STT, diarisation) **préfèrent les cartes hors placement** quand elles conviennent (préserve la relance de la LLM) |
 | `gpu.llm_vram_mb_per_gpu` | absent (= parts égales) | Cartes **hétérogènes** (8/12/16/24/48 Go…) ou `--tensor-split` inégal : part réelle de la LLM **par carte**, liste alignée sur `llm_gpu_indices` (ex. `[18000, 6000]` pour 24+8 Go) |
 
-> **Calibration de ces trois clés** : à l'install, `scripts/plan_llm_placement.py` les **écrit selon le placement réel** par carte (round-trip ruamel non destructif, cf. `transcria/config/gpu_calibration.py`). Pour vérifier/raffiner après coup, `scripts/check_arbitrage_llm.sh` (mode `verify`) **mesure** la VRAM réellement consommée par carte et signale dérive (calibration périmée), marge critique (OOM imminent) ou débordement hors placement. Empreintes mesurées par palier : `docs/BENCH_LLM_PALIERS.md`.
+> **Calibration de ces trois clés** : à l'install, `scripts/plan_llm_placement.py` les **écrit selon le placement réel** par carte (round-trip ruamel non destructif, cf. `transcria/config/gpu_calibration.py`). Pour vérifier/raffiner après coup, `scripts/check_arbitrage_llm.sh` (mode `verify`) **mesure** la VRAM réellement consommée par carte et signale dérive (calibration périmée), marge critique (OOM imminent) ou débordement hors placement. Empreintes mesurées par palier : `docs/archive/BENCH_LLM_PALIERS.md`.
 | `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre exigée en plus du besoin d'une phase (appliquée **par GPU**, y compris pour chaque part de la LLM). **À réduire sur les petites cartes (4-8 Go)** : 4000 y interdirait presque toute allocation |
 | `gpu.preemption` | `own-only` | Politique de récupération VRAM à l'admission d'un job bloqué. `own-only` : n'arrête que **nos** process gérés inactifs (LLM d'arbitrage trackée, arrêtée proprement et relancée à la demande), **jamais** un process tiers. `aggressive` : préempte aussi les serveurs d'inférence **tiers** (`workflow.scheduling.kill_patterns`, process non trackés via `force_free_gpu`), **uniquement** dans la fenêtre calendaire `force_gpu` — à réserver à un GPU dédié. Réglable dans `/admin/config` → « Ressources GPU ». Cf. `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis. |
 

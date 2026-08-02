@@ -25,7 +25,7 @@ n'est requis pour utiliser TranscrIA — ce sont des outils d'ingénierie/qualif
   nécessaires aux combos que tu lances (Cohere, Whisper, pyannote…).
 - Un ou plusieurs GPU libres (le runner répartit les combos dessus).
 - Pour les combos `--with-llm` : une LLM d'arbitrage joignable (cf. [INSTALL.md](INSTALL.md)
-  et [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) pour le choix du modèle par palier VRAM).
+  et [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) pour le choix du modèle par palier VRAM).
 
 ## 1. Lancer un banc — `scripts/bench/bench_audio.py`
 
@@ -138,7 +138,7 @@ venv/bin/python scripts/bench/estimate_local_b5.py --bench-root bench_results/te
 ## Bancs LLM (paliers VRAM)
 
 Le comparatif des modèles d'arbitrage par palier de VRAM (llama.cpp / Ollama / vLLM) a sa
-propre méthodo et ses résultats dans **[BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md)** ; la
+propre méthodo et ses résultats dans **[BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md)** ; la
 table opérationnelle palier → modèle est la source de données `transcria/data/llm_profiles.yaml`.
 
 ## Campagnes historiques (archivées)
@@ -153,4 +153,4 @@ hotwords. Pour un nouveau banc, utiliser `bench_audio.py`.
 
 Le tooling d'arbitrage hybride segment-par-segment (`arbitrate_hybrid_llm.py`,
 `build_hybrid_transcript.py`, `compare_stt_segments.py`) est conservé — il relève de la
-feature hybride, cf. [STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md).
+feature hybride, cf. [STT_ADAPTATIF_ET_HYBRIDE.md](archive/STT_ADAPTATIF_ET_HYBRIDE.md).

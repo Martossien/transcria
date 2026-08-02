@@ -3,7 +3,7 @@
 Ce répertoire rassemble des **types de réunion** partagés par la communauté TranscrIA.
 Un type définit l'apparence et les champs du compte-rendu Word (bannière, palette,
 badge, champs de saisie, indices de suggestion, extractions supplémentaires) — voir
-`docs/TYPES_REUNION_PERSONNALISES.md`.
+`docs/archive/TYPES_REUNION_PERSONNALISES.md`.
 
 ## Utiliser un type
 

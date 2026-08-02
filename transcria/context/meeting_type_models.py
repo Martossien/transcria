@@ -1,4 +1,4 @@
-"""Types de réunion personnalisés — modèle SQL (cf. docs/TYPES_REUNION_PERSONNALISES.md §2.2).
+"""Types de réunion personnalisés — modèle SQL (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md §2.2).
 
 Un template = une fiche du MÊME schéma que le catalogue intégré (`definition_json`,
 validée par ``meeting_type_catalog.validate_type_definition``), plus une portée de

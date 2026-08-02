@@ -521,7 +521,18 @@ GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
 Pour un déploiement split **entièrement containerisé** où le nœud GPU sert AUSSI le STT et
 le LLM d'arbitrage via **vLLM** (au lieu de services externes), un banc dédié est fourni :
 `docker-compose.split-gpu.yml` + `config.split.example.yaml`. Référence détaillée (décisions,
-risques, placement VRAM, FP8 sur Ampere) : **[docs/PLAN_TEST_SPLIT_VLLM.md](PLAN_TEST_SPLIT_VLLM.md)**.
+risques, placement VRAM, FP8 sur Ampere) : **[docs/archive/PLAN_TEST_SPLIT_VLLM.md](archive/PLAN_TEST_SPLIT_VLLM.md)**
+(plan de mise au point, archivé — le banc, lui, reste en service).
+
+Un **override de développement** l'accompagne : `docker-compose.split-gpu.dev.yml` monte le
+code source de l'hôte dans les conteneurs pour itérer sans reconstruire l'image.
+
+```bash
+docker compose -f docker-compose.split-gpu.yml -f docker-compose.split-gpu.dev.yml up -d
+```
+
+⚠️ **Jamais pour une validation finale** : celle-ci doit tourner sur les images bakées, sinon
+on valide le code de l'hôte et pas ce que l'image contient.
 
 Particularités vs le `docker run` minimal ci-dessus :
 

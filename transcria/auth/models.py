@@ -37,7 +37,7 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime(timezone=True), nullable=True)
     # Langue préférée de l'INTERFACE (code BCP-47 court, ex. "fr"/"en"). NULL = suivre le
     # navigateur / la locale par défaut de l'instance. Distinct de la langue des livrables
-    # (réglage par job). Voir docs/I18N_MULTILANGUE.md et transcria/web/i18n.py.
+    # (réglage par job). Voir docs/archive/I18N_MULTILANGUE.md et transcria/web/i18n.py.
     locale = db.Column(db.String(8), nullable=True)
     # Chantier identité (lot 0, docs/GESTION_IDENTITE.md) : provenance du compte et
     # clé de rapprochement JIT. Un compte fédéré n'a PAS de mot de passe utilisable.

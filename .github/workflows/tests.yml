@@ -68,7 +68,7 @@ jobs:
         # silence quand deux suites divergent. Les quatorze occurrences ont été traitées une
         # par une : `strict=True` là où un écart est un bug, `strict=False` là où la
         # troncature est voulue, avec sa raison écrite. Les paliers UP et SIM (68 et 73
-        # occurrences) viendront séparément — cf. docs/PASSE_QUALITE_2026-08.md.
+        # occurrences) viendront séparément — cf. docs/archive/PASSE_QUALITE_2026-08.md.
         run: ruff check transcria/ inference_service/ connector_service/ --line-length 140 --select E,W,F,I,B,UP,SIM103,SIM113,SIM114
 
       - name: Type check (mypy)
@@ -80,7 +80,7 @@ jobs:
       - name: Architecture — ratchet + contrats d'imports
         # Ratchet : aucune métrique de quality_baseline.json ne peut se dégrader
         # (imports différés, fan-out, chaînes de config, cycles). Contrats : .importlinter.
-        # Doctrine et procédure : docs/REFACTORING_QUALITE.md (vague A0).
+        # Doctrine et procédure : docs/archive/REFACTORING_QUALITE.md (vague A0).
         run: |
           python scripts/audit_imports.py --check-baseline quality_baseline.json
           python scripts/audit_front.py --check-baseline quality_baseline_front.json
@@ -95,7 +95,7 @@ jobs:
         # `connector_service` est MESURÉ : ses ~9 600 lignes (bots, ingestion, chaîne Meet)
         # étaient hors périmètre, si bien que le plancher de 80 % portait sur un ensemble
         # plus favorable qu'annoncé. Le plancher reste à 80 le temps de constater le chiffre
-        # réel des trois paquets ; il sera remonté ensuite (docs/PASSE_QUALITE_2026-08.md).
+        # réel des trois paquets ; il sera remonté ensuite (docs/archive/PASSE_QUALITE_2026-08.md).
         run: python -m pytest tests/ -q --cov=transcria --cov=inference_service --cov=connector_service --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
       - name: Upload coverage report

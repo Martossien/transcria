@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Générateur de charge concurrente pour TranscrIA — cf. docs/PLAN_TEST_CHARGE.md.
+"""Générateur de charge concurrente pour TranscrIA — cf. docs/archive/PLAN_TEST_CHARGE.md.
 
 Lance N jobs en RAFALE (tous démarrés ~simultanément, pire cas d'admission), chacun via le
 flux E2E complet de `verify_split_topology.run_job` (login → upload → wizard → process →

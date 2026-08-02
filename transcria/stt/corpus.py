@@ -4,7 +4,7 @@ But : produire, pour chaque segment transcrit, une ligne qui **paire** le
 *prédicteur* (difficulté acoustique de la zone, issue de la `difficulty_map`
 par fenêtre) avec le *résultat* STT (moteur, confiance native, fiabilité).
 Ce couple `difficulté × moteur × qualité` est le jeu de données qui manquait
-pour calibrer les seuils SQUIM/DNSMOS (cf. `docs/STT_ADAPTATIF_ET_HYBRIDE.md`).
+pour calibrer les seuils SQUIM/DNSMOS (cf. `docs/archive/STT_ADAPTATIF_ET_HYBRIDE.md`).
 
 Un emplacement `quality_measure` est **réservé** (None) pour la vérité terrain
 ou un proxy WER ajouté ultérieurement — il n'est pas rempli ici.

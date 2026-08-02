@@ -239,7 +239,7 @@ le profil (les prérequis profile-aware côté transitions ne sont pas encore br
 - `scripts/arbitrage_profiles/96gb_qwen3.6-27b-fp8-vllm.sh`.
 - `scripts/verify_split_topology.py`.
 - (option) `config.frontale.example.yaml`, `config.resource-node.example.yaml`.
-- `docs/PLAN_TEST_SPLIT_VLLM.md` (ce fichier).
+- `docs/archive/PLAN_TEST_SPLIT_VLLM.md` (ce fichier).
 
 **Modifiés :**
 - `docker-compose.yml` (service `resource-node`, profil `split-gpu`).

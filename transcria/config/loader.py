@@ -142,7 +142,7 @@ _DEFAULT_CONFIG = {
     # Temps réel & connecteurs de réunion (docs/TEMPS_REEL_REUNIONS.md). Tout est
     # OPT-IN, défaut OFF : sans activation, aucune route façade n'existe et la
     # surface d'API par défaut est strictement inchangée.
-    # Réunions côté utilisateur (vague 3, docs/UI_REUNIONS_WORKFLOW.md) : l'INTENTION
+    # Réunions côté utilisateur (vague 3, docs/archive/UI_REUNIONS_WORKFLOW.md) : l'INTENTION
     # (« le bot rejoint telle réunion à telle heure ») et son exécution. OPT-IN : false =
     # ni API /api/meetings ni carte « Réunion » à la création de job.
     "connectors": {
@@ -1003,7 +1003,7 @@ def _normalize_legacy_user_config(user_cfg: dict) -> dict:
 def _warn_removed_keys(user_cfg: dict) -> None:
     """Clés retirées, IGNORÉES avec avertissement (dépréciation douce, une version).
 
-    L'éditeur de transcription est désormais intégré (docs/EDITEUR_SRT_INTEGRE.md §8) :
+    L'éditeur de transcription est désormais intégré (docs/archive/EDITEUR_SRT_INTEGRE.md §8) :
     le lien vers le fork externe « SRT Editor EASY » n'existe plus. Warning retiré à la 0.2.0.
     """
     import logging

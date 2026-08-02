@@ -1,4 +1,4 @@
-"""API des sessions de réunion (vague 3, docs/UI_REUNIONS_WORKFLOW.md §6.2) — deux familles.
+"""API des sessions de réunion (vague 3, docs/archive/UI_REUNIONS_WORKFLOW.md §6.2) — deux familles.
 
 **Humaine** (`/api/meetings/*`, session cookie, `Permission.SCHEDULE_MEETINGS`) : planifier,
 annuler, connaître la disponibilité. **Runner** (`/v1/meetings/*` + `/v1/runners/*`, Bearer

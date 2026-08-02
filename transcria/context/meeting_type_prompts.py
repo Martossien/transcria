@@ -1,4 +1,4 @@
-"""Variables de prompts des types de réunion (lot D — docs/TYPES_REUNION_PERSONNALISES.md §4).
+"""Variables de prompts des types de réunion (lot D — docs/archive/TYPES_REUNION_PERSONNALISES.md §4).
 
 Le prompt de résumé (``configs/prompts/summary_prompt.txt``) porte trois placeholders,
 substitués À LA CONSTRUCTION DE L'INSTRUCTION (le fichier versionné reste éditable

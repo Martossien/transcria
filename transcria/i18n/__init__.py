@@ -1,4 +1,4 @@
-"""Internationalisation transverse (couche noyau — cf. docs/REFACTORING_QUALITE.md, vague A1).
+"""Internationalisation transverse (couche noyau — cf. docs/archive/REFACTORING_QUALITE.md, vague A1).
 
 Résolution de la locale d'interface et catalogue des chaînes JS. Vivait dans
 ``transcria/web/`` ; extrait ici parce que les blueprints hors web (contexte, voix, file)

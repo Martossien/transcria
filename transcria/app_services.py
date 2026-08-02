@@ -298,7 +298,7 @@ def register_template_globals(app: Flask) -> None:
 def register_i18n(app: Flask) -> None:
     """Internationalisation de l'interface (Flask-Babel) : sélecteur de locale, globals
     Jinja (get_locale, available_locales) et route de catalogue JS. Distinct de la langue
-    des livrables (réglage par job). Voir docs/I18N_MULTILANGUE.md."""
+    des livrables (réglage par job). Voir docs/archive/I18N_MULTILANGUE.md."""
     web_i18n.init_app(app)
 
 

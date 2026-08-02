@@ -11,7 +11,7 @@ Vérifie, pour chaque catalogue ``transcria/web/translations/<locale>/LC_MESSAGE
   3. **Compile** : produit les ``.mo`` (gitignorés) pour que l'app et les tests disposent des
      traductions.
 
-Sortie non nulle au premier problème, avec un message actionnable. Voir docs/I18N_MULTILANGUE.md.
+Sortie non nulle au premier problème, avec un message actionnable. Voir docs/archive/I18N_MULTILANGUE.md.
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 # Arbitration-LLM VRAM tiers (English summary)
 
 > English summary of the tier catalog. Full protocol, per-model review sheets and raw
-> measurements live in [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) (French); backend
+> measurements live in [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) (French); backend
 > lifecycle details in [LLM_BACKENDS.md](LLM_BACKENDS.md) (French).
 
 TranscrIA's summary / SRT-correction / final-review phases are driven by a **local

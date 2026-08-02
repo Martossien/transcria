@@ -1,4 +1,4 @@
-"""Pics de waveform côté serveur (lot A — docs/EDITEUR_SRT_INTEGRE.md §3.3).
+"""Pics de waveform côté serveur (lot A — docs/archive/EDITEUR_SRT_INTEGRE.md §3.3).
 
 Le fork décodait l'audio DANS le navigateur (intenable à 3 h 30-4 h 30, D4) ; ici les
 pics sont calculés une fois par ffmpeg côté serveur et mis en cache dans le job :

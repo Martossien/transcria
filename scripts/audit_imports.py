@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit d'architecture — graphe d'imports internes, différés, cycles, budgets (ratchet).
 
-Outil de la vague A0 du plan `docs/REFACTORING_QUALITE.md`. Trois usages :
+Outil de la vague A0 du plan `docs/archive/REFACTORING_QUALITE.md`. Trois usages :
 
     venv/bin/python scripts/audit_imports.py                     # résumé lisible
     venv/bin/python scripts/audit_imports.py --write-baseline quality_baseline.json

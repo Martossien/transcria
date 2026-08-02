@@ -4,7 +4,7 @@ Aucune chaîne traduisible ici — juste la mécanique de sélection. Les catalo
 restent dans ``transcria/web/translations/<code>/`` (le branchement Flask-Babel de l'app,
 ``init_app``, vit toujours côté web).
 
-Rappel de conception (cf. docs/I18N_MULTILANGUE.md) : la locale de l'INTERFACE (ici) est
+Rappel de conception (cf. docs/archive/I18N_MULTILANGUE.md) : la locale de l'INTERFACE (ici) est
 distincte de la langue des LIVRABLES générés, qui est un réglage par job. On ne les couple pas.
 """
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Éditeur de transcription intégré — modèle serveur (lot A).
 
-Cf. docs/EDITEUR_SRT_INTEGRE.md §3.1. Module PUR (aucune dépendance Flask/DB) :
+Cf. docs/archive/EDITEUR_SRT_INTEGRE.md §3.1. Module PUR (aucune dépendance Flask/DB) :
 
 - ``parse_srt_chunks``   : SRT → chunks ``{index, start_ms, end_ms, speaker_id,
   speaker_name, text}``. Le locuteur est un PRÉFIXE TEXTUEL (`SPEAKER_01(Nom): …`),

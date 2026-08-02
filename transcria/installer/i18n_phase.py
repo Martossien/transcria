@@ -5,7 +5,7 @@ Cette phase compile les ``.mo`` **de façon idempotente** (recompile si le ``.po
 ou si le ``.mo`` manque). Pur-Python (API Babel, aucun sous-processus ``pybabel``) → testable et
 indépendant du PATH. Réutilisée par ``install.sh`` (délégation CLI) et par l'entrypoint Docker.
 
-Voir docs/I18N_MULTILANGUE.md (§3 Installation & déploiement).
+Voir docs/archive/I18N_MULTILANGUE.md (§3 Installation & déploiement).
 """
 from __future__ import annotations
 

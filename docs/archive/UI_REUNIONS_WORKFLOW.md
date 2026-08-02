@@ -61,8 +61,8 @@
 > 2026-07-29 (v2, approfondie) après audit
 > complet du dépôt : parcours wizard, chemin d'ingestion, déploiement des bots, modèle de
 > permissions, formulaire de config, gestion du temps. Ce plan prolonge
-> [`docs/TEMPS_REEL_REUNIONS.md`](TEMPS_REEL_REUNIONS.md) (il **réalise** ses items L1–L5) et
-> respecte les décisions actives d'[`ADR-001`](adr/ADR-001-frontiere-ingestion-reunions.md).
+> [`docs/TEMPS_REEL_REUNIONS.md`](../TEMPS_REEL_REUNIONS.md) (il **réalise** ses items L1–L5) et
+> respecte les décisions actives d'[`ADR-001`](../adr/ADR-001-frontiere-ingestion-reunions.md).
 > La revue **sécurité** de chaque vague (droits, surface, secrets, socket Docker) est un
 > passage OBLIGÉ mais **hors de ce document** — menée séparément, avant toute mise en service.
 

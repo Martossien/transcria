@@ -1,4 +1,4 @@
-"""Éditeur SRT — API serveur (lot A, docs/EDITEUR_SRT_INTEGRE.md §3.4 + critères §10).
+"""Éditeur SRT — API serveur (lot A, docs/archive/EDITEUR_SRT_INTEGRE.md §3.4 + critères §10).
 
 Couvre les contrats : state complet en un appel, brouillon à verrou optimiste (409),
 save = snapshot pool commun + recalcul stats (A2) + purge du brouillon + audit,

@@ -4,7 +4,7 @@ Ce module remplace, à terme, le binaire `fast`/`quality` par des **profils de l
 nommés et stables. Il est volontairement **pur et additif** : il ne décrit que des données
 immuables et des fonctions sans effet de bord. Aucune route, aucun pipeline, aucun wizard ne
 l'utilise encore à ce stade — l'introduction de l'abstraction précède son câblage (cf.
-`docs/PROFILS_TRAITEMENT_WORKFLOW.md`, plan d'action).
+`docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md`, plan d'action).
 
 Le module est la **source unique** du contrat : ce qu'un profil produit, ce qu'il exige de
 l'utilisateur, et quelles phases machine il exécute. Objectif : éliminer la dispersion des

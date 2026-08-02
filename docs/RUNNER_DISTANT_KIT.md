@@ -2,7 +2,7 @@
 
 > **Statut : cadrage rédigé et implémenté le 2026-07-30** (suite autonome validée par
 > l'utilisateur après la clôture de la vague 5). Volet différé « jamais oublié » du plan
-> [`UI_REUNIONS_WORKFLOW.md`](UI_REUNIONS_WORKFLOW.md) : jusqu'ici le meeting-runner ne
+> [`UI_REUNIONS_WORKFLOW.md`](archive/UI_REUNIONS_WORKFLOW.md) : jusqu'ici le meeting-runner ne
 > s'auto-provisionnait que SUR la machine du portail.
 > ⚠ **REVUE SÉCURITÉ (Opus 5) OBLIGATOIRE avant usage réel** : le kit généré CONTIENT un
 > jeton d'API `tia_` en clair (transport = responsabilité de l'admin, scp/USB — jamais un

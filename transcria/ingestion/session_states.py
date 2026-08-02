@@ -11,7 +11,7 @@ refusée n'est pas un incident), `2` = anomalie technique (rejouable avec backof
 """
 from __future__ import annotations
 
-# États — cf. docs/UI_REUNIONS_WORKFLOW.md §6.1 (le diagramme est le contrat).
+# États — cf. docs/archive/UI_REUNIONS_WORKFLOW.md §6.1 (le diagramme est le contrat).
 PLANNED = "planned"
 CLAIMED = "claimed"
 JOINING = "joining"

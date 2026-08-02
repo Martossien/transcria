@@ -105,7 +105,7 @@ Le pipeline dépend de signaux que ces endpoints **ne renvoient pas toujours** :
 - `avg_logprob` / confiance mot-à-mot (`reliability` → `mots_faible_confiance`)
 - timestamps **mot-à-mot** (alignement et réalignement locuteurs)
 
-→ Options : (a) configurer vLLM pour exposer ces champs si le modèle/endpoint le permet, (b) enrichir via un wrapper, ou (c) **dégradation documentée** du `reliability` en mode distant. **À trancher** — principal compromis fonctionnel de la bascule STT, et c'est précisément ce que le mode hybride ([STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md)) peut compenser (re-transcription ciblée).
+→ Options : (a) configurer vLLM pour exposer ces champs si le modèle/endpoint le permet, (b) enrichir via un wrapper, ou (c) **dégradation documentée** du `reliability` en mode distant. **À trancher** — principal compromis fonctionnel de la bascule STT, et c'est précisément ce que le mode hybride ([STT_ADAPTATIF_ET_HYBRIDE.md](archive/STT_ADAPTATIF_ET_HYBRIDE.md)) peut compenser (re-transcription ciblée).
 
 ### 2.3 Parakeet — pas de vLLM
 
@@ -304,7 +304,7 @@ inference:
 
 **Ordre conseillé :** 0 → 1/2 (STT via vLLM, gain rapide) → 3/4 (le cœur dur : service maison + diarisation) → 5 → 6/7 (industrialisation) → 8.
 
-> Le **mode hybride** de [STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md) devient trivial une fois cette migration faite : re-transcrire les segments douteux = appels API parallèles, sans charge/décharge GPU. Les deux chantiers sont complémentaires — **l'API d'abord, l'hybride ensuite**.
+> Le **mode hybride** de [STT_ADAPTATIF_ET_HYBRIDE.md](archive/STT_ADAPTATIF_ET_HYBRIDE.md) devient trivial une fois cette migration faite : re-transcrire les segments douteux = appels API parallèles, sans charge/décharge GPU. Les deux chantiers sont complémentaires — **l'API d'abord, l'hybride ensuite**.
 
 ---
 

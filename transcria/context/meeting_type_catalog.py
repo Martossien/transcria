@@ -4,7 +4,7 @@ SOURCE UNIQUE = ``transcria/data/meeting_types.yaml`` (versionné). Plus aucun t
 champ de saisie, thème DOCX ou drapeau de comportement n'est écrit en dur dans le
 code : les anciens ``MEETING_TYPES`` / ``TYPE_SPECIFIC_FIELDS`` (meeting_context) et
 ``_THEMES`` / ``_CSE_TYPES`` / ``_AUTO_CONFIDENTIEL`` (docx_report) sont dérivés d'ici.
-Cf. docs/TYPES_REUNION_PERSONNALISES.md (lot A) — le lot B branchera les types
+Cf. docs/archive/TYPES_REUNION_PERSONNALISES.md (lot A) — le lot B branchera les types
 personnalisés (base de données) sur le même schéma via ``validate_type_definition``.
 
 Le fichier intégré est un contrat : toute entrée invalide fait échouer le chargement

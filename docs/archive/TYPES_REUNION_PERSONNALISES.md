@@ -500,4 +500,4 @@ prompts ; D est le lot le plus délicat (LLM réelle en jeu → validation E2E G
 
 ---
 
-*Références : `docs/PROFILS_TRAITEMENT_WORKFLOW.md` (motif de cadrage), `transcria/data/llm_profiles.yaml` (motif catalogue en données), `transcria/context/central_lexicon_models.py` (motif de partage par portées), `docs/archive/FEATURE_DOCX_REPORT.md` (spec v1/v2 du rapport Word, archive locale).*
+*Références : `docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md` (motif de cadrage), `transcria/data/llm_profiles.yaml` (motif catalogue en données), `transcria/context/central_lexicon_models.py` (motif de partage par portées), `docs/archive/FEATURE_DOCX_REPORT.md` (spec v1/v2 du rapport Word, archive locale).*

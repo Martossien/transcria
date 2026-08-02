@@ -256,7 +256,7 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
 def _cmd_create_runner_token(args: argparse.Namespace) -> int:
     """Crée (ou réutilise) le COMPTE DE SERVICE du meeting-runner et émet son jeton d'API.
 
-    Vague 4 réunions (docs/UI_REUNIONS_WORKFLOW.md §5.8) : évite la connexion interactive
+    Vague 4 réunions (docs/archive/UI_REUNIONS_WORKFLOW.md §5.8) : évite la connexion interactive
     d'un compte de service. Le jeton est affiché UNE seule fois (ou écrit dans --out avec
     permissions 600). Rappel affiché : le compte doit figurer dans
     `connectors.meetings.runner_usernames` (attribution NOMINATIVE de la permission)."""

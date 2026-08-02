@@ -764,7 +764,7 @@ workflow:
     max_transcript_chars: 60000
     max_answer_tokens: 2000
 
-  # Types de réunion personnalisés (cf. docs/TYPES_REUNION_PERSONNALISES.md) : tout
+  # Types de réunion personnalisés (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md) : tout
   # utilisateur crée des types privés ; les admins les partagent (groupe/global).
   meeting_types:
     # Nombre max de types créés par utilisateur (tous statuts de partage confondus).
@@ -1034,7 +1034,7 @@ inference:
 #     max_sync_duration_s: 600  # durée maximale d'un envoi synchrone
 #     inference_timeout_s: 300  # patience côté moteur avant d'abandonner une fenêtre
 
-# ── Réunions planifiées par les utilisateurs (vague 3, docs/UI_REUNIONS_WORKFLOW.md) ──────
+# ── Réunions planifiées par les utilisateurs (vague 3, docs/archive/UI_REUNIONS_WORKFLOW.md) ──────
 # Opt-in : activer fait apparaître « Depuis une réunion » à la création d'un job (si un
 # meeting-runner est vivant) et ouvre /api/meetings. Exige la façade (live.facade.enabled)
 # et la clé TRANSCRIA_MEETING_REF_KEY dans .env (chiffrement des références de réunion).

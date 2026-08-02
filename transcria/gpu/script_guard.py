@@ -15,7 +15,7 @@ permission `MANAGE_CONFIG` ne doit pas valoir shell root.
 qui est la correction propre — mais un chantier d'installation entier (unités systemd,
 droits sur `jobs/`, cache des modèles, accès GPU, images Docker) pour un gain nul sur le
 déploiement de référence. La racine allowlistée ferme l'essentiel du trajet pour quelques
-lignes ; c'est un arbitrage assumé, écrit dans `docs/PASSE_SECURITE_2026-08.md`.
+lignes ; c'est un arbitrage assumé, écrit dans `docs/archive/PASSE_SECURITE_2026-08.md`.
 
 **Ce qu'elle vérifie**, et pourquoi chaque règle existe :
 

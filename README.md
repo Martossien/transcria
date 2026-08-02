@@ -22,7 +22,7 @@ production GPU queue, and role-based multi-user access are first-class, not afte
 *The interface, the generated deliverables and the installer are **bilingual French / English**
 (pick the language at install time or from the navbar; default French). See also
 [README français](README.fr.md). Adding more languages needs no rewrite (French fallback
-everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
+everywhere) — see [docs/archive/I18N_MULTILANGUE.md](docs/archive/I18N_MULTILANGUE.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
@@ -168,7 +168,7 @@ only the GPU/LLM — that the chosen profile actually needs.
 
 Word minutes adapt to built-in meeting types (works council, executive committee, project
 review, crisis, and more), and teams can create, theme, and share their own types — see
-[docs/TYPES_REUNION_PERSONNALISES.md](docs/TYPES_REUNION_PERSONNALISES.md).
+[docs/archive/TYPES_REUNION_PERSONNALISES.md](docs/archive/TYPES_REUNION_PERSONNALISES.md).
 
 ## How it works
 

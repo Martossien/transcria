@@ -41,7 +41,7 @@ def _fernet() -> Fernet:
     if not raw:
         raise MeetingRefKeyMissing(
             f"{_ENV_KEY} absente de l'environnement — générer une clé Fernet et la poser "
-            "dans .env (cf. docs/UI_REUNIONS_WORKFLOW.md §10, à ratifier en revue sécurité)")
+            "dans .env (cf. docs/archive/UI_REUNIONS_WORKFLOW.md §10, à ratifier en revue sécurité)")
     try:
         return Fernet(raw.encode("ascii"))
     except Exception as exc:  # noqa: BLE001 — la CAUSE sans jamais citer la valeur

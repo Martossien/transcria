@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-02 09:48+0200\n"
+"POT-Creation-Date: 2026-08-02 22:56+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -206,27 +206,27 @@ msgstr "Membre retiré du groupe."
 msgid "Groupe supprimé."
 msgstr "Groupe supprimé."
 
-#: transcria/context/central_lexicon_routes.py:67
+#: transcria/context/central_lexicon_routes.py:68
 msgid "Lexique créé."
 msgstr "Lexique créé."
 
-#: transcria/context/central_lexicon_routes.py:133
+#: transcria/context/central_lexicon_routes.py:134
 msgid "Lexique mis à jour."
 msgstr "Lexique mis à jour."
 
-#: transcria/context/central_lexicon_routes.py:184
+#: transcria/context/central_lexicon_routes.py:185
 msgid "Lexique supprimé."
 msgstr "Lexique supprimé."
 
-#: transcria/context/central_lexicon_routes.py:221
+#: transcria/context/central_lexicon_routes.py:222
 msgid "Entrée enregistrée."
 msgstr "Entrée enregistrée."
 
-#: transcria/context/central_lexicon_routes.py:263
+#: transcria/context/central_lexicon_routes.py:264
 msgid "Entrée supprimée."
 msgstr "Entrée supprimée."
 
-#: transcria/context/central_lexicon_routes.py:297
+#: transcria/context/central_lexicon_routes.py:298
 #, python-format
 msgid "Import terminé : %(i)s entrée(s), %(r)s rejet(s)."
 msgstr "Import terminé : %(i)s entrée(s), %(r)s rejet(s)."
@@ -2495,54 +2495,54 @@ msgstr "Nouveau traitement créé."
 msgid "Traitement supprimé."
 msgstr "Traitement supprimé."
 
-#: transcria/web/prompt_files.py:31
+#: transcria/web/prompt_files.py:33
 msgid "Résumé structuré"
 msgstr "Résumé structuré"
 
-#: transcria/web/prompt_files.py:32
+#: transcria/web/prompt_files.py:34
 msgid "Prompt système de la génération du résumé (étape « Résumé » du wizard)."
 msgstr "Prompt système de la génération du résumé (étape « Résumé » du wizard)."
 
-#: transcria/web/prompt_files.py:37
+#: transcria/web/prompt_files.py:39
 msgid "Correction de la transcription"
 msgstr "Correction de la transcription"
 
-#: transcria/web/prompt_files.py:38
+#: transcria/web/prompt_files.py:40
 msgid "Prompt système de la correction LLM du SRT (phase d'arbitrage)."
 msgstr "Prompt système de la correction LLM du SRT (phase d'arbitrage)."
 
-#: transcria/web/prompt_files.py:43
+#: transcria/web/prompt_files.py:45
 msgid "Relecture finale"
 msgstr "Relecture finale"
 
-#: transcria/web/prompt_files.py:44
+#: transcria/web/prompt_files.py:46
 msgid "Prompt système de la passe de relecture finale (harmonisation glossaire)."
 msgstr "Prompt système de la passe de relecture finale (harmonisation glossaire)."
 
-#: transcria/web/prompt_files.py:52
+#: transcria/web/prompt_files.py:54
 msgid "Lancement de la LLM d'arbitrage"
 msgstr "Lancement de la LLM d'arbitrage"
 
-#: transcria/web/prompt_files.py:53
+#: transcria/web/prompt_files.py:55
 msgid "Arrêt de la LLM d'arbitrage"
 msgstr "Arrêt de la LLM d'arbitrage"
 
-#: transcria/web/prompt_files.py:99
+#: transcria/web/prompt_files.py:146
 #, python-format
 msgid "Prompt inconnu : %(name)s"
 msgstr "Prompt inconnu : %(name)s"
 
-#: transcria/web/prompt_files.py:102
+#: transcria/web/prompt_files.py:149
 #, python-format
 msgid "%(label)s : contenu vide refusé (le prompt serait inopérant)."
 msgstr "%(label)s : contenu vide refusé (le prompt serait inopérant)."
 
-#: transcria/web/prompt_files.py:104
+#: transcria/web/prompt_files.py:151
 #, python-format
 msgid "%(label)s : contenu trop volumineux (max %(kb)s Ko)."
 msgstr "%(label)s : contenu trop volumineux (max %(kb)s Ko)."
 
-#: transcria/web/prompt_files.py:122
+#: transcria/web/prompt_files.py:169
 #, python-format
 msgid "%(label)s : prompt sauvegardé (copie de secours .bak conservée)."
 msgstr "%(label)s : prompt sauvegardé (copie de secours .bak conservée)."

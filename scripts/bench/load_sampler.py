@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Échantillonneur pour les tests de charge — cf. docs/PLAN_TEST_CHARGE.md.
+"""Échantillonneur pour les tests de charge — cf. docs/archive/PLAN_TEST_CHARGE.md.
 
 Poll périodique (CSV sur stdout) de : VRAM/util par GPU (`nvidia-smi`), charge du nœud
 (`/capabilities` : inflight/queued/capacity), et batching vLLM (`/metrics` Prometheus :

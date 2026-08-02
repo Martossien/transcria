@@ -35,7 +35,7 @@
 > continuité d'échantillons par flux, fenêtres d'énergie du registre, placement de la
 > façade par l'allocateur / `live.facade.inference_url`, contrat multipart validé
 > strictement. Réalise le niveau 2 de la décision D5 du plan et amène la révision
-> correspondante d'[`ADR-001`](adr/ADR-001-frontiere-ingestion-reunions.md).
+> correspondante d'[`ADR-001`](../adr/ADR-001-frontiere-ingestion-reunions.md).
 
 ---
 

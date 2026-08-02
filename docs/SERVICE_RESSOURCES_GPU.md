@@ -13,7 +13,7 @@
 >
 > **Banc containerisé (vLLM) :** un déploiement split entièrement Docker — nœud GPU servant
 > diarisation + **STT Cohere via vLLM** + **LLM d'arbitrage Qwen3.6-27B-FP8 via vLLM** — est décrit
-> dans [`PLAN_TEST_SPLIT_VLLM.md`](PLAN_TEST_SPLIT_VLLM.md) (`docker-compose.split-gpu.yml`,
+> dans [`PLAN_TEST_SPLIT_VLLM.md`](archive/PLAN_TEST_SPLIT_VLLM.md) (`docker-compose.split-gpu.yml`,
 > `Dockerfile.resource-node`) et résumé dans [`DOCKER.md`](DOCKER.md).
 
 ---
@@ -223,7 +223,7 @@ STT garde son instance (affinité) et bascule sur les vivantes si la sienne tomb
 laisser une seule instance (défaut inchangé) — deux instances sur la même carte se partagent le
 même moteur de calcul, gain à mesurer avant d'en mettre.
 
-**Validation (test de charge, `docs/PLAN_TEST_CHARGE.md`, 8×RTX 3090)** : split **robuste jusqu'à 8 jobs
+**Validation (test de charge, `docs/archive/PLAN_TEST_CHARGE.md`, 8×RTX 3090)** : split **robuste jusqu'à 8 jobs
 concurrents** (0 échec serveur), débit qui scale 1→4 puis le **LLM 27B sature** (compute-bound, GPU à
 100 %). **Sweet spot ≈ 4** sur ce matériel : régler `max_concurrent_jobs` (frontale **et** nœud) au sweet
 spot ⇒ le surplus **attend en file** (claim atomique, aucun perdu) plutôt que de thrasher la LLM —

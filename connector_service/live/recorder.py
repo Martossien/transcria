@@ -1,6 +1,6 @@
 """Enregistreur de réunion — mix + PISTES SÉPARÉES, sur disque, pour le pipeline batch.
 
-Vague 5, lot A (`docs/VAGUE5_PISTES_SEPAREES.md`) : le direct attribue la parole PAR PISTE ;
+Vague 5, lot A (`docs/archive/VAGUE5_PISTES_SEPAREES.md`) : le direct attribue la parole PAR PISTE ;
 le mélange perdait les MOTS des chevauchements (deux voix sommées = bouillie pour le STT) et
 condamnait une piste « salle » à rester UN locuteur. Désormais chaque participant a SON
 fichier, aligné sur la timeline commune — le mix reste produit (repli, préflight qualité,

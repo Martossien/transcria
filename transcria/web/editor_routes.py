@@ -1,4 +1,4 @@
-"""Éditeur de transcription intégré — API serveur (lot A, docs/EDITEUR_SRT_INTEGRE.md §3.4).
+"""Éditeur de transcription intégré — API serveur (lot A, docs/archive/EDITEUR_SRT_INTEGRE.md §3.4).
 
 Contrats clés :
 - ``state``  : tout ce que l'atelier doit savoir en UN appel (chunks, locuteurs,

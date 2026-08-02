@@ -6,7 +6,7 @@ L'empreinte VRAM d'un modèle = **poids + KV(contexte) + buffers compute (par GP
 Elle n'est pas prédictible par un simple calcul : le KV dépend de l'architecture
 (le 35B MoE Gated-Delta a un KV plus petit qu'un 9B dense !) et le compute du nombre
 de cartes. On s'appuie donc sur des empreintes **mesurées** par palier
-(cf. docs/BENCH_LLM_PALIERS.md) et on vérifie qu'un placement **tient réellement** sur
+(cf. docs/archive/BENCH_LLM_PALIERS.md) et on vérifie qu'un placement **tient réellement** sur
 la topologie de la machine — au lieu de raisonner sur la VRAM *totale*, qui ignore
 qu'une carte ne peut héberger qu'une fraction du modèle (« 2× 8 Go = 16 Go » est faux
 dès que le profil est mono-GPU ou que le split égal déborde la plus petite carte).
@@ -24,7 +24,7 @@ CTX_192K = 196608
 CTX_256K = 262144
 
 # Marge libre exigée par carte APRÈS la LLM. Plancher calé sur le bench
-# (docs/BENCH_LLM_PALIERS.md) : palier 24 Go accepté à ~1,8 Go libre, quant Q4_K_M
+# (docs/archive/BENCH_LLM_PALIERS.md) : palier 24 Go accepté à ~1,8 Go libre, quant Q4_K_M
 # REJETÉ pour la prod à 0,2 Go libre (OOM dès qu'un autre process touche la carte).
 DEFAULT_SAFETY_MARGIN_MB = 1500
 
@@ -43,7 +43,7 @@ class Tier:
     label: str
 
 
-# Empreintes mesurées — source : docs/BENCH_LLM_PALIERS.md (Phase A + Phase B, 06/2026).
+# Empreintes mesurées — source : docs/archive/BENCH_LLM_PALIERS.md (Phase A + Phase B, 06/2026).
 # `profile_gpus` reflète le placement des profils livrés (scripts/arbitrage_profiles/ ;
 # cf. scripts/switch_arbitrage_llm.sh) : 12/16/24 = mono-GPU, 32/48 = 2 cartes, 64 = 3.
 TIERS: tuple[Tier, ...] = (

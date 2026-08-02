@@ -1,4 +1,4 @@
-"""API des types de réunion personnalisés (cf. docs/TYPES_REUNION_PERSONNALISES.md §3).
+"""API des types de réunion personnalisés (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md §3).
 
 JSON uniquement — l'éditeur visuel (lot E) et l'étape 4 du wizard consomment ces
 routes. RBAC dans le store (``MeetingTypeStore``) : création ouverte à tous (portée

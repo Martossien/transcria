@@ -1,6 +1,6 @@
 # Passe sécurité — août 2026
 
-État de référence : `132ddfd` sur `main`, après la passe qualité (`docs/PASSE_QUALITE_2026-08.md`).
+État de référence : `132ddfd` sur `main`, après la passe qualité (`docs/archive/PASSE_QUALITE_2026-08.md`).
 **Passe terminée le 2026-08-02** (`ef156cf`) — voir le *Bilan* en fin de document.
 Le modèle de sécurité existant est décrit dans `docs/SECURITY_MODEL.md` ; ce document ne le
 remplace pas, il liste **ce qui manque encore** et, tout aussi important, **ce qu'on refuse de

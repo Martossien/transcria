@@ -7,7 +7,7 @@
 > sur 8×RTX 3090. Résultats détaillés en §8.
 > **Auteur :** Claude (Opus 4.8) + Martossien · **Démarré :** 2026-06-23
 > **Pré-requis acquis :** les 3 topologies Docker (all-in-one, frontale, nœud de ressources) sont
-> validées E2E **en séquentiel** (1 job à la fois, qualité 97/100) — cf. `docs/PLAN_TEST_SPLIT_VLLM.md`
+> validées E2E **en séquentiel** (1 job à la fois, qualité 97/100) — cf. `docs/archive/PLAN_TEST_SPLIT_VLLM.md`
 > et `docs/DOCKER.md`. Ce plan attaque l'étape suivante : **la concurrence**.
 
 ## 0. Objectifs & priorités (verrouillés)

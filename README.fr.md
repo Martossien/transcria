@@ -15,7 +15,7 @@ exécute l'analyse « cet enregistrement va-t-il bien se transcrire ? » de Tran
 *L'interface, les livrables générés et l'installateur sont **bilingues français / anglais**
 (choix de la langue à l'installation ou dans la barre de navigation ; défaut français).
 Ajouter d'autres langues ne demande aucune refonte (repli français partout) — voir
-[docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
+[docs/archive/I18N_MULTILANGUE.md](docs/archive/I18N_MULTILANGUE.md).*
 
 **Portail de transcription de réunion auto-hébergé.** TranscrIA transforme de longs
 enregistrements de réunion en livrables exploitables, sur vos propres GPU : transcriptions
@@ -179,7 +179,7 @@ pipeline — et ne réserve que le GPU/LLM — dont le profil choisi a réelleme
 Les comptes rendus Word s'adaptent à des types de réunion intégrés (comité social et
 économique, comité de direction, revue de projet, cellule de crise, etc.), et les équipes
 peuvent créer, thématiser et partager leurs propres types — voir
-[docs/TYPES_REUNION_PERSONNALISES.md](docs/TYPES_REUNION_PERSONNALISES.md).
+[docs/archive/TYPES_REUNION_PERSONNALISES.md](docs/archive/TYPES_REUNION_PERSONNALISES.md).
 
 ## Comment ça marche
 

@@ -628,7 +628,7 @@ class Transcriber:
         return smoothed
 
     def _transcribe_per_track(self, fs: JobFilesystem, lang: str, sl) -> list[dict] | None:
-        """Mode PAR PISTE (vague 5, lot B — `docs/VAGUE5_PISTES_SEPAREES.md` D5.3).
+        """Mode PAR PISTE (vague 5, lot B — `docs/archive/VAGUE5_PISTES_SEPAREES.md` D5.3).
 
         Quand le job porte des pistes séparées (manifeste v2 + `input/tracks/`), chaque
         piste est transcrite SEULE, découpée par ses fenêtres de parole (levier de coût :

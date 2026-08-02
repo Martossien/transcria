@@ -1,4 +1,4 @@
-# Topologie SPLIT GPU (banc de test) — cf. docs/PLAN_TEST_SPLIT_VLLM.md
+# Topologie SPLIT GPU (banc de test) — cf. docs/archive/PLAN_TEST_SPLIT_VLLM.md
 # ─────────────────────────────────────────────────────────────────────────────
 #   • FRONTALE (CPU)  : web (UI) + scheduler (orchestration, phases LLM via opencode)
 #   • NŒUD GPU        : resource-node (diarisation pyannote + STT Cohere via vLLM :8003)

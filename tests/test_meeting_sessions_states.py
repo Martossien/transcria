@@ -1,6 +1,6 @@
 """Vague 3 — machine d'états des sessions de réunion (PURE) + chiffrement meeting_ref.
 
-La machine est LE contrat (docs/UI_REUNIONS_WORKFLOW.md §6.1) : le mapping des codes de
+La machine est LE contrat (docs/archive/UI_REUNIONS_WORKFLOW.md §6.1) : le mapping des codes de
 sortie du bot, les transitions légales, l'annulable/replanifiable. Un runner périmé qui
 propose un état illégal ne doit rien écraser — c'est ici que ça se prouve.
 """

@@ -214,7 +214,7 @@ transparent.
 
 ## 11. Reprise et profils de traitement
 
-Depuis l'introduction des profils (`docs/PROFILS_TRAITEMENT_WORKFLOW.md`), la liste des phases
+Depuis l'introduction des profils (`docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md`), la liste des phases
 machine est **sélectionnée par le profil** (`PipelineService._define_pipeline_steps_for_profile`)
 et non plus par `mode == "quality"`. Le mécanisme de reprise est inchangé et **agnostique au
 profil** : il opère sur la liste de phases effectivement produite, quelle qu'elle soit. Un profil

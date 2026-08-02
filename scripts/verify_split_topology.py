@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vérification E2E de la topologie SPLIT GPU — cf. docs/PLAN_TEST_SPLIT_VLLM.md.
+"""Vérification E2E de la topologie SPLIT GPU — cf. docs/archive/PLAN_TEST_SPLIT_VLLM.md.
 
 Deux niveaux, du moins au plus exigeant :
 

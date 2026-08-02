@@ -1,6 +1,6 @@
 """Types de réunion personnalisés — store (RBAC/quotas/collisions), API, étape 4, rendu.
 
-Lot B de docs/TYPES_REUNION_PERSONNALISES.md. Décision D2 : tout utilisateur CRÉE
+Lot B de docs/archive/TYPES_REUNION_PERSONNALISES.md. Décision D2 : tout utilisateur CRÉE
 (portée privée), les admins PARTAGENT. La fiche d'un type choisi à l'étape 4 est
 MATÉRIALISÉE dans le job (`meeting_context["custom_type"]`) : le rendu ne résout
 jamais un template en base, la suppression du template ne casse aucun job.

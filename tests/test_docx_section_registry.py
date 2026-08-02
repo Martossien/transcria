@@ -1,4 +1,4 @@
-"""Registre de sections DOCX ordonnées (lot C — docs/TYPES_REUNION_PERSONNALISES.md §5.1).
+"""Registre de sections DOCX ordonnées (lot C — docs/archive/TYPES_REUNION_PERSONNALISES.md §5.1).
 
 Le test de NON-RÉGRESSION ci-dessous a été écrit AVANT le refactor de ``build()``
 (point P2 du cadrage) : l'ordre par défaut, les libellés et la numérotation

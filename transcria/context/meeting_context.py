@@ -5,7 +5,7 @@ from transcria.jobs.models import Job
 # Champs spécifiques par type de réunion — affichés dynamiquement dans le wizard
 # et utilisés dans le DOCX et le contexte de correction LLM.
 # SOURCE UNIQUE : transcria/data/meeting_types.yaml (via meeting_type_catalog) —
-# plus aucun type/champ en dur ici (cf. docs/TYPES_REUNION_PERSONNALISES.md, lot A).
+# plus aucun type/champ en dur ici (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md, lot A).
 TYPE_SPECIFIC_FIELDS: dict[str, list[dict]] = type_specific_fields()
 
 MEETING_TYPES = meeting_type_names()

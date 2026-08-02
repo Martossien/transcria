@@ -652,7 +652,7 @@ machine (`run_diarization`, `run_llm_correction`, `run_quality`…), ses livrabl
 `get_profile`, `resolve_legacy_mode` (`fast→legacy_fast`, `quality→dossier_qualite`),
 `resolve_request(profile_id|mode)`, `profile_for_job(job)` (lit le profil persisté dans
 `extra_data.execution.processing_profile_id`), `profile_deliverables`, `profile_validations`.
-Le cadrage complet et le plan en phases : `docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
+Le cadrage complet et le plan en phases : `docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md`.
 
 **`profile_availability.py`** — source unique de disponibilité pour le wizard :
 `compute_profiles_view(config)` retourne, par profil, un statut structurel
@@ -942,7 +942,7 @@ Flux : routes `POST` / `DELETE /api/jobs/<id>/meeting-invite/document[/<index>]`
 | `central_lexicon_routes.py` | Interface `/admin/lexicons`, stats, signaux RGPD/PSSI, import/export CSV et alertes qualité |
 | `lexicon_audit.py` | Résumés d'audit sans contenu brut : compteurs, catégories, priorités, sources et noms propres probables |
 
-**Types de réunion personnalisés** (`docs/TYPES_REUNION_PERSONNALISES.md`)
+**Types de réunion personnalisés** (`docs/archive/TYPES_REUNION_PERSONNALISES.md`)
 | Module | Description |
 |---|---|
 | `meeting_type_catalog.py` | SOURCE UNIQUE en données : charge `transcria/data/meeting_types.yaml` (18 intégrés, fail-loud) et porte `validate_type_definition` — le contrat d'entrée des types personnalisés ET de l'import communautaire (bornes anti-injection : hex stricts, badge ≤ 16, ≤ 6 `extract_fields` avec instructions ≤ 200 sans guillemets/backticks/accolades) |
@@ -951,7 +951,7 @@ Flux : routes `POST` / `DELETE /api/jobs/<id>/meeting-invite/document[/<index>]`
 | `meeting_type_routes.py` | Page `/meeting-types` + API `/api/meeting-types*` (CRUD, scope, logo, `preview.docx` sur données factices, export/import) |
 | `meeting_type_prompts.py` | Placeholders du prompt de résumé (`{{TYPES_REUNION}}`, `{{INDICES_TYPES}}`, `{{CHAMPS_EXTRACTION_TYPE}}`) — substitués à la construction de l'instruction, no-op strict sans placeholder |
 
-**Éditeur de transcription intégré** (`docs/EDITEUR_SRT_INTEGRE.md`)
+**Éditeur de transcription intégré** (`docs/archive/EDITEUR_SRT_INTEGRE.md`)
 | Module | Description |
 |---|---|
 | `workflow/srt_editor.py` | Modèle PUR : parse tolérant du format réel (`SPEAKER_XX(Nom): …`), sérialisation canonique (round-trip à l'octet, hors normalisation unique du saut final), avertissements NON bloquants (chevauchements autorisés — D6), recalcul des stats locuteurs (A2 : le tableau du DOCX suit les réattributions) |

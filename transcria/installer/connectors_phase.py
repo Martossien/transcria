@@ -39,7 +39,7 @@ class ConnectorsPlan:
 
 
 RUNNER_CONFIG_TEMPLATE = """\
-# Configuration du meeting-runner (vague 4 — docs/UI_REUNIONS_WORKFLOW.md).
+# Configuration du meeting-runner (vague 4 — docs/archive/UI_REUNIONS_WORKFLOW.md).
 # Démarrage : TRANSCRIA_RUNNER_CONFIG={config_path} python -m connector_service.runner
 portal_url: http://127.0.0.1:7870
 # Jeton d'exécutant : DÉPOSÉ AUTOMATIQUEMENT par le bouton « Activer » de
@@ -61,7 +61,7 @@ platforms: [jitsi]
 SYSTEMD_UNIT_TEMPLATE = """\
 [Unit]
 Description=TranscrIA — meeting-runner (bots de réunion planifiés)
-Documentation=file://{repo_root}/docs/UI_REUNIONS_WORKFLOW.md
+Documentation=file://{repo_root}/docs/archive/UI_REUNIONS_WORKFLOW.md
 After=network-online.target docker.service
 Wants=network-online.target
 

@@ -3,7 +3,7 @@
 L'intention répond à « que doit-il se passer, quand, pour qui ? » ; `MeetingImport` répond à
 « cet artefact a-t-il déjà créé un job ? » (idempotence par artefact). Ne pas fusionner : une
 session peut échouer sans jamais produire d'artefact, un artefact peut arriver par un
-connecteur officiel sans session (docs/UI_REUNIONS_WORKFLOW.md §4 D2).
+connecteur officiel sans session (docs/archive/UI_REUNIONS_WORKFLOW.md §4 D2).
 
 `meeting_ref` est CHIFFRÉ au repos (module unique `meeting_ref_crypto`, à ratifier en revue
 sécurité) — l'affichage passe par `meeting_title`, jamais par la référence. Les transitions

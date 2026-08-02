@@ -1,4 +1,4 @@
-# Catalogue des types de réunion INTÉGRÉS — SOURCE UNIQUE (cf. docs/TYPES_REUNION_PERSONNALISES.md).
+# Catalogue des types de réunion INTÉGRÉS — SOURCE UNIQUE (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md).
 #
 # Transcription fidèle des anciennes constantes de code (lot A) :
 #   - MEETING_TYPES               (transcria/context/meeting_context.py) → l'ordre des

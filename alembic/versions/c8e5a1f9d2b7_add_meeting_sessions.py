@@ -1,6 +1,6 @@
 """meeting_sessions + meeting_runners : l'intention de réunion et ses exécutants (vague 3).
 
-Additive — cf. docs/UI_REUNIONS_WORKFLOW.md §6.1/§6.6. `meeting_ref_encrypted` ne reçoit QUE
+Additive — cf. docs/archive/UI_REUNIONS_WORKFLOW.md §6.1/§6.6. `meeting_ref_encrypted` ne reçoit QUE
 des valeurs chiffrées (module meeting_ref_crypto, préfixe enc1:).
 
 Revision ID: c8e5a1f9d2b7

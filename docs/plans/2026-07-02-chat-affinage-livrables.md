@@ -276,7 +276,7 @@ Ajouter des assertions GPU-free : sur un job seedé `completed`, le panneau de c
 ### Task D2 : documentation
 
 - `docs/TECHNICAL.md` : phase `refine` (diagramme des étages, garde-fous, versions).
-- `docs/PROFILS_TRAITEMENT_WORKFLOW.md` : le chat d'affinage est disponible quel que soit le profil, après `completed`.
+- `docs/archive/PROFILS_TRAITEMENT_WORKFLOW.md` : le chat d'affinage est disponible quel que soit le profil, après `completed`.
 - `CHANGELOG.md` `[Unreleased]` : feature + décisions (artefacts re-rendus, jamais d'OOXML LLM).
 
 ### Task D3 : gate + E2E réel

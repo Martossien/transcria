@@ -1,4 +1,4 @@
-"""Catalogue des types de réunion en données (lot A — docs/TYPES_REUNION_PERSONNALISES.md).
+"""Catalogue des types de réunion en données (lot A — docs/archive/TYPES_REUNION_PERSONNALISES.md).
 
 Trois responsabilités :
   1. NON-RÉGRESSION : les littéraux ci-dessous sont l'instantané des anciennes

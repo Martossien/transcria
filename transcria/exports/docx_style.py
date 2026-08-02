@@ -290,7 +290,7 @@ def _hex_rgb(value: str) -> RGBColor:
 
 
 # SOURCE UNIQUE : transcria/data/meeting_types.yaml (via meeting_type_catalog) — plus
-# aucun thème en dur ici (cf. docs/TYPES_REUNION_PERSONNALISES.md, lot A). Un type sans
+# aucun thème en dur ici (cf. docs/archive/TYPES_REUNION_PERSONNALISES.md, lot A). Un type sans
 # palette dans le catalogue (Réunion interne, Autre) retombe sur _THEME_DEFAULT.
 
 _THEMES: dict[str, _DocxTheme] = {

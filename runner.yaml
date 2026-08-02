@@ -1,4 +1,4 @@
-# Configuration du meeting-runner (vague 4 — docs/UI_REUNIONS_WORKFLOW.md).
+# Configuration du meeting-runner (vague 4 — docs/archive/UI_REUNIONS_WORKFLOW.md).
 # Démarrage : TRANSCRIA_RUNNER_CONFIG=/home/admin_ia/transcria/runner.yaml python -m connector_service.runner
 portal_url: http://127.0.0.1:7870
 # Jeton d'exécutant : DÉPOSÉ AUTOMATIQUEMENT par le bouton « Activer » de
