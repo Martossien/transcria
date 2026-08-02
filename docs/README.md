@@ -10,7 +10,7 @@ this index is the English entry point (English summaries below).
 New here? Start with the [project README](../README.md), then
 [INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) to get a running instance.
 Non-technical readers (business owners, project managers, decision makers) have a
-dedicated overview: [PRESENTATION.md](PRESENTATION.md) (in French) — use cases, benefits,
+dedicated overview: [PRESENTATION.md](PRESENTATION.md) (French) · [PRESENTATION.en.md](PRESENTATION.en.md) (English) — use cases, benefits,
 example results and the user journey.
 
 ## Deployment and operations
@@ -45,6 +45,24 @@ example results and the user journey.
 | [EDITEUR_SRT_INTEGRE.md](archive/EDITEUR_SRT_INTEGRE.md) | Built-in SRT editor: versioned transcript correction |
 | [PIPELINE_REPRISE.md](PIPELINE_REPRISE.md) | Resumable pipeline: phase checkpoints and provenance fingerprints |
 
+## Meeting connectors
+
+TranscrIA can fetch a meeting on its own — **without any inbound port**. Four platforms are
+validated in real conditions; two more ship prepared but unvalidated.
+
+| Document | What it covers |
+|---|---|
+| [TEMPS_REEL_REUNIONS.md](TEMPS_REEL_REUNIONS.md) | Master plan: the three ingestion routes (post-meeting artefacts, live media, STT client) and the per-platform study |
+| [BOT_REUNION.md](BOT_REUNION.md) | The meeting bot: lifecycle, states, capture, displayed identity, guards |
+| [VISIO_ZOOM_RUNNER.md](VISIO_ZOOM_RUNNER.md) | Visio (native LiveKit client) and Zoom (official SDK) on the full journey, with automated gate benches |
+| [ZOOM_GRATUIT_ADMIN.md](ZOOM_GRATUIT_ADMIN.md) | **Zoom admin guide**: creating the Meeting SDK app on a free *or* business account, diagnostics |
+| [MEET_TEAMS_ADMIN.md](MEET_TEAMS_ADMIN.md) | **Google Meet and Teams admin guide**: permissions, the SILENT failure modes, recommended order |
+| [RUNNER_DISTANT_KIT.md](RUNNER_DISTANT_KIT.md) | Installing a meeting runner on **another machine** (script generated from the admin UI) |
+
+> **Google Meet needs no bot at all** — it collects the recording afterwards through a
+> Pub/Sub *pull*. **Zoom RTMS and Microsoft Teams** are the only two routes that require a
+> **public HTTPS entry point**; they are shipped `implemented`, not `validated`.
+
 ## Security and compliance
 
 | Document | What it covers |
@@ -66,6 +84,8 @@ example results and the user journey.
 | [BENCHMARKING.md](BENCHMARKING.md) | How to run a reproducible bench: the `bench_audio.py` matrix runner and its four analyzers (metrics, LLM quality, WER vs reference, concurrency) |
 | [STT_BENCHMARK_REAL_MEETINGS.md](STT_BENCHMARK_REAL_MEETINGS.md) | **In English** — published STT benchmark on real French meetings vs a professional human transcript: all engines and external runtimes, traps, failure modes |
 | [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
+
+| [STT_CORPUS.md](STT_CORPUS.md) | How the reference corpus is built (selection, annotation, licensing) |
 
 ## Concurrency, scale, and distributed inference
 

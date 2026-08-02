@@ -1128,3 +1128,21 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/ZOOM_GRATUIT_ADMIN.md` | Guide admin Zoom : créer l'app Meeting SDK (compte gratuit ET entreprise), diagnostic |
 | `docs/MEET_TEAMS_ADMIN.md` | Guide admin Meet et Teams (connecteurs post-réunion) : permissions, pannes MUETTES, ordre conseillé |
 | `docs/RUNNER_DISTANT_KIT.md` | Poser un meeting-runner sur une AUTRE machine (script généré depuis /admin/connecteurs) |
+| `docs/TEMPS_REEL_REUNIONS.md` | Plan directeur temps réel & connecteurs : les trois voies d'ingestion, étude comparée par plateforme |
+| `docs/BOT_REUNION.md` | Le bot de réunion : cycle de vie, états, capture, identité affichée, gardes |
+| `docs/SECURITY_MODEL.md` | Modèle de sécurité : rôles, sessions, en-têtes, secrets, durcissement HTTP(S) opt-in |
+| `docs/GESTION_IDENTITE.md` | Identité d'entreprise : OIDC, proxy de confiance, LDAP/AD, jetons d'API, break-glass |
+| `docs/AUDIT_DPO.md` | Traçabilité et rétention pour un délégué à la protection des données |
+| `docs/API_REFERENCE.md` | Surface HTTP complète (GÉNÉRÉE — `scripts/generate_api_reference.py`) |
+| `docs/UPGRADE.md` | Montée de version : sauvegarde, migration, restauration, rollback |
+| `docs/STOCKAGE_PARTAGE_JOBS.md` | Magasin de fichiers partagé via PostgreSQL (topologie split sans disque commun) |
+| `docs/PIPELINE_REPRISE.md` | Reprise du pipeline : checkpoints, empreintes de provenance, invalidation aval |
+| `docs/LLM_BACKENDS.md` | Backends LLM d'arbitrage : script local, Ollama, HTTP compatible OpenAI |
+| `docs/LLM_TIERS.md` | Profils LLM par palier de VRAM (12 → 64 Go) |
+| `docs/EXTERNAL_STT_RUNTIMES.md` | Runtimes STT servis (audio.cpp, parakeet.cpp) : cycle de vie, santé, VRAM |
+| `docs/BENCHMARKING.md` | Méthode de banc : protocole, métriques, reproductibilité |
+| `docs/STT_BENCHMARK_REAL_MEETINGS.md` | Banc sur réunions réelles (anonymisé) : WER/CER par backend |
+| `docs/STT_CORPUS.md` | Constitution du corpus de référence |
+| `docs/PISTES_AMELIORATION.md` | Backlog technique : ce qui est identifié, pas encore décidé |
+| `docs/TESTERS.md` | Guide des testeurs externes |
+| `docs/PRESENTATION.md` / `.en.md` | Présentation non technique (français / anglais) |

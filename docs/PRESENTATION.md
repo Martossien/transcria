@@ -105,6 +105,15 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
 - **Capitalisation d'équipe** — lexiques partagés, modèles de compte-rendu par type de
   réunion, groupes avec leurs propres administrateurs : la deuxième réunion coûte moins
   d'effort que la première, et l'outil s'améliore avec l'usage de l'équipe.
+- **Les réunions arrivent toutes seules (0.4.0)** — planifiez depuis l'interface, et le
+  compte rendu vous attend. Quatre plateformes : **Jitsi**, **Visio (La Suite numérique)**,
+  **Zoom** et **Google Meet**. Aucune n'exige d'ouvrir un port sur votre pare-feu — tout se
+  fait en connexion sortante, ce qui rend l'installation acceptable là où un service
+  informatique refuserait d'exposer une URL. Le bot se nomme et reste **visible des
+  participants** (choix assumé : pas d'enregistrement furtif) ; Meet n'envoie personne du
+  tout et récupère l'enregistrement après coup. Quand la plateforme le permet, chaque
+  participant est transcrit **séparément** : les mots prononcés en même temps ne se perdent
+  plus, chacun reste sous son nom.
 - **Identité d'entreprise (0.3.9)** — connexion via votre annuaire existant : SSO OIDC
   (Keycloak, Entra ID…), proxy d'authentification (Authelia, oauth2-proxy) ou LDAP /
   Active Directory en direct, avec attribution automatique des rôles selon les groupes.

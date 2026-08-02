@@ -6,29 +6,59 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [Non publié]
+## [0.4.0] — 2026-08-02
+
+Les réunions arrivent toutes seules — **sans ouvrir un port entrant**.
 
 ### Ajouté
 
-- **Réunions — pistes séparées** (vague 5, `docs/archive/VAGUE5_PISTES_SEPAREES.md`) : le bot
-  conserve l'audio de CHAQUE participant sur disque (timeline commune, RAM constante),
-  l'ingestion v2 les stocke à côté du mix (validation stricte tout-ou-rien, gardes
-  `connectors.meetings.max_tracks`/`max_track_mb`), et le pipeline transcrit **piste par
-  piste** puis fusionne par timestamps : les mots des CHEVAUCHEMENTS existent, chacun
-  sous son nom. Les pistes « salle » sont sous-diarisées (`PISTE_<pid>_S1`…) — une salle
-  cesse d'être un locuteur unique. Sans pistes, comportement d'avant à l'octet près.
-- **Réunions — suivi en direct** : pendant la réunion, la page du job affiche les tours
-  de parole au fil de l'eau, marqués « provisoires » (`/v1/meetings/<sid>/captions`
-  relayé par lots par le runner, `live/captions.jsonl` plafonné par
-  `connectors.meetings.max_caption_lines`, troncature annoncée). La transcription de
-  référence reste celle du pipeline (ADR-001 D5, révision écrite).
-- **Réunions — salle protégée + instance à compte** : champ « code de la réunion »
-  (chiffré au repos, déchiffré au seul claim du runner) ; compte d'instance Jitsi
-  auto-hébergée par l'environnement du runner (`JITSI_XMPP_USER`/`_PASSWORD`), zéro
+#### Connecteurs de réunion — quatre plateformes, validées en réel
+
+TranscrIA sait désormais récupérer une réunion sans que personne n'exporte de fichier. La
+propriété qui décide de tout : **les quatre voies validées fonctionnent en connexion
+SORTANTE**. Aucune exception de pare-feu à négocier, aucun reverse-proxy à exposer, aucune
+URL publique à faire valider — le service informatique n'a rien à ouvrir.
+
+| Plateforme | Voie | Ce qui se passe |
+|---|---|---|
+| **Jitsi** | bot navigateur | le bot rejoint la salle, se nomme « fonction — initiateur », capte l'audio |
+| **Visio (La Suite numérique)** | client LiveKit **natif** | pas de navigateur : on parle le protocole de l'instance |
+| **Zoom** | **SDK officiel** | pas de scraping — le SDK Meeting, avec son état de salle d'attente |
+| **Google Meet** | **pull** Pub/Sub | aucun bot dans la réunion : l'enregistrement est récupéré après coup, depuis l'agenda jusqu'au compte rendu |
+
+Trois d'entre elles rejoignent la réunion et sont **visibles des participants** — c'est un
+choix, pas une limite : un enregistrement furtif n'est pas défendable. Meet, lui, n'envoie
+personne : il lit l'enregistrement que la plateforme a produit.
+
+**Ce qui les rend utilisables au quotidien :** planification depuis l'interface (« le bot
+rejoint telle réunion à telle heure »), identités de plateforme saisies par l'admin et
+remises au seul exécutant qui réclame la session, code de salle protégée chiffré au repos,
+états relayés sur la carte du job (« salle d'attente », « en réunion »), annulation à chaud,
+et un **kit d'installation** pour poser un exécutant sur une autre machine.
+
+**Zoom RTMS et Microsoft Teams sont livrés `implemented`, pas `validated`** — la distinction
+est portée par le catalogue et visible dans l'interface. Leur logique est écrite et testée en
+intégration continue ; leur branchement réseau n'a pas été confirmé, faute de locataire
+Microsoft 365 et de crédits Zoom Developer Pack. Ce sont aussi les deux seuls qui **exigent
+un point d'entrée HTTPS public** : les activer change la posture de déploiement, et le
+diagnostic le refuse désormais sans TLS (voir Sécurité).
+
+#### Réunions — la qualité de ce qui est capté
+
+- **Pistes séparées** (vague 5) : le bot conserve l'audio de CHAQUE participant sur disque
+  (timeline commune, RAM constante), et le pipeline transcrit **piste par piste** avant de
+  fusionner par horodatage. Les mots des **chevauchements existent**, chacun sous son nom —
+  là où un mixage les perd définitivement. Les pistes « salle » sont sous-diarisées
+  (`PISTE_<pid>_S1`…) : une salle cesse d'être un locuteur unique. Sans pistes, comportement
+  d'avant à l'octet près.
+- **Suivi en direct** : pendant la réunion, la page du job affiche les tours de parole au fil
+  de l'eau, marqués **provisoires**. La transcription de référence reste celle du pipeline
+  (ADR-001 D5) — le direct informe, il ne fait pas foi.
+- **Salle protégée et instance à compte** : code de réunion chiffré au repos et déchiffré au
+  seul claim de l'exécutant ; compte d'instance Jitsi auto-hébergée par l'environnement, zéro
   saisie utilisateur quand il ne sert pas.
-- **Éditeur SRT** : les identifiants de locuteur issus des pistes (noms avec espaces)
-  sont reconnus partout (grammaire généralisée + contrat `known_ids` — jamais de
-  locuteur fantôme depuis une phrase à deux-points).
+- **Éditeur SRT** : les identifiants de locuteur issus des pistes (noms avec espaces) sont
+  reconnus partout — jamais de locuteur fantôme né d'une phrase à deux-points.
 
 ### Sécurité
 
@@ -94,6 +124,30 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Révocation de session épinglée par des tests** (S1.3). La protection existait, mais
   reposait entièrement sur un détail de `flask_login` (`UserMixin.is_authenticated`
   délègue à `is_active`). Elle est maintenant écrite dans le projet et testée.
+
+### Interne — passe qualité
+
+Invisible à l'usage, décisive pour la suite : ces corrections ont été trouvées **par des
+tests écrits avant elles**, et plusieurs ont révélé des défauts que personne n'avait vus.
+
+- **Un défaut de configuration divergeait selon le chemin d'appel** (`gpu.pyannote_vram_mb`
+  valait 2 000 ici et 3 000 là) : une réservation VRAM faussée ne se voit qu'à saturation.
+  Source unique désormais, et le test balayant l'arbre a trouvé un **second cas** non
+  repéré — le registre de PID posé à la racine du répertoire courant, où deux processus
+  pouvaient se croire seuls sur le GPU.
+- **Le parcours navigateur ignorait ses propres erreurs** : il collectait les erreurs
+  JavaScript, les affichait, et les excluait du verdict. Un test qui coûte son temps
+  d'exécution sans mériter sa confiance.
+- **Une fuite de capacité de la file** : une entrée bloquée en « en cours » pour un job
+  terminé retirait **définitivement** une place d'exécution, en silence — trois
+  terminaisons anormales paralysaient une file de quatre.
+- **Une seule porte pour les transitions d'état** des jobs, et le pipeline renvoie
+  désormais une **issue typée** de bout en bout : une faute de clé ne peut plus changer
+  silencieusement le comportement de reprise.
+- Socle de test JavaScript (ESLint + Vitest), paliers `ruff` triés un par un (14 `zip()`
+  qui tronquaient en silence), signatures obligatoires sur `auth`, `ingestion` et `queue`,
+  et couverture élargie au service connecteur — le seuil portait sur un périmètre plus
+  favorable qu'annoncé.
 
 ### Corrigé
 

@@ -106,6 +106,15 @@ board meeting — the choice is one click, right when you drop the file.
 - **Team capitalisation** — shared lexicons, minutes templates per meeting type, groups
   with their own administrators: the second meeting costs less effort than the first,
   and the tool improves as the team uses it.
+- **Meetings come to you (0.4.0)** — schedule from the interface, and the minutes are
+  waiting for you. Four platforms: **Jitsi**, **Visio (La Suite numérique)**, **Zoom** and
+  **Google Meet**. None of them requires opening an inbound port on your firewall —
+  everything happens outbound, which makes the install acceptable where IT would refuse to
+  expose a URL. The bot introduces itself and stays **visible to participants** (a
+  deliberate choice: no covert recording); Meet sends nobody at all and collects the
+  recording afterwards. Where the platform allows it, each participant is transcribed
+  **separately**: words spoken at the same time are no longer lost, each stays under its
+  own name.
 - **Enterprise identity (0.3.9)** — sign in through your existing directory: OIDC SSO
   (Keycloak, Entra ID…), an authentication proxy (Authelia, oauth2-proxy) or LDAP /
   Active Directory directly, with automatic role assignment from group membership.
