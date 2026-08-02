@@ -23,18 +23,26 @@ from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
 
 
 @pytest.fixture()
-def racine(tmp_path):
-    """Une racine autorisée contenant un script légitime."""
+def racine(tmp_path, monkeypatch):
+    """Une racine autorisée contenant un script légitime.
+
+    La racine est déclarée dans l'ENVIRONNEMENT : depuis la reprise d'audit, une racine
+    écrite en configuration est ignorée — l'administrateur applicatif ne doit pas pouvoir
+    fixer les limites qui le contraignent."""
+    from transcria.gpu.script_guard import CLE_ENV_RACINES
+
     r = tmp_path / "scripts"
     r.mkdir()
     s = r / "launch.sh"
     s.write_text("#!/bin/bash\necho ok\n")
     s.chmod(0o755)
+    monkeypatch.setenv(CLE_ENV_RACINES, str(r))
     return r
 
 
 def _cfg(racine):
-    return {"security": {"allowed_script_roots": [str(racine)]}}
+    """La configuration n'a plus d'effet sur les racines — c'est tout l'objet du correctif."""
+    return {}
 
 
 class TestCeQuiEstAccepte:
@@ -101,7 +109,8 @@ class TestCeQuiEstRefuse:
 
 
 class TestLaRacineParDefaut:
-    def test_sans_configuration_la_racine_est_scripts_du_depot(self):
+    def test_sans_configuration_la_racine_est_scripts_du_depot(self, monkeypatch):
+        monkeypatch.delenv("TRANSCRIA_SCRIPT_ROOTS", raising=False)
         """Le cas de TOUTES les installations : personne ne configure
         `security.allowed_script_roots`. Le défaut doit donc être le bon."""
         from pathlib import Path
@@ -114,7 +123,8 @@ class TestLaRacineParDefaut:
             pytest.skip("dépôt sans scripts/launch_arbitrage.sh")
         assert safe_script_path(str(attendu), {}) == attendu
 
-    def test_sans_configuration_un_chemin_arbitraire_est_refuse(self, tmp_path):
+    def test_sans_configuration_un_chemin_arbitraire_est_refuse(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("TRANSCRIA_SCRIPT_ROOTS", raising=False)
         charge = tmp_path / "charge.sh"
         charge.write_text("#!/bin/bash\n")
         with pytest.raises(ScriptRefuse):
@@ -141,7 +151,7 @@ def test_le_message_de_refus_dit_quoi_faire(racine, tmp_path):
     ailleurs.write_text("#!/bin/bash\n")
     with pytest.raises(ScriptRefuse) as exc:
         safe_script_path(str(ailleurs), _cfg(racine))
-    assert "security.allowed_script_roots" in str(exc.value)
+    assert "TRANSCRIA_SCRIPT_ROOTS" in str(exc.value)
 
 
 def test_pas_de_faux_positif_sur_un_lien_INTERNE(racine):
@@ -162,3 +172,68 @@ def test_droit_de_groupe_tolere(racine):
     s.chmod(0o775)
     assert safe_script_path(str(s), _cfg(racine)) == s
     assert os.access(s, os.R_OK)
+
+
+# --- Reprise d'audit : l'allowlist ne doit pas être à la portée de l'ADMIN ---------------
+#
+# Défaut de conception de la première version : `security.allowed_script_roots` était une
+# clé de CONFIGURATION. Or /admin/config propose un mode YAML brut — l'administrateur
+# applicatif contrôlait donc l'allowlist censée le contraindre. Il lui suffisait d'ajouter
+# `/tmp` pour retrouver son shell root. Une garde dont l'acteur visé règle lui-même les
+# bornes ne protège de rien.
+#
+# La chaîne complète, telle qu'un second audit l'a décrite : le répertoire des prompts est
+# lui aussi configurable, et le CONTENU des prompts est libre — donc écrire un fichier
+# choisi, puis le désigner comme script, puis autoriser sa racine.
+#
+# Les racines viennent désormais de l'ENVIRONNEMENT (unité systemd), hors de portée du
+# formulaire d'administration.
+
+class TestLesRacinesNeViennentPlusDeLaConfig:
+    def test_une_racine_declaree_en_CONFIG_est_ignoree(self, racine, tmp_path):
+        """Le cœur du correctif : ce que l'admin écrit dans config.yaml ne compte plus."""
+        charge = tmp_path / "charge.sh"
+        charge.write_text("#!/bin/bash\n")
+        charge.chmod(0o755)
+        cfg = {"security": {"allowed_script_roots": [str(tmp_path)]}}
+        with pytest.raises(ScriptRefuse):
+            safe_script_path(str(charge), cfg)
+
+    def test_une_racine_declaree_en_ENVIRONNEMENT_est_honoree(self, racine, monkeypatch):
+        from transcria.gpu.script_guard import CLE_ENV_RACINES
+
+        monkeypatch.setenv(CLE_ENV_RACINES, str(racine))
+        assert safe_script_path(str(racine / "launch.sh"), {}) == (racine / "launch.sh")
+
+    def test_plusieurs_racines_separees_par_deux_points(self, racine, tmp_path, monkeypatch):
+        from transcria.gpu.script_guard import CLE_ENV_RACINES
+
+        autre = tmp_path / "autres"
+        autre.mkdir()
+        s = autre / "b.sh"
+        s.write_text("#!/bin/bash\n")
+        s.chmod(0o755)
+        monkeypatch.setenv(CLE_ENV_RACINES, f"{racine}:{autre}")
+        assert safe_script_path(str(racine / "launch.sh"), {}) == (racine / "launch.sh")
+        assert safe_script_path(str(s), {}) == s
+
+    def test_la_racine_du_depot_reste_toujours_autorisee(self, monkeypatch):
+        """Sans quoi une installation qui ne pose rien cesserait de fonctionner."""
+        from pathlib import Path
+
+        import transcria
+        from transcria.gpu.script_guard import CLE_ENV_RACINES
+
+        monkeypatch.delenv(CLE_ENV_RACINES, raising=False)
+        du_depot = Path(transcria.__file__).resolve().parents[1] / "scripts" / "launch_arbitrage.sh"
+        if not du_depot.is_file():
+            pytest.skip("dépôt sans scripts/launch_arbitrage.sh")
+        assert safe_script_path(str(du_depot), {}) == du_depot
+
+    def test_le_message_oriente_vers_lENVIRONNEMENT_pas_la_config(self, tmp_path):
+        charge = tmp_path / "x.sh"
+        charge.write_text("#!/bin/bash\n")
+        with pytest.raises(ScriptRefuse) as exc:
+            safe_script_path(str(charge), {})
+        assert "TRANSCRIA_SCRIPT_ROOTS" in str(exc.value)
+        assert "security.allowed_script_roots" not in str(exc.value)

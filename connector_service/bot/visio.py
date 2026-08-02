@@ -49,7 +49,11 @@ from connector_service.live.livekit_transport import livekit_demux_source
 from connector_service.live.media import LiveAudioProvider
 from connector_service.live.recorder import RecordingTee
 from connector_service.live.session import LiveSession
-from connector_service.outbound_guard import HoteRefuse, verifier_hote_sortant
+from connector_service.outbound_guard import (
+    HoteRefuse,
+    ouvreur_sans_redirection,
+    verifier_hote_sortant,
+)
 
 logger = logging.getLogger("connector_service.bot.visio")
 
@@ -84,7 +88,6 @@ def resolve_livekit_room(meeting_ref: str, opener=None) -> str:
     (`viewsets.py:271`). On interroge donc l'API du MÊME hôte (`/api/v1.0/rooms/<slug>/`,
     anonyme) ; repli honnête sur le slug (salle éphémère, API indisponible, nom brut)."""
     import json as _json
-    import urllib.request
 
     slug = parse_visio_room(meeting_ref)
     if "://" not in (meeting_ref or ""):
@@ -109,7 +112,11 @@ def resolve_livekit_room(meeting_ref: str, opener=None) -> str:
             return slug
 
     def _default(url):
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        # Ouvreur qui NE SUIT PAS les redirections : `urlopen` les suit par défaut, donc un
+        # hôte légitime répondant `302 Location: http://127.0.0.1/` contournait la
+        # vérification faite juste au-dessus. Vérifier puis laisser la bibliothèque aller
+        # ailleurs, c'est ne pas vérifier.
+        with ouvreur_sans_redirection().open(url, timeout=10) as resp:
             return resp.status, resp.read().decode("utf-8", "replace")
     try:
         status, body = (opener or _default)(api)

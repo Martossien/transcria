@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
+import urllib.request
 from urllib.parse import urlsplit
 
 #: Noms d'hôte qui désignent la machine elle-même, quelle que soit la résolution.
@@ -45,19 +47,68 @@ def allowlist_depuis_environnement() -> list[str]:
     return [h.strip().lower() for h in brut.split(",") if h.strip()]
 
 
-def _est_toujours_interdit(hote: str) -> bool:
+def _adresse_interdite(adresse: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Boucle locale, « toutes interfaces », lien-local (métadonnées cloud)."""
-    if hote.lower() in _NOMS_LOCAUX:
-        return True
+    return bool(adresse.is_loopback or adresse.is_link_local or adresse.is_unspecified)
+
+
+def _resoudre(hote: str) -> list[str]:
+    """Toutes les adresses derrière un nom. Liste vide si la résolution échoue.
+
+    Injectable dans les tests : la garde doit être vérifiable sans DNS.
+    """
     try:
-        adresse = ipaddress.ip_address(hote)
-    except ValueError:
-        return False   # un nom de domaine : on ne résout PAS (pas de DNS ici, cf. module)
-    return bool(
-        adresse.is_loopback
-        or adresse.is_link_local        # 169.254.0.0/16 et fe80::/10
-        or adresse.is_unspecified       # 0.0.0.0 / ::
-    )
+        infos = socket.getaddrinfo(hote, None, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        return []
+    return [str(info[4][0]) for info in infos]
+
+
+def _est_toujours_interdit(hote: str) -> tuple[bool, str]:
+    """Décide sur la DESTINATION, pas sur la forme écrite.
+
+    Première version : on comparait le texte de l'hôte. Un second audit l'a démontée en
+    cinq lignes — `2130706433`, `0x7f000001`, `017700000001` et `127.1` désignent tous
+    `127.0.0.1` pour le résolveur système, mais `ipaddress` les rejette, donc ils passaient
+    pour des noms de domaine. Et un nom qui RÉSOUT vers la boucle locale passait tout
+    court : un attaquant contrôle son propre DNS.
+
+    On résout donc, et **une seule** adresse interdite suffit à refuser — un nom
+    multi-adresses ne doit pas passer parce que la première est saine.
+
+    Limite assumée : entre cette vérification et la requête, le DNS peut changer (*DNS
+    rebinding*). La fermer demanderait d'épingler l'adresse jusqu'à la connexion, ce qui
+    n'est pas proportionné ici — le repli de l'appelant est le nom de la salle, et aucune
+    réponse n'est renvoyée à l'utilisateur.
+    """
+    if hote.lower() in _NOMS_LOCAUX:
+        return True, hote
+    adresses = _resoudre(hote)
+    if not adresses:
+        return True, "aucune adresse (résolution impossible)"
+    for brute in adresses:
+        try:
+            adresse = ipaddress.ip_address(brute)
+        except ValueError:
+            return True, f"adresse illisible ({brute})"
+        if _adresse_interdite(adresse):
+            return True, brute
+    return False, ""
+
+
+def ouvreur_sans_redirection() -> urllib.request.OpenerDirector:
+    """Ouvreur HTTP qui NE SUIT PAS les redirections.
+
+    `urlopen` les suit par défaut : un hôte parfaitement légitime qui répond `302 Location:
+    http://127.0.0.1/` contournait toute vérification faite en amont — on validait la
+    première URL et la bibliothèque allait ailleurs. Refuser la redirection est ici sans
+    coût : l'API interrogée n'en émet pas dans son fonctionnement normal.
+    """
+    class _SansRedirection(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+            return None
+
+    return urllib.request.build_opener(_SansRedirection)
 
 
 def verifier_hote_sortant(url: str, *, allowlist: list[str] | None = None) -> bool:
@@ -80,10 +131,11 @@ def verifier_hote_sortant(url: str, *, allowlist: list[str] | None = None) -> bo
         raise HoteRefuse("URL sortante sans nom d'hôte")
 
     # Niveau 1 : jamais joignable, même déclaré dans l'allowlist.
-    if _est_toujours_interdit(hote):
+    interdit, motif = _est_toujours_interdit(hote)
+    if interdit:
         raise HoteRefuse(
             f"hôte interdit pour une requête pilotée par un lien d'utilisateur : {hote} "
-            f"(boucle locale, « toutes interfaces » ou lien-local/métadonnées)"
+            f"→ {motif} (boucle locale, « toutes interfaces » ou lien-local/métadonnées)"
         )
 
     # Niveau 2 : allowlist, si l'exploitant en a posé une.

@@ -115,7 +115,7 @@ def health():
             "status": "ok" if db_ok else "error",
         },
     }
-    if db_error:
+    if db_error and _peut_voir_le_detail():
         payload["database"]["error"] = db_error
     return jsonify(payload), (200 if db_ok else 503)
 

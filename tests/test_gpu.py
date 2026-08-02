@@ -24,18 +24,15 @@ def _default_config(**overrides):
             "qwen_port": 8080,
             "llm_cleanup_ports": [8000],
         },
-        # S1.6 : un script n'est exécuté que sous une racine autorisée. Ces tests se
-        # servent de `/bin/true` comme lanceur factice — ils déclarent donc `/bin`.
-        "security": {"allowed_script_roots": ["/bin"]},
     }
     for k, v in overrides.items():
         cfg["services"][k] = v
-    # Un test qui pose son propre lanceur (tmp_path) autorise sa racine — sinon la garde
-    # S1.6 le refuse, à juste titre.
-    for cle in ("arbitrage_script", "stop_script"):
-        chemin = overrides.get(cle)
-        if chemin:
-            cfg["security"]["allowed_script_roots"].append(str(pathlib.Path(chemin).parent))
+    # S1.6 : les racines autorisées viennent de l'ENVIRONNEMENT, plus de la config (une
+    # allowlist réglable par l'admin ne le contraint pas). Ces tests se servent de
+    # `/bin/true` comme lanceur factice, et parfois d'un script en tmp_path.
+    racines = ["/bin"] + [str(pathlib.Path(overrides[c]).parent)
+                          for c in ("arbitrage_script", "stop_script") if overrides.get(c)]
+    os.environ["TRANSCRIA_SCRIPT_ROOTS"] = ":".join(racines)
     return cfg
 
 

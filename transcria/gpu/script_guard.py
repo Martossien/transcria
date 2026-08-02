@@ -36,28 +36,41 @@ from pathlib import Path
 
 #: Racine implicite : les scripts versionnés du dépôt. C'est là que vivent
 #: `launch_arbitrage.sh`, `stop_stt.sh` et les lanceurs de moteurs — donc le défaut couvre
-#: toutes les installations, dont aucune ne configure `security.allowed_script_roots`.
+#: toutes les installations, dont aucune ne pose `TRANSCRIA_SCRIPT_ROOTS`.
 _RACINE_DEPOT = Path(__file__).resolve().parents[2] / "scripts"
 
-CLE_RACINES = "security.allowed_script_roots"
+#: Les racines supplémentaires viennent de l'ENVIRONNEMENT, jamais de la configuration.
+#:
+#: Première version de cette garde : elles étaient lues dans `security.allowed_script_roots`.
+#: Défaut de conception — `/admin/config` propose un mode YAML brut, donc l'administrateur
+#: applicatif réglait lui-même les bornes censées le contraindre. Il lui suffisait d'ajouter
+#: `/tmp` pour retrouver son shell root, et la chaîne était complète : le répertoire des
+#: prompts est aussi configurable et leur CONTENU est libre — écrire un fichier choisi, le
+#: désigner comme script, autoriser sa racine.
+#:
+#: Une garde dont l'acteur visé fixe les limites ne protège de rien. L'environnement d'un
+#: service (unité systemd, docker-compose) est hors de portée du formulaire d'administration :
+#: c'est la bonne place. Séparateur `:`, comme un PATH.
+CLE_ENV_RACINES = "TRANSCRIA_SCRIPT_ROOTS"
 
 
 class ScriptRefuse(RuntimeError):
     """Chemin de script refusé — le message porte le motif ET le remède."""
 
 
-def allowed_script_roots(config: dict) -> list[Path]:
-    """Racines autorisées : celle du dépôt, plus celles configurées.
+def allowed_script_roots(config: dict | None = None) -> list[Path]:
+    """Racines autorisées : celle du dépôt, plus celles de l'ENVIRONNEMENT.
 
-    Les racines configurées **s'ajoutent** au défaut, elles ne le remplacent pas : un
-    exploitant qui range ses lanceurs ailleurs ne doit pas perdre ceux du dépôt au passage.
+    `config` n'est plus lue — le paramètre subsiste pour ne pas casser les appelants, et
+    parce que le supprimer masquerait le point important : **ce n'est pas un oubli, c'est
+    la correction**. Voir `CLE_ENV_RACINES`.
+
+    Les racines de l'environnement **s'ajoutent** à celle du dépôt : un exploitant qui range
+    ses lanceurs ailleurs ne doit pas perdre ceux du dépôt au passage.
     """
     racines: list[Path] = []
-    # Sous `security` et non sous `services`/`gpu`/`resource_node` : la même règle couvre
-    # les TROIS sources de chemins exécutables. La rattacher à l'une d'elles aurait obligé
-    # à la dupliquer.
-    configurees = (config.get("security", {}) or {}).get("allowed_script_roots") or []
-    with_default = [_RACINE_DEPOT, *configurees]
+    depuis_env = [p for p in os.environ.get(CLE_ENV_RACINES, "").split(":") if p.strip()]
+    with_default = [_RACINE_DEPOT, *depuis_env]
     for item in with_default:
         try:
             racines.append(Path(str(item)).resolve())
@@ -81,7 +94,9 @@ def safe_script_path(raw: str, config: dict) -> Path:
     if not any(resolu == r or r in resolu.parents for r in racines):
         raise ScriptRefuse(
             f"script hors des racines autorisées : {resolu}. Rangez-le sous "
-            f"{_RACINE_DEPOT}, ou déclarez sa racine dans {CLE_RACINES}."
+            f"{_RACINE_DEPOT}, ou déclarez sa racine dans la variable d'environnement "
+            f"{CLE_ENV_RACINES} du service (PAS dans config.yaml : ce serait laisser "
+            f"l'administrateur applicatif fixer ses propres limites)."
         )
 
     if not resolu.is_file():

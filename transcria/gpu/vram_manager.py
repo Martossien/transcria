@@ -622,10 +622,18 @@ class VRAMManager:
                 pass
             return ok
         logger.info("Arrêt LLM d'arbitrage port %d...", self.arbitrage_llm_port)
-        if os.path.isfile(self.stop_script):
+        # Le script d'ARRÊT vient de la même configuration que celui de lancement : il
+        # mérite la même garde. Corrigé après un second audit — la première passe avait
+        # traité le lancement seul, ce qui laissait le trajet ouvert par l'autre bout.
+        try:
+            stop_verifie = str(safe_script_path(self.stop_script, self.config))
+        except ScriptRefuse as exc:
+            logger.error("Script d'arrêt REFUSÉ : %s", exc)
+            stop_verifie = ""
+        if stop_verifie:
             try:
                 subprocess.run(
-                    ["/bin/bash", self.stop_script],
+                    ["/bin/bash", stop_verifie],
                     capture_output=True, text=True, timeout=30,
                 )
                 logger.info("Script d'arrêt exécuté: %s", self.stop_script)

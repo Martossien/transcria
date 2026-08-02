@@ -48,7 +48,6 @@ exposed:
 - notifications.email.smtp_port
 - notifications.email.use_ssl
 - notifications.email.use_starttls
-- security.allowed_script_roots
 - security.allow_job_delete
 - security.allowed_document_extensions
 - security.allowed_upload_extensions

@@ -6,6 +6,7 @@ aucun kill réel. Ces chemins (lancement script, arrêt, kill de port, attente d
 port, diagnostic de panne) étaient les 141 lignes mortes qui interdisaient de
 refactorer la zone GPU (B3) : ils sont désormais sous filet.
 """
+import os
 import subprocess as real_subprocess
 import time
 from types import SimpleNamespace
@@ -32,6 +33,9 @@ class _FakeResp:
 
 
 def _script_config(tmp_path, *, script_exists=True):
+    # S1.6 : racines déclarées par l'ENVIRONNEMENT (hors de portée de la config, donc de
+    # l'administrateur applicatif). Ces tests posent leurs scripts dans un tmp_path.
+    os.environ["TRANSCRIA_SCRIPT_ROOTS"] = str(tmp_path)
     script = tmp_path / "launch.sh"
     stop = tmp_path / "stop.sh"
     if script_exists:
@@ -46,11 +50,6 @@ def _script_config(tmp_path, *, script_exists=True):
             "arbitrage_log_path": str(tmp_path / "launch.log"),
         },
         "workflow": {"arbitration_llm": {"model_id": "local/arbitrage"}},
-        # S1.6 : un chemin de script venu de la config n'est exécuté que sous une racine
-        # autorisée. Ces tests posent leurs scripts dans un tmp_path — ils déclarent donc
-        # cette racine, exactement comme le ferait un exploitant qui range ses lanceurs
-        # ailleurs que dans `<dépôt>/scripts`.
-        "security": {"allowed_script_roots": [str(tmp_path)]},
     }
 
 

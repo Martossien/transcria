@@ -125,6 +125,26 @@ class TestRunWiring:
         assert code == 1                          # jamais entré → non admis, pas « technique »
 
 
+@pytest.fixture(autouse=True)
+def _resolution_stubbee(monkeypatch):
+    """Les noms d'exemple (`.test`, `.exemple`) ne résolvent nulle part, et la garde
+    sortante (S2.2, durcie après reprise d'audit) décide sur la DESTINATION : elle résout.
+    On rend donc la résolution déterministe — sans quoi ces tests dépendraient du DNS de la
+    machine qui les exécute."""
+    import ipaddress
+
+    import connector_service.outbound_guard as og
+
+    def _stub(hote):
+        try:
+            ipaddress.ip_address(hote)
+            return [hote]
+        except ValueError:
+            return ["93.184.216.34"]
+
+    monkeypatch.setattr(og, "_resoudre", _stub)
+
+
 class TestResolveLivekitRoom:
     """Vérifié dans la source officielle meet : salle ENREGISTRÉE → room = UUID
     (serializers.py:179) ; éphémère/injoignable → slug (viewsets.py:271)."""

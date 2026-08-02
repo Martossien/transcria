@@ -190,3 +190,29 @@ class TestUploadEnFlux:
         resultat = fs.save_upload(b"bonjour", "note.wav")
         assert resultat["size_bytes"] == 7
         assert (tmp_path / "job-octets" / "input" / "original.wav").read_bytes() == b"bonjour"
+
+
+# --- Reprise d'audit : les SIBLINGS oubliés ---------------------------------------------
+#
+# Deux correctifs de cette passe avaient traité l'instance NOMMÉE par l'audit sans traiter
+# la CLASSE. Un second audit les a trouvés — à raison :
+#   · `/ready` a été corrigé, `/health` (cinq lignes plus haut, défaut identique) non ;
+#   · le LANCEMENT de l'arbitrage a reçu la garde de script, son ARRÊT non.
+# Ces tests couvrent les deux routes et les deux chemins, pas un seul de chaque.
+
+@pytest.mark.parametrize("route", ["/health", "/ready"])
+def test_aucune_sonde_anonyme_ne_divulgue_lerreur_base(app, client, monkeypatch, route):
+    monkeypatch.setattr(
+        "transcria.web.health_routes._check_database_health",
+        lambda: (False, 'connection to server at "10.1.2.3", port 5432 failed: '
+                        'FATAL: password authentication failed'))
+    corps = client.get(route).get_data(as_text=True)
+    for fuite in ("10.1.2.3", "5432", "password authentication"):
+        assert fuite not in corps, f"{route} divulgue « {fuite} » sans authentification"
+
+
+@pytest.mark.parametrize("route", ["/health", "/ready"])
+def test_le_detail_reste_lisible_pour_un_admin(app, admin_client, monkeypatch, route):
+    monkeypatch.setattr("transcria.web.health_routes._check_database_health",
+                        lambda: (False, "motif technique"))
+    assert admin_client.get(route).get_json()["database"]["error"] == "motif technique"

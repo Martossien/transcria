@@ -831,11 +831,6 @@ _DEFAULT_CONFIG = {
         "csrf_origin_check": False,       # rejette un POST cookie d'origine croisée (défense CSRF en plus de SameSite)
         "csrf_tokens": False,             # jeton CSRF synchroniseur par requête mutante (défense forte)
         "csp": "off",
-        # Sécurité S1.6 — racines SUPPLÉMENTAIRES d'où un script déclaré en configuration
-        # (services.arbitrage_script, services.stop_script, resource_node.engines[].script)
-        # peut être exécuté. `<dépôt>/scripts` est toujours autorisé ; ceci l'étend pour
-        # les exploitants qui rangent leurs lanceurs ailleurs.
-        "allowed_script_roots": [],                     # Content-Security-Policy : off | report-only | enforce
         "audit_retention_by_family": {
             "auth": 1095,
             "job": 1095,

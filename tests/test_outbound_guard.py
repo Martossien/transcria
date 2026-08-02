@@ -22,6 +22,28 @@ import pytest
 from connector_service.outbound_guard import HoteRefuse, verifier_hote_sortant
 
 
+@pytest.fixture(autouse=True)
+def resolution_neutre(monkeypatch):
+    """Par défaut, tout nom résout vers une adresse publique anodine.
+
+    Depuis la reprise d'audit, la garde décide sur la DESTINATION : elle résout. Les tests
+    doivent donc contrôler la résolution — sinon ils dépendraient du DNS de la machine
+    d'exécution, et les noms d'exemple (`.test`, réservé RFC 2606) ne résolvent nulle part.
+    Les tests qui portent SUR la résolution surchargent ce stub."""
+    import ipaddress
+
+    import connector_service.outbound_guard as og
+
+    def _stub(hote):
+        try:                       # une IP littérale se « résout » en elle-même
+            ipaddress.ip_address(hote)
+            return [hote]
+        except ValueError:
+            return ["93.184.216.34"]
+
+    monkeypatch.setattr(og, "_resoudre", _stub)
+
+
 class TestCeQuiEstToujoursRefuse:
     """Cibles qui ne sont jamais une instance de visioconférence, allowlist ou pas."""
 
@@ -128,3 +150,77 @@ class TestIntegrationVisio:
 
         assert resolve_livekit_room("https://visio.exemple/ma-salle", ouvreur) == "0aeb8887-1234"
         assert appels, "l'hôte légitime doit bien être interrogé"
+
+
+# --- Reprise d'audit : la garde était contournable ---------------------------------------
+#
+# Un second audit a montré cinq contournements, tous réels. La cause était écrite noir sur
+# blanc dans mon propre module : « on ne résout PAS » — donc `2130706433` et `127.1`
+# passaient pour des noms de domaine, et un nom qui RÉSOUT vers la boucle locale passait
+# tout court. La garde regardait la forme, pas la destination.
+
+class TestContournementsFermes:
+    @pytest.mark.parametrize("notation", [
+        "http://2130706433/api",         # 127.0.0.1 en décimal
+        "http://0x7f000001/api",         # hexadécimal
+        "http://017700000001/api",       # octal
+        "http://127.1/api",              # forme courte
+    ])
+    def test_les_notations_numeriques_de_la_boucle_locale(self, notation, monkeypatch):
+        """Le résolveur système accepte ces formes ; `ipaddress` les rejette. C'est
+        exactement l'écart qui laissait passer — d'où la VRAIE résolution ici."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.undo()      # on veut le résolveur système, pas le stub
+        with pytest.raises(HoteRefuse):
+            verifier_hote_sortant(notation, allowlist=[])
+        assert og._resoudre("127.1")
+
+    def test_un_nom_qui_resout_vers_la_boucle_locale(self, monkeypatch):
+        """Un attaquant contrôle son DNS : il fait pointer son domaine vers 127.0.0.1."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["127.0.0.1"])
+        with pytest.raises(HoteRefuse):
+            verifier_hote_sortant("http://piege.exemple.test/api", allowlist=[])
+
+    def test_un_nom_qui_resout_vers_les_metadonnees(self, monkeypatch):
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["169.254.169.254"])
+        with pytest.raises(HoteRefuse):
+            verifier_hote_sortant("http://piege.exemple.test/api", allowlist=[])
+
+    def test_UNE_seule_adresse_interdite_suffit_a_refuser(self, monkeypatch):
+        """Un nom multi-adresses ne doit pas passer parce que la première est saine."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["93.184.216.34", "127.0.0.1"])
+        with pytest.raises(HoteRefuse):
+            verifier_hote_sortant("http://double.exemple.test/api", allowlist=[])
+
+    def test_un_nom_qui_resout_normalement_passe(self, monkeypatch):
+        """Contre-épreuve : le LAN reste joignable (instance Visio auto-hébergée)."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: ["192.168.1.50"])
+        assert verifier_hote_sortant("http://visio.interne/api", allowlist=[])
+
+    def test_un_nom_irresolvable_est_refuse(self, monkeypatch):
+        """Ne pas savoir où l'on va n'est pas une raison d'y aller."""
+        import connector_service.outbound_guard as og
+
+        monkeypatch.setattr(og, "_resoudre", lambda hote: [])
+        with pytest.raises(HoteRefuse):
+            verifier_hote_sortant("http://inconnu.exemple.test/api", allowlist=[])
+
+
+class TestRedirections:
+    def test_louvreur_par_defaut_ne_SUIT_pas_les_redirections(self):
+        """`urlopen` les suit par défaut : un hôte légitime qui répond 302 vers
+        127.0.0.1 contournait toute vérification faite en amont."""
+        from connector_service.outbound_guard import ouvreur_sans_redirection
+
+        ouvreur = ouvreur_sans_redirection()
+        handlers = [type(h).__name__ for h in ouvreur.handlers]
+        assert not any("RedirectHandler" in n and "No" not in n for n in handlers), handlers

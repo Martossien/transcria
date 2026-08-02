@@ -496,6 +496,75 @@ qu'elles reviennent.
 
 ---
 
+## Reprise après second audit (2026-08-02)
+
+Un second passage de l'analyse externe a trouvé **cinq défauts réels**, dont **trois qui
+m'appartiennent**. Ils sont corrigés ; les consigner ici vaut mieux que de les lisser.
+
+### Ce que j'avais manqué, et pourquoi
+
+**Deux fois, j'ai corrigé l'INSTANCE nommée par l'audit au lieu de la CLASSE.**
+
+- `/ready` corrigé, **`/health` non** — cinq lignes plus haut, défaut identique, même
+  fonction d'aide. Les deux sondes partagent désormais la même garde, et le test est
+  paramétré sur les deux routes ;
+- le **lancement** de l'arbitrage LLM avait reçu la garde de script, son **arrêt** non
+  (`vram_manager`). Le trajet restait ouvert par l'autre bout.
+
+C'est exactement le reproche que j'adressais à l'audit ailleurs dans ce document — vérifier
+le périmètre plutôt que la ligne citée. Je ne l'ai pas appliqué à moi-même.
+
+### Un défaut de conception : la garde de script ne contraignait personne  🔴
+
+`security.allowed_script_roots` était une **clé de configuration**. Or `/admin/config`
+propose un mode YAML brut : l'administrateur applicatif réglait donc lui-même les bornes
+censées le contraindre. Il lui suffisait d'ajouter `/tmp`. Et la chaîne complète existait :
+le répertoire des prompts est aussi configurable, le **contenu** des prompts est libre —
+écrire un fichier choisi, le désigner comme script, autoriser sa racine.
+
+**Une garde dont l'acteur visé fixe les limites ne protège de rien.** Les racines viennent
+désormais de l'**environnement du service** (`TRANSCRIA_SCRIPT_ROOTS`, unité systemd),
+hors de portée du formulaire d'administration. `<dépôt>/scripts` reste toujours autorisée.
+La clé de configuration est **supprimée** plutôt que dépréciée : la laisser aurait entretenu
+l'illusion qu'elle sert.
+
+### La garde SSRF regardait la forme, pas la destination  🔴
+
+Cinq contournements, tous vérifiés :
+
+| Contournement | Cause |
+|---|---|
+| `http://2130706433/`, `0x7f000001`, `017700000001`, `127.1` | le résolveur système accepte ces formes, `ipaddress` les rejette — elles passaient pour des noms de domaine |
+| un nom qui **résout** vers `127.0.0.1` | un attaquant contrôle son propre DNS |
+| une **redirection** vers la boucle locale | `urlopen` suit les redirections par défaut |
+
+La cause était écrite noir sur blanc dans mon propre module : *« on ne résout PAS »*. La
+garde **résout** désormais, et **une seule** adresse interdite suffit à refuser (un nom
+multi-adresses ne passe pas parce que la première est saine). Un nom irrésolvable est
+refusé : ne pas savoir où l'on va n'est pas une raison d'y aller. L'ouvreur HTTP ne suit
+plus les redirections — vérifier puis laisser la bibliothèque aller ailleurs, c'est ne pas
+vérifier.
+
+**Limite assumée et écrite dans le code :** entre la vérification et la requête, le DNS peut
+changer (*DNS rebinding*). La fermer demanderait d'épingler l'adresse jusqu'à la connexion —
+non proportionné ici, où le repli est le nom de la salle et où aucune réponse n'est renvoyée
+à l'utilisateur.
+
+### Ce qui n'est pas un défaut de code
+
+**Le `config.yaml` déployé est encore en `0644`.** Le code force `0600` à chaque écriture
+(Q1.4) et le doctor le signale, mais un fichier créé *avant* le correctif garde ses
+permissions tant que personne n'enregistre depuis l'interface. C'est un geste d'exploitation,
+pas un correctif : `chmod 600 config.yaml`. Un enregistrement depuis l'interface suffit aussi.
+
+**`PhaseOutcome` : migration terminée là où elle était annoncée.** Le pipeline renvoie du
+typé de bout en bout ; le **runner d'étape** renvoie encore des dictionnaires, et
+`from_legacy_dict` ne sert plus qu'à lui. Ce n'est pas un reste oublié — c'est écrit dans
+Q2.1 de la passe qualité, avec la raison. Le gate E2E GPU réel de Q2.1 reste, lui,
+réellement à jouer.
+
+---
+
 ## Bilan
 
 **Tout est livré, sauf un point volontairement reporté.** Neuf correctifs, chacun poussé
@@ -510,8 +579,8 @@ séparément avec ses tests et la CI verte avant d'enchaîner.
 | S1.5 ✅ | Lecture et écriture séparées sur les jobs | 13 |
 | S1.6 ✅ | Racine allowlistée pour les scripts exécutés en root | 16 |
 | S2.1 ✅ | Transport rattaché aux connecteurs à webhook (FAIL) | 6 |
-| S2.2 ✅ | Requête sortante bornée (boucle locale, métadonnées) | 21 |
-| S3 ✅ | `/ready`, formules CSV, décompression, upload en flux | 22 |
+| S2.2 ✅ | Requête sortante bornée — **durcie** : résolution, notations numériques, redirections | 31 |
+| S3 ✅ | `/health` **et** `/ready`, formules CSV, décompression, upload en flux | 26 |
 | **S2.3 ⏸** | **Un principal par exécutant** | **différée** |
 
 **Ce qui reste, et pourquoi :** S2.3 seulement. Il n'y a qu'un seul exécutant — le défaut
@@ -519,6 +588,11 @@ est nul en pratique, et le corriger maintenant produirait une abstraction écrit
 d'usage qui lui donnerait sa forme. **À reprendre le jour où un deuxième exécutant est
 posé.** Voir aussi la section « Écarté volontairement », qui n'est pas une liste d'attente :
 ces points sont refusés, pas reportés.
+
+**Le second audit a trouvé cinq défauts réels**, dont trois miens — corrigés, et consignés
+dans la section « Reprise après second audit » : deux corrections d'instance au lieu de
+classe (`/health`, l'arrêt de l'arbitrage), une garde dont l'administrateur réglait lui-même
+les bornes, et une garde SSRF qui regardait la forme plutôt que la destination.
 
 **Un changement cassant**, documenté au CHANGELOG : un nœud d'inférence dont la variable de
 clé a disparu ne démarre plus. Le portail tout-en-un n'est pas concerné.
