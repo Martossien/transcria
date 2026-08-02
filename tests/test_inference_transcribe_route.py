@@ -10,6 +10,7 @@ import wave
 import pytest
 
 from inference_service.app import create_app
+from inference_helpers import inference_dev_config
 
 
 class _FakeEngine:
@@ -31,7 +32,7 @@ class _FakeEngine:
 
 
 def _client(engine=None, config=None):
-    app = create_app(config=config or {}, transcribe_engine=engine or _FakeEngine())
+    app = create_app(config=inference_dev_config(config), transcribe_engine=engine or _FakeEngine())
     return app.test_client()
 
 

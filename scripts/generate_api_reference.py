@@ -120,7 +120,10 @@ def generate() -> str:
 
     from inference_service.app import create_app as create_inference_app
 
-    inference_app = create_inference_app(config={})
+    # Mode ouvert DEMANDÉ explicitement : on ne fait qu'énumérer des routes, sans servir
+    # (sécurité S1.1 — `create_app` refuse une posture implicite).
+    inference_app = create_inference_app(
+        config={"inference": {"auth": {"allow_unauthenticated": True}}})
     parts += _render_sections("Service d'inférence (nœud de ressources)", _rows_for_app(inference_app))
     return "\n".join(parts).rstrip() + "\n"
 

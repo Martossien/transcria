@@ -178,6 +178,7 @@ deferred:
 - granite.repetition_loop_max_phrase_words
 - granite.repetition_loop_min_repeats
 - granite.torch_dtype
+- inference.auth.allow_unauthenticated
 - inference.auth.api_key
 - inference.auth.api_key_env
 - inference.fallback_local

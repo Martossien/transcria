@@ -30,6 +30,37 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   sont reconnus partout (grammaire généralisée + contrat `known_ids` — jamais de
   locuteur fantôme depuis une phrase à deux-points).
 
+### Sécurité
+
+> **CHANGEMENT CASSANT pour le service d'inférence.** Il refuse désormais de démarrer sans
+> posture d'authentification explicite. Si vous le faites tourner (topologies « frontale +
+> nœud GPU » ou nœud de ressources), assurez-vous que `TRANSCRIA_INFERENCE_API_KEY` est
+> réellement posée, ou déclarez `inference.auth.allow_unauthenticated: true` pour un usage
+> de développement en loopback. Le portail tout-en-un n'est pas concerné.
+
+- **Le service d'inférence n'échoue plus OUVERT** (passe sécurité S1.1,
+  `docs/PASSE_SECURITE_2026-08.md`). Deux défauts fail-open sont inversés :
+  - la garde de clé API était un **no-op** quand aucune clé n'était configurée. Comme la
+    clé se lit d'abord dans une variable d'environnement, une variable disparue au
+    déploiement transformait *silencieusement* un service authentifié en service ouvert —
+    sur un port qui écoute en `0.0.0.0:8002`. La posture est maintenant décidée au
+    démarrage : déclarer `api_key_env` sans poser la variable **refuse le démarrage**, y
+    compris si le mode ouvert est demandé par ailleurs (la configuration se contredit) ;
+  - le transport `file_ref` autorisait **n'importe quel chemin** quand
+    `inference.allowed_audio_roots` était vide — or c'est le transport par défaut et cette
+    clé n'avait ni valeur par défaut ni exemple. Sans allowlist, la borne est désormais
+    déduite de `storage.jobs_dir`, là où vit l'audio légitime. Un chemin hors racine
+    répond **403 avant 404** : sinon le service devient un oracle d'existence de fichiers.
+- **Kit « exécutant distant » : URL du portail validée puis échappée** (S1.2). Elle était
+  interpolée telle quelle dans le script bash, avec pour seule validation un préfixe
+  `http(s)` — alors que ce script est exécuté **en root sur une autre machine**, par
+  quelqu'un qui n'est pas forcément l'admin du portail. Validation de forme stricte
+  (schéma, hôte, pas de userinfo ni de caractère de contrôle) **et** `shlex.quote` à
+  l'injection : deux défenses indépendantes, 19 tests négatifs.
+- **Révocation de session épinglée par des tests** (S1.3). La protection existait, mais
+  reposait entièrement sur un détail de `flask_login` (`UserMixin.is_authenticated`
+  délègue à `is_active`). Elle est maintenant écrite dans le projet et testée.
+
 ### Corrigé
 
 - **Cœur GPU/VRAM** (audit + tests métal) : préflight de l'arbitrage LLM mesuré et

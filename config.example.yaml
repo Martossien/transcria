@@ -954,8 +954,17 @@ inference:
     max_unavailable_s: 600      # mode dégradé : au-delà, un job dont le nœud reste injoignable échoue
     capabilities_cache_ttl_s: 5 # B6.4 : TTL du cache de /api/resources/status (mutualise les /capabilities). 0 = désactivé
   auth:
+    # Le service d'inférence REFUSE DE DÉMARRER sans posture explicite (sécurité S1.1) :
+    # il écoute sur 0.0.0.0:8002 et lit des fichiers locaux — démarrer ouvert « par
+    # défaut » était le mauvais côté du choix.
+    #   · api_key_env déclarée  → la variable DOIT exister (sinon refus : c'est le
+    #     scénario « la clé a disparu au déploiement », qu'il faut rendre bruyant) ;
+    #   · api_key non vide      → clé directe (pratique, mais elle vit dans ce fichier) ;
+    #   · aucune des deux       → il faut demander le mode ouvert ci-dessous.
     api_key_env: "TRANSCRIA_INFERENCE_API_KEY"   # clé API du service (variable d'env)
     api_key: ""
+    # Mode OUVERT, sans authentification. Développement en loopback UNIQUEMENT.
+    allow_unauthenticated: false
   stt:
     fallback_local: true
     response_format: "verbose_json"   # défaut global ; surchargé par backend ci-dessous

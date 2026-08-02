@@ -13,6 +13,7 @@ import threading
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ import pytest
 from inference_service.app import create_app
 from inference_service.engine import VoiceEmbedEngine
 from transcria.voice.embedding import VoiceEmbedding, deserialize_embedding
+from inference_helpers import inference_dev_config
 
 # ── Faux backends (aucun GPU) ─────────────────────────────────────────────────
 
@@ -51,7 +53,9 @@ def _make_engine(backend=None, factory=None, idle_timeout_s=300):
 @pytest.fixture
 def client(tmp_path):
     engine = _make_engine()
-    app = create_app(config={"voice_enrollment": {"embedding": {"device": "cpu"}}}, engine=engine)
+    app = create_app(config=inference_dev_config({"voice_enrollment": {"embedding": {"device": "cpu"}}},
+                                                audio_root=tmp_path),
+                     engine=engine)
     app.config["TESTING"] = True
     c = app.test_client()
     c._engine = engine  # accès dans les tests
@@ -121,10 +125,20 @@ def test_file_ref_path_manquant(client):
     assert r.get_json()["error"] == "bad_request"
 
 
-def test_file_ref_fichier_introuvable(client):
-    r = client.post("/infer/voice-embed", json={"audio_path": "/nope/absent.wav"})
+def test_file_ref_absent_SOUS_la_racine_donne_404_metier(client, wav_file):
+    r = client.post("/infer/voice-embed", json={"audio_path": str(wav_file.parent / "absent.wav")})
     assert r.status_code == 400
     assert r.get_json()["error"] == "audio_not_found"
+
+
+def test_file_ref_hors_racine_donne_403_MEME_si_le_fichier_nexiste_pas(client):
+    """L'ordre compte : la borne est vérifiée AVANT l'existence.
+
+    Répondre « introuvable » pour un chemin hors racine ferait du service un oracle
+    d'existence de fichiers — on apprendrait ce qui est présent sur le disque en lisant
+    la différence entre 403 et 404."""
+    r = client.post("/infer/voice-embed", json={"audio_path": "/nope/absent.wav"})
+    assert r.status_code == 403
 
 
 # ── Transport upload ─────────────────────────────────────────────────────────
@@ -150,14 +164,14 @@ def test_upload_extension_refusee(client):
 
 # ── Gestion VRAM A/B/C ─────────────────────────────────────────────────────────
 
-def test_cas_c_oom_renvoie_503_retry_after():
+def test_cas_c_oom_renvoie_503_retry_after(wav_file):
     """Chargement qui échoue par OOM → 503 + Retry-After (le client re-planifie)."""
     def oom_factory():
         raise RuntimeError("CUDA out of memory")
     engine = _make_engine(factory=oom_factory)
-    app = create_app(config={}, engine=engine)
+    app = create_app(config=inference_dev_config(audio_root=wav_file.parent), engine=engine)
     app.config["TESTING"] = True
-    r = app.test_client().post("/infer/voice-embed", json={"audio_path": __file__})
+    r = app.test_client().post("/infer/voice-embed", json={"audio_path": str(wav_file)})
     assert r.status_code == 503
     assert r.get_json()["error"] == "gpu_busy"
     assert "Retry-After" in r.headers
@@ -225,7 +239,7 @@ def test_erreur_metier_renvoie_422(client, wav_file):
             raise VoiceEmbeddingError("speaker_embeddings_vides")
 
     engine = _make_engine(factory=lambda: _FailingBackend())
-    app = create_app(config={}, engine=engine)
+    app = create_app(config=inference_dev_config(audio_root=wav_file.parent), engine=engine)
     app.config["TESTING"] = True
     r = app.test_client().post("/infer/voice-embed", json={"audio_path": str(wav_file)})
     assert r.status_code == 422
@@ -315,9 +329,10 @@ def _make_diar_engine(factory=None, idle_timeout_s=300):
 
 
 @pytest.fixture
-def diar_client():
+def diar_client(tmp_path):
     diar = _make_diar_engine()
-    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app = create_app(config=inference_dev_config(audio_root=tmp_path),
+                     engine=_make_engine(), diarize_engine=diar)
     app.config["TESTING"] = True
     c = app.test_client()
     c._diar = diar
@@ -347,8 +362,8 @@ def test_diarize_path_manquant(diar_client):
     assert r.get_json()["error"] == "bad_request"
 
 
-def test_diarize_fichier_introuvable(diar_client):
-    r = diar_client.post("/infer/diarize", json={"audio_path": "/nope/x.wav"})
+def test_diarize_fichier_introuvable(diar_client, wav_file):
+    r = diar_client.post("/infer/diarize", json={"audio_path": str(wav_file.parent / "x.wav")})
     assert r.status_code == 400
     assert r.get_json()["error"] == "audio_not_found"
 
@@ -364,7 +379,8 @@ def test_diarize_cas_c_oom_503():
     def oom_factory():
         raise RuntimeError("CUDA out of memory")
     diar = _make_diar_engine(factory=oom_factory)
-    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app = create_app(config=inference_dev_config(audio_root=Path(__file__).parent),
+                     engine=_make_engine(), diarize_engine=diar)
     app.config["TESTING"] = True
     r = app.test_client().post("/infer/diarize", json={"audio_path": __file__})
     assert r.status_code == 503
@@ -376,7 +392,8 @@ def test_diarize_echec_metier_422(wav_file):
     """available=False + error (hors OOM) → 422."""
     failing = _FakeDiarBackend(result={"available": False, "turns": [], "speakers": [], "error": "annotation_vide"})
     diar = _make_diar_engine(factory=lambda: failing)
-    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app = create_app(config=inference_dev_config(audio_root=wav_file.parent),
+                     engine=_make_engine(), diarize_engine=diar)
     app.config["TESTING"] = True
     r = app.test_client().post("/infer/diarize", json={"audio_path": str(wav_file)})
     assert r.status_code == 422
@@ -409,7 +426,14 @@ def _secure_app(tmp_path, *, api_key=None, allowed_roots=None, max_upload_mb=Non
         inference["allowed_audio_roots"] = [str(r) for r in allowed_roots]
     if max_upload_mb is not None:
         inference["max_upload_mb"] = max_upload_mb
-    cfg = {"inference": inference}
+    # Sans clé, le mode ouvert doit être DEMANDÉ (S1.1) — c'est le cas de la plupart de
+    # ces tests, qui portent sur les racines de fichiers ou la taille d'upload.
+    # `storage.jobs_dir` = le tmp_path du test : depuis S1.1, `file_ref` est borné au
+    # répertoire des jobs quand aucune allowlist n'est configurée. C'est la topologie
+    # réelle (l'audio d'un job vit sous jobs_dir), pas un artifice de test.
+    cfg = {"inference": inference, "storage": {"jobs_dir": str(tmp_path)}}
+    if api_key is None:
+        cfg = inference_dev_config(cfg)
     app = create_app(config=cfg, engine=_make_engine(), diarize_engine=_make_diar_engine())
     app.config["TESTING"] = True
     return app.test_client()
@@ -497,12 +521,23 @@ def test_traversal_bloque(tmp_path):
     assert r.status_code == 403
 
 
-def test_sans_allowlist_autorise(tmp_path):
-    """Sans racine configurée : autorisé (dev), comportement historique."""
-    c = _secure_app(tmp_path)  # ni clé ni allowlist
+def test_sans_allowlist_la_borne_est_le_repertoire_des_jobs(tmp_path):
+    """Sans racine configurée, `file_ref` n'est plus SANS BORNE (passe sécurité S1.1) :
+    il est borné à `storage.jobs_dir`, où vit l'audio légitime.
+
+    Le comportement historique — tout autoriser — était le plus dangereux des deux
+    défauts fail-open de ce service : `file_ref` est le transport PAR DÉFAUT et
+    `allowed_audio_roots` n'a ni valeur par défaut ni exemple."""
+    c = _secure_app(tmp_path)                    # ni clé ni allowlist : jobs_dir = tmp_path
     wav = _wav(tmp_path / "a.wav")
-    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)})
-    assert r.status_code == 200
+    assert c.post("/infer/voice-embed", json={"audio_path": str(wav)}).status_code == 200
+
+
+def test_sans_allowlist_un_chemin_hors_jobs_dir_est_refuse(tmp_path):
+    dehors = _wav(tmp_path.parent / "hors_jobs.wav")
+    c = _secure_app(tmp_path / "jobs")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(dehors)})
+    assert r.status_code == 403
 
 
 # --- Limite de taille upload ---
@@ -529,9 +564,10 @@ class _FakeDiarizeEngine:
         return {"available": True, "turns": [], "exclusive_turns": [], "speakers": [], "stats": {}}
 
 
-def _diarize_client(diar):
+def _diarize_client(diar, audio_root=None):
     app = create_app(
-        config={"voice_enrollment": {"embedding": {"device": "cpu"}}},
+        config=inference_dev_config({"voice_enrollment": {"embedding": {"device": "cpu"}}},
+                                    audio_root=audio_root),
         engine=_make_engine(),
         diarize_engine=diar,
     )
@@ -541,7 +577,7 @@ def _diarize_client(diar):
 
 def test_diarize_route_forwards_speaker_params_file_ref(wav_file):
     diar = _FakeDiarizeEngine()
-    r = _diarize_client(diar).post(
+    r = _diarize_client(diar, audio_root=wav_file.parent).post(
         "/infer/diarize", json={"audio_path": str(wav_file), "min_speakers": 3, "max_speakers": 7}
     )
     assert r.status_code == 200
@@ -552,21 +588,21 @@ def test_diarize_route_forwards_speaker_params_upload(wav_file):
     diar = _FakeDiarizeEngine()
     with open(wav_file, "rb") as fh:
         data = {"file": (fh, "ref.wav"), "num_speakers": "4"}
-        r = _diarize_client(diar).post("/infer/diarize", data=data, content_type="multipart/form-data")
+        r = _diarize_client(diar, audio_root=wav_file.parent).post("/infer/diarize", data=data, content_type="multipart/form-data")
     assert r.status_code == 200
     assert diar.last_speaker_params == {"num_speakers": 4}
 
 
 def test_diarize_route_no_params_passes_none(wav_file):
     diar = _FakeDiarizeEngine()
-    r = _diarize_client(diar).post("/infer/diarize", json={"audio_path": str(wav_file)})
+    r = _diarize_client(diar, audio_root=wav_file.parent).post("/infer/diarize", json={"audio_path": str(wav_file)})
     assert r.status_code == 200
     assert diar.last_speaker_params is None
 
 
 def test_diarize_route_ignores_non_integer_speaker_params(wav_file):
     diar = _FakeDiarizeEngine()
-    r = _diarize_client(diar).post(
+    r = _diarize_client(diar, audio_root=wav_file.parent).post(
         "/infer/diarize", json={"audio_path": str(wav_file), "num_speakers": "abc"}
     )
     assert r.status_code == 200

@@ -854,7 +854,12 @@ _DEFAULT_CONFIG = {
         #   [{"url": "http://gpu-1:8002", "priority": 1}, {"url": "http://gpu-2:8002", "priority": 2}]
         "nodes": [],
         "fallback_local": True,                # bascule locale si le service tombe
-        "auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY", "api_key": ""},
+        # Sécurité S1.1 — le service refuse de démarrer sans posture explicite.
+        # `api_key_env` est VIDE par défaut : la déclarer est un acte volontaire qui dit
+        # « ce service est authentifié ». Si elle est déclarée et que la variable manque,
+        # le service refuse (c'est le scénario « clé perdue au déploiement »). Sans clé du
+        # tout, il faut demander le mode ouvert — réservé au développement en loopback.
+        "auth": {"api_key_env": "", "api_key": "", "allow_unauthenticated": False},
         "transport": {"audio": "file_ref"},    # file_ref (mono-machine) | upload (distant)
         "resilience": {"timeout_s": 1800, "retries": 2},
         # STT via un serveur compatible OpenAI (vLLM, SGLang, … — non hardcodé),

@@ -10,6 +10,7 @@ from inference_service.app import create_app
 from inference_service.capabilities import build_capabilities
 from transcria.gpu.stt_engine_supervisor import EngineSpec
 from transcria.gpu.stt_vram_planner import GpuState
+from inference_helpers import inference_dev_config
 
 # ── Builder pur ───────────────────────────────────────────────────────────────
 
@@ -155,7 +156,8 @@ def test_capabilities_route_includes_stt_supervisor_load(monkeypatch):
         ]},
         "voice_enrollment": {"embedding": {"device": "cpu"}},
     }
-    app = create_app(config=config, engine=_FakeEngine("voice-embed"), diarize_engine=_FakeEngine("diarize"))
+    app = create_app(config=inference_dev_config(config), engine=_FakeEngine("voice-embed"),
+                     diarize_engine=_FakeEngine("diarize"))
     supervisor = _FakeSupervisor()
     app.extensions["stt_supervisor"] = supervisor
     app.config.update({"TESTING": True})

@@ -21,7 +21,7 @@ from inference_service.routes.engines import engines_bp
 from inference_service.routes.health import health_bp
 from inference_service.routes.transcribe import transcribe_bp
 from inference_service.routes.voice_embed import voice_embed_bp
-from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
+from inference_service.security import assert_secure_startup, enforce_api_key, max_upload_bytes
 from inference_service.transcribe_engine import TranscribeEngine
 from transcria.config import load_config
 from transcria.gpu.stt_engine_supervisor import build_stt_supervisor
@@ -73,10 +73,11 @@ def create_app(
     # Sécurité des flux (proportionnée Phase 0) — voir inference_service/security.py
 
     app.config["MAX_CONTENT_LENGTH"] = max_upload_bytes(config)
-    if expected_api_key(config):
+    # Posture décidée ICI, au démarrage (S1.1) : un service qui ne peut pas s'authentifier
+    # ne doit pas servir. `assert_secure_startup` lève si la configuration est intenable —
+    # on ne veut PAS d'un service qui démarre ouvert avec un avertissement dans un journal.
+    if assert_secure_startup(config) is not None:
         logger.info("Auth activée : les endpoints /infer exigent une clé API")
-    else:
-        logger.warning("Auth désactivée (aucune clé 'inference.auth.api_key' configurée) — mode dev")
 
     @app.before_request
     def _guard_inference_endpoints():

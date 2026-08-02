@@ -80,7 +80,7 @@ Six points. Ils ont en commun de ne dépendre d'aucune exposition réseau : ils 
 aujourd'hui, sur l'installation telle qu'elle tourne — et le resteraient si le portail ne
 sortait jamais de sa machine.
 
-### S1.1 — Le service d'inférence échoue OUVERT
+### S1.1 — Le service d'inférence échoue OUVERT  ✅ **LIVRÉE**
 
 `inference_service/security.py` — `enforce_api_key()` est un **no-op quand aucune clé n'est
 configurée** :
@@ -108,9 +108,31 @@ devient joignable sans authentification par quiconque atteint le port.
 démarrer**, sauf drapeau de développement explicite ET écoute sur loopback. Un message qui dit
 quoi faire, pas un warning qu'on ne lit jamais.
 
-**Critère d'acceptation :** clé absente + écoute non-loopback → boot refusé (test) ; clé absente
-+ `127.0.0.1` + drapeau dev → démarre avec un avertissement visible (test) ; clé présente →
-comportement actuel (test de non-régression).
+**Critère d'acceptation :** clé absente sans intention explicite → boot refusé ; drapeau de
+mode ouvert → démarre avec un avertissement ; clé présente → comportement inchangé. **11 tests.**
+
+**Deux ajustements de périmètre, décidés à l'écriture :**
+
+1. **La condition « écoute sur loopback » n'a pas été retenue** : le service tourne sous
+   gunicorn, qui porte l'adresse d'écoute — la fabrique d'application ne peut pas l'observer
+   de façon fiable. Prétendre la vérifier aurait donné une garantie fausse. C'est donc le
+   **drapeau explicite** qui porte toute la charge, et la documentation qui dit « loopback
+   uniquement ». Mieux vaut une garde honnête qu'une garde décorative.
+2. **`api_key_env` passe à vide dans les défauts.** Elle valait
+   `TRANSCRIA_INFERENCE_API_KEY` : avec la nouvelle règle, *toute* installation aurait été
+   refusée, et le drapeau de mode ouvert ne l'aurait pas sauvée (déclarer la variable dit
+   « authentifié »). La déclarer devient un **acte volontaire** — ce qui est précisément ce
+   qui rend la règle « déclarée mais absente → refus » lisible plutôt qu'absurde.
+
+**Le second défaut fail-open, traité avec :** `resolve_safe_audio_path` autorisait tout
+chemin quand `allowed_audio_roots` était vide — et cette clé n'a ni défaut ni exemple, alors
+que `file_ref` est le transport **par défaut**. Refuser franchement aurait cassé toutes les
+installations ; la borne est donc **déduite de `storage.jobs_dir`**, là où vit l'audio
+légitime. Un chemin hors racine répond **403 avant 404** : répondre « introuvable » ferait du
+service un oracle d'existence de fichiers.
+
+**Changement cassant, assumé et documenté** au CHANGELOG : un nœud d'inférence dont la
+variable de clé a disparu ne démarrera plus. C'est le but.
 
 ### S1.2 — Le kit runner interpole une URL dans du Bash  ✅ **LIVRÉE**
 
