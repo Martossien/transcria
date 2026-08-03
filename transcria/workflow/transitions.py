@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
@@ -32,7 +32,7 @@ EXECUTION_ACTIVE_STATUSES = {"queued", "running", "waiting_vram"}
 
 
 def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def can_start_processing(job_state: str) -> bool:
@@ -202,7 +202,7 @@ def vram_wait_elapsed_s(job_id: str) -> float:
         return 0.0
     try:
         since = datetime.fromisoformat(str(raw))
-        return max(0.0, (datetime.now(timezone.utc) - since).total_seconds())
+        return max(0.0, (datetime.now(UTC) - since).total_seconds())
     except ValueError:
         return 0.0
 

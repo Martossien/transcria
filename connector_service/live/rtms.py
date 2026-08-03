@@ -20,7 +20,7 @@ from __future__ import annotations
 import base64
 import binascii
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live.media import RawFrame
@@ -94,7 +94,7 @@ def keepalive_response(msg: object) -> dict | None:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def parse_audio_frame(msg: object, *, sequence_number: int,

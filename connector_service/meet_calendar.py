@@ -16,6 +16,7 @@ Pur et injecté, comme le reste : les `*_call` construisent, le transport vient 
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -95,9 +96,9 @@ def _is_meet_link(uri: str) -> bool:
 
 def horizon(now, days: int = DEFAULT_HORIZON_DAYS) -> tuple[str, str]:
     """(timeMin, timeMax) RFC 3339 — l'instant est INJECTÉ, jamais lu de l'horloge ici."""
-    from datetime import timedelta, timezone
+    from datetime import timedelta
 
-    debut = now.astimezone(timezone.utc)
+    debut = now.astimezone(UTC)
     return debut.isoformat(), (debut + timedelta(days=days)).isoformat()
 
 

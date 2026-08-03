@@ -1,7 +1,7 @@
 import contextlib
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import Blueprint, Response, render_template, request
 from flask_login import login_required
@@ -32,13 +32,13 @@ def audit_page():
     since_dt = None
     if since:
         with contextlib.suppress(ValueError):
-            since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=UTC)
 
     until_dt = None
     if until:
         with contextlib.suppress(ValueError):
             until_dt = datetime.strptime(until, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59, tzinfo=timezone.utc
+                hour=23, minute=59, second=59, tzinfo=UTC
             )
 
     actor_id = None
@@ -98,13 +98,13 @@ def audit_export_csv():
     since_dt = None
     if since:
         with contextlib.suppress(ValueError):
-            since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=UTC)
 
     until_dt = None
     if until:
         with contextlib.suppress(ValueError):
             until_dt = datetime.strptime(until, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59, tzinfo=timezone.utc
+                hour=23, minute=59, second=59, tzinfo=UTC
             )
 
     rows = AuditStore.query(

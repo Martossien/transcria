@@ -1,5 +1,6 @@
 import logging
 import secrets
+from datetime import UTC
 from typing import Any
 
 from sqlalchemy import func
@@ -15,8 +16,8 @@ DEFAULT_ADMIN_PASSWORDS = {"admin-change-me", "CHANGE-ME", ""}
 class UserStore:
     @staticmethod
     def record_login(user: User) -> None:
-        from datetime import datetime, timezone
-        user.last_login = datetime.now(timezone.utc)
+        from datetime import datetime
+        user.last_login = datetime.now(UTC)
         db.session.commit()
 
     @staticmethod

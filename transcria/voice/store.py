@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from werkzeug.datastructures import FileStorage
@@ -173,7 +173,7 @@ class VoiceStore:
         consent = VoiceConsent(
             subject_id=subject.id,
             form_version=form_version,
-            signed_at=datetime.now(timezone.utc) if status == VoiceConsentStatus.ACTIVE else None,
+            signed_at=datetime.now(UTC) if status == VoiceConsentStatus.ACTIVE else None,
             uploaded_by=actor.id,
             proof_path=proof_path,
             proof_sha256=proof_sha256,
@@ -326,7 +326,7 @@ class VoiceStore:
         ).scalars().all():
             old.status = VoiceProfileStatus.ARCHIVED.value
             old.embedding_blob = None
-            old.disabled_at = datetime.now(timezone.utc)
+            old.disabled_at = datetime.now(UTC)
 
         profile.status = VoiceProfileStatus.ACTIVE.value
         profile.embedding_backend = embedding.backend
@@ -374,14 +374,14 @@ class VoiceStore:
     @staticmethod
     def mark_reference_deleted(reference: VoiceReferenceFile) -> None:
         reference.status = VoiceReferenceStatus.DELETED.value
-        reference.deleted_at = datetime.now(timezone.utc)
+        reference.deleted_at = datetime.now(UTC)
         db.session.commit()
 
     @staticmethod
     def fail_profile(profile: VoiceProfile, actor: User, reason: str) -> None:
         profile.status = VoiceProfileStatus.DELETED.value
         profile.embedding_blob = None
-        profile.deleted_at = datetime.now(timezone.utc)
+        profile.deleted_at = datetime.now(UTC)
         VoiceStore.audit(
             "profile_generation_failed",
             actor_id=actor.id, subject_id=profile.subject_id, profile_id=profile.id,
@@ -397,7 +397,7 @@ class VoiceStore:
         for profile in subject.profiles:  # type: ignore[attr-defined]
             if profile.status in {VoiceProfileStatus.ACTIVE.value, VoiceProfileStatus.PROCESSING.value}:
                 profile.status = VoiceProfileStatus.DISABLED.value
-                profile.disabled_at = datetime.now(timezone.utc)
+                profile.disabled_at = datetime.now(UTC)
         VoiceStore.audit("subject_disabled", actor_id=actor.id, subject_id=subject.id)
         db.session.commit()
         logger.info("Voix désactivée: subject=%s actor=%s", subject.id, actor.id)

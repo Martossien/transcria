@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 STATUS_FILENAME = "meet_status.json"
@@ -60,8 +60,8 @@ def write_status(instance_path: str | Path, status: MeetStatus, *,
                  now: datetime | None = None) -> Path:
     """Écrit l'état. L'horodatage est POSÉ ICI : un état sans date ne permettrait pas de
     distinguer un service vivant d'un service arrêté depuis deux jours."""
-    status.updated_at = (now or datetime.now(timezone.utc)).astimezone(
-        timezone.utc).isoformat()
+    status.updated_at = (now or datetime.now(UTC)).astimezone(
+        UTC).isoformat()
     cible = status_path(instance_path)
     cible.parent.mkdir(parents=True, exist_ok=True)
     # Écriture ATOMIQUE : la page peut lire à tout instant, et un JSON tronqué s'afficherait
@@ -98,5 +98,5 @@ def is_stale(status: MeetStatus, *, now: datetime | None = None) -> bool:
         ecrit = datetime.fromisoformat(status.updated_at.replace("Z", "+00:00"))
     except ValueError:
         return True
-    maintenant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    return maintenant - ecrit.astimezone(timezone.utc) > STALE_AFTER
+    maintenant = (now or datetime.now(UTC)).astimezone(UTC)
+    return maintenant - ecrit.astimezone(UTC) > STALE_AFTER

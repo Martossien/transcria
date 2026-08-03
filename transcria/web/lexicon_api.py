@@ -4,7 +4,7 @@ central, sélection des lexiques centraux, diagnostic.
 Vague A2 — routes déplacées telles quelles depuis ``web/routes.py``.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import jsonify, request
 from flask_login import current_user, login_required
@@ -172,7 +172,7 @@ def api_selected_lexicons(job_id: str):
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     fs.save_json("context/selected_lexicons.json", {
         "selected_lexicon_ids": selected_ids,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     })
     logger.info(
         "Sélection lexiques job sauvegardée | job=%s available=%d selected=%d ignored=%d",

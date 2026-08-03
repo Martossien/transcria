@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 
 from connector_service.bridge import JobsApiBridge
@@ -399,7 +400,7 @@ class MeetService:
 
     def _preparer_agendas(self, config, reglages) -> EnsureOutcome:
         """Réunions À VENIR de chaque utilisateur → salles réglées en auto-enregistrement."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         def agenda(adresse, methode, url):
             jeton = GoogleOAuth(service_account_info=config.service_account,
@@ -407,7 +408,7 @@ class MeetService:
             return _lire_json(methode, url, jeton)
 
         bilan = discover_and_prepare(users=list(config.watched_users),
-                                     now=datetime.now(timezone.utc),
+                                     now=datetime.now(UTC),
                                      calendar_call=agenda,
                                      settings_client=MeetSpacesClient(reglages.token))
         return EnsureOutcome(auto_recording=bilan["prepared"], failed=bilan["failed"])

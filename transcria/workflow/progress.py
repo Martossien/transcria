@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from transcria.jobs.store import JobStore
@@ -57,7 +57,7 @@ class WorkflowProgressReporter:
             "step": self._clean_text(step, max_len=40),
             "phase": self._clean_text(phase, max_len=60),
             "message": self._clean_text(message, max_len=180),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         if percent is not None:
             payload["percent"] = self._normalize_percent(percent)

@@ -181,7 +181,7 @@ class MeetingRunnerDaemon:
                     try:
                         line = await asyncio.wait_for(stdout.readline(),
                                                       timeout=self._CAPTION_FLUSH_S)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         await _flush_captions()
                         continue
                 else:

@@ -19,7 +19,7 @@ jour — c'est assumé et écrit, plutôt que déguisé en couverture.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 # Chaînes de ressource EXACTES, relevées sur la documentation Graph. Elles ne se devinent pas
@@ -102,8 +102,8 @@ def build_subscription_request(*, resource: str, notification_url: str,
             "clientState requis : c'est lui qui permet de reconnaître nos propres "
             "notifications d'un appel forgé")
 
-    now = datetime.now(timezone.utc)
-    horizon = expires_at.astimezone(timezone.utc) - now
+    now = datetime.now(UTC)
+    horizon = expires_at.astimezone(UTC) - now
     if horizon <= timedelta(0):
         raise GraphSubscriptionError("expirationDateTime déjà passée")
     if horizon > MAX_SUBSCRIPTION_LIFETIME:
@@ -136,7 +136,7 @@ def build_subscription_request(*, resource: str, notification_url: str,
 
 def _iso(moment: datetime) -> str:
     """Horodatage au format attendu par Graph (UTC, suffixe Z)."""
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
 
 
 def renewal_deadline(expires_at: datetime, *, margin: timedelta = RENEWAL_MARGIN) -> datetime:
@@ -145,7 +145,7 @@ def renewal_deadline(expires_at: datetime, *, margin: timedelta = RENEWAL_MARGIN
     Renouveler à l'expiration exacte perd les notifications émises pendant l'aller-retour ;
     la marge est là pour ça, pas par excès de prudence.
     """
-    return expires_at.astimezone(timezone.utc) - margin
+    return expires_at.astimezone(UTC) - margin
 
 
 @dataclass(frozen=True)

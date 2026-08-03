@@ -25,7 +25,7 @@ import subprocess
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -183,7 +183,7 @@ def create_backup(
     if scope not in ("full", "db", "files"):
         raise BackupError(f"scope inconnu : {scope!r} (attendu : full, db ou files)")
     plan = plan_from_config(cfg, config_path, include_audio=include_audio)
-    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%d-%H%M%S")
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d-%H%M%S")
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:

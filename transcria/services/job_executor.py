@@ -5,7 +5,7 @@ import signal as _sig
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -231,7 +231,7 @@ class JobExecutorService:
                     # On replanifie au lieu d'échouer (terminaison garantie par la fenêtre
                     # max_unavailable_s côté pré-vol). Pas d'état terminal, pas de notif.
                     retry_after = outcome.retry_after_s or 30
-                    scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    scheduled_at = datetime.now(UTC) + timedelta(seconds=retry_after)
                     QueueStore.requeue_later(job_id, scheduled_at)
                     mark_execution_queued(job_id, mode)
                     sl.info("Job différé (ressources distantes) — nouvelle tentative dans %ds",
@@ -244,7 +244,7 @@ class JobExecutorService:
                     required_mb = outcome.required_vram_mb or 0
                     phase = outcome.phase or "stt"
                     retry_after = outcome.retry_after_s or 30
-                    scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    scheduled_at = datetime.now(UTC) + timedelta(seconds=retry_after)
                     QueueStore.requeue_later(job_id, scheduled_at)
                     first_wait = mark_execution_waiting_vram(job_id, required_mb=required_mb, phase=phase)
                     sl.warning("Job en attente de VRAM — nouvelle tentative dans %ds",

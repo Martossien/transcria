@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, request, send_file
@@ -271,7 +271,7 @@ def editor_draft_put(job_id: str):
     fs.save_json(_DRAFT_REL, {
         "schema_version": 1,
         "revision": server_revision + 1,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
         "base_srt_sha256": str(data.get("base_srt_sha256") or ""),
         "chunks": chunks,
         "new_speakers": data.get("new_speakers") or [],
@@ -361,7 +361,7 @@ def editor_save(job_id: str):
         # résultat et mentionné dans le DOCX tant qu'une resynchronisation LLM
         # n'a pas réécrit la synthèse (effacé par apply_refine).
         fs.save_json("metadata/summary_stale.json",
-                     {"since": datetime.now(timezone.utc).isoformat(), "reason": "srt_edited"})
+                     {"since": datetime.now(UTC).isoformat(), "reason": "srt_edited"})
     return jsonify({
         "version": version,
         "warnings": warnings,

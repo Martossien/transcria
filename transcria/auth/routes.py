@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC
 from typing import Any, Protocol
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
@@ -397,7 +398,7 @@ def account_tokens() -> ResponseReturnValue:
 
     Le secret complet n'est affiché qu'UNE fois, dans la réponse du POST de
     création — seule sa somme SHA-256 vit en base."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from transcria.auth.api_tokens import create_token, list_for_user
 
@@ -414,7 +415,7 @@ def account_tokens() -> ResponseReturnValue:
                 flash(_("Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."), "error")
                 return render_template("account_tokens.html",
                                        tokens=list_for_user(current_user.id), new_secret=None), 400
-            expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+            expires_at = datetime.now(UTC) + timedelta(days=days)
         new_secret, token = create_token(current_user.id, request.form.get("label", ""), expires_at)
         audit_log(AuditAction.TOKEN_CREATE, target_type="api_token", target_label=token.token_id,
                   details={"label": token.label, "expires_at": token.expires_at.isoformat() if token.expires_at else None})

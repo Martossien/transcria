@@ -1,7 +1,7 @@
 import enum
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import cast
 
 from transcria.database import db
@@ -38,10 +38,10 @@ class Job(db.Model):
     title = db.Column(db.String(255), nullable=False, default="Réunion sans titre")
     state = db.Column(db.String(40), nullable=False, default=JobState.CREATED.value)
     processing_mode = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC),
     )
     extra_data_json = db.Column(db.Text, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
@@ -93,7 +93,7 @@ class JobFile(db.Model):
     chunk_count = db.Column(db.Integer, nullable=False, default=0)
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (db.UniqueConstraint("job_id", "relpath", name="uq_job_files_job_relpath"),)

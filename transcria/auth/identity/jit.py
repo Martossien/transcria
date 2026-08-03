@@ -15,7 +15,7 @@ Algorithme verrouillé par tests :
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.auth.identity.base import FederatedIdentity
 from transcria.auth.identity.mapping import MappingDecision, resolve_role
@@ -51,7 +51,7 @@ def provision_federated(identity: FederatedIdentity, config: dict) -> tuple[User
         raise FederatedLoginDenied("aucun groupe mappé (default=deny)", decision)
 
     user = UserStore.get_by_external(identity.source, identity.subject)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if user is not None:
         if not user.is_active:
             # Veto LOCAL : un admin a désactivé ce compte — le fournisseur ne le

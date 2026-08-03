@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func
 
@@ -335,7 +335,7 @@ class CentralLexiconStore:
     def mark_entries_used(entry_ids: list[str]) -> None:
         if not entry_ids:
             return
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         entries = db.session.execute(
             db.select(GroupLexiconEntry).filter(GroupLexiconEntry.id.in_(entry_ids))
         ).scalars().all()

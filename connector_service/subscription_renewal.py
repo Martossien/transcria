@@ -26,7 +26,7 @@ rend les scénarios de bord (juste avant l'échéance, juste après) reproductib
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 
 
@@ -57,7 +57,7 @@ class RenewalPolicy:
 
     def next_expiry(self, now: datetime) -> datetime:
         """Échéance à demander : le maximum permis, pour espacer les renouvellements."""
-        return now.astimezone(timezone.utc) + self.max_lifetime
+        return now.astimezone(UTC) + self.max_lifetime
 
 
 # Valeurs relevées sur les documentations officielles (cf. en-tête).
@@ -96,8 +96,8 @@ def decide(*, state: SubscriptionState, expires_at: datetime, now: datetime,
        abonnement neuf qu'un abonnement inerte dont personne ne s'aperçoit ;
     3. **échéance proche** enfin : renouveler.
     """
-    now = now.astimezone(timezone.utc)
-    expires_at = expires_at.astimezone(timezone.utc)
+    now = now.astimezone(UTC)
+    expires_at = expires_at.astimezone(UTC)
 
     if state is SubscriptionState.EXPIRED or expires_at <= now:
         return RenewalDecision(
@@ -165,4 +165,4 @@ def is_expired_beyond_recovery(expires_at: datetime, now: datetime) -> bool:
     recréation ET signale que des évènements ont pu être perdus — ce qui mérite un message,
     pas un renouvellement silencieux qui masquerait le trou.
     """
-    return expires_at.astimezone(timezone.utc) <= now.astimezone(timezone.utc)
+    return expires_at.astimezone(UTC) <= now.astimezone(UTC)

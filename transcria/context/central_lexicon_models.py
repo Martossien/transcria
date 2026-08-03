@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import cast
 
 from transcria.database import db
@@ -15,12 +15,12 @@ class GroupLexicon(db.Model):
     description = db.Column(db.String(500), nullable=False, default="")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     group = db.relationship("Group")
@@ -63,12 +63,12 @@ class GroupLexiconEntry(db.Model):
     source = db.Column(db.String(40), nullable=False, default="manual")
     usage_count = db.Column(db.Integer, nullable=False, default=0)
     last_used_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     lexicon = db.relationship("GroupLexicon", back_populates="entries")

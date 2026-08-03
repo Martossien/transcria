@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import case, func, or_, text, update
@@ -45,7 +45,7 @@ class QueueStore:
             aging_bonus=0,
             position=QueueStore._next_position(priority),
             status=QUEUE_WAITING,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
             scheduled_at=scheduled_at,
             mode=mode,
         )
@@ -201,7 +201,7 @@ class QueueStore:
 
     @staticmethod
     def get_next_candidates(limit: int = 16) -> list[JobQueueEntry]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return list(
             db.session.execute(
                 db.select(JobQueueEntry)
@@ -294,7 +294,7 @@ class QueueStore:
         La transaction est volontairement minuscule (aucune E/S) : on claim, on committe,
         *puis* on lance le job hors transaction (cf. C2 — verrous tenus quelques ms).
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if db.engine.dialect.name == "postgresql":
             entry = db.session.execute(
                 db.select(JobQueueEntry)
@@ -325,7 +325,7 @@ class QueueStore:
         if entry is None:
             return False
         entry.status = QUEUE_RUNNING
-        entry.started_at = datetime.now(timezone.utc)
+        entry.started_at = datetime.now(UTC)
         entry.gpu_index = gpu_index
         entry.current_phase = phase
         db.session.commit()
@@ -346,7 +346,7 @@ class QueueStore:
         max_bonus = max(0, int(max_total_bonus))
         if max_bonus <= 0:
             return 0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(minutes=max(1, int(interval_minutes)))
         result = db.session.execute(
             update(JobQueueEntry)

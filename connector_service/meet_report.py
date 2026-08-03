@@ -13,7 +13,7 @@ deux dérive, et non un exploitant devant une page vide.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 STATUS_FILENAME = "meet_status.json"
@@ -35,7 +35,7 @@ def write_report(instance_path: str | Path, *, cycles: int, watched: list[str],
     porte bien.
     """
     charge = {
-        "updated_at": (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(),
+        "updated_at": (now or datetime.now(UTC)).astimezone(UTC).isoformat(),
         "cycles": cycles,
         "watched": list(watched),
         "pending": list(pending),

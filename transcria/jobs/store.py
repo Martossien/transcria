@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_
 
@@ -153,7 +153,7 @@ class JobStore:
         if days <= 0:
             return 0
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         terminal_states = {
             JobState.COMPLETED.value,
             JobState.FAILED.value,
@@ -166,7 +166,7 @@ class JobStore:
             if updated_at is None:
                 continue
             if updated_at.tzinfo is None:
-                updated_at = updated_at.replace(tzinfo=timezone.utc)
+                updated_at = updated_at.replace(tzinfo=UTC)
             if updated_at >= cutoff:
                 continue
             if dry_run:                       # C3.10 : comptage sans effet de bord

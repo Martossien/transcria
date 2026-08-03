@@ -7,7 +7,7 @@ artefact) et la transmet ; TranscrIA la hache et déduplique dessus, sans conna�
 structure de clé propre à chaque plateforme.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.database import db
 
@@ -53,10 +53,10 @@ class MeetingImport(db.Model):
     last_error = db.Column(db.Text, nullable=True)
     next_retry_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False,
-                           default=lambda: datetime.now(timezone.utc))
+                           default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False,
-                           default=lambda: datetime.now(timezone.utc),
-                           onupdate=lambda: datetime.now(timezone.utc))
+                           default=lambda: datetime.now(UTC),
+                           onupdate=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {

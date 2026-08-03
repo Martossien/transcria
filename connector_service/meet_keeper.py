@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from connector_service.meet_events import MAX_TTL, TTL_MAX_LITERAL
 from connector_service.subscription_keeper import TrackedSubscription, plan
@@ -51,7 +51,7 @@ def parse_expiry(brut: str) -> datetime | None:
     if not brut:
         return None
     try:
-        return datetime.fromisoformat(brut.replace("Z", "+00:00")).astimezone(timezone.utc)
+        return datetime.fromisoformat(brut.replace("Z", "+00:00")).astimezone(UTC)
     except ValueError:
         return None
 
@@ -113,7 +113,7 @@ class MeetSubscriptionKeeper:
         self._dernieres: dict[str, datetime] = {}
 
     def keep_once(self, now: datetime | None = None) -> KeepOutcome:
-        maintenant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        maintenant = (now or datetime.now(UTC)).astimezone(UTC)
         resultat = KeepOutcome()
         abonnements = tuple(
             suivi for suivi in (

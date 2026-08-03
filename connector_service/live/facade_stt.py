@@ -222,7 +222,7 @@ class FacadeTranscriber:
                     break
                 try:
                     yield await asyncio.wait_for(out.get(), timeout=0.5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
             if not drainer.cancelled():
                 capture_error = drainer.exception()         # remonte l'échec de la capture

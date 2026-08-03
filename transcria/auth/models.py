@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -33,7 +33,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default=Role.OPERATOR.value)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     last_login = db.Column(db.DateTime(timezone=True), nullable=True)
     # Langue préférée de l'INTERFACE (code BCP-47 court, ex. "fr"/"en"). NULL = suivre le
     # navigateur / la locale par défaut de l'instance. Distinct de la langue des livrables
@@ -102,7 +102,7 @@ class ApiToken(db.Model):
     secret_hash = db.Column(db.String(64), nullable=False)
     label = db.Column(db.String(80), nullable=False, default="", server_default="")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False,
-                           default=lambda: datetime.now(timezone.utc))
+                           default=lambda: datetime.now(UTC))
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     # Mise à jour throttlée (1×/min) : le polling /status ne doit pas écrire à chaque hit.
     last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -133,7 +133,7 @@ class Group(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(120), unique=True, nullable=False, index=True)
     description = db.Column(db.String(255), nullable=False, default="")
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     memberships = db.relationship(
         "GroupMembership",
@@ -160,7 +160,7 @@ class GroupMembership(db.Model):
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=False, index=True)
     user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     role = db.Column(db.String(30), nullable=False, default=GroupRole.MEMBER.value)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     group = db.relationship("Group", back_populates="memberships")
     user = db.relationship("User", backref="group_memberships")

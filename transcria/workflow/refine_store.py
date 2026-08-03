@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
@@ -107,7 +107,7 @@ class RefineStore:
             "role": role,
             "kind": kind,
             "text": text,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }
         if proposal:
             # Proposition d'application extraite d'un tour discuss : l'UI l'affiche à
@@ -137,7 +137,7 @@ class RefineStore:
         self._fs.save_json(_REQUEST, {
             "kind": kind,
             "message": message,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         })
 
     def has_active_request(self) -> bool:

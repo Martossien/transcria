@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import desc
 
@@ -37,7 +37,7 @@ class AuditStore:
     ) -> None:
         try:
             entry = AuditLog(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 actor_id=actor_id,
                 actor_username=actor_username,
                 action=action.value if isinstance(action, AuditAction) else action,
@@ -111,7 +111,7 @@ class AuditStore:
 
     @staticmethod
     def purge_expired(retention_days: int) -> int:
-        cutoff = datetime.now(timezone.utc).replace(
+        cutoff = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         cutoff = cutoff - timedelta(days=retention_days)
@@ -139,7 +139,7 @@ class AuditStore:
             return AuditStore.purge_expired(default_retention_days)
 
         total = 0
-        now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        now = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         for family, prefixes in AuditStore.FAMILY_PREFIXES.items():
             retention_days = policy.get(family, default_retention_days)
             if not isinstance(retention_days, (int, float)) or retention_days <= 0:

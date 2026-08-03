@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.database import db
 
@@ -45,10 +45,10 @@ class VoiceSubject(db.Model):
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=True, index=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC),
     )
 
     group = db.relationship("Group")
@@ -84,7 +84,7 @@ class VoiceConsent(db.Model):
     revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
     revoked_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     revocation_reason = db.Column(db.String(500), nullable=False, default="")
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     subject = db.relationship("VoiceSubject", back_populates="consents")
     uploader = db.relationship("User", foreign_keys=[uploaded_by])
@@ -112,7 +112,7 @@ class VoiceProfile(db.Model):
     speech_duration_s = db.Column(db.Float, nullable=False, default=0.0)
     quality_status = db.Column(db.String(80), nullable=False, default="")
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     disabled_at = db.Column(db.DateTime(timezone=True), nullable=True)
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -134,7 +134,7 @@ class VoiceReferenceFile(db.Model):
     sample_rate = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(30), nullable=False, default=VoiceReferenceStatus.TEMPORARY.value)
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     profile = db.relationship("VoiceProfile", back_populates="reference_files")
 
@@ -148,7 +148,7 @@ class VoiceAuditEvent(db.Model):
     actor_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)
     event_type = db.Column(db.String(80), nullable=False, index=True)
     details_json = db.Column(db.Text, nullable=False, default="{}")
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     subject = db.relationship("VoiceSubject")
     profile = db.relationship("VoiceProfile")
@@ -168,7 +168,7 @@ class VoiceMatch(db.Model):
     rank = db.Column(db.Integer, nullable=False, default=1)
     decision = db.Column(db.String(40), nullable=False, default=VoiceMatchDecision.SUGGESTED.value, index=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     decided_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     decided_at = db.Column(db.DateTime(timezone=True), nullable=True)
 

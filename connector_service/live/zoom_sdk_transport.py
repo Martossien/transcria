@@ -260,7 +260,7 @@ def zoom_sdk_demux_source(
 
                 try:
                     await asyncio.wait_for(auth_done.wait(), timeout=auth_timeout_s)
-                except asyncio.TimeoutError as exc:
+                except TimeoutError as exc:
                     raise ZoomSdkError(
                         f"pas de réponse d'authentification en {auth_timeout_s:.0f} s") from exc
 
@@ -597,7 +597,7 @@ async def _await_admission(changed: asyncio.Event, phase_of: Callable[[], ZoomSd
         changed.clear()
         try:
             await asyncio.wait_for(changed.wait(), timeout=remaining)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return
 
 

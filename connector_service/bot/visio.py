@@ -177,7 +177,7 @@ def monitored_frames(factory, *, on_first=None, idle_timeout_s: float = 900.0,
                                                    timeout=idle_timeout_s)
                 except StopAsyncIteration:
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.info("aucune frame audio depuis %.0f s — salle vraisemblablement "
                                 "désertée, sortie", idle_timeout_s)
                     return
@@ -240,7 +240,7 @@ async def run(args: argparse.Namespace, api_key: str, api_secret: str) -> int:
     try:
         await asyncio.wait_for(session.run(provider, occurrence),
                                timeout=args.max_duration_s)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.info("Durée maximale atteinte — sortie de la salle")
     except Exception as exc:  # noqa: BLE001 — connexion LiveKit : le code de retour décide du rejeu
         logger.error("Visio/LiveKit : %r", exc)

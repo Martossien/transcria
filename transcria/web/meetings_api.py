@@ -17,7 +17,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -133,8 +133,8 @@ def api_meetings_create():
         except ValueError:
             return jsonify({"error": "Date/heure invalide (ISO 8601 attendu)"}), 400
         scheduled_at = (parsed.replace(tzinfo=tz) if parsed.tzinfo is None else parsed
-                        ).astimezone(timezone.utc)
-        now = datetime.now(timezone.utc)
+                        ).astimezone(UTC)
+        now = datetime.now(UTC)
         if scheduled_at <= now + __import__("datetime").timedelta(minutes=2):
             # « la même heure même minute » doit marcher (vécu) : tout horaire déjà atteint
             # ou imminent = DÈS QUE POSSIBLE, pas une erreur.
@@ -160,7 +160,7 @@ def api_meetings_create():
     # réunion, langue — l'utilisateur complète le reste AVANT la réunion s'il veut.
     try:
         cfg_now = get_config()
-        local_when = ((scheduled_at or datetime.now(timezone.utc))
+        local_when = ((scheduled_at or datetime.now(UTC))
                       .astimezone(ZoneInfo(str((cfg_now.get("queue", {}) or {}).get("timezone", "Europe/Paris")))))
         JobFilesystem(cfg_now["storage"]["jobs_dir"], job_id).save_json(
             "context/meeting_context.json",

@@ -15,7 +15,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from transcria.models_catalog import ModelSpec, disk_free_bytes, resolve_hf_home, resolve_models_dir, resolve_runtimes_dir
@@ -125,7 +125,7 @@ def run_download(
     total_fn: Callable[[ModelSpec, str | None], int] | None = None,
 ) -> dict:
     """Effectue le téléchargement BLOQUANT (dans le sous-process) en publiant le statut."""
-    started = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(UTC).isoformat()
     hf_fast = _configure_hf_transfer()
 
     def _base(**extra) -> dict:
@@ -184,7 +184,7 @@ def run_download(
         return {"ok": False, "error": str(exc)}
 
     _write_status(status_file, _base(status="done", total_bytes=total,
-                                     finished_at=datetime.now(timezone.utc).isoformat()))
+                                     finished_at=datetime.now(UTC).isoformat()))
     return {"ok": True}
 
 

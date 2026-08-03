@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _ARCHIVE_GLOB = "transcria-backup-*.tar.gz"
@@ -35,7 +35,7 @@ class MaintenanceService:
             archives.append({
                 "name": path.name,
                 "size_mb": round(stat.st_size / (1024 * 1024), 1),
-                "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC),
             })
         return archives
 
@@ -64,7 +64,7 @@ class MaintenanceService:
         """Lance une sauvegarde en sous-processus DÉTACHÉ (CLI). Retourne le fichier de log."""
         dest = MaintenanceService.backup_dir(cfg)
         dest.mkdir(parents=True, exist_ok=True)
-        log_path = dest / f".backup-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}.log"
+        log_path = dest / f".backup-{datetime.now(UTC):%Y%m%d-%H%M%S}.log"
 
         cmd = [sys.executable, "-m", "transcria.maintenance.cli"]
         if config_path:

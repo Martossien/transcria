@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 
@@ -21,7 +21,7 @@ class JobContextBuilder:
         context = {
             "job_id": job.id,
             "owner_user_id": job.owner_id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "meeting": {
                 "title": meeting.get("title", ""),
                 "type": meeting.get("meeting_type", ""),

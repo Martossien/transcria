@@ -1,5 +1,11 @@
 [tool.ruff]
 line-length = 140
+# La CI tourne en Python 3.11 (cf. `.github/workflows/tests.yml` et `python_version` de
+# mypy) alors qu'une machine de développement peut être en 3.13. Sans cette cible, ruff
+# analyse avec une grammaire récente et ACCEPTE la syntaxe qui n'existe qu'à partir de
+# 3.12 — une f-string à guillemets imbriqués (PEP 701) est passée exactement ainsi, gates
+# locaux verts et CI rouge sur une erreur de syntaxe. La cible fait échouer ruff ici.
+target-version = "py311"
 
 [tool.ruff.lint]
 # `B` (flake8-bugbear) ajouté à la passe qualité d'août 2026 — il attrape des pièges que
@@ -18,6 +24,14 @@ line-length = 140
 #     capture à un futur palier `BLE`.
 # Un linter n'a pas toujours raison ; l'accepter en bloc aurait produit du bruit.
 select = ["E", "W", "F", "I", "B", "UP", "SIM103", "SIM113", "SIM114"]
+
+# UP042 (`class X(str, Enum)` → `StrEnum`) est ÉCARTÉ, et ce n'est pas de la paresse : la
+# conversion change ce que renvoie `str(x)` (`"JobState.DONE"` devient `"done"`), donc la
+# sortie de tout `f"{x}"`. Or les 17 sites sont des énumérations PERSISTÉES en base et
+# rendues dans les gabarits — `JobState`, `Role`, `Permission`, `AuditAction`… Un
+# remplacement mécanique y écrirait silencieusement d'autres valeurs dans des lignes
+# d'audit. À reprendre site par site, avec des tests, jamais en `--fix`.
+ignore = ["UP042"]
 
 # Tri d'imports déterministe entre local et CI. Le dossier racine `alembic/`
 # (migrations, sans __init__.py) est auto-détecté comme first-party par certaines

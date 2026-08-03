@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from transcria.auth.models import User
 from transcria.database import db
@@ -35,7 +35,7 @@ _BACKOFF_CAP_S = 900
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _backoff_s(attempts: int) -> int:

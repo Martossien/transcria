@@ -22,7 +22,7 @@ Trois pièges que cet ordonnanceur existe pour éviter :
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from connector_service.subscription_renewal import (
     RenewalAction,
@@ -99,7 +99,7 @@ def plan(subscriptions: tuple[TrackedSubscription, ...], now: datetime) -> Plan:
     compte — le tester après `decide()` ferait renvoyer une opération qu'on n'a pas le droit
     d'exécuter.
     """
-    now = now.astimezone(timezone.utc)
+    now = now.astimezone(UTC)
     operations: list[PlannedOperation] = []
     skipped: list[SkippedOperation] = []
 
@@ -131,10 +131,10 @@ def _why_skip(abonnement: TrackedSubscription, now: datetime) -> str:
     if abonnement.given_up:
         return (f"{abonnement.consecutive_failures} échecs consécutifs : abandon, "
                 f"une intervention est nécessaire")
-    if abonnement.retry_not_before and now < abonnement.retry_not_before.astimezone(timezone.utc):
+    if abonnement.retry_not_before and now < abonnement.retry_not_before.astimezone(UTC):
         return "temporisation en cours après un échec"
     if abonnement.last_operation_at:
-        depuis = now - abonnement.last_operation_at.astimezone(timezone.utc)
+        depuis = now - abonnement.last_operation_at.astimezone(UTC)
         if depuis < MIN_INTERVAL_BETWEEN_OPERATIONS:
             return (f"opération il y a {int(depuis.total_seconds() // 60)} min : "
                     f"les plateformes demandent {int(MIN_INTERVAL_BETWEEN_OPERATIONS.total_seconds() // 60)} "
@@ -174,7 +174,7 @@ def after_failure(abonnement: TrackedSubscription, *, now: datetime) -> TrackedS
     return replace(
         abonnement,
         consecutive_failures=echecs,
-        retry_not_before=now.astimezone(timezone.utc) + backoff_delay(echecs),
+        retry_not_before=now.astimezone(UTC) + backoff_delay(echecs),
     )
 
 
@@ -190,14 +190,14 @@ def next_wakeup(subscriptions: tuple[TrackedSubscription, ...], now: datetime, *
     Le plafond n'est pas qu'un confort : sans lui, un ensemble d'abonnements tous lointains
     endormirait la boucle si longtemps qu'un abonnement ajouté entre-temps ne serait pas vu.
     """
-    now = now.astimezone(timezone.utc)
+    now = now.astimezone(UTC)
     echeances: list[datetime] = []
     for abonnement in subscriptions:
         if abonnement.given_up:
             continue
         if abonnement.retry_not_before:
-            echeances.append(abonnement.retry_not_before.astimezone(timezone.utc))
-        echeances.append(abonnement.expires_at.astimezone(timezone.utc) - abonnement.policy.margin)
+            echeances.append(abonnement.retry_not_before.astimezone(UTC))
+        echeances.append(abonnement.expires_at.astimezone(UTC) - abonnement.policy.margin)
 
     futures = [e - now for e in echeances if e > now]
     if not futures:

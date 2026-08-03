@@ -10,7 +10,7 @@ et son débit natif — factorisés ici pour rester maintenables.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import NamedTuple
 
 from connector_service.contract import ExternalMeetingOccurrence
@@ -31,7 +31,7 @@ class DemuxedFrame(NamedTuple):
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # open(occurrence) -> AsyncIterator[DemuxedFrame] : frames démuxées du transport établi.

@@ -14,7 +14,7 @@ le référentiel est en base pour suivre la topologie split (jamais de disque co
 """
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.database import db
 
@@ -37,12 +37,12 @@ class MeetingTypeTemplate(db.Model):
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=True, index=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     group = db.relationship("Group")

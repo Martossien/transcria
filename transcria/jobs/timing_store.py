@@ -8,7 +8,7 @@ points doivent s'effacer. Voir [[timing_model]].
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.database import db
 from transcria.workflow.timing_model import WINDOW
@@ -24,7 +24,7 @@ class JobTiming(db.Model):
     duration_seconds = db.Column(db.Float, nullable=False)
     recorded_at = db.Column(
         db.DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

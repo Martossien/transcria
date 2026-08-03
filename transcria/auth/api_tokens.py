@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from transcria.auth.models import ApiToken, User, db
 
@@ -62,7 +62,7 @@ def authenticate_token(raw: str) -> User | None:
     token = db.session.scalar(db.select(ApiToken).filter_by(token_id=token_id))
     if token is None or token.revoked_at is not None:
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if token.expires_at is not None and _aware(token.expires_at) <= now:
         return None
     if not hmac.compare_digest(token.secret_hash, _hash_secret(secret)):
@@ -77,7 +77,7 @@ def authenticate_token(raw: str) -> User | None:
 
 
 def revoke_token(token: ApiToken) -> None:
-    token.revoked_at = datetime.now(timezone.utc)
+    token.revoked_at = datetime.now(UTC)
     db.session.commit()
 
 
@@ -88,4 +88,4 @@ def list_for_user(user_id: str) -> list[ApiToken]:
 
 def _aware(dt: datetime) -> datetime:
     """SQLite rend les DateTime naïfs même déclarés timezone=True — normalise en UTC."""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)

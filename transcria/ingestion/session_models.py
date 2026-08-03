@@ -10,14 +10,14 @@ sécurité) — l'affichage passe par `meeting_title`, jamais par la référence
 d'état passent par `session_states` (machine PURE) : le modèle stocke, il ne décide pas.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from transcria.database import db
 from transcria.ingestion.session_states import PLANNED
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class MeetingSession(db.Model):

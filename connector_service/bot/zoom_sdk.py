@@ -239,7 +239,7 @@ async def run(args: argparse.Namespace, client_secret: str) -> int:
     try:
         await asyncio.wait_for(session.run(provider, occurrence),
                                timeout=args.max_duration_s)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.info("Durée maximale atteinte — sortie de réunion")
     except ZoomSdkError as exc:
         # Le message porte déjà le diagnostic Zoom traduit. Reste à choisir le CODE, et la

@@ -18,14 +18,14 @@ from __future__ import annotations
 import base64
 import binascii
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from connector_service.contract import ExternalMeetingOccurrence
 from connector_service.live.media import RawFrame
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def parse_bridge_message(msg: object) -> tuple[str, bytes, int, int, str, int] | None:
