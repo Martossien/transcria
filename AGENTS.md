@@ -1135,6 +1135,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/AUDIT_DPO.md` | Traçabilité et rétention pour un délégué à la protection des données |
 | `docs/API_REFERENCE.md` | Surface HTTP complète (GÉNÉRÉE — `scripts/generate_api_reference.py`) |
 | `docs/UPGRADE.md` | Montée de version : sauvegarde, migration, restauration, rollback |
+| `docs/RELEASE.md` | **Mainteneurs** — procédure de PUBLICATION d'une version : gates, E2E réel, gate d'installation en distro vierge, règle C7, revue documentaire et critères d'archivage, tag, images, notes de release. Partie mécanique exécutable : `scripts/release_check.py` |
 | `docs/STOCKAGE_PARTAGE_JOBS.md` | Magasin de fichiers partagé via PostgreSQL (topologie split sans disque commun) |
 | `docs/PIPELINE_REPRISE.md` | Reprise du pipeline : checkpoints, empreintes de provenance, invalidation aval |
 | `docs/LLM_BACKENDS.md` | Backends LLM d'arbitrage : script local, Ollama, HTTP compatible OpenAI |

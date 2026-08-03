@@ -21,6 +21,7 @@ example results and the user journey.
 | [INSTALL.md](INSTALL.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting |
 | [DOCKER.md](DOCKER.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
 | [UPGRADE.md](UPGRADE.md) | Upgrade and rollback procedure, obsolete configuration keys, database migrations |
+| [RELEASE.md](RELEASE.md) | **Maintainers** — how a version gets published: gates, real E2E, clean-distro install gate, Docker rule, documentation review, tag, images, release notes, and the incidents each step exists for |
 | [SERVICE_RESSOURCES_GPU.md](SERVICE_RESSOURCES_GPU.md) | Split topology (web frontend + GPU resource node): remote inference, VRAM autonomy, admission and degraded modes |
 | [STOCKAGE_PARTAGE_JOBS.md](STOCKAGE_PARTAGE_JOBS.md) | PostgreSQL-backed job file store for deployments without a shared filesystem |
 
