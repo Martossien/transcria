@@ -103,16 +103,50 @@ Conteneur vierge → amorçage OS → `install.sh` → service → sonde GPU ré
 complet. Compter ~35 min, dont le téléchargement du GGUF d'arbitrage du palier détecté.
 `--topology frontale-split` existe et exerce l'autre chemin d'installation.
 
-## 5. Images Docker
+## 5. Images Docker — construire et vérifier AVANT le tag
 
-**Règle C7 : tout `Dockerfile` modifié est buildé AVANT le tag.** La CI ne parse ni le
-bundled ni le resource-node — un Dockerfile cassé ne se voit qu'ici.
-`release_check.py` liste ceux qui ont bougé depuis le dernier tag.
+**Règle C7 : tout `Dockerfile` modifié est buildé avant le tag.** La CI ne construit que
+les quatre images qu'elle publie — un `Dockerfile.allinone-bundled` ou
+`Dockerfile.resource-node` cassé ne se voit que si on le construit soi-même, c'est-à-dire
+ici ou jamais. `release_check.py` liste ceux qui ont bougé depuis le dernier tag.
+
+### 5.1 Le parc
+
+| Dockerfile | Ce qu'il produit | Publié ? |
+|---|---|---|
+| `Dockerfile.allinone-gpu` | portail complet, modèles **téléchargés au premier démarrage** (image « slim ») | **oui**, par la CI |
+| `Dockerfile.bot` | exécutant bot de réunion (Jitsi) | **oui**, par la CI |
+| `Dockerfile.visio` | exécutant Visio — client LiveKit natif | **oui**, par la CI |
+| `Dockerfile.zoom-sdk` | exécutant Zoom — SDK officiel | **oui**, par la CI |
+| `Dockerfile.allinone-bundled` | portail + **poids embarqués** (~57 Go, hors-ligne) | **oui**, mais **à la main** (§ 9.2) |
+| `Dockerfile.resource-node` | nœud de ressources GPU (topologie split) | non — construit localement |
+| `Dockerfile`, `Dockerfile.worker` | base et worker | non |
+
+### 5.2 Les gardes automatiques
+
+```bash
+venv/bin/python -m pytest tests/test_docker_sync.py -q
+```
+
+Elles couvrent ce qu'une relecture humaine laisse passer : les **SHA épinglés** des étages
+CUDA doivent égaler les constantes Python correspondantes, les **blocs partagés** entre
+Dockerfiles doivent rester identiques au caractère près, les répertoires lourds doivent
+être dans `.dockerignore`, et **tout Dockerfile ou compose cité dans une documentation
+doit exister** — un artefact introuvable n'existe pas pour qui reprend le projet.
+
+`release_check.py` y ajoute le contrôle inverse : tout Dockerfile que le workflow de
+publication prétend construire doit être présent.
+
+### 5.3 Construire ce qui a changé
 
 ```bash
 DOCKER_BUILDKIT=1 docker build -f Dockerfile.<celui-qui-a-changé> .
-venv/bin/python -m pytest tests/test_docker_sync.py -q   # SHAs épinglés, blocs partagés
+docker compose -f docker-compose.yml config >/dev/null           # le compose parse
+docker compose -f docker-compose.split-gpu.yml config >/dev/null
 ```
+
+Le bundled ne se construit pas ainsi : il a son script, qui enchaîne construction et
+vérification (§ 9.2).
 
 ## 6. Documentation — la revue, fichier par fichier
 
@@ -227,19 +261,51 @@ gh run list --limit 5 --json status,conclusion,name,headSha
 
 ## 9. Publier les images
 
-- **Slim** : publiée automatiquement par le workflow `publish-allinone-image`, déclenché
-  par le tag `v*`. Rien à faire, mais vérifier qu'il est vert.
-- **Bundled** : **uniquement** via le script, jamais à la main. Il porte six contrôles
-  bloquants (version du paquet, commits épinglés des runtimes contre les constantes
-  Python, site MOSS, poids bakés, poids Qwen3-ASR au chemin du lanceur, absence de
-  `/app/runtimes`) qu'une vérification manuelle oublie.
+Une release publie **sept tags**, par deux voies différentes. Les compter est le seul
+moyen de ne pas en oublier : en 0.4.0, les trois images de connecteurs ont été publiées
+par la CI sans que personne ne le vérifie.
+
+### 9.1 Ce que la CI fait toute seule
+
+Le workflow `publish-allinone-image` se déclenche sur le tag `v*` et pousse **quatre**
+images, chacune en `:v<x.y.z>` **et** `:latest` :
+
+`transcria-allinone` (slim), `transcria-bot`, `transcria-visio`, `transcria-zoom-sdk`.
+
+Rien à faire — mais vérifier que le run est **vert**, et pas seulement lancé. Un workflow
+de publication peut échouer en silence pendant des versions entières : c'est arrivé de la
+`0.1.0-beta.6` à la `.9`, où l'image slim n'avait jamais été publiée faute de droits sur
+le paquet GHCR.
+
+### 9.2 Le bundled, à la main mais scripté
+
+L'image « batteries incluses » (~57 Go) dépasse le disque d'un runner GitHub : elle se
+construit depuis une machine locale. **Toujours par le script, jamais à la main** — il
+porte six contrôles bloquants qu'une vérification humaine oublie : version du paquet
+Python dans l'image, commits épinglés des runtimes STT **comparés aux constantes Python**,
+site MOSS présent, poids bakés (GGUF d'arbitrage + cache HF), poids Qwen3-ASR au chemin
+exact qu'attend le lanceur, et absence de `/app/runtimes` (les runtimes vivent dans
+`/opt`).
 
 ```bash
 scripts/release_bundled.sh --owner <propriétaire> --push
 ```
 
-L'image dépasse le disque d'un runner GitHub : elle se construit depuis une machine
-locale. À la toute première publication, rendre le paquet **public** (Settings → Packages).
+Sans `--push`, il construit et vérifie sans rien publier. Avec `--skip-build`, il vérifie
+une image déjà construite — utile pour contrôler après coup ce qu'on a poussé.
+
+### 9.3 Vérifier que tout est bien arrivé
+
+```bash
+venv/bin/python scripts/release_check.py --images
+```
+
+Il déduit la liste attendue du workflow lui-même — ajouter une image au workflow étend le
+contrôle sans y penser — et interroge GHCR tag par tag.
+
+À la toute première publication d'un paquet, le rendre **public** (Settings → Packages) :
+tant qu'il est privé, un `docker pull` anonyme échoue sur une erreur d'authentification
+qui ne dit pas que le paquet existe.
 
 ## 10. Notes de release
 
@@ -272,12 +338,14 @@ curl -sf -o /dev/null -w "%{http_code}\n" http://127.0.0.1:7870/login
 
 Cela arrive — un correctif nécessaire découvert après le tag. Dans l'ordre :
 
-1. **Annuler le run `publish-allinone-image` périmé.** Sinon il pousse l'image slim de
-   l'ancien commit **après** la nouvelle, et écrase la bonne.
-2. Déplacer le tag, le repousser en forçant.
-3. **Reconstruire le bundled sur le commit taggé** — l'image publiée doit correspondre au
-   tag.
-4. Re-vérifier la CI sur le nouveau commit taggé.
+1. **Annuler le run `publish-allinone-image` périmé.** Sinon il pousse les images de
+   l'ancien commit **après** les nouvelles, et écrase les bonnes. C'est la seule étape
+   dont l'oubli est irrattrapable sans republier.
+2. Déplacer le tag, le repousser en forçant. Les **quatre** images de la CI se
+   reconstruisent toutes seules ; le nouveau run doit être vert.
+3. **Reconstruire et repousser le bundled** (`scripts/release_bundled.sh --push`) : lui ne
+   se rejoue pas tout seul, et une image qui ne correspond plus au tag est pire qu'absente.
+4. Re-vérifier la CI sur le nouveau commit taggé, puis `release_check.py --images`.
 
 Un correctif qui ne touche que l'outillage de mainteneur (scripts de test, gates) ne
 justifie pas de déplacer un tag déjà publié : l'arbre livré se comporte à l'identique, et
@@ -300,3 +368,4 @@ Chaque étape ci-dessus existe parce qu'elle a manqué une fois.
 | `0.4.0` | CI rouge après le tag : f-string à guillemets imbriqués, valide en 3.12+, refusée par le Python 3.11 de la CI | `target-version` dans `[tool.ruff]`, contrôlé par `release_check.py` |
 | `0.4.0` | CI rouge à nouveau : le `--select` de la CI **effaçait le `ignore`** de `pyproject.toml` | l'étape de lint n'a plus aucun drapeau |
 | `0.4.0` | treize plans de chantier terminés traînaient encore dans `docs/`, et dix-huit documents manquaient à `AGENTS.md` — parce que la revue documentaire n'avait été faite à aucune version précédente | § 6, et les contrôles d'orphelins et de pointeurs morts |
+| `0.4.0` | les trois images de connecteurs ont été publiées par la CI **sans que personne ne le vérifie** — la release ne comptait que deux images sur sept | § 9.3 — `release_check.py --images` |

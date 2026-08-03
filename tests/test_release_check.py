@@ -208,6 +208,72 @@ class TestVersionDePython:
         rc.controler_version_python()
 
 
+class TestImagesAttendues:
+    """La liste des images à publier est DÉDUITE du workflow, pas recopiée."""
+
+    def _workflow(self, racine: Path, contenu: str) -> None:
+        (racine / ".github" / "workflows").mkdir(parents=True)
+        (racine / ".github" / "workflows" / "publish-image.yml").write_text(contenu)
+
+    def test_image_directe_et_matrice_sont_toutes_deux_vues(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(rc, "ROOT", tmp_path)
+        monkeypatch.setattr(rc, "proprietaire", lambda: "quelquun")
+        self._workflow(tmp_path,
+                       "images: ghcr.io/${{ github.repository_owner }}/transcria-allinone\n"
+                       "  - { name: transcria-bot, dockerfile: Dockerfile.bot }\n"
+                       "  - { name: transcria-visio, dockerfile: Dockerfile.visio }\n")
+        tags = rc.images_attendues("0.4.0")
+        assert "ghcr.io/quelquun/transcria-allinone:v0.4.0" in tags
+        assert "ghcr.io/quelquun/transcria-bot:v0.4.0" in tags
+        assert "ghcr.io/quelquun/transcria-visio:v0.4.0" in tags
+
+    def test_le_bundled_est_attendu_meme_s_il_n_est_pas_dans_le_workflow(self, tmp_path, monkeypatch):
+        # Il ne passe pas par la CI (trop gros pour un runner) : sans cette ligne, l'image
+        # la plus lourde de la release serait la seule que personne ne vérifie.
+        monkeypatch.setattr(rc, "ROOT", tmp_path)
+        monkeypatch.setattr(rc, "proprietaire", lambda: "quelquun")
+        self._workflow(tmp_path,
+                       "images: ghcr.io/${{ github.repository_owner }}/transcria-allinone\n")
+        tags = rc.images_attendues("0.4.0")
+        assert "ghcr.io/quelquun/transcria-allinone:v0.4.0-bundled" in tags
+        assert "ghcr.io/quelquun/transcria-allinone:bundled" in tags
+
+    def test_le_prefixe_v_du_tag_git_est_respecte(self, tmp_path, monkeypatch):
+        # `type=ref,event=tag` reprend le nom du tag git tel quel. Chercher `:0.4.0` au lieu
+        # de `:v0.4.0` déclarait toutes les images manquantes — erreur commise en écrivant
+        # ce contrôle.
+        monkeypatch.setattr(rc, "ROOT", tmp_path)
+        monkeypatch.setattr(rc, "proprietaire", lambda: "quelquun")
+        self._workflow(tmp_path,
+                       "images: ghcr.io/${{ github.repository_owner }}/transcria-allinone\n")
+        assert all(":v0.4.0" in t or ":bundled" in t or ":latest" in t
+                   for t in rc.images_attendues("0.4.0"))
+        # Une version déjà préfixée ne doit pas produire `vv0.4.0`.
+        assert all("vv" not in t for t in rc.images_attendues("v0.4.0"))
+
+    def test_workflow_sans_image_refuse(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(rc, "ROOT", tmp_path)
+        self._workflow(tmp_path, "name: rien du tout\n")
+        with pytest.raises(SystemExit):
+            rc.images_attendues("0.4.0")
+
+    def test_dockerfile_du_workflow_introuvable_refuse(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(rc, "ROOT", tmp_path)
+        self._workflow(tmp_path, "file: Dockerfile.disparu\n")
+        with pytest.raises(SystemExit):
+            rc.controler_dockerfiles_du_workflow()
+
+    def test_le_depot_reel_a_tous_ses_dockerfiles(self):
+        rc.controler_dockerfiles_du_workflow()
+
+    def test_le_depot_reel_attend_les_sept_tags(self):
+        # Garde vivante : ajouter une image au workflow étend cette liste toute seule.
+        tags = rc.images_attendues(rc.version_du_paquet())
+        assert len(tags) == len(set(tags)), "doublon dans les images attendues"
+        assert any("bundled" in t for t in tags)
+        assert any("transcria-bot" in t for t in tags)
+
+
 class TestRappelsManuels:
     """Ce que le script ne peut pas vérifier doit rester ÉCRIT, pas disparaître."""
 
@@ -218,5 +284,6 @@ class TestRappelsManuels:
 
     def test_les_autres_etapes_non_automatisables_sont_rappelees(self):
         rappels = " ".join(f"{titre} {comment}" for titre, comment in rc.RESTE_A_LA_MAIN)
-        for attendu in ("test_e2e_workflow.py", "release_bundled.sh", "commit TAGGÉ"):
+        for attendu in ("test_e2e_workflow.py", "release_bundled.sh", "commit TAGGÉ",
+                        "test_docker_sync.py", "--images"):
             assert attendu in rappels, f"rappel manquant : {attendu}"

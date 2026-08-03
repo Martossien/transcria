@@ -35,8 +35,13 @@ RESTE_A_LA_MAIN = [
      "sudo systemctl stop transcria && venv/bin/python scripts/verify_install_matrix.py "
      "--distro ubuntu2404 --topology all-in-one --audio tests/test2.mp3 "
      "--stt-backend whisper --diarization-backend sortformer  (~35 min)"),
-    ("Images Docker", "tout Dockerfile modifié doit être BUILDÉ avant le tag (règle C7) ; "
-                      "le bundled se publie avec scripts/release_bundled.sh, JAMAIS à la main"),
+    ("Images Docker — avant le tag",
+     "tout Dockerfile modifié doit être BUILDÉ (règle C7) : la CI n'en construit que "
+     "quatre sur sept, le bundled et le resource-node ne se cassent qu'ici. "
+     "pytest tests/test_docker_sync.py -q"),
+    ("Images Docker — après le tag",
+     "scripts/release_bundled.sh --push pour le bundled (JAMAIS à la main), puis "
+     "scripts/release_check.py --images pour vérifier les sept tags sur GHCR"),
     ("CI sur le commit TAGGÉ", "vérifier la CI sur le tag lui-même, pas sur main"),
     ("Notes de release", "titre bilingue, anglais puis français, ligne Docker en dernier "
                          "— cf. docs/RELEASE.md § « Notes de release »"),
@@ -181,6 +186,79 @@ def documents_non_revus_depuis_le_tag() -> list[str]:
     return sorted({p.name for p in (ROOT / "docs").glob("*.md")} - touches)
 
 
+def images_attendues(version: str) -> list[str]:
+    """Tags GHCR qu'une release doit publier — DÉDUITS du workflow, jamais récités ici.
+
+    Une liste recopiée à la main diverge le jour où quelqu'un ajoute une image au workflow
+    sans y penser : la nouvelle image ne serait vérifiée par personne. En lisant
+    `publish-image.yml`, ce contrôle s'étend tout seul.
+    """
+    workflow = (ROOT / ".github" / "workflows" / "publish-image.yml").read_text()
+    noms = set(re.findall(r"images:\s*ghcr\.io/\$\{\{\s*github\.repository_owner\s*\}\}/([\w-]+)",
+                          workflow))
+    noms |= set(re.findall(r"name:\s*([\w-]+),\s*dockerfile:", workflow))  # images en matrice
+    if not noms:
+        _echec("images", "aucune image trouvée dans publish-image.yml — le workflow a changé "
+                         "de forme, ce contrôle ne sait plus quoi vérifier.")
+    # `type=ref,event=tag` reprend le nom du tag git tel quel — donc AVEC son `v`.
+    ref = version if version.startswith("v") else f"v{version}"
+    tags = [f"ghcr.io/{proprietaire()}/{nom}:{ref}" for nom in sorted(noms)]
+    # L'image « batteries incluses » ne passe pas par la CI (elle dépasse le disque d'un
+    # runner) : elle est poussée depuis une machine locale par scripts/release_bundled.sh.
+    tags += [f"ghcr.io/{proprietaire()}/transcria-allinone:{ref}-bundled",
+             f"ghcr.io/{proprietaire()}/transcria-allinone:bundled",
+             f"ghcr.io/{proprietaire()}/transcria-allinone:latest"]
+    return tags
+
+
+def proprietaire() -> str:
+    """Propriétaire GHCR, déduit du remote `origin` (même règle que release_bundled.sh)."""
+    origin = subprocess.run(["git", "remote", "get-url", "origin"],
+                            cwd=str(ROOT), capture_output=True, text=True)
+    trouve = re.search(r"[:/]([^/]+)/[^/]+?(?:\.git)?$", origin.stdout.strip())
+    if not trouve:
+        _echec("images", "propriétaire GHCR indéterminable depuis le remote `origin`")
+    return trouve.group(1).lower()
+
+
+def controler_dockerfiles_du_workflow() -> None:
+    """Tout Dockerfile que le workflow prétend construire doit exister."""
+    workflow = (ROOT / ".github" / "workflows" / "publish-image.yml").read_text()
+    cites = set(re.findall(r"(Dockerfile[\w.-]*)", workflow))
+    manquants = sorted(c for c in cites if not (ROOT / c).is_file())
+    if manquants:
+        _echec("images", "le workflow de publication référence un Dockerfile INTROUVABLE : "
+                         + ", ".join(manquants))
+    print(f"  · {len(cites)} Dockerfile(s) référencé(s) par le workflow, tous présents")
+
+
+def controler_images_publiees(version: str) -> int:
+    """APRÈS le tag : chaque image attendue est-elle réellement sur GHCR ?
+
+    En 0.4.0, trois images de connecteurs (bot, visio, zoom-sdk) ont été publiées par la CI
+    sans que personne ne le vérifie — elles auraient tout aussi bien pu manquer, et la
+    release aurait été annoncée incomplète.
+    """
+    manquantes = []
+    for tag in images_attendues(version):
+        trouve = subprocess.run(["docker", "manifest", "inspect", tag],
+                                capture_output=True, text=True)
+        etat = "OK" if trouve.returncode == 0 else "INTROUVABLE"
+        print(f"  · {tag} … {etat}")
+        if trouve.returncode != 0:
+            manquantes.append(tag)
+    if manquantes:
+        print(f"\n[images] ÉCHEC : {len(manquantes)} image(s) attendue(s) absente(s) de GHCR.",
+              file=sys.stderr)
+        print("  · slim et connecteurs : workflow `publish-allinone-image` (déclenché par le tag)",
+              file=sys.stderr)
+        print("  · bundled : scripts/release_bundled.sh --push, depuis une machine locale",
+              file=sys.stderr)
+        return 1
+    print("\n✅ Toutes les images attendues sont publiées.")
+    return 0
+
+
 def dockerfiles_modifies_depuis_le_tag() -> list[str]:
     """Dockerfiles touchés depuis le dernier tag — la règle C7 impose de les builder."""
     dernier = subprocess.run(["git", "describe", "--tags", "--abbrev=0"],
@@ -225,9 +303,17 @@ def main() -> int:
     parseur.add_argument("--rapide", action="store_true",
                          help="sauter la suite de tests complète (itération seulement — "
                               "JAMAIS comme barrière avant un tag)")
+    parseur.add_argument("--images", action="store_true",
+                         help="APRÈS publication : vérifier que toutes les images attendues "
+                              "sont bien sur GHCR (slim, connecteurs, bundled)")
     args = parseur.parse_args()
 
     version = version_du_paquet()
+
+    if args.images:
+        print(f"== Images publiées pour {version}\n")
+        return controler_images_publiees(version)
+
     print(f"== Contrôle de montée de version : {version}\n")
 
     print("— Cohérence des versions et des documents")
@@ -235,6 +321,7 @@ def main() -> int:
     controler_docs_cites(section)
     controler_index_documentaire()
     controler_paires_bilingues(version)
+    controler_dockerfiles_du_workflow()
     controler_version_python()
 
     print("\n— Gates de la CI (commandes exactes, sans drapeau)")
