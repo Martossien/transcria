@@ -406,3 +406,68 @@ class TestCorrectedSrtIntegrityGuard:
             assert result["success"] is False
             assert "10 segments au lieu de 40" in result["error"]
             assert fs.load_text("metadata/transcription_corrigee.srt") is None  # rien d'écrit
+
+
+class TestCorrectionRetryRelanceLaLlm:
+    """La boucle de retry RE-VÉRIFIE la LLM avant chaque nouvel essai (miroir du résumé).
+
+    Vécu au gate E2E du 2026-08-03 : serveur d'arbitrage tombé EN PLEINE session de
+    correction — sans relance, les tentatives suivantes butaient sur la pré-garde TCP en
+    ~10 s chacune et la phase échouait, alors qu'un serveur relancé suffisait.
+    """
+
+    def test_gel_declenche_re_verification_llm(self):
+        from transcria.workflow.phases.correction import _invoke_correction_with_retries
+
+        calls = {"runs": 0, "ensures": 0}
+
+        class _FakeOcr:
+            def run_correction(self, *a, **k):
+                calls["runs"] += 1
+                if calls["runs"] == 1:
+                    return {"success": False, "corrected_srt": "", "report": "",
+                            "error": "opencode interrompu (gel détecté)"}
+                return {"success": True, "corrected_srt": "1\n00:00:00,000 --> 00:00:01,000\nok\n",
+                        "report": "", "error": ""}
+
+        class _FakeVram:
+            def ensure_arbitrage_llm_ready(self, expected_model_id=None):
+                calls["ensures"] += 1
+                return True
+
+        class _FakeRunner:
+            vram = _FakeVram()
+
+        class _FakeJob:
+            def get_extra_data(self):
+                return {}
+
+        result = _invoke_correction_with_retries(
+            _FakeOcr(), _FakeJob(), staged_srt="s", staged_context="c",
+            staged_lexicon="l", staged_invite=None,
+            runner=_FakeRunner(), api_model_id="local/x")
+
+        assert calls["runs"] == 2 and calls["ensures"] == 1
+        assert result["success"] is True and result["corrected_srt"]
+
+    def test_sans_runner_le_comportement_historique_est_preserve(self):
+        # Les appels existants sans `runner` (tests historiques, autres chemins) ne
+        # doivent pas casser : la boucle retente simplement sans re-vérification.
+        from transcria.workflow.phases.correction import _invoke_correction_with_retries
+
+        runs = {"n": 0}
+
+        class _FakeOcr:
+            def run_correction(self, *a, **k):
+                runs["n"] += 1
+                return {"success": False, "corrected_srt": "", "report": "",
+                        "error": "opencode interrompu (gel)"}
+
+        class _FakeJob:
+            def get_extra_data(self):
+                return {}
+
+        result = _invoke_correction_with_retries(
+            _FakeOcr(), _FakeJob(), staged_srt="s", staged_context="c",
+            staged_lexicon="l", staged_invite=None)
+        assert runs["n"] == 3 and result["success"] is False

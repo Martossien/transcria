@@ -133,6 +133,12 @@ class OpenCodeRunner:
         - **vLLM** (topologie split-vLLM) : ``/metrics`` Prometheus →
           ``vllm:num_requests_running`` / ``:num_requests_waiting`` > 0.
         Aucun des deux (Ollama, frontale sans sonde) ⇒ None ⇒ repli idle pur du watchdog.
+
+        Connexion REFUSÉE sur les deux sondes ⇒ **False**, pas None : un port qui refuse
+        n'est pas un backend « sans sonde », c'est un serveur ABSENT — la LLM ne traite
+        certainement rien. Le compter « inconnu » désactivait les détections rapides du
+        watchdog dans le pire cas justement (serveur tombé en pleine session opencode,
+        vécu au gate du 2026-08-03 : 10 min de plafond idle pur au lieu de ~2 min).
         """
         if not self._config:
             return None
@@ -141,6 +147,7 @@ class OpenCodeRunner:
 
             host, port = resolve_arbitrage_endpoint(self._config)
             base = f"http://{host}:{port}"
+            refused = 0
 
             # llama.cpp — /slots
             try:
@@ -152,6 +159,8 @@ class OpenCodeRunner:
                             s.get("is_processing") is True or s.get("state") in (1, "processing")
                             for s in slots
                         )
+            except requests.exceptions.ConnectionError:
+                refused += 1
             except requests.RequestException:
                 pass
 
@@ -160,10 +169,12 @@ class OpenCodeRunner:
                 r = requests.get(f"{base}/metrics", timeout=3)
                 if r.status_code == 200:
                     return self._vllm_metrics_busy(r.text)
+            except requests.exceptions.ConnectionError:
+                refused += 1
             except requests.RequestException:
                 pass
 
-            return None
+            return False if refused == 2 else None
         except Exception:  # noqa: BLE001 — signal best-effort du watchdog, jamais bloquant
             return None
 

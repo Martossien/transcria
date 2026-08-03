@@ -1470,3 +1470,29 @@ class TestWatchdogVllmSignal:
         monkeypatch.setattr(requests, "get",
                             lambda url, timeout=0: type("R", (), {"status_code": 404, "text": ""})())
         assert runner._llm_is_processing() is None       # ni /slots ni /metrics → repli idle pur
+
+    def test_connexion_refusee_sur_les_deux_sondes_renvoie_false(self, tmp_path, monkeypatch):
+        # Port qui REFUSE = serveur absent = LLM certainement pas occupée. Renvoyer None
+        # désactivait les détections rapides du watchdog dans le pire cas justement
+        # (serveur tombé en pleine session opencode, gate 2026-08-03 : 10 min de plafond
+        # idle pur au lieu de ~2 min de détection ciblée).
+        import requests
+        runner = _make_runner(tmp_path, config={"workflow": {"arbitration_llm": {"model_id": "local/q"}}})
+
+        def _refused(url, timeout=0):
+            raise requests.exceptions.ConnectionError("[Errno 111] Connection refused")
+
+        monkeypatch.setattr(requests, "get", _refused)
+        assert runner._llm_is_processing() is False
+
+    def test_timeout_reste_indetermine(self, tmp_path, monkeypatch):
+        # Un TIMEOUT n'est pas un refus : le serveur existe peut-être (surchargé, réseau
+        # lent) — on reste sur None (repli idle pur), pas sur un « idle » affirmatif.
+        import requests
+        runner = _make_runner(tmp_path, config={"workflow": {"arbitration_llm": {"model_id": "local/q"}}})
+
+        def _timeout(url, timeout=0):
+            raise requests.exceptions.Timeout("lent")
+
+        monkeypatch.setattr(requests, "get", _timeout)
+        assert runner._llm_is_processing() is None

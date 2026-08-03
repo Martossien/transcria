@@ -138,6 +138,8 @@ def run(runner, job: Job, config: dict) -> dict:
             staged_context=str(staged_context),
             staged_lexicon=str(staged_lexicon),
             staged_invite=staged_invite,
+            runner=runner,
+            api_model_id=api_model_id,
         )
         workspace.verify_and_restore_sources()
         result = _persist_correction_result(runner, fs, result)
@@ -209,6 +211,7 @@ def _prefilter_lexicon(fs, job: Job):
 def _invoke_correction_with_retries(
     ocr: OpenCodeRunner, job: Job, *,
     staged_srt: str, staged_context: str, staged_lexicon: str, staged_invite: str | None,
+    runner=None, api_model_id: str | None = None,
 ) -> dict:
     """Rejoue la SEULE passe LLM sur gel opencode ou production vide (≤ 3 tentatives)."""
     result: dict = {}
@@ -229,6 +232,18 @@ def _invoke_correction_with_retries(
             "gel opencode au démarrage" if hang else "LLM sans production (exit 0, 0 texte)",
             attempt, _MAX_LLM_ATTEMPTS,
         )
+        if attempt < _MAX_LLM_ATTEMPTS and runner is not None:
+            # « LLM déjà chargée » est une HYPOTHÈSE, pas un fait (miroir du résumé) : le
+            # serveur peut être TOMBÉ pendant la session (vécu au gate du 2026-08-03 —
+            # arrêt en pleine correction). Sans relance, les tentatives suivantes butaient
+            # sur la pré-garde en ~10 s chacune et la phase échouait, alors qu'un serveur
+            # relancé suffit. On RE-VÉRIFIE (et relance au besoin) avant chaque essai.
+            try:
+                if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+                    logger.warning("[correction] LLM d'arbitrage injoignable avant la tentative %d "
+                                   "— relance échouée", attempt + 1)
+            except Exception:  # noqa: BLE001 — le retry reste tenté quoi qu'il arrive
+                logger.warning("[correction] re-vérification LLM avant retry en erreur", exc_info=True)
     return result
 
 
