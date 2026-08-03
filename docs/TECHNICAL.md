@@ -1423,6 +1423,11 @@ Les quatre voies validées (Jitsi, Visio, Zoom, Meet) fonctionnent en connexion 
 
 ## 5. API REST
 
+> La liste **exhaustive** des routes (151), leur authentification et le contrat scriptable
+> ⭐ vivent dans [`API_REFERENCE.md`](API_REFERENCE.md) — document **généré**
+> (`scripts/generate_api_reference.py`) et comparé en CI, donc toujours exact. Ce chapitre
+> ne garde que le format des réponses et quelques exemples commentés.
+
 ### 5.1 Format des réponses
 
 Succès : `{"status": "ok", ...}` ou JSON spécifique.

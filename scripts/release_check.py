@@ -146,6 +146,106 @@ def controler_index_documentaire() -> None:
     print(f"  · {len(docs)} document(s) dans docs/, tous indexés, aucun pointeur mort")
 
 
+def _cles_feuilles(schema: dict, prefixe: str = "") -> list[str]:
+    """Chemins pointés de toutes les clés feuilles d'un dict de configuration."""
+    chemins: list[str] = []
+    for cle, valeur in schema.items():
+        chemin = f"{prefixe}.{cle}" if prefixe else str(cle)
+        if isinstance(valeur, dict) and valeur:
+            chemins.extend(_cles_feuilles(valeur, chemin))
+        else:
+            chemins.append(chemin)
+    return chemins
+
+
+def _blocs_de_la_reference(texte: str) -> list[tuple[set[str], set[str]]]:
+    """Blocs (jetons du titre, jetons du corps) de la référence, découpés aux titres.
+
+    Un « jeton » est tout ce qui est écrit entre accents graves — c'est ainsi que la
+    référence nomme les clés, dans ses titres (``## Section `live```) comme dans ses
+    tableaux (``| `facade.enabled` | …``).
+    """
+    motif = re.compile(r"`([A-Za-z0-9_.<>*-]+)`")
+    blocs: list[tuple[set[str], set[str]]] = []
+    titre: set[str] = set()
+    corps: list[str] = []
+    for ligne in texte.splitlines():
+        if ligne.startswith("#"):
+            blocs.append((titre, set(corps)))
+            titre, corps = set(motif.findall(ligne)), []
+        else:
+            corps.extend(motif.findall(ligne))
+    blocs.append((titre, set(corps)))
+    return blocs
+
+
+def _segments_du_bloc(titre: set[str], corps: set[str]) -> tuple[set[str], list[str]]:
+    """Segments pointés d'un bloc + préfixes des jetons joker (`repetition_loop_*`)."""
+    segments: set[str] = set()
+    jokers: list[str] = []
+    for jeton in titre | corps:
+        for segment in jeton.split("."):
+            if segment.endswith("*"):
+                jokers.append(segment[:-1])
+            else:
+                segments.add(segment)
+    return segments, jokers
+
+
+def _cle_documentee(chemin: str, blocs: list[tuple[set[str], set[str]]]) -> bool:
+    """Une clé est documentée si sa section la nomme — pas si son nom traîne ailleurs.
+
+    Trois écritures réelles de la référence sont acceptées, observées en la lisant :
+
+    · le chemin complet quelque part (``queue.poll_interval_s``) ;
+    · dans un bloc dont le TITRE porte la section de tête (``## Section `security```,
+      ``#### `inference.stt.backends.<moteur>``` — un segment ``<…>`` vaut joker), chaque
+      segment restant du chemin apparaît, en jeton entier ou dans un jeton pointé
+      (``audit.log_match_scores`` couvre ``audit`` et ``log_match_scores``) ;
+    · un joker explicite ``prefixe_*`` couvre les segments qu'il préfixe (les backends
+      expérimentaux renvoient ainsi aux « mêmes sémantiques que les autres backends »).
+    """
+    segments_chemin = chemin.split(".")
+    for titre, corps in blocs:
+        if chemin in titre or chemin in corps:
+            return True
+        tetes = {jeton.split(".")[0] for jeton in titre}
+        if segments_chemin[0] not in tetes and "<" + segments_chemin[0] not in tetes:
+            continue
+        segments, jokers = _segments_du_bloc(titre, corps)
+        # Un segment variable du document (`<moteur>`) vaut pour UN segment concret du
+        # chemin — c'est lui qui documente cohere ET whisper d'une seule table. Il en
+        # absorbe un chacun, pas le chemin entier : `url` doit rester écrit quelque part.
+        absorptions = sum(1 for seg in segments if seg.startswith("<"))
+        non_reconnus = sum(1 for seg in segments_chemin[1:]
+                           if seg not in segments
+                           and not any(seg.startswith(joker) for joker in jokers))
+        if non_reconnus <= absorptions:
+            return True
+    return False
+
+
+def controler_reference_configuration() -> None:
+    """Chaque clé du schéma par défaut a sa ligne dans docs/CONFIG_REFERENCE.md.
+
+    Vécu en 0.4.0 : la section `connectors` — sept clés validées par le schéma, pilotant
+    la fonctionnalité phare de la release — n'existait tout simplement pas dans la
+    référence de configuration. `API_REFERENCE.md` ne dérive jamais parce qu'un contrôle
+    l'exécute ; la référence de configuration mérite la même garde, dans l'autre sens :
+    elle est écrite à la main, donc c'est la COUVERTURE qu'on vérifie.
+    """
+    sys.path.insert(0, str(ROOT))
+    from transcria.config.loader import get_default_config
+
+    chemins = _cles_feuilles(get_default_config())
+    blocs = _blocs_de_la_reference((ROOT / "docs" / "CONFIG_REFERENCE.md").read_text())
+    absentes = sorted(chemin for chemin in chemins if not _cle_documentee(chemin, blocs))
+    if absentes:
+        _echec("config", f"{len(absentes)} clé(s) du schéma sans ligne dans "
+                         "docs/CONFIG_REFERENCE.md : " + ", ".join(absentes))
+    print(f"  · {len(chemins)} clés de configuration, toutes documentées dans la référence")
+
+
 def controler_paires_bilingues(version: str) -> None:
     """Les documents publiés en deux langues doivent l'être ensemble, et dater ensemble.
 
@@ -320,6 +420,7 @@ def main() -> int:
     section = section_changelog(version)
     controler_docs_cites(section)
     controler_index_documentaire()
+    controler_reference_configuration()
     controler_paires_bilingues(version)
     controler_dockerfiles_du_workflow()
     controler_version_python()

@@ -142,6 +142,68 @@ class TestIndexDocumentaire:
         rc.controler_index_documentaire()
 
 
+class TestReferenceDeConfiguration:
+    """Chaque clé du schéma doit avoir sa ligne dans CONFIG_REFERENCE.md.
+
+    Le défaut fondateur : en 0.4.0, la section `connectors` (sept clés validées par le
+    schéma) n'existait pas du tout dans la référence. La logique testée est celle du
+    RAPPROCHEMENT : reconnaître les écritures réelles du document sans accepter n'importe
+    quel homonyme qui traîne ailleurs.
+    """
+
+    def _blocs(self, texte: str):
+        return rc._blocs_de_la_reference(texte)
+
+    def test_chemin_complet_accepte(self):
+        blocs = self._blocs("## Réglages\n\n| `queue.poll_interval_s` | int | `5` | … |\n")
+        assert rc._cle_documentee("queue.poll_interval_s", blocs)
+
+    def test_cle_absente_refusee(self):
+        blocs = self._blocs("## Section `queue`\n\n| `enabled` | bool | `true` | … |\n")
+        assert not rc._cle_documentee("queue.jamais_ecrite", blocs)
+
+    def test_segment_dans_sa_section_accepte(self):
+        # L'écriture par tableau : la section donne le préfixe, la ligne donne le reste —
+        # y compris en jeton pointé (`audit.log_x`) ou en segments séparés (dict énuméré).
+        blocs = self._blocs("## Section `security`\n\n"
+                            "| `audit_retention_by_family` | dict | … | familles `auth`, `job` |\n")
+        assert rc._cle_documentee("security.audit_retention_by_family.auth", blocs)
+
+    def test_homonyme_dans_une_autre_section_refuse(self):
+        # `enabled` documenté sous `queue` ne documente PAS `connectors.meetings.enabled` :
+        # sans ce refus, la garde serait aveugle à une section entière oubliée — le défaut
+        # exact qu'elle existe pour attraper.
+        blocs = self._blocs("## Section `queue`\n\n| `enabled` | bool | `true` | … |\n"
+                            "| `meetings` | dict | … | … |\n")
+        assert not rc._cle_documentee("connectors.meetings.enabled", blocs)
+
+    def test_joker_de_famille_accepte(self):
+        # Les backends expérimentaux écrivent `repetition_loop_*` plutôt que trois lignes.
+        blocs = self._blocs("### `voxtral`\n\n| `repetition_loop_*` | int | … | … |\n")
+        assert rc._cle_documentee("voxtral.repetition_loop_min_repeats", blocs)
+
+    def test_titre_a_segment_variable_accepte(self):
+        # `#### inference.stt.backends.<moteur>` documente cohere ET whisper d'un coup.
+        blocs = self._blocs("#### `inference.stt.backends.<moteur>`\n\n| `url` | string | … | … |\n")
+        assert rc._cle_documentee("inference.stt.backends.cohere.url", blocs)
+
+    def test_le_segment_variable_n_absorbe_qu_un_segment(self):
+        # Le joker vaut pour le nom du moteur, PAS pour la clé qui suit : si `url`
+        # disparaît de la table, la garde doit le voir — sinon un bloc à joker rendrait
+        # indétectable l'oubli de n'importe laquelle de ses clés.
+        blocs = self._blocs("#### `inference.stt.backends.<moteur>`\n\n| `model` | string | … | … |\n")
+        assert not rc._cle_documentee("inference.stt.backends.cohere.url", blocs)
+
+    def test_cles_feuilles_traverse_les_dicts(self):
+        schema = {"a": {"b": {"c": 1}, "d": []}, "e": "x"}
+        assert sorted(rc._cles_feuilles(schema)) == ["a.b.c", "a.d", "e"]
+
+    def test_le_depot_reel_est_couvert(self):
+        # Garde vivante : ajouter une clé à `get_default_config()` sans documenter fait
+        # tomber ce test — le remède structurel à la dérive constatée en 0.4.0.
+        rc.controler_reference_configuration()
+
+
 class TestPairesBilingues:
     """Une version anglaise en retard est pire qu'absente : elle passe pour à jour."""
 

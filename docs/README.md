@@ -31,7 +31,7 @@ example results and the user journey.
 |---|---|
 | [TECHNICAL.md](TECHNICAL.md) | Architecture, pipeline, modules, GPU orchestration, timing model, database |
 | [API_REFERENCE.md](API_REFERENCE.md) | **Generated** HTTP API reference (all routes, auth, ⭐ scriptable contract) — regenerate with `scripts/generate_api_reference.py`, guarded in CI |
-| [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (hand-maintained against the classified schema) |
+| [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference — hand-written, but key coverage is guarded in CI (`release_check.py`: every schema key must have its line) |
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
 | [LLM_TIERS.md](LLM_TIERS.md) | **In English** — the benchmarked arbitration-LLM VRAM tiers (12 → 64 GB): validated model, quant and context per tier, backend recommendation |
 | [LLM_BACKENDS.md](LLM_BACKENDS.md) | Arbitration LLM backends (Ollama / llama.cpp / vLLM) and hardware-driven selection |

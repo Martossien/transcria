@@ -177,6 +177,11 @@ Pour **chacun** des documents de `docs/`, une décision explicite, et une seule 
 une faute, c'est la liste de ce qui reste à ouvrir. Un document peut légitimement ne pas
 bouger — encore faut-il l'avoir décidé.
 
+Deux références n'ont plus besoin de cette relecture pour leur exhaustivité (leur
+exactitude, si) : `API_REFERENCE.md` est **généré** et comparé en CI, et la **couverture**
+de `CONFIG_REFERENCE.md` est contrôlée par `release_check.py` — chaque clé de
+`get_default_config()` doit y avoir sa ligne, une section oubliée fait échouer la CI.
+
 ### 6.3 Ce qui part dans `docs/archive/`
 
 La question n'est pas « ce document est-il vieux ? » mais **« décrit-il encore le présent
@@ -369,3 +374,5 @@ Chaque étape ci-dessus existe parce qu'elle a manqué une fois.
 | `0.4.0` | CI rouge à nouveau : le `--select` de la CI **effaçait le `ignore`** de `pyproject.toml` | l'étape de lint n'a plus aucun drapeau |
 | `0.4.0` | treize plans de chantier terminés traînaient encore dans `docs/`, et dix-huit documents manquaient à `AGENTS.md` — parce que la revue documentaire n'avait été faite à aucune version précédente | § 6, et les contrôles d'orphelins et de pointeurs morts |
 | `0.4.0` | les trois images de connecteurs ont été publiées par la CI **sans que personne ne le vérifie** — la release ne comptait que deux images sur sept | § 9.3 — `release_check.py --images` |
+| `0.4.0` | deux CI rouges d'affilée APRÈS le tag : l'index et `AGENTS.md` pointaient des documents **gitignorés** — présents sur la machine de dev, absents du dépôt poussé, donc invisibles en local | avant de pousser un pointeur de doc : `git ls-files <cible>`, pas seulement son existence sur disque |
+| `0.4.0` | la section `connectors` — sept clés du schéma pilotant la fonctionnalité phare — **n'existait pas** dans `CONFIG_REFERENCE.md` ; personne ne l'avait vu parce que rien ne l'exigeait | le contrôle de couverture schéma → référence de `release_check.py` (549 clés, zéro tolérance), joué par la CI via `tests/test_release_check.py` |

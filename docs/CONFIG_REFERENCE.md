@@ -198,6 +198,7 @@ construction). Le doctor REFUSE un backend fédéré sans admin local actif.
 |---|---|---|---|
 | `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko` — CPU pur — ou `moss`) |
 | `summary_stt_backend` | string \| null | `null` | Backend dédié à la transcription rapide de la PHASE RÉSUMÉ (`null` = même backend que `stt_backend`). Mêmes valeurs acceptées que `stt_backend` (backends servis routés inclus). `kroko` rend la phase résumé 100 % CPU : zéro réservation VRAM, plus de reclaim du LLM d'arbitrage par le résumé |
+| `live_stt_backend` | string \| null | `null` | Backend STT **streaming** dédié à la chaîne live (`null` = la façade utilise la chaîne historique). Moteurs *conçus* streaming uniquement (`nemotron-streaming`, `kyutai`, `voxtralrt`) — jamais un batch. Distinct du STT de référence du pipeline (cf. `docs/TEMPS_REEL_REUNIONS.md`, couture 3) |
 | `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
@@ -455,6 +456,7 @@ avec des accents ou hésitations. Documenté dans `docs/archive/PARAKEET_STT_INT
 | `decoding_beam_size` | int | `2` | Taille du beam (si `decoding_strategy=beam`) |
 | `max_chunk_duration_s` | int | `1200` | Durée max d'un chunk avant pré-découpage (20 min) |
 | `collapse_repetition_loops` | bool | `true` | Anti-hallucination (même mécanisme que Cohere/Granite) |
+| `repetition_loop_*` | int | `4` / `10` / `2` | Réglages de la réduction de boucles (mêmes sémantiques que les autres backends) |
 
 VRAM : `gpu.parakeet_vram_mb` (défaut 8000 Mo). Dépendance : `nemo_toolkit[asr]`.
 Fichier : `metadata/parakeet.json`.
@@ -1108,6 +1110,7 @@ Configuration générale du calendrier. Les créneaux eux-mêmes sont stockés e
 | `enabled` | bool | `true` | Active la prise en compte des créneaux |
 | `timezone` | string | `"Europe/Paris"` | Fuseau horaire utilisé pour évaluer les jours et heures |
 | `kill_patterns` | list[str] | `["vllm", "llama-server", ...]` | Patterns de processus externes que `force_gpu` et la libération VRAM ciblée peuvent tuer ; les autres processus GPU sont ignorés |
+| `poll_interval_s` | int | `300` | **Réservé** (validé par le schéma, non consommé à ce jour) : période de réévaluation du calendrier. Le poll effectif de la file est `queue.poll_interval_s` |
 | `windows` | list[dict] | `[]` | Valeurs initiales/documentaires ; le runtime utilise la table `scheduling_windows` |
 
 Format d'un créneau :
@@ -1294,7 +1297,8 @@ Référentiel local de voix connues avec consentement explicite. Désactivé par
 | `high_confidence_threshold` | float | `0.86` | Score à partir duquel la suggestion est marquée haute confiance |
 | `min_top2_margin` | float | `0.05` | Écart minimal entre le premier et le deuxième candidat |
 | `max_candidates_per_speaker` | int | `2` | Nombre maximal de candidats conservés pour audit et diagnostic |
-| `audit.log_match_suggestions` | bool | `true` | Journalise (audit `voice`) chaque suggestion de correspondance voix proposée à validation |
+| `audit.log_match_suggestions` | bool | `true` | **Réservé** (validé par le schéma, non consommé à ce jour) : journalisation d'audit des suggestions de correspondance voix |
+| `audit.log_match_scores` | bool | `true` | **Réservé** (validé par le schéma, non consommé à ce jour) : inclusion des scores de similarité dans l'audit |
 | `audit.log_match_scores` | bool | `true` | Journalise les scores de similarité des correspondances (diagnostic ; désactivable par posture de minimisation) |
 | `stale_profiles_are_matchable` | bool | `false` | Autorise exceptionnellement les profils périmés ; désactivé par défaut |
 
@@ -1325,6 +1329,7 @@ Détail : [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md).
 | `fallback_local` | bool | `true` | Bascule locale si le service distant tombe (sauf 4xx définitif) |
 | `auth.api_key_env` | string | `"TRANSCRIA_INFERENCE_API_KEY"` | Variable d'env portant la clé API du service |
 | `auth.api_key` | string | `""` | Clé API en clair (priorité à la variable d'env) |
+| `auth.allow_unauthenticated` | bool | `false` | Mode **ouvert**, sans authentification — développement en loopback uniquement. Le service d'inférence **refuse de démarrer** sans posture d'auth explicite (S1.1) : clé (env ou directe) ou ce drapeau assumé |
 | `transport.audio` | string | `"file_ref"` | `file_ref` (chemin, mono-machine/FS partagé) \| `upload` (octets, **obligatoire en vrai distant**) |
 | `resilience.timeout_s` | int | `1800` | Timeout par requête au service |
 | `resilience.retries` | int | `2` | Tentatives sur erreur transitoire (5xx/503/réseau) |
@@ -1494,6 +1499,7 @@ décision, pas un effet de bord d'une mise à jour.
 | `facade.max_sync_audio_mb` | int | `25` | Taille maximale d'un envoi ; au-delà, refus explicite |
 | `facade.max_sync_duration_s` | int | `600` | Durée maximale d'un envoi synchrone |
 | `facade.inference_timeout_s` | int | `300` | Patience côté moteur avant d'abandonner une fenêtre |
+| `facade.idle_unload_s` | int | `600` | Décharge le transcripteur de la façade après N s sans requête (`0` = jamais). Sans lui, le modèle chargé par le live reste résident dans le process web et peut bloquer le placement de la LLM d'arbitrage (vécu au gate Jitsi réel) |
 
 **Redémarrage requis :** oui (les routes sont montées au démarrage).
 
