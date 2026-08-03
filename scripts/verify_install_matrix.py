@@ -29,6 +29,7 @@ Exemple :
 from __future__ import annotations
 
 import argparse
+import socket
 import subprocess
 import sys
 import time
@@ -172,8 +173,27 @@ def docker_run_argv(
     # Cache HF/torch persistant (volume nommé) : les modèles survivent aux runs → itération
     # rapide et fidèle à la prod (pas de re-téléchargement à chaque exécution).
     argv += ["-v", f"{CACHE_VOLUME}:/root/.cache"]
+    # Poids et runtimes compilés : MONTÉS en lecture seule, jamais copiés. Sur une machine de
+    # développement `models/` pèse des dizaines de Go — les dupliquer dans le conteneur ferait
+    # durer la copie plus longtemps que l'installation testée, pour zéro valeur de test.
+    for lourd in DOSSIERS_LOURDS_MONTES:
+        source = repo_dir / lourd
+        if source.is_dir():
+            argv += ["-v", f"{source}:/app/{lourd}:ro"]
     argv += ["-v", f"{repo_dir}:/src:ro", "-w", "/app", base_image, "sleep", "infinity"]
     return argv
+
+
+# Dossiers montés en lecture seule au lieu d'être copiés (poids de modèles, runtimes C++
+# compilés) : le conteneur les LIT pour l'E2E, l'installation ne les régénère pas.
+DOSSIERS_LOURDS_MONTES = ("models", "runtimes")
+# Dossiers jamais transmis au conteneur : venv de l'hôte (invalide ici, install.sh recrée le
+# sien), historique git, données d'exécution locales. Les DOSSIERS_LOURDS_MONTES en font
+# partie — ils arrivent par montage, la copie les écraserait.
+DOSSIERS_NON_COPIES = (
+    "venv", ".git", "backup", "node_modules", "jobs", "bench_results", "archives", "voices",
+    *DOSSIERS_LOURDS_MONTES,
+)
 
 
 def install_command(profile: str, cuda: str | None, pg_existing: bool, llm_backend: str | None = None) -> str:
@@ -239,8 +259,17 @@ def _fail(stage: str, msg: str) -> None:
 
 
 def _run(argv: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(argv, check=check, text=True,
-                          capture_output=capture)
+    try:
+        return subprocess.run(argv, check=check, text=True, capture_output=capture)
+    except subprocess.CalledProcessError as exc:
+        # `capture_output` renvoie la sortie d'erreur dans l'exception, où personne ne la lit :
+        # la trace affiche la commande et le code de retour, jamais le message du programme.
+        # Sans ce ré-affichage on ne sait PAS pourquoi l'étape a échoué (vécu en 0.4.0 : un
+        # `tar | tar` en échec silencieux). On la remonte avant de laisser l'erreur filer.
+        for flux, contenu in (("stdout", exc.stdout), ("stderr", exc.stderr)):
+            for ligne in (contenu or "").strip().splitlines()[-25:]:
+                print(f"    [{flux}] {ligne}", file=sys.stderr, flush=True)
+        raise
 
 
 def _docker_exec(container: str, shell_cmd: str, *, detach: bool = False) -> str:
@@ -268,6 +297,33 @@ def preflight_gpu() -> None:
     if cp.returncode != 0:
         _fail("preflight", "Docker ne voit pas le GPU (CDI). Lancer : scripts/setup_docker_gpu.sh")
     _log("preflight", "GPU hôte OK + Docker/CDI OK")
+
+
+def preflight_ports(topology: TopologySpec) -> None:
+    """Tous les ports publiés par la topologie doivent être LIBRES sur l'hôte.
+
+    Sans ce contrôle, `docker run` échoue sur un code 125 opaque (« failed to bind host
+    port ») noyé dans un `CalledProcessError` de 20 lignes — vécu pendant la préparation de
+    la 0.4.0, où le service TranscrIA de la machine occupait déjà 7870. Le message ci-dessous
+    dit quoi arrêter, ce qui est tout ce dont on a besoin à ce moment-là.
+    """
+    occupes: list[int] = []
+    for conteneur in topology.containers:
+        for hport in sorted(conteneur.published.values()):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sonde:
+                sonde.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    sonde.bind(("0.0.0.0", int(hport)))
+                except OSError:
+                    occupes.append(int(hport))
+    if occupes:
+        liste = ", ".join(str(p) for p in occupes)
+        _fail("preflight",
+              f"port(s) hôte DÉJÀ OCCUPÉ(S) : {liste} — le conteneur ne pourra pas les "
+              f"publier. C'est le plus souvent le service local : "
+              f"`sudo systemctl stop transcria`. Pour voir qui les tient : "
+              f"`ss -lntp | grep -E ':({"|".join(str(p) for p in occupes)})'`.")
+    _log("preflight", "ports hôte libres")
 
 
 def wait_health(host_port: int, internal_port: int, container: str, timeout_s: float = 600) -> None:
@@ -366,8 +422,14 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
             _docker_exec(
                 c.name,
                 "mkdir -p /app && tar -C /src "
-                "--exclude=./venv --exclude=./.git --exclude=./backup --exclude=./node_modules "
-                "--exclude='*/__pycache__' -cf - . | tar -C /app -xf - && chmod -R u+w /app",
+                + " ".join(f"--exclude=./{d}" for d in DOSSIERS_NON_COPIES)
+                + " --exclude='*/__pycache__' -cf - . | tar -C /app -xf - && "
+                # `chmod -R /app` échouerait sur les DOSSIERS_LOURDS_MONTES : ce sont des
+                # montages en lecture seule, et un chmod qui les traverse fait échouer TOUTE
+                # l'étape de copie. On ne rend inscriptible que ce qui vient d'être extrait.
+                + "find /app -mindepth 1 -maxdepth 1 "
+                + " ".join(f"! -name {d}" for d in DOSSIERS_LOURDS_MONTES)
+                + " -exec chmod -R u+w {} +",
             )
 
             # 2) Config exemple → config.yaml (NODE_IP + DSN + mot de passe admin déterministe).
@@ -436,10 +498,11 @@ def main() -> int:
 
     if not args.audio.exists():
         _fail("setup", f"audio introuvable : {args.audio}")
+    topo = topologies()[args.topology]
     if not args.no_preflight:
         preflight_gpu()
+        preflight_ports(topo)
 
-    topo = topologies()[args.topology]
     run_topology(topo, args.distro, args.audio, args.profile,
                  args.username, args.password, args.cuda, args.keep_up,
                  llm_backend=args.llm_backend, stt_backend=args.stt_backend,
