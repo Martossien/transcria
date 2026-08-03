@@ -1046,3 +1046,4 @@ inference:
 #     max_track_mb: 512                # taille max d'une piste (au-delà : mode mix, annoncé)
 #     max_caption_lines: 2000          # plafond du suivi en direct par job (troncature annoncée)
 #     platform_env: {}                 # identités plateforme saisies par /admin/connecteurs (claim)
+#     meet_spaces: []                  # réunions Google Meet à surveiller (liens/codes, saisis dans l'admin)

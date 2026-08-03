@@ -248,6 +248,21 @@ transcria/
 │   ├── test_workflow.py           # 30 tests — États, transitions, runner
 │   └── test_workflow_runner.py    # 64 tests — Runner, correction, résumé, genre locuteur
 │
+├── inference_service/             # Nœud de ressources GPU (service Flask, défaut :8002) — STT, diarisation
+│                                  #   et empreintes vocales servis par HTTP (docs/SERVICE_RESSOURCES_GPU.md, § 5.3)
+│
+├── connector_service/             # Connecteurs de réunion (0.4.0) — service ASYNC, ISOLÉ, opt-in :
+│   │                              #   JAMAIS importé par le portail (contrat import-linter) — cf. § 4.17
+│   ├── service.py / app.py        # Squelette du service connecteur (démarrable/arrêtable)
+│   ├── contract.py / providers/   # Contrat providers par capacités + fiches Zoom / Meet / Teams / Visio
+│   ├── runner/                    # meeting-runner : daemon (heartbeat, claim, lancement du bot, relais d'états)
+│   ├── bot/                       # Les trois bots (docs/BOT_REUNION.md) : browser.py (Jitsi), visio.py
+│   │                              #   (client LiveKit natif), zoom_sdk.py (SDK officiel) + _workflow.py commun
+│   ├── live/                      # Capture temps réel : sources/transports par plateforme (LiveKit, Meet
+│   │                              #   Media, Zoom RTMS, Teams RTM), session, timeline, pistes par participant
+│   ├── meet_*.py                  # La voie SANS bot : Workspace Events, pull Pub/Sub, calendrier, ingestion
+│   └── outbound_guard.py, jwt_crypto.py, oauth.py  # gardes sortantes + crypto + identités plateforme
+│
 ├── jobs/                          # Données des traitements (runtime)
 └── docs/                          # Documentation
 ```
@@ -1270,7 +1285,7 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 
 ---
 
-### 4.13 Audit (`transcria/audit/`)
+### 4.14 Audit (`transcria/audit/`)
 
 **`models.py`**
 
@@ -1310,7 +1325,7 @@ Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route D
 
 ---
 
-### 4.14 Notifications (`transcria/notifications/`)
+### 4.15 Notifications (`transcria/notifications/`)
 
 **`mailer.py`** — envoi d'emails de notification à la fin du traitement d'un job.
 
@@ -1371,7 +1386,7 @@ Source **unique** des estimations de durée, apprises de l'historique réel de l
 
 ---
 
-### 4.15 Maintenance & modèles (`transcria/maintenance/`, `models_catalog.py`, `models_download.py`)
+### 4.16 Maintenance & modèles (`transcria/maintenance/`, `models_catalog.py`, `models_download.py`)
 
 Outillage opérateur, exposé en **CLI** (`python -m transcria.maintenance.cli`) et dans l'**UI admin** (`/admin/maintenance`, `/admin/models`, permission `MANAGE_CONFIG`). Toute la logique métier est PURE et injectable (`run`/`write`/`popen`), testée sans systemd ni réseau ; les pages web ne font qu'orchestrer.
 
@@ -1384,6 +1399,25 @@ Outillage opérateur, exposé en **CLI** (`python -m transcria.maintenance.cli`)
 **Gestionnaire de modèles** (`models_catalog.py`, `models_download.py`) — `build_catalog(cfg, total_vram_mb)` résout les modèles NÉCESSAIRES à l'install (palier GGUF LLM recommandé pour le VRAM via `installer/tiers.py` (vague C6), STT + diarisation selon `models.{stt_backend,diarization_backend}`). Chaque `ModelSpec` porte repo/fichier/kind (`gguf`→`MODELS_DIR`, `hf_cache`→`HF_HOME`)/`gated`/licence/palier. Téléchargement HF en **sous-process détaché** (CLI interne `model-download`, token via ENV `HF_TOKEN` jamais en argv), progression par **taille sur disque / total du repo** (fichier de statut JSON auto-suffisant, polling `/admin/models/progress/<role>` sans détection GPU). Bouton **« Activer (servir) »** = bascule du profil llama.cpp sur le GGUF téléchargé (`switch_arbitrage_llm.sh`). Cf. `docs/UPGRADE.md`.
 
 **Mise à jour opencode** (`installer/opencode_lib.py`, vague C6) — CLI `opencode-upgrade` : détecte le type d'install du binaire (npm / officiel `~/.opencode/bin` / brew) et lance l'updater adapté.
+
+---
+
+### 4.17 Connecteurs de réunion (`connector_service/` + `transcria/ingestion/`)
+
+Livrés en 0.4.0 (« les réunions arrivent toutes seules ») — vue d'ensemble : `docs/TEMPS_REEL_REUNIONS.md`, bots : `docs/BOT_REUNION.md`, exécutant distant : `docs/RUNNER_DISTANT_KIT.md`, configuration : section `connectors` de `docs/CONFIG_REFERENCE.md`. Deux moitiés, séparées par une **frontière stricte** (ADR-001, `docs/adr/`) : le portail n'importe **jamais** `connector_service` (contrat import-linter `connecteur-isole`) — tout passe par la donnée (config, base) et par HTTP (`/v1/audio/ingest`, jetons `tia_`), si bien que le connecteur peut vivre sur une autre machine. Ses dépendances sont opt-in (`requirements-connectors.txt`, imports paresseux — jamais installées par défaut).
+
+**Côté portail — `transcria/ingestion/`** : `MeetingImport` (mapping artefact externe → job, get-or-create **idempotent**), manifeste participants (v1 fenêtres, v2 pistes `track_<id>`, validation stricte tout-ou-rien), `meeting_sessions`/runners (machine d'états **pure**, claim `SKIP LOCKED` — **seul** endroit où la référence de réunion sort déchiffrée ; chiffrement Fernet `enc1:` au repos), provisionnement du runner en un clic (`runner_provisioning.py` : compte de service, jeton local 0600, check-list vivante) + kit d'installation pour une machine distante (`runner_kit.py`), suivi en direct **provisoire** (`live/captions.jsonl` plafonné, troncature annoncée — le pipeline batch reste la référence).
+
+**Côté capture — `connector_service/`** (~85 modules, ≈6 300 l.) :
+
+- `contract.py` + `providers/` — contrat providers **par capacités** ; fiches Zoom, Meet, Teams, Visio. Le statut `implemented` vs `validated` est porté par le catalogue et visible dans l'UI.
+- `runner/` — le **meeting-runner** : daemon (heartbeat, claim des intentions planifiées, lancement du bot, relais des états sur la carte du job — « salle d'attente », « en réunion » —, rattachement du résultat). Les identités de plateforme lui sont remises **par le claim** uniquement, jamais dans argv.
+- `bot/` — les **trois bots** : `browser.py` (Jitsi, Chromium headless, capture WebRTC), `visio.py` (client **LiveKit natif**, sans navigateur — **visible par défaut**, `BOT_HIDDEN=1` = opt-in explicite de l'exploitant), `zoom_sdk.py` (Meeting SDK officiel Linux) ; `_workflow.py` = plomberie commune (ingest/events/captions). Images `Dockerfile.bot` / `Dockerfile.visio` / `Dockerfile.zoom-sdk`, toujours via `scripts/bot.sh`.
+- `live/` — capture temps réel : sources/transports par plateforme (LiveKit, Meet Media, Zoom RTMS, Teams RTM, SDK Zoom), session à provenance progressive, timeline commune, pistes **par participant** écrites sur disque (RAM constante), demux.
+- `meet_*.py` — la voie **sans bot** : abonnements Google Workspace Events maintenus, **pull** Pub/Sub (aucun port entrant), lecture du calendrier, récupération des enregistrements produits par la plateforme.
+- Sécurité : `outbound_guard.py` (garde des requêtes sortantes pilotées par une valeur utilisateur — S2.2, `VISIO_ALLOWED_HOSTS`), `jwt_crypto.py`/`signatures.py`/`oauth.py` (identités plateforme, vérification des signatures entrantes).
+
+Les quatre voies validées (Jitsi, Visio, Zoom, Meet) fonctionnent en connexion **sortante** uniquement. Zoom RTMS et Teams sont `implemented` non `validated` : ce sont les deux seuls à exiger un point d'entrée HTTPS public, et le doctor refuse leur activation sans TLS.
 
 ---
 

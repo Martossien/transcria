@@ -1499,6 +1499,31 @@ décision, pas un effet de bord d'une mise à jour.
 
 ---
 
+## Section `connectors` — réunions planifiées (bots)
+
+**Désactivée par défaut (opt-in).** Active le parcours « les réunions arrivent toutes
+seules » (0.4.0) : la carte « Depuis une réunion » à la création d'un job, l'API
+`/api/meetings` et le claim des sessions par le meeting-runner. Sans activation, aucune
+route n'existe et la surface d'API par défaut est strictement inchangée. Exige la façade
+(`live.facade.enabled: true`) et la clé `TRANSCRIA_MEETING_REF_KEY` dans `.env`
+(chiffrement au repos des références de réunion). Vue d'ensemble :
+`docs/TEMPS_REEL_REUNIONS.md`, bots : `docs/BOT_REUNION.md`, exécutant distant :
+`docs/RUNNER_DISTANT_KIT.md`.
+
+| Clé | Type | Défaut | Description |
+|---|---|---|---|
+| `meetings.enabled` | bool | `false` | Active le parcours réunions (API `/api/meetings` + carte à la création de job) |
+| `meetings.runner_usernames` | liste | `[]` | Comptes de **service** autorisés à opérer le meeting-runner (claim des intentions, relais d'états, rattachement d'audio). Attribution **nominative**, jamais par rôle : la référence de réunion déchiffrée passe par ce canal |
+| `meetings.max_tracks` | int | `16` | Pistes séparées max acceptées à l'ingestion (`track_<id>`) ; au-delà, les pistes sont rejetées **en bloc** et l'ingestion continue en mode mix (annoncé dans le manifeste) |
+| `meetings.max_track_mb` | int | `512` | Taille max d'une piste ; au-delà, même repli en mode mix, annoncé |
+| `meetings.platform_env` | dict | `{}` | Identités de **plateforme** saisies dans l'interface admin (`{NOM_ENV: valeur}`, clés admises = celles des fiches du catalogue). Secrets masqués à l'affichage, remis au runner **par le claim** uniquement, jamais dans argv ; l'environnement du runner reste un repli machine |
+| `meetings.meet_spaces` | liste | `[]` | Réunions Google Meet à **surveiller** (liens ou codes saisis dans l'admin). Donnée d'intention : c'est le service Meet qui lit cette liste et y conforme les abonnements — le portail n'appelle jamais Google |
+| `meetings.max_caption_lines` | int | `2000` | Plafond du suivi en direct (`live/captions.jsonl`) par job ; au-delà, troncature de tête annoncée dans le flux. Le direct est **provisoire** : le pipeline batch reste la référence |
+
+**Redémarrage requis :** oui (routes et fils d'arrière-plan montés au démarrage).
+
+---
+
 ## 6. Variables d'environnement
 
 | Variable | Description | Défaut si absente |
@@ -1616,7 +1641,7 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 
 ---
 
-## 10. Matrice de redémarrage
+## 11. Matrice de redémarrage
 
 | Paramètre | Redémarrage requis ? | Lu dynamiquement ? |
 |---|:---:|:---:|
