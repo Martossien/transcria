@@ -14,7 +14,7 @@
 ## Checklist
 
 - [ ] `venv/bin/python -m pytest tests/ -q` passes locally
-- [ ] `ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I` passes
+- [ ] `ruff check transcria/ inference_service/ connector_service/` passes (no flags — the tiers live in `pyproject.toml`; a CLI `--select` would silently discard the rules deliberately ignored there)
 - [ ] Tests added/updated for the change
 - [ ] Docs updated if behavior changed (`docs/*.md`, `CHANGELOG.md`)
 - [ ] Works in the relevant topologies (all-in-one / web+scheduler / remote inference) — or N/A
