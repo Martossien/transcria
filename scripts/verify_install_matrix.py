@@ -318,11 +318,12 @@ def preflight_ports(topology: TopologySpec) -> None:
                     occupes.append(int(hport))
     if occupes:
         liste = ", ".join(str(p) for p in occupes)
+        motif = "|".join(str(p) for p in occupes)
         _fail("preflight",
               f"port(s) hôte DÉJÀ OCCUPÉ(S) : {liste} — le conteneur ne pourra pas les "
               f"publier. C'est le plus souvent le service local : "
               f"`sudo systemctl stop transcria`. Pour voir qui les tient : "
-              f"`ss -lntp | grep -E ':({"|".join(str(p) for p in occupes)})'`.")
+              f"`ss -lntp | grep -E ':({motif})'`.")
     _log("preflight", "ports hôte libres")
 
 
