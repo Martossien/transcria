@@ -1028,10 +1028,11 @@ def _warn_removed_keys(user_cfg: dict) -> None:
     if isinstance(scheduling, dict) and "poll_interval_s" in scheduling:
         sans_effet.append("workflow.scheduling.poll_interval_s")
     for key in sans_effet:
+        hint = (" (le poll effectif de la file est queue.poll_interval_s)"
+                if key == "workflow.scheduling.poll_interval_s" else "")
         logging.getLogger(__name__).warning(
             "Clé de configuration sans effet ignorée : %s — elle n'a jamais été consommée "
-            "par le code, retirez-la de config.yaml (le poll de la file est "
-            "queue.poll_interval_s).", key)
+            "par le code, retirez-la de config.yaml%s.", key, hint)
 
 
 def load_config(config_path: str | None = None) -> dict:
