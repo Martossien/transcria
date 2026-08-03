@@ -1,19 +1,25 @@
 # Déploiement Docker (P5)
 
-> Référence du déploiement conteneurisé de TranscrIA. Suit les invariants de
-> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Deux familles d'images :
+> Référence du déploiement conteneurisé de TranscrIA (invariants d'origine :
+> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`, archivé). Trois familles d'images
+> applicatives :
 >
 > - **Rôles CPU distribués** (`web`, `scheduler`, `migrate`) : une seule image légère construite
 >   par le `Dockerfile` racine (torch CPU) et orchestrée par `docker-compose.yml` (profil `split`).
 > - **All-in-one GPU** (`all`) : image **dédiée** `Dockerfile.allinone-gpu` (base CUDA 12.6,
 >   **llama.cpp compilé** = LLM d'arbitrage embarquée, **NeMo/Sortformer** pour la diarisation
 >   non gated), profil `gpu`. Elle livre le **workflow complet GPU en une commande, sans token**
->   — voir « All-in-one GPU » ci-dessous.
+>   — voir « All-in-one GPU » ci-dessous. **Aucun poids de modèle embarqué** (téléchargés au
+>   runtime) → image **publiable** (cf. § Publication).
+> - **All-in-one GPU bundled** (`Dockerfile.allinone-bundled`) : la même, plus **trois modèles
+>   NON gated bakés** (whisper + Sortformer + Qwen) → zéro téléchargement, hors-ligne ; build
+>   local ~31 Go, publiée par `scripts/release_bundled.sh` uniquement — voir § slim vs bundled.
 >
-> Les deux embarquent opencode (agent des phases LLM). Le nœud de ressources GPU du banc split
-> utilise `Dockerfile.resource-node` ; le banc split bâtit `Dockerfile.worker`/`Dockerfile.resource-node`
-> en exécutant `install.sh`. **Aucune image n'embarque de poids de modèle** (téléchargés au
-> runtime) → l'image all-in-one GPU est **publiable** (cf. § Publication).
+> Toutes embarquent opencode (agent des phases LLM). S'y ajoutent les images d'infrastructure
+> du banc split (`Dockerfile.resource-node` pour le nœud GPU, `Dockerfile.worker` — bâties en
+> exécutant `install.sh`) et les images des **bots de réunion**, jamais construites à la main
+> (`scripts/bot.sh` s'en charge) : `Dockerfile.bot` (navigateur), `Dockerfile.visio` (client
+> LiveKit natif), `Dockerfile.zoom-sdk` (SDK Zoom) — cf. `docs/BOT_REUNION.md`.
 
 ## Démarrage rapide (une commande)
 

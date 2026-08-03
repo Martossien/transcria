@@ -90,7 +90,7 @@ leur consentement à leur place.
 
 ## 3. Suppression d'un utilisateur
 
-En 0.2.0, la suppression d'un compte se fait par **désactivation**
+La suppression d'un compte se fait par **désactivation**
 (`UserStore.deactivate_user`) : le compte ne peut plus se connecter, mais **ses
 traitements, ses empreintes vocales et ses entrées d'audit sont CONSERVÉS** — choix
 assumé pour préserver l'intégrité de la piste d'audit et ne pas détruire des livrables
@@ -99,7 +99,8 @@ partagés au sein d'un groupe.
 Pour un **droit à l'effacement** complet (RGPD art. 17) : désactiver le compte, puis
 supprimer manuellement ses traitements (page Traitements) et ses empreintes vocales
 (page Voix) ; les entrées d'audit expirent selon leur rétention. Une commande
-d'effacement par utilisateur (anonymisation de l'audit incluse) est un candidat 0.2.x.
+d'effacement par utilisateur (anonymisation de l'audit incluse) reste une évolution
+envisagée, non livrée à ce jour.
 
 ## 4. Accès aux données
 

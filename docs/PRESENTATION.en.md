@@ -127,11 +127,13 @@ board meeting — the choice is one click, right when you drop the file.
 
 Let's be upfront:
 
-- **Not a bot that joins your video calls.** It starts from a recording (an audio
-  file) — your dictaphone's, or the audio track exported from your video-conferencing
-  tool.
-- **Not real-time.** Processing happens after the meeting, in a few dozen minutes
-  depending on duration and hardware.
+- **Not a covert recorder.** Since 0.4.0 a bot *can* join your video calls (Jitsi,
+  Visio, Zoom — Meet needs no bot at all): it names itself and stays visible to
+  participants, by design. And nothing forces you to use it — a plain recording
+  (dictaphone, exported audio track) still works.
+- **Not real-time.** A provisional live feed exists for captured meetings, but the
+  deliverables are produced after the meeting, in a few dozen minutes depending on
+  duration and hardware.
 - **Not a turnkey online service.** You need a server with a graphics card (from 12 GB
   of video memory) and a technical contact to install it — half a day's work with
   step-by-step guides, and that is the price of sovereignty over your data.

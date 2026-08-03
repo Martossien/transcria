@@ -41,7 +41,9 @@ propres que sur Jitsi (aucun pont JS).
 - **D-V2 — Visio d'abord** (`bot/visio.py`, image `transcria-visio:latest`,
   `Dockerfile.visio` SANS navigateur : python + `livekit`) : meeting_ref = URL de salle
   (`https://…/<room>`) ou nom brut — parse PUR testé ; jeton bot forgé par
-  `livekit_access_token` (participant caché, `can_subscribe`) avec `LIVEKIT_URL/API_KEY/
+  `livekit_access_token` (`can_subscribe` ; bot **VISIBLE par défaut** depuis le gate du
+  2026-07-31 — transparence voulue, `BOT_HIDDEN=1` = opt-in explicite de l'exploitant)
+  avec `LIVEKIT_URL/API_KEY/
   API_SECRET` de l'ENVIRONNEMENT DU RUNNER (propriété machine, patron `JITSI_XMPP_*` —
   la voie validée est celle de l'EXPLOITANT de l'instance).
 - **D-V3 — Zoom ensuite** (`bot/zoom_sdk.py` complété, image déjà déclarée au runner) :
@@ -58,7 +60,7 @@ propres que sur Jitsi (aucun pont JS).
 | Lot | Contenu | DoD |
 |---|---|---|
 | **V0 — socle** | `bot/_workflow.py` extrait de `cli.py` (ingest/events/captions), tests déplacés/verts, bot Jitsi inchangé à l'octet près (mêmes lignes stdout) | suite + E2E verts, gate Jitsi non requis (aucun comportement changé) |
-| **V1 — Visio** | `bot/visio.py` + parse PUR + `Dockerfile.visio` + `DEFAULT_IMAGES`/`_DOCKERFILES`/matrix GHCR + relais `LIVEKIT_*` + catalogue (steps runner) | gate réel : planifier une salle Visio depuis l'accueil → bot caché entre → pistes par participant → étape 5 nommée → SRT chevauchements |
+| **V1 — Visio** | `bot/visio.py` + parse PUR + `Dockerfile.visio` + `DEFAULT_IMAGES`/`_DOCKERFILES`/matrix GHCR + relais `LIVEKIT_*` + catalogue (steps runner) | gate réel : planifier une salle Visio depuis l'accueil → le bot entre (visible par défaut) → pistes par participant → étape 5 nommée → SRT chevauchements |
 | **V2 — Zoom** | tee+ingest+events/captions dans `bot/zoom_sdk.py`, relais `ZOOM_*`, doc 40 min | gate réel compte gratuit : même parcours ; sortie propre AVANT 40 min |
 
 Discipline inchangée : gates statiques + suite + E2E réel avant CHAQUE push ; images bot

@@ -126,10 +126,13 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
 
 Autant le dire clairement :
 
-- **Pas un robot qui rejoint vos visioconférences.** On part d'un enregistrement
-  (fichier audio) — celui de votre dictaphone ou la piste audio exportée de votre visio.
-- **Pas du temps réel.** Le traitement se fait après la réunion, en quelques dizaines de
-  minutes selon la durée et le matériel.
+- **Pas d'enregistrement furtif.** Depuis la 0.4.0, un bot *peut* rejoindre vos
+  visioconférences (Jitsi, Visio, Zoom — Meet se passe même de bot) : il se nomme et
+  reste visible des participants, c'est un choix assumé. Et rien n'oblige à l'utiliser —
+  un simple enregistrement (dictaphone, piste audio exportée) suffit toujours.
+- **Pas du temps réel.** Un suivi en direct provisoire existe pour les réunions captées,
+  mais les livrables sont produits après la réunion, en quelques dizaines de minutes
+  selon la durée et le matériel.
 - **Pas un service en ligne clé en main.** Il faut un serveur avec une carte graphique
   (à partir de 12 Go de mémoire vidéo) et un interlocuteur technique pour l'installer —
   c'est l'affaire d'une demi-journée, guides pas à pas à l'appui, et c'est le prix de la

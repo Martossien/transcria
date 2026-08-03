@@ -31,7 +31,7 @@ example results and the user journey.
 |---|---|
 | [TECHNICAL.md](TECHNICAL.md) | Architecture, pipeline, modules, GPU orchestration, timing model, database |
 | [API_REFERENCE.md](API_REFERENCE.md) | **Generated** HTTP API reference (all routes, auth, ⭐ scriptable contract) — regenerate with `scripts/generate_api_reference.py`, guarded in CI |
-| [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (generated from the schema) |
+| [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (hand-maintained against the classified schema) |
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
 | [LLM_TIERS.md](LLM_TIERS.md) | **In English** — the benchmarked arbitration-LLM VRAM tiers (12 → 64 GB): validated model, quant and context per tier, backend recommendation |
 | [LLM_BACKENDS.md](LLM_BACKENDS.md) | Arbitration LLM backends (Ollama / llama.cpp / vLLM) and hardware-driven selection |
@@ -101,7 +101,7 @@ validated in real conditions; two more ship prepared but unvalidated.
 |---|---|
 | [REFACTORING_QUALITE.md](archive/REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
 | [PISTES_AMELIORATION.md](PISTES_AMELIORATION.md) | Post-0.3.7 improvement analysis: measured time breakdown, engine choices, CPU-fallback trade-offs, UX and operations gaps, suggested roadmap |
-| [GESTION_IDENTITE.md](GESTION_IDENTITE.md) | Enterprise identity plan (validated, not yet implemented): pluggable backends — OIDC, direct LDAP/AD, trusted proxy headers, API tokens — group→role mapping, JIT provisioning, break-glass, test matrix |
+| [GESTION_IDENTITE.md](GESTION_IDENTITE.md) | Enterprise identity (shipped in 0.3.9): pluggable backends — OIDC, direct LDAP/AD, trusted proxy headers, API tokens — group→role mapping, JIT provisioning, break-glass, test matrix |
 
 ## History
 

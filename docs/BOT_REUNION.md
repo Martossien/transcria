@@ -12,19 +12,22 @@ pare-feu ou un proxy d'entreprise sans aucune ouverture entrante.
 > récupération après coup. Seuls **Zoom RTMS** et **Teams** exigent un point d'entrée public
 > — et ce sont précisément les deux qui ne sont pas encore validés.
 
-Deux bots coexistent, parce que les plateformes n'ouvrent pas la même porte :
+Trois bots coexistent, parce que les plateformes n'ouvrent pas la même porte :
 
 | Bot | Plateformes | Comment il entre | Image |
 |---|---|---|---|
 | **Navigateur** | Jitsi (publique ou auto-hébergée) | Chromium headless, capture WebRTC dans la page | `Dockerfile.bot` |
+| **Client LiveKit natif** | Visio (La Suite numérique) | parle le protocole LiveKit de l'instance, sans navigateur (`bot/visio.py` — cf. `docs/VISIO_ZOOM_RUNNER.md`) | `Dockerfile.visio` |
 | **SDK natif Zoom** | Zoom | Meeting SDK officiel pour Linux, sans navigateur | `Dockerfile.zoom-sdk` |
 
-Pourquoi deux : **Zoom refuse l'automatisation de son client Web** (reCAPTCHA, constaté au
-gate) et recommande explicitement le SDK natif pour un bot headless Linux. Ce n'était donc pas
-un défaut à corriger dans le pilote navigateur, mais la mauvaise porte d'entrée. Le SDK
-apporte en prime ce que le navigateur ne pouvait pas donner : **les locuteurs sont nommés**.
+Pourquoi pas un seul : **Zoom refuse l'automatisation de son client Web** (reCAPTCHA, constaté
+au gate) et recommande explicitement le SDK natif pour un bot headless Linux — ce n'était donc
+pas un défaut à corriger dans le pilote navigateur, mais la mauvaise porte d'entrée ; et Visio
+expose LiveKit, qu'on peut parler nativement pour bien moins lourd qu'un Chromium. Les voies
+natives apportent en prime ce que le navigateur ne pouvait pas donner : **des pistes par
+participant, sous leur nom**.
 
-Les deux partagent l'aval (façade STT, session live, provenance) et **les mêmes codes de
+Les trois partagent l'aval (façade STT, session live, provenance) et **les mêmes codes de
 retour** : l'orchestration n'a pas à les distinguer.
 
 ## 0. Au quotidien : une seule commande

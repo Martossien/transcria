@@ -1,19 +1,20 @@
 # Gestion d'identité d'entreprise — OIDC, LDAP/AD, proxy de confiance, jetons d'API
 
-> **Statut : PLAN VALIDÉ, non implémenté.** Document d'analyse et de cadrage
+> **Statut : LIVRÉ en 0.3.9** (backends `transcria/auth/identity/` — OIDC,
+> LDAP/AD, proxy de confiance, jetons d'API ; configuration depuis l'UI admin,
+> voir `SECURITY_MODEL.md § 6`). Ce document est le cadrage d'origine
 > (2026-07-20), rédigé en réponse à des demandes utilisateurs : « gestion des
 > utilisateurs en LDAP, Active Directory, OIDC… pour les droits (admins,
-> utilisateurs, etc.) ». Il suit la même discipline que
-> `PISTES_AMELIORATION.md` : état des lieux vérifié contre le code, choix
-> argumentés, lots avec définition de fini, matrice de tests. Les principes
-> d'implémentation du projet (§ « Principes » de `PISTES_AMELIORATION.md`)
-> s'appliquent intégralement — en premier lieu : **les comptes locaux restent
-> le défaut, rien ne change pour les installations existantes**.
+> utilisateurs, etc.) ». Il reste la référence des choix d'architecture et de
+> sécurité de la fonctionnalité (pourquoi ces quatre connecteurs, mapping
+> groupes→rôle, JIT, break-glass, matrice de tests). Le principe premier tient
+> toujours : **les comptes locaux restent le défaut, rien ne change pour les
+> installations existantes**.
 
 ## 0. Résumé exécutif
 
-Le portail ne connaît aujourd'hui que des comptes locaux (mot de passe haché en
-base). Pour une adoption en entreprise, c'est le blocage classique : pas
+Avant 0.3.9, le portail ne connaissait que des comptes locaux (mot de passe haché
+en base). Pour une adoption en entreprise, c'est le blocage classique : pas
 d'offboarding automatique (un employé parti garde son accès tant qu'un admin ne
 pense pas à le désactiver), pas de politique de mots de passe ni de MFA
 centralisés, double saisie des droits.

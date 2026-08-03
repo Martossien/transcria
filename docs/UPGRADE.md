@@ -1,8 +1,8 @@
 # Sauvegarde, restauration et mise à niveau
 
-> Chantier C1.1/C1.2 (docs/archive/RELEASE_0.2.0.md). Tout est **local** en 0.2.0 (pas de
-> destination distante). Les commandes s'exécutent avec le venv du projet et la même
-> configuration (`TRANSCRIA_CONFIG`, `TRANSCRIA_DATABASE_URL`) que le service.
+> Chantier d'origine : C1.1/C1.2 (docs/archive/RELEASE_0.2.0.md). Tout est **local** (pas
+> de destination distante de sauvegarde). Les commandes s'exécutent avec le venv du projet
+> et la même configuration (`TRANSCRIA_CONFIG`, `TRANSCRIA_DATABASE_URL`) que le service.
 
 ## Ce qui est protégé
 
