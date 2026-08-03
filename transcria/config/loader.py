@@ -46,10 +46,6 @@ _DEFAULT_CONFIG = {
             "proof_allowed_extensions": ["pdf", "png", "jpg", "jpeg"],
             "max_proof_size_mb": 25,
         },
-        "audit": {
-            "log_match_suggestions": True,
-            "log_match_scores": True,
-        },
     },
     "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "",
              "session_lifetime_hours": 12,
@@ -665,7 +661,6 @@ _DEFAULT_CONFIG = {
         "scheduling": {
             "enabled": False,
             "timezone": "Europe/Paris",
-            "poll_interval_s": 300,
             "kill_patterns": [
                 "vllm",
                 "llama-server",
@@ -1005,6 +1000,11 @@ def _warn_removed_keys(user_cfg: dict) -> None:
 
     L'éditeur de transcription est désormais intégré (docs/archive/EDITEUR_SRT_INTEGRE.md §8) :
     le lien vers le fork externe « SRT Editor EASY » n'existe plus. Warning retiré à la 0.2.0.
+
+    Retirées après la 0.4.0 : trois clés validées par le schéma mais consommées NULLE PART
+    (`voice_enrollment.audit.*` promettait même une journalisation d'audit qui n'a jamais
+    existé — inacceptable dans un produit documenté pour un DPO ; le poll effectif de la
+    file est `queue.poll_interval_s`).
     """
     import logging
 
@@ -1019,6 +1019,19 @@ def _warn_removed_keys(user_cfg: dict) -> None:
         logging.getLogger(__name__).warning(
             "Clé de configuration obsolète ignorée : %s — retirez-la de config.yaml "
             "(cf. CHANGELOG : fork SRT intégré en beta.9, llmdashboard retiré en 0.2.0).", key)
+
+    sans_effet = []
+    if isinstance(user_cfg.get("voice_enrollment"), dict) and "audit" in user_cfg["voice_enrollment"]:
+        sans_effet.append("voice_enrollment.audit")
+    workflow_cfg = user_cfg.get("workflow")
+    scheduling = workflow_cfg.get("scheduling") if isinstance(workflow_cfg, dict) else None
+    if isinstance(scheduling, dict) and "poll_interval_s" in scheduling:
+        sans_effet.append("workflow.scheduling.poll_interval_s")
+    for key in sans_effet:
+        logging.getLogger(__name__).warning(
+            "Clé de configuration sans effet ignorée : %s — elle n'a jamais été consommée "
+            "par le code, retirez-la de config.yaml (le poll de la file est "
+            "queue.poll_interval_s).", key)
 
 
 def load_config(config_path: str | None = None) -> dict:

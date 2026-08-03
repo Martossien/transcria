@@ -108,13 +108,6 @@ def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:
                 if not isinstance(value, str) or not value.strip():
                     r.add_error(f"voice_enrollment.consent.proof_allowed_extensions[{i}]: doit être une chaîne non vide")
 
-    audit = cfg.get("audit", {})
-    if audit:
-        if not isinstance(audit, dict):
-            r.add_error("voice_enrollment.audit: doit être un objet YAML")
-        else:
-            _check_bool(audit, "log_match_suggestions", "voice_enrollment.audit.log_match_suggestions", r)
-            _check_bool(audit, "log_match_scores", "voice_enrollment.audit.log_match_scores", r)
 
 def _check_gpu(gpu: dict, r: ValidationResult) -> None:
     _check_int_range(gpu, "cohere_vram_mb", "gpu.cohere_vram_mb", 1000, 100000, r)

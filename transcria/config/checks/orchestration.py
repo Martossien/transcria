@@ -155,7 +155,6 @@ def _check_scheduling_section(sched_cfg: dict, r: ValidationResult) -> None:
             zoneinfo.ZoneInfo(timezone)
         except Exception:
             r.add_error(f"workflow.scheduling.timezone: fuseau horaire invalide '{timezone}'")
-    _check_int_range(sched_cfg, "poll_interval_s", "workflow.scheduling.poll_interval_s", 10, 86400, r)
     patterns = sched_cfg.get("kill_patterns", [])
     if not isinstance(patterns, list):
         r.add_error("workflow.scheduling.kill_patterns: doit être une liste")

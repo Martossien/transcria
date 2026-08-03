@@ -157,6 +157,15 @@ venv/bin/python -m transcria.maintenance.cli upgrade
 Si une étape échoue, la mise à niveau **s'arrête** et affiche les étapes déjà faites ;
 restaurez la sauvegarde initiale pour revenir en arrière.
 
+### Notes spécifiques 0.4.0 → suivante
+
+Rien à faire. Trois clés de configuration **sans effet** ont été retirées du schéma —
+`voice_enrollment.audit.log_match_suggestions`, `voice_enrollment.audit.log_match_scores`
+et `workflow.scheduling.poll_interval_s` : elles étaient validées mais consommées nulle
+part par le code (le poll de la file est `queue.poll_interval_s`). Si votre `config.yaml`
+les porte encore, elles sont **ignorées avec un avertissement** au démarrage — retirez-les
+à l'occasion.
+
 ### Notes spécifiques 0.3.9.x → 0.4.0
 
 Aucune migration de base. **Un changement cassant, et il ne concerne pas tout le monde.**

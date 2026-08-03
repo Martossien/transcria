@@ -67,9 +67,6 @@ voice_enrollment:
       - "jpg"
       - "jpeg"
     max_proof_size_mb: 25
-  audit:
-    log_match_suggestions: true
-    log_match_scores: true
 
 auth:
   enabled: true

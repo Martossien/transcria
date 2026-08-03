@@ -80,8 +80,6 @@ CASES = [
     ("voice_enrollment.consent.validity_days", 0, "voice_enrollment.consent.validity_days"),
     ("voice_enrollment.consent.proof_allowed_extensions", [], "proof_allowed_extensions: doit être une liste non vide"),
     ("voice_enrollment.consent.proof_allowed_extensions", ["  "], "proof_allowed_extensions[0]: doit être une chaîne non vide"),
-    ("voice_enrollment.audit", "bad", "voice_enrollment.audit: doit être un objet YAML"),
-    ("voice_enrollment.audit.log_match_scores", "x", "voice_enrollment.audit.log_match_scores: doit être true/false"),
     # gpu
     ("gpu.llm_gpu_indices", [], "gpu.llm_gpu_indices: doit être une liste non vide d'index GPU"),
     ("gpu.llm_gpu_indices", [0, 0], "gpu.llm_gpu_indices: index GPU dupliqués"),

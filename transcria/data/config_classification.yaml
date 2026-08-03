@@ -275,8 +275,6 @@ deferred:
 - storage.database_url
 - storage.jobs_dir
 - voice_enrollment.allow_global_profiles
-- voice_enrollment.audit.log_match_scores
-- voice_enrollment.audit.log_match_suggestions
 - voice_enrollment.consent.allow_expiration
 - voice_enrollment.consent.current_form_version
 - voice_enrollment.consent.max_proof_size_mb
@@ -468,7 +466,6 @@ deferred:
 - workflow.queue.use_listen_notify
 - workflow.scheduling.enabled
 - workflow.scheduling.kill_patterns
-- workflow.scheduling.poll_interval_s
 - workflow.scheduling.timezone
 - workflow.scheduling.windows
 - workflow.segment_reliability.degrade_on_text_flags

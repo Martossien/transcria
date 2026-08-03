@@ -1110,7 +1110,6 @@ Configuration générale du calendrier. Les créneaux eux-mêmes sont stockés e
 | `enabled` | bool | `true` | Active la prise en compte des créneaux |
 | `timezone` | string | `"Europe/Paris"` | Fuseau horaire utilisé pour évaluer les jours et heures |
 | `kill_patterns` | list[str] | `["vllm", "llama-server", ...]` | Patterns de processus externes que `force_gpu` et la libération VRAM ciblée peuvent tuer ; les autres processus GPU sont ignorés |
-| `poll_interval_s` | int | `300` | **Réservé** (validé par le schéma, non consommé à ce jour) : période de réévaluation du calendrier. Le poll effectif de la file est `queue.poll_interval_s` |
 | `windows` | list[dict] | `[]` | Valeurs initiales/documentaires ; le runtime utilise la table `scheduling_windows` |
 
 Format d'un créneau :
@@ -1297,8 +1296,6 @@ Référentiel local de voix connues avec consentement explicite. Désactivé par
 | `high_confidence_threshold` | float | `0.86` | Score à partir duquel la suggestion est marquée haute confiance |
 | `min_top2_margin` | float | `0.05` | Écart minimal entre le premier et le deuxième candidat |
 | `max_candidates_per_speaker` | int | `2` | Nombre maximal de candidats conservés pour audit et diagnostic |
-| `audit.log_match_suggestions` | bool | `true` | **Réservé** (validé par le schéma, non consommé à ce jour) : journalisation d'audit des suggestions de correspondance voix |
-| `audit.log_match_scores` | bool | `true` | **Réservé** (validé par le schéma, non consommé à ce jour) : inclusion des scores de similarité dans l'audit |
 | `audit.log_match_scores` | bool | `true` | Journalise les scores de similarité des correspondances (diagnostic ; désactivable par posture de minimisation) |
 | `stale_profiles_are_matchable` | bool | `false` | Autorise exceptionnellement les profils périmés ; désactivé par défaut |
 
