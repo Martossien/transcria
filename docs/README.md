@@ -85,7 +85,6 @@ validated in real conditions; two more ship prepared but unvalidated.
 | [BENCHMARKING.md](BENCHMARKING.md) | How to run a reproducible bench: the `bench_audio.py` matrix runner and its four analyzers (metrics, LLM quality, WER vs reference, concurrency) |
 | [STT_BENCHMARK_REAL_MEETINGS.md](STT_BENCHMARK_REAL_MEETINGS.md) | **In English** — published STT benchmark on real French meetings vs a professional human transcript: all engines and external runtimes, traps, failure modes |
 | [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
-
 | [STT_CORPUS.md](STT_CORPUS.md) | How the reference corpus is built (selection, annotation, licensing) |
 
 ## Concurrency, scale, and distributed inference
