@@ -99,6 +99,11 @@ class TestWorkflowRunnerRunSummary:
 
         from transcria.gpu.gpu_session import GPUSessionError
 
+        # Jamais de kill de port RÉEL (garde conftest _no_real_process_kills) : le chemin
+        # vram_wait libère le port LLM pour de vrai — sur une machine où un serveur
+        # écoute 8080, ce test le tuait (incident 2026-08-03, 7 tests attrapés d'un coup).
+        monkeypatch.setattr("transcria.gpu.vram_manager.VRAMManager._kill_port",
+                            lambda self, port: True)
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "VRAM Fail")

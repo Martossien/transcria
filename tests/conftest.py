@@ -205,3 +205,46 @@ def _reset_login_rate_limiter():
     login_rate_limiter.reset()
     yield
     login_rate_limiter.reset()
+
+
+
+@pytest.fixture(autouse=True)
+def _no_real_process_kills(request, monkeypatch):
+    """AUCUN test ne tue de vrai processus depuis les modules GPU — échec BRUYANT sinon.
+
+    Incident du 2026-08-03 (traqué en direct pendant un gate E2E) : un test de préflight
+    VRAM dont la couture ``_free_memory`` n'était pas substituée a PRÉEMPTÉ pour de vrai
+    le ``llama-server`` d'arbitrage de la machine — en pleine session opencode d'un E2E
+    concurrent. Le test passait (VRAM mockée), le meurtre était silencieux, et la
+    protection P1.a (PID trackés exclus) était neutralisée par le registre tmp du test.
+    Corriger l'instance ne suffit pas : tout test qui atteint un kill réel des modules
+    GPU sans substitution est le même incident en attente — garde de CLASSE.
+
+    Mécanique : ``os.kill`` global est remplacé par une garde qui n'échoue QUE si
+    l'APPELANT est un module ``transcria.gpu.*`` (seul périmètre qui préempte des
+    processus de la machine par pattern/port) ; tout autre appel est délégué au vrai
+    ``os.kill`` (``subprocess.Popen.terminate`` passe par là). Les tests qui substituent
+    déjà leurs coutures (``_free_memory``, ``os.kill`` re-patché localement) écrasent la
+    garde et ne la voient jamais ; les marqueurs matériels réels y échappent.
+    """
+    if request.node.get_closest_marker("gpu_e2e") or request.node.get_closest_marker("gpu_real"):
+        yield
+        return
+
+    import os as _os
+    import sys as _sys
+
+    _vrai_kill = _os.kill
+
+    def _kill_garde(pid, sig):
+        appelant = _sys._getframe(1).f_globals.get("__name__", "")
+        if appelant.startswith("transcria.gpu"):
+            pytest.fail(
+                f"os.kill({pid}, {sig}) RÉEL tenté depuis {appelant} pendant un test — "
+                "substituer la couture (_free_memory, kill_port_listeners, os.kill du "
+                "module) au lieu de tuer un vrai processus de la machine."
+            )
+        return _vrai_kill(pid, sig)
+
+    monkeypatch.setattr(_os, "kill", _kill_garde)
+    yield

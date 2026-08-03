@@ -123,7 +123,14 @@ class TestPreflightLlmVram:
         # La PETITE carte descend à 6,5 Go libres < 6000 + 1000 → refus, même si la
         # grande carte est vide (tout-ou-rien : llama s'étale ou ne se lance pas)
         mgr = _manager(cfg, {0: 24000, 1: 6500}, monkeypatch)
+        # ⚠ La couture de préemption DOIT être substituée : le chemin du refus escalade
+        # jusqu'à `_free_memory`, qui tue par pattern les VRAIS processus GPU de la
+        # machine (incident 2026-08-03 : le llama-server d'un E2E concurrent préempté
+        # par CE test — VRAM mockée ⇒ meurtre silencieux, test vert).
+        freed: list[int] = []
+        monkeypatch.setattr(mgr, "_free_memory", lambda idx: freed.append(idx))
         assert mgr._preflight_llm_vram() is False
+        assert freed == [1]                      # l'escalade a bien visé la petite carte
 
     def test_launch_refuse_sans_executer_le_script(self, tmp_path, monkeypatch):
         """Le refus arrive AVANT le Popen : plus jamais de segfault aveugle."""
@@ -214,3 +221,21 @@ class TestCheckCudaVisibleDivergence:
             self._cfg(), is_file=lambda p: True,
             read_text=lambda p: "--tensor-split 1,1,1")
         assert res.status == OK
+
+
+class TestGardeAntiKillReel:
+    """La garde conftest `_no_real_process_kills` transforme un kill GPU réel en échec.
+
+    Elle ne se déclenche qu'en présence d'une victime : en CI (aucun process GPU) la
+    fuite était invisible — ce test lui fabrique une victime factice pour prouver que
+    la garde ferait échouer un test qui atteint `os.kill` sans substitution.
+    """
+
+    def test_un_kill_gpu_non_substitue_fait_echouer_le_test(self, monkeypatch):
+        import pytest as _pytest
+
+        mgr = _manager({"llm_gpu_indices": [0], "llm_vram_mb": 1000}, {0: 0}, monkeypatch)
+        monkeypatch.setattr(mgr, "_preemptable_processes",
+                            lambda idx, protected: [(999999, "processus-factice", 1234)])
+        with _pytest.raises(_pytest.fail.Exception, match="os.kill"):
+            mgr._free_memory(0)

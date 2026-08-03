@@ -174,6 +174,11 @@ class TestPipelineServiceStateRecovery:
             assert effective["models"]["stt_backend"] == "cohere"
 
     def test_quality_mode_forces_configured_whisper_backend(self, app, owner_id, monkeypatch, tmp_path):
+        # Jamais de kill de port RÉEL (garde conftest _no_real_process_kills) : le chemin
+        # vram_wait libère le port LLM pour de vrai — sur une machine où un serveur
+        # écoute 8080, ce test le tuait (incident 2026-08-03, 7 tests attrapés d'un coup).
+        monkeypatch.setattr("transcria.gpu.vram_manager.VRAMManager._kill_port",
+                            lambda self, port: True)
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
 
@@ -210,6 +215,11 @@ class TestPipelineServiceStateRecovery:
             assert captured["backend"] == "whisper"
 
     def test_degraded_summary_forces_configured_whisper_backend(self, app, owner_id, monkeypatch, tmp_path):
+        # Jamais de kill de port RÉEL (garde conftest _no_real_process_kills) : le chemin
+        # vram_wait libère le port LLM pour de vrai — sur une machine où un serveur
+        # écoute 8080, ce test le tuait (incident 2026-08-03, 7 tests attrapés d'un coup).
+        monkeypatch.setattr("transcria.gpu.vram_manager.VRAMManager._kill_port",
+                            lambda self, port: True)
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
 
@@ -347,6 +357,11 @@ class TestPipelineServiceStateRecovery:
             assert stats["max_prefix_tokens"] == 20
 
     def test_pipeline_marks_job_failed_when_step_returns_error(self, app, owner_id, monkeypatch, tmp_path):
+        # Jamais de kill de port RÉEL (garde conftest _no_real_process_kills) : le chemin
+        # vram_wait libère le port LLM pour de vrai — sur une machine où un serveur
+        # écoute 8080, ce test le tuait (incident 2026-08-03, 7 tests attrapés d'un coup).
+        monkeypatch.setattr("transcria.gpu.vram_manager.VRAMManager._kill_port",
+                            lambda self, port: True)
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
 
@@ -373,6 +388,11 @@ class TestPipelineServiceStateRecovery:
             assert updated.state == JobState.FAILED.value
 
     def test_pipeline_can_defer_terminal_state_to_worker(self, app, owner_id, monkeypatch, tmp_path):
+        # Jamais de kill de port RÉEL (garde conftest _no_real_process_kills) : le chemin
+        # vram_wait libère le port LLM pour de vrai — sur une machine où un serveur
+        # écoute 8080, ce test le tuait (incident 2026-08-03, 7 tests attrapés d'un coup).
+        monkeypatch.setattr("transcria.gpu.vram_manager.VRAMManager._kill_port",
+                            lambda self, port: True)
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
 
