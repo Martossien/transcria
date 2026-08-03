@@ -26,6 +26,78 @@ from transcria.workflow.type_field_extraction import (
 
 logger = logging.getLogger(__name__)
 
+# Une seule relance : la phase est best-effort, mais une livraison partielle (< 4 sorties)
+# est presque toujours un accident transitoire d'opencode (gel/interruption en cours de
+# session), pas une limite du modèle — mesuré au gate E2E du 2026-08-03 : 1 run complet
+# sur 3 rendu sans rapport ni synthèse harmonisée, puis 4/4 au run suivant à l'identique.
+_MAX_REVIEW_ATTEMPTS = 2
+
+# Les quatre sorties contractuelles de `run_final_review` (mêmes clés que son retour).
+_REVIEW_OUTPUT_KEYS = ("reviewed_srt", "harmonized_summary", "reviewed_structured_data", "report")
+
+# Les fichiers que l'agent écrit dans le scratch — purgés avant une relance pour que le
+# 2e process opencode reparte d'un répertoire net (des sorties partielles laissées en
+# place changeraient son comportement : « fichiers déjà écrits »).
+_REVIEW_OUTPUT_FILES = ("transcription_reviewed.srt", "summary_harmonized.md",
+                        "structured_data_reviewed.json", "final_review_report.md")
+
+
+def _invoke_final_review_with_retries(
+    runner, ocr: OpenCodeRunner, job: Job, *,
+    staged_srt: str, summary_file: str, glossary_file: str, structured_file: str,
+    api_model_id: str | None,
+) -> dict:
+    """Rejoue la relecture finale (≤ ``_MAX_REVIEW_ATTEMPTS``) sur livraison partielle.
+
+    Jusqu'ici la livraison partielle était acceptée sans relance : « succès dès 1 fichier »,
+    un simple WARNING, et le job sortait sans ``final_review_report.md`` ni synthèse
+    harmonisée — livraison dégradée SILENCIEUSE pour l'utilisateur. Miroir des boucles du
+    résumé et de la correction : process opencode neuf, re-vérification de la LLM avant la
+    relance (le serveur peut être tombé entre-temps — SIGTERM one-off observé). Les sorties
+    des tentatives sont FUSIONNÉES par fichier : une sortie déjà produite n'est jamais
+    perdue, la plus récente fait foi. Seul un échec dur (success=False sans « interrompu »)
+    coupe la boucle — retenter n'y changerait rien.
+    """
+    merged: dict = {}
+    for attempt in range(1, _MAX_REVIEW_ATTEMPTS + 1):
+        result = ocr.run_final_review(
+            staged_srt, summary_file, glossary_file, structured_file,
+            output_language=resolve_output_language(job),
+        )
+        if not merged:
+            merged = dict(result)
+        else:
+            for key in _REVIEW_OUTPUT_KEYS:
+                if result.get(key):
+                    merged[key] = result[key]
+            if result.get("success"):
+                merged["success"] = True
+                merged["error"] = ""
+        missing = [key for key in _REVIEW_OUTPUT_KEYS if not merged.get(key)]
+        if not missing:
+            if attempt > 1:
+                logger.info("Relecture finale complète à la tentative %d/%d",
+                            attempt, _MAX_REVIEW_ATTEMPTS)
+            break
+        hang = (not result.get("success")) and "interrompu" in str(result.get("error", ""))
+        if not result.get("success") and not hang:
+            break
+        if attempt < _MAX_REVIEW_ATTEMPTS:
+            logger.warning(
+                "Relecture finale partielle (%d/4 sorties, manquantes : %s) — relance %d/%d "
+                "avec un process opencode neuf",
+                4 - len(missing), ", ".join(missing), attempt + 1, _MAX_REVIEW_ATTEMPTS,
+            )
+            for name in _REVIEW_OUTPUT_FILES:
+                (ocr.work_dir / name).unlink(missing_ok=True)
+            try:
+                if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+                    logger.warning("LLM d'arbitrage injoignable avant la relance de la relecture "
+                                   "finale — relance tentée quand même (pré-garde en aval)")
+            except Exception:  # noqa: BLE001 — la re-vérification ne bloque jamais la relance
+                logger.warning("Re-vérification LLM avant relance en erreur", exc_info=True)
+    return merged
+
 
 def run(runner, job: Job, config: dict) -> dict:
     """Phase de relecture finale (A+C+D+G) exécutée après la correction.
@@ -107,12 +179,13 @@ def run(runner, job: Job, config: dict) -> dict:
 
         opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
         ocr = OpenCodeRunner(str(workspace.scratch_dir), opencode_bin=opencode_bin, config=config)
-        result = ocr.run_final_review(
-            str(staged_srt),
-            str(summary_file),
-            str(glossary_file),
-            str(structured_file),
-            output_language=resolve_output_language(job),
+        result = _invoke_final_review_with_retries(
+            runner, ocr, job,
+            staged_srt=str(staged_srt),
+            summary_file=str(summary_file),
+            glossary_file=str(glossary_file),
+            structured_file=str(structured_file),
+            api_model_id=api_model_id,
         )
         workspace.verify_and_restore_sources()
         applied = runner._apply_final_review(fs, result)

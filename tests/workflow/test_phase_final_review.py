@@ -179,3 +179,97 @@ class TestRunFinalReview:
             assert result["success"] is True  # best-effort : le pipeline poursuit
             assert result["review_applied"] is False and "opencode HS" in result["error"]
             assert stopped["v"] is True  # LLM lancée par ce call → stoppée
+
+
+class TestInvokeFinalReviewWithRetries:
+    """La livraison partielle (< 4 sorties) déclenche UNE relance, sorties fusionnées.
+
+    Le défaut fondateur (gate E2E 2026-08-03) : 1 run sur 3 rendu sans rapport ni
+    synthèse harmonisée, accepté « succès » sans relance — livraison dégradée
+    silencieuse. La boucle est le miroir de celles du résumé et de la correction.
+    """
+
+    _COMPLETE = {
+        "success": True, "reviewed_srt": "srt", "harmonized_summary": "sum",
+        "reviewed_structured_data": "{}", "report": "rapport", "error": "",
+    }
+
+    def _fakes(self, tmp_path, results):
+        """Fake ocr (séquence de résultats) + fake runner (LLM toujours prête)."""
+        from transcria.workflow.phases import final_review as mod
+
+        calls = {"n": 0, "llm_rechecks": 0}
+
+        class _FakeOcr:
+            work_dir = tmp_path
+
+            def run_final_review(self, *a, **k):
+                calls["n"] += 1
+                return dict(results[min(calls["n"], len(results)) - 1])
+
+        class _FakeVram:
+            def ensure_arbitrage_llm_ready(self, expected_model_id=None):
+                calls["llm_rechecks"] += 1
+                return True
+
+        class _FakeRunner:
+            vram = _FakeVram()
+
+        class _FakeJob:
+            def get_extra_data(self):
+                return {}
+
+        def _invoke(ocr, runner):
+            return mod._invoke_final_review_with_retries(
+                runner, ocr, _FakeJob(), staged_srt="s", summary_file="m",
+                glossary_file="g", structured_file="d", api_model_id=None)
+
+        return _FakeOcr(), _FakeRunner(), calls, _invoke
+
+    def test_livraison_complete_ne_relance_pas(self, tmp_path):
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [self._COMPLETE])
+        result = invoke(ocr, runner)
+        assert calls["n"] == 1 and result["report"] == "rapport"
+
+    def test_livraison_partielle_relancee_puis_complete(self, tmp_path):
+        partial = {**self._COMPLETE, "harmonized_summary": "", "report": ""}
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [partial, self._COMPLETE])
+        result = invoke(ocr, runner)
+        assert calls["n"] == 2 and calls["llm_rechecks"] == 1
+        assert result["report"] == "rapport" and result["harmonized_summary"] == "sum"
+
+    def test_fusion_conserve_les_sorties_de_la_premiere_tentative(self, tmp_path):
+        # La 2e tentative rend le rapport mais PAS le SRT : l'union par fichier garde
+        # le SRT de la 1re — une sortie produite n'est jamais perdue par la relance.
+        first = {**self._COMPLETE, "report": "", "harmonized_summary": ""}
+        second = {**self._COMPLETE, "reviewed_srt": "", "reviewed_structured_data": ""}
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [first, second])
+        result = invoke(ocr, runner)
+        assert result["reviewed_srt"] == "srt" and result["report"] == "rapport"
+        assert result["success"] is True
+
+    def test_gel_opencode_est_relance(self, tmp_path):
+        hang = {"success": False, "reviewed_srt": "", "harmonized_summary": "",
+                "reviewed_structured_data": "", "report": "",
+                "error": "opencode interrompu (gel détecté)"}
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [hang, self._COMPLETE])
+        result = invoke(ocr, runner)
+        assert calls["n"] == 2 and result["success"] is True and result["error"] == ""
+
+    def test_echec_dur_ne_relance_pas(self, tmp_path):
+        dur = {"success": False, "reviewed_srt": "", "harmonized_summary": "",
+               "reviewed_structured_data": "", "report": "", "error": "opencode introuvable: x"}
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [dur, self._COMPLETE])
+        result = invoke(ocr, runner)
+        assert calls["n"] == 1 and result["success"] is False
+
+    def test_les_sorties_partielles_sont_purgees_avant_relance(self, tmp_path):
+        # Un scratch non purgé changerait le comportement du 2e process opencode
+        # (« fichiers déjà écrits ») ET ferait re-lire les restes de la tentative 1.
+        from transcria.workflow.phases.final_review import _REVIEW_OUTPUT_FILES
+        for name in _REVIEW_OUTPUT_FILES:
+            (tmp_path / name).write_text("reste tentative 1")
+        partial = {**self._COMPLETE, "report": ""}
+        ocr, runner, calls, invoke = self._fakes(tmp_path, [partial, self._COMPLETE])
+        invoke(ocr, runner)
+        assert all(not (tmp_path / name).exists() for name in _REVIEW_OUTPUT_FILES)
