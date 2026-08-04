@@ -59,7 +59,10 @@ répertoire de travail) :
    listé est probablement une invention sur du bruit. Si son texte ressemble à une
    hallucination (générique vidéo, formule de clôture, crédits de sous-titrage) ou
    ne se rattache à rien du contexte, marque `[INCERTAIN: hallucination probable —
-   <raison du hint>]` SANS le corriger ni le supprimer. Les hints signalent, ils ne
+   <raison du hint>]` SANS le corriger ni le supprimer. Marquage OBLIGATOIRE (pas un
+   jugement) pour tout segment listé dont le hint porte `level: degrade`,
+   `no_speech_prob` ≥ 0,8 ou la raison `signature_hallucination_moteur` — sauf si son
+   texte se rattache clairement aux phrases voisines. Les hints signalent, ils ne
    prouvent pas : jamais de suppression, jamais de réécriture sur leur seule foi.
 3. **session_lexicon_filtered.json** — le lexique validé par l'utilisateur. C'est la
    liste des formes à appliquer en contexte, PAS une simple référence. Chaque entrée
@@ -125,10 +128,12 @@ Joins à la consigne de chaque subagent les entrées de `quality_hints.segments`
 > Applique aussi le lexique validé `session_lexicon_filtered.json` en jugeant le
 > contexte de chaque occurrence (cible = `replace_by` sinon `term` ; homographe
 > légitime → ne pas toucher ; entrées `_preservation_only` → ne jamais modifier).
-> Les segments listés dans `quality_hints.segments` de `job_context.yaml` (fournis
-> ci-dessous s'il y en a dans ta plage) sont peu fiables : exigence redoublée — si
-> leur texte ressemble à une hallucination STT ou ne se rattache à rien, marque
-> `[INCERTAIN: hallucination probable — raison]` sans corriger ni supprimer.
+> Les segments listés dans `quality_hints.segments` (fournis ci-dessous s'il y en a
+> dans ta plage) sont peu fiables : exigence redoublée. Marquage OBLIGATOIRE
+> `[INCERTAIN: hallucination probable — raison]` sur tout segment listé en
+> `degrade`, à `no_speech_prob` ≥ 0,8 ou à signature moteur — sauf rattachement
+> clair aux phrases voisines. Jamais de correction ni de suppression sur la seule
+> foi d'un hint.
 > Parcours ta plage par blocs de 80 segments avec Read (offset/limit). Pour chaque
 > bloc, écris dans ton raisonnement : le sujet du bloc en une phrase ; chaque
 > correction prévue AVANT de l'appliquer (numéro de segment + nature : orthographe ou

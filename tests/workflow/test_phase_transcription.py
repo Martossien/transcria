@@ -74,6 +74,7 @@ class TestWorkflowRunnerRunTranscription:
             from transcria.stt.transcription import Transcriber
 
             fake_result = {
+                "segments": [{"start": 0.0, "end": 5.0, "text": "Bonjour"}],
                 "transcript_text": "[0s->5s] Bonjour",
                 "segment_count": 1,
                 "speaker_count": 0,
@@ -113,3 +114,28 @@ class TestWorkflowRunnerRunTranscription:
 
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.FAILED.value
+
+
+class TestTranscriptVideCourtCircuit:
+    def test_zero_segment_echoue_clair_avant_les_phases_llm(self, app, owner_id, monkeypatch, tmp_path):
+        """Vérité terrain bruit blanc (2026-08-04) : 0 segment partait quand même en
+        correction LLM (3 tentatives + exception). Désormais : FAILED immédiat avec
+        un constat actionnable pour l'utilisateur."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Bruit pur")
+            runner = WorkflowRunner(JobStore, cfg)
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
+
+            from transcria.stt.transcription import Transcriber
+            monkeypatch.setattr(Transcriber, "transcribe",
+                                lambda self, job, path: {"segments": [], "srt_content": "",
+                                                         "speaker_count": 0})
+
+            result = runner.run_transcription(job, "/tmp/fake.wav", cfg)
+            assert "Aucune parole détectée" in result.get("error", "")
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == JobState.FAILED.value
+            assert "Aucune parole détectée" in (updated.error_message or updated.error or "")

@@ -529,3 +529,39 @@ class TestWorkflowRunnerRunSummary:
             assert result["gender"]["has_gender_data"] is True
             assert fs.load_json("metadata/audio_scene.json")["gender_segments"][0]["label"] == "female"
             assert fs.load_json("metadata/audio_quality_decision.json")["level"] == "ok"
+
+
+class TestTranscriptVideCourtCircuitResume:
+    def test_zero_segment_abandonne_avant_la_llm(self, app, owner_id, monkeypatch, tmp_path):
+        """Vérité terrain bruit blanc (2026-08-04) : STT rapide à 0 segment partait
+        quand même en résumé LLM. Constat clair et FAILED immédiat."""
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={"enable_quick_summary": True, "enable_speaker_detection": True,
+                          "enable_quality_mode": True, "summary_llm": {"enabled": True}},
+            )
+            job = JobStore.create_job(owner_id, "Bruit pur résumé")
+            runner = WorkflowRunner(JobStore, cfg)
+            monkeypatch.setattr(runner.allocator, "try_reserve",
+                                lambda job_id, mb, phase, preferred_gpu=None: SimpleNamespace(gpu_index=0))
+            monkeypatch.setattr(runner.allocator, "release_phase", lambda job_id, phase: None)
+
+            from transcria.stt.summary import SummaryGenerator
+            monkeypatch.setattr(SummaryGenerator, "generate_quick_summary",
+                                lambda *a, **kw: {"transcript_text": "", "transcript_short": "",
+                                                  "summary_text": "", "segment_count": 0})
+            llm_called = {}
+            monkeypatch.setattr(runner, "_run_summary_llm_phase",
+                                lambda *a, **kw: llm_called.setdefault("hit", True),
+                                raising=False)
+
+            audio_path = str(tmp_path / "bruit.wav")
+            with open(audio_path, "w") as f:
+                f.write("fake")
+
+            result = runner.run_summary(job, audio_path, cfg)
+            assert "Aucune parole détectée" in result.get("error", "")
+            assert "hit" not in llm_called
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == JobState.FAILED.value

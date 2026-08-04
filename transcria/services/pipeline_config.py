@@ -39,7 +39,10 @@ def config_for_mode(source_config: dict, mode: str, job: Job | None = None) -> d
             fallback = SttView.from_config(source_config).stt_backend
             if fallback == "granite":
                 fallback = "cohere"
-            logger.info(
+            # WARNING, pas INFO : l'opérateur a demandé un backend et en reçoit un
+            # autre — un bench qui rate cette ligne compare des moteurs fantômes
+            # (vécu 2026-08-04 : consensus multi-STT avec un doublon cohere).
+            logger.warning(
                 "Granite exclu pour audio dégradé (job=%s), fallback → %s", job.id, fallback
             )
             cfg["models"]["stt_backend"] = fallback

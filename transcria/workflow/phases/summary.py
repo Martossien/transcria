@@ -81,6 +81,17 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         if current is None or current.state != JobState.FAILED.value:
             runner.store.update_state(job.id, JobState.FAILED, result["error"])
         return result
+    if (result.get("segment_count", 0) == 0
+            and len(str(result.get("transcript_text") or "").strip()) < 40):
+        # Vérité terrain bruit blanc (2026-08-04) : 0 segment ET transcript quasi vide
+        # partaient quand même en résumé LLM. Constat clair AVANT toute dépense LLM —
+        # sur silence/bruit pur, l'utilisateur doit le savoir tout de suite.
+        msg = (f"Aucune parole détectée dans cet audio par le moteur « {backend} » — "
+               "fichier silencieux, bruit ou musique seulement ? Vérifiez l'audio, "
+               "ou essayez un autre moteur STT.")
+        sl.error("[1/3] STT rapide : transcript vide — abandon résumé", backend=backend)
+        runner.store.update_state(job.id, JobState.FAILED, msg)
+        return {"success": False, "error": msg, "no_speech": True}
 
     sl.info("[2/4] Analyse de scène audio — début")
     runner.progress.update(

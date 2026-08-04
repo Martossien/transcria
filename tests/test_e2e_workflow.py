@@ -2383,6 +2383,19 @@ def main() -> int:
                 RESULTS["preflight_fingerprint"] = False
                 fail("préflight : source_fingerprint absent d'audio_preflight.json")
 
+            # 1bis. Le backend EFFECTIF est celui demandé — un repli silencieux
+            # (ex. granite exclu sur audio dégradé → cohere, pipeline_config) rend
+            # tout bench mensonger : on compare alors des moteurs fantômes (vécu
+            # 2026-08-04, consensus multi-STT pollué par un doublon cohere).
+            effective_backend = (fs.load_json("metadata/transcription_metadata.json") or {}).get("backend")
+            if effective_backend == args.stt_backend:
+                ok(f"backend effectif = demandé ({args.stt_backend})")
+                RESULTS["backend_effectif"] = True
+            else:
+                RESULTS["backend_effectif"] = False
+                fail(f"backend effectif « {effective_backend} » ≠ demandé « {args.stt_backend} » "
+                     "(repli du pipeline — voir le WARNING « exclu » dans le log)")
+
             # 2. Chaque étape preprocess est historisée dans le modèle de temps
             #    machine (préalable des décisions chiffrées du lot 2). Même
             #    résolution d'identifiant que le pipeline : profil s'il existe,

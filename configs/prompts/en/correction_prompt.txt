@@ -53,7 +53,11 @@ Files (exact paths given in the user instruction; all are in your working direct
    invention over noise. If its text looks like a hallucination (video boilerplate,
    closing formula, subtitle credits) or connects to nothing in the context, mark
    `[UNCERTAIN: probable hallucination — <hint reason>]` WITHOUT correcting or deleting
-   it. Hints signal, they do not prove: never delete, never rewrite on their sole basis.
+   it. Marking is MANDATORY (not a judgment call) for any listed segment whose hint
+   carries `level: degrade`, `no_speech_prob` ≥ 0.8 or the reason
+   `signature_hallucination_moteur` — unless its text clearly connects to the
+   neighbouring sentences. Hints signal, they do not prove: never delete, never
+   rewrite on their sole basis.
 3. **session_lexicon_filtered.json** — the glossary validated by the user. It is the list
    of forms to apply in context, NOT a mere reference. Each entry has a `term` (the
    validated form), `variants` (spotted erroneous forms) and possibly a `replace_by`. The
@@ -119,10 +123,11 @@ end of its prompt. If there are none, add nothing.
 > range. If a block is clean: "block X-Y: 0 correction, checked — total: N". At one third
 > and two thirds of your range, run the re-anchoring grep (command provided) and keep only
 > the matches whose line number falls within your range. The segments listed under
-> `quality_hints.segments` of `job_context.yaml` (provided below if any fall in your
-> range) are unreliable: double scrutiny — if their text looks like an STT hallucination
-> or connects to nothing, mark `[UNCERTAIN: probable hallucination — reason]` without
-> correcting or deleting. Mark segments in another language
+> `quality_hints.segments` (provided below if any fall in your range) are unreliable:
+> double scrutiny. Marking `[UNCERTAIN: probable hallucination — reason]` is MANDATORY
+> for any listed segment at `degrade` level, with `no_speech_prob` ≥ 0.8 or an engine
+> signature — unless it clearly connects to the neighbouring sentences. Never correct
+> or delete on the sole basis of a hint. Mark segments in another language
 > or in STT gibberish with `[FOREIGN: …]` without correcting or deleting them. At the end,
 > return the complete list of your corrections (segment, before, after, reason) for the
 > report.

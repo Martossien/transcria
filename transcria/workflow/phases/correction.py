@@ -51,8 +51,9 @@ def run(runner, job: Job, config: dict) -> dict:
     fs = runner._get_fs(config, job.id)
     srt_path = fs.job_dir / "metadata" / "transcription.srt"
 
-    if not srt_path.is_file():
-        return {"success": False, "error": "SRT source introuvable"}
+    srt_error = _srt_source_error(srt_path)
+    if srt_error is not None:
+        return srt_error
 
     lexicon_path_for_correction = _prefilter_lexicon(fs, job)
 
@@ -176,6 +177,18 @@ def run(runner, job: Job, config: dict) -> dict:
         runner.allocator.release_llm(job.id)
 
 
+def _srt_source_error(srt_path) -> dict | None:
+    """Garde d'entrée : SRT absent, ou VIDE (vérité terrain bruit blanc 2026-08-04 —
+    un SRT vide partait quand même en LLM, 3 tentatives pour rien puis exception).
+    Rien à corriger = constat immédiat, pas une panne à retenter."""
+    if not srt_path.is_file():
+        return {"success": False, "error": "SRT source introuvable"}
+    if not srt_path.read_text(encoding="utf-8").strip():
+        return {"success": False,
+                "error": "SRT source vide (aucune parole transcrite) — rien à corriger"}
+    return None
+
+
 def _prefilter_lexicon(fs, job: Job):
     """Préfiltre le lexique de session par présence dans le SRT (charge utile LLM réduite).
 
@@ -267,6 +280,14 @@ def _persist_correction_result(runner, fs, result: dict) -> dict:
         fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
         if result["report"]:
             fs.save_text("metadata/correction_report.md", result["report"])
+        else:
+            # Constat 2026-08-04 : l'agent omet CHRONIQUEMENT son second livrable
+            # (correction_report.md absent de tous les jobs récents). Plutôt que rien,
+            # un rapport de repli DÉTERMINISTE : le diff factuel source→corrigé.
+            logger.warning("[correction] l'agent n'a pas rendu correction_report.md — "
+                           "rapport de repli généré par diff")
+            fs.save_text("metadata/correction_report.md",
+                         _fallback_diff_report(source_srt, result["corrected_srt"]))
         logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
         if result.get("warning"):
             logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
@@ -280,6 +301,29 @@ def _persist_correction_result(runner, fs, result: dict) -> dict:
         logger.error("[correction] %s", msg)
         return {"success": False, "error": msg}
     return result
+
+
+def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:
+    """Rapport factuel minimal quand l'agent n'a pas rendu le sien : lignes modifiées.
+
+    Pas une reconstruction des RAISONS (seul l'agent les connaissait) — un constat
+    honnête de CE QUI a changé, ligne à ligne, exploitable en relecture."""
+    import difflib
+
+    changes: list[str] = []
+    for line in difflib.unified_diff(source_srt.splitlines(), corrected_srt.splitlines(),
+                                     lineterm="", n=0):
+        if line.startswith("-") and not line.startswith("---"):
+            changes.append(f"- avant : {line[1:].strip()}")
+        elif line.startswith("+") and not line.startswith("+++"):
+            changes.append(f"- après : {line[1:].strip()}")
+    header = (
+        "## Rapport de correction (repli système)\n\n"
+        "L'agent de correction n'a pas produit son rapport — voici le diff factuel "
+        "source → corrigé (les raisons des corrections ne sont pas reconstituables).\n\n"
+        f"Lignes modifiées : {sum(1 for c in changes if c.startswith('- avant'))}\n\n"
+    )
+    return header + ("\n".join(changes) if changes else "Aucune modification de ligne.")
 
 
 def corrected_srt_integrity_error(source: str, corrected: str, language: str = "fr") -> str | None:

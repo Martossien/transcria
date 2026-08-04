@@ -120,6 +120,16 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
 
         transcriber = Transcriber(config, gpu_index=gpu, backend=profile_backend)
         result = transcriber.transcribe(job, Path(audio_path))
+        if not result.get("segments"):
+            # Vérité terrain bruit blanc (2026-08-04) : 0 segment partait quand même
+            # vers les phases LLM (3 tentatives de correction puis exception). Constat
+            # clair et échec IMMÉDIAT, avant toute dépense LLM.
+            msg = (f"Aucune parole détectée dans cet audio par le moteur "
+                   f"« {transcriber.backend} » — fichier silencieux, bruit ou musique "
+                   "seulement ? Vérifiez l'audio, ou essayez un autre moteur STT.")
+            logger.error("[transcription] %s", msg)
+            runner.store.update_state(job.id, JobState.FAILED, msg)
+            return {"error": msg}
         runner.progress.update(
             job.id,
             step="processing",
