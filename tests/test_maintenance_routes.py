@@ -103,3 +103,82 @@ def test_restore_success_triggers_request(admin_client, monkeypatch, tmp_path):
 
 def test_restore_forbidden_for_viewer(viewer_client):
     assert viewer_client.post("/admin/maintenance/restore", data={}).status_code == 403
+
+
+# --- Détection de nouvelle version (carte « Version » + bandeau admin) ---------------
+
+
+def test_update_check_post_forbidden_for_viewer(viewer_client):
+    assert viewer_client.post("/admin/maintenance/update-check").status_code == 403
+
+
+def test_update_check_post_reports_newer(admin_client, monkeypatch):
+    monkeypatch.setattr("transcria.maintenance.update_check.check_for_update",
+                        lambda cfg, **_kw: {"tag": "v99.0.0", "url": "u", "published_at": "", "notes": ""})
+    resp = admin_client.post("/admin/maintenance/update-check", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "Nouvelle version disponible" in resp.get_data(as_text=True)
+
+
+def test_update_check_post_reports_up_to_date(admin_client, monkeypatch):
+    from transcria import __version__
+    monkeypatch.setattr("transcria.maintenance.update_check.check_for_update",
+                        lambda cfg, **_kw: {"tag": f"v{__version__}", "url": "u",
+                                            "published_at": "", "notes": ""})
+    resp = admin_client.post("/admin/maintenance/update-check", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "à jour" in resp.get_data(as_text=True)
+
+
+def test_update_check_post_network_failure_is_actionable(admin_client, monkeypatch):
+    from transcria.maintenance.update_check import UpdateCheckError
+
+    def boom(cfg, **_kw):
+        raise UpdateCheckError("API injoignable")
+    monkeypatch.setattr("transcria.maintenance.update_check.check_for_update", boom)
+    resp = admin_client.post("/admin/maintenance/update-check", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "Vérification impossible" in resp.get_data(as_text=True)
+
+
+def test_maintenance_page_shows_version_card_without_network(admin_client, monkeypatch):
+    def forbidden(*_a, **_kw):
+        raise AssertionError("appel réseau interdit au rendu (opt-in désactivé)")
+    monkeypatch.setattr("transcria.maintenance.update_check.check_for_update", forbidden)
+    from transcria import __version__
+    resp = admin_client.get("/admin/maintenance")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Vérifier maintenant" in body and __version__ in body
+
+
+def test_maintenance_page_auto_refreshes_when_opted_in(admin_client, monkeypatch):
+    from transcria.services.config_service import ConfigService
+    cfg = ConfigService.get_singleton()
+    monkeypatch.setitem(cfg.setdefault("maintenance", {}), "update_check", {"enabled": True})
+    monkeypatch.setattr("transcria.maintenance.update_check.read_cache", lambda path: None)
+    called: dict = {}
+
+    def fake_check(c, **_kw):
+        called["hit"] = True
+        return {"tag": "v99.0.0", "url": "u", "published_at": "", "notes": ""}
+    monkeypatch.setattr("transcria.maintenance.update_check.check_for_update", fake_check)
+    resp = admin_client.get("/admin/maintenance")
+    assert resp.status_code == 200
+    assert called.get("hit") is True
+
+
+def test_update_banner_visible_for_admin_when_cache_says_newer(admin_client, monkeypatch):
+    monkeypatch.setattr("transcria.maintenance.update_check.read_cache",
+                        lambda path: {"tag": "v99.0.0", "url": "u",
+                                      "checked_at": "2026-08-04T00:00:00+00:00"})
+    body = admin_client.get("/admin/maintenance").get_data(as_text=True)
+    assert "Nouvelle version" in body and "v99.0.0" in body
+
+
+def test_update_banner_absent_for_viewer(viewer_client, monkeypatch):
+    monkeypatch.setattr("transcria.maintenance.update_check.read_cache",
+                        lambda path: {"tag": "v99.0.0", "url": "u",
+                                      "checked_at": "2026-08-04T00:00:00+00:00"})
+    body = viewer_client.get("/").get_data(as_text=True)
+    assert "v99.0.0" not in body

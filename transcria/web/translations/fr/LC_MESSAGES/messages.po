@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 00:13+0200\n"
+"POT-Creation-Date: 2026-08-04 18:02+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -66,143 +66,143 @@ msgstr "Erreur interne"
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 
-#: transcria/auth/routes.py:73
+#: transcria/auth/routes.py:74
 #, python-format
 msgid "Le mot de passe doit contenir au moins %(n)s caractères."
 msgstr "Le mot de passe doit contenir au moins %(n)s caractères."
 
-#: transcria/auth/routes.py:75
+#: transcria/auth/routes.py:76
 msgid "La confirmation du mot de passe ne correspond pas."
 msgstr "La confirmation du mot de passe ne correspond pas."
 
-#: transcria/auth/routes.py:141 transcria/auth/routes.py:212
+#: transcria/auth/routes.py:142 transcria/auth/routes.py:213
 msgid "Trop de tentatives. Réessayez dans quelques minutes."
 msgstr "Trop de tentatives. Réessayez dans quelques minutes."
 
-#: transcria/auth/routes.py:153
+#: transcria/auth/routes.py:154
 msgid "Annuaire d'entreprise indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Annuaire d'entreprise indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 
-#: transcria/auth/routes.py:177 transcria/auth/routes.py:283
-#: transcria/auth/routes.py:326
+#: transcria/auth/routes.py:178 transcria/auth/routes.py:284
+#: transcria/auth/routes.py:327
 msgid "Accès non attribué : contactez votre administrateur."
 msgstr "Accès non attribué : contactez votre administrateur."
 
-#: transcria/auth/routes.py:214
+#: transcria/auth/routes.py:215
 msgid "Identifiant ou mot de passe incorrect."
 msgstr "Identifiant ou mot de passe incorrect."
 
-#: transcria/auth/routes.py:243 transcria/auth/routes.py:267
+#: transcria/auth/routes.py:244 transcria/auth/routes.py:268
 msgid "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 
-#: transcria/auth/routes.py:272
+#: transcria/auth/routes.py:273
 msgid "Connexion refusée."
 msgstr "Connexion refusée."
 
-#: transcria/auth/routes.py:317
+#: transcria/auth/routes.py:318
 msgid "Aucune identité transmise par le proxy d'authentification. Utilisez le compte local de secours."
 msgstr "Aucune identité transmise par le proxy d'authentification. Utilisez le compte local de secours."
 
-#: transcria/auth/routes.py:361
+#: transcria/auth/routes.py:362
 msgid "Session du portail fermée. La session du proxy d'authentification reste active : déconnectez-vous aussi du proxy pour changer d'identité."
 msgstr "Session du portail fermée. La session du proxy d'authentification reste active : déconnectez-vous aussi du proxy pour changer d'identité."
 
-#: transcria/auth/routes.py:364
+#: transcria/auth/routes.py:365
 msgid "Vous avez été déconnecté."
 msgstr "Vous avez été déconnecté."
 
-#: transcria/auth/routes.py:377
+#: transcria/auth/routes.py:378
 msgid "Mot de passe actuel incorrect."
 msgstr "Mot de passe actuel incorrect."
 
-#: transcria/auth/routes.py:387
+#: transcria/auth/routes.py:388
 msgid "Mot de passe mis à jour."
 msgstr "Mot de passe mis à jour."
 
-#: transcria/auth/routes.py:414
+#: transcria/auth/routes.py:415
 msgid "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
 msgstr "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
 
-#: transcria/auth/routes.py:421
+#: transcria/auth/routes.py:422
 msgid "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
 msgstr "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
 
-#: transcria/auth/routes.py:436
+#: transcria/auth/routes.py:437
 msgid "Jeton introuvable."
 msgstr "Jeton introuvable."
 
-#: transcria/auth/routes.py:441
+#: transcria/auth/routes.py:442
 msgid "Jeton révoqué."
 msgstr "Jeton révoqué."
 
-#: transcria/auth/routes.py:466
+#: transcria/auth/routes.py:467
 msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
 msgstr "Le nom d'utilisateur et le mot de passe sont obligatoires."
 
-#: transcria/auth/routes.py:470
+#: transcria/auth/routes.py:471
 msgid "Ce nom d'utilisateur existe déjà."
 msgstr "Ce nom d'utilisateur existe déjà."
 
-#: transcria/auth/routes.py:488
+#: transcria/auth/routes.py:489
 #, python-format
 msgid "Utilisateur %(u)s créé."
 msgstr "Utilisateur %(u)s créé."
 
-#: transcria/auth/routes.py:500
+#: transcria/auth/routes.py:501
 msgid "Utilisateur introuvable."
 msgstr "Utilisateur introuvable."
 
-#: transcria/auth/routes.py:522
+#: transcria/auth/routes.py:523
 msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 msgstr "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 
-#: transcria/auth/routes.py:554
+#: transcria/auth/routes.py:555
 msgid "Utilisateur mis à jour."
 msgstr "Utilisateur mis à jour."
 
-#: transcria/auth/routes.py:578 transcria/auth/routes.py:610
+#: transcria/auth/routes.py:579 transcria/auth/routes.py:611
 msgid "Le nom du groupe est obligatoire."
 msgstr "Le nom du groupe est obligatoire."
 
-#: transcria/auth/routes.py:581 transcria/auth/routes.py:612
+#: transcria/auth/routes.py:582 transcria/auth/routes.py:613
 msgid "Ce groupe existe déjà."
 msgstr "Ce groupe existe déjà."
 
-#: transcria/auth/routes.py:588
+#: transcria/auth/routes.py:589
 #, python-format
 msgid "Groupe %(g)s créé."
 msgstr "Groupe %(g)s créé."
 
-#: transcria/auth/routes.py:598
+#: transcria/auth/routes.py:599
 msgid "Groupe introuvable."
 msgstr "Groupe introuvable."
 
-#: transcria/auth/routes.py:619
+#: transcria/auth/routes.py:620
 msgid "Groupe mis à jour."
 msgstr "Groupe mis à jour."
 
-#: transcria/auth/routes.py:638 transcria/auth/routes.py:660
+#: transcria/auth/routes.py:639 transcria/auth/routes.py:661
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "Le groupe doit conserver au moins un admin de groupe."
 
-#: transcria/auth/routes.py:640
+#: transcria/auth/routes.py:641
 msgid "Utilisateur introuvable ou inactif."
 msgstr "Utilisateur introuvable ou inactif."
 
-#: transcria/auth/routes.py:646
+#: transcria/auth/routes.py:647
 msgid "Membre ajouté au groupe."
 msgstr "Membre ajouté au groupe."
 
-#: transcria/auth/routes.py:653
+#: transcria/auth/routes.py:654
 msgid "Un admin de groupe ne peut pas se retirer lui-même."
 msgstr "Un admin de groupe ne peut pas se retirer lui-même."
 
-#: transcria/auth/routes.py:667
+#: transcria/auth/routes.py:668
 msgid "Membre retiré du groupe."
 msgstr "Membre retiré du groupe."
 
-#: transcria/auth/routes.py:676
+#: transcria/auth/routes.py:677
 msgid "Groupe supprimé."
 msgstr "Groupe supprimé."
 
@@ -1146,6 +1146,7 @@ msgid "Appliquer cette proposition"
 msgstr "Appliquer cette proposition"
 
 #: transcria/i18n/js_catalog.py:238
+#: transcria/web/templates/admin_maintenance.html:11
 msgid "Version"
 msgstr "Version"
 
@@ -1605,182 +1606,197 @@ msgstr "Génération impossible : %(e)s"
 msgid "Voix désactivée."
 msgstr "Voix désactivée."
 
-#: transcria/web/admin_routes.py:167 transcria/web/admin_routes.py:226
+#: transcria/web/admin_routes.py:169 transcria/web/admin_routes.py:228
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s erreur(s) de validation. Sauvegarde annulée."
 
-#: transcria/web/admin_routes.py:171
+#: transcria/web/admin_routes.py:173
 msgid "Réglages sauvegardés."
 msgstr "Réglages sauvegardés."
 
-#: transcria/web/admin_routes.py:176
+#: transcria/web/admin_routes.py:178
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:202
+#: transcria/web/admin_routes.py:204
 msgid "Aucun prompt modifié."
 msgstr "Aucun prompt modifié."
 
-#: transcria/web/admin_routes.py:209
+#: transcria/web/admin_routes.py:211
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "YAML invalide : %(e)s"
 
-#: transcria/web/admin_routes.py:213
+#: transcria/web/admin_routes.py:215
 msgid "La configuration doit être un objet YAML racine."
 msgstr "La configuration doit être un objet YAML racine."
 
-#: transcria/web/admin_routes.py:229
+#: transcria/web/admin_routes.py:231
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration sauvegardée dans %(p)s."
 
-#: transcria/web/admin_routes.py:278
+#: transcria/web/admin_routes.py:296
+#, python-format
+msgid "Vérification impossible : %(e)s"
+msgstr "Vérification impossible : %(e)s"
+
+#: transcria/web/admin_routes.py:299
+#, python-format
+msgid "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
+msgstr "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
+
+#: transcria/web/admin_routes.py:302
+#, python-format
+msgid "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
+msgstr "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
+
+#: transcria/web/admin_routes.py:320
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Sauvegarde planifiée activée (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:283
+#: transcria/web/admin_routes.py:325
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Sauvegarde planifiée désactivée."
 
-#: transcria/web/admin_routes.py:285
+#: transcria/web/admin_routes.py:327
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Échec de la planification : %(e)s"
 
-#: transcria/web/admin_routes.py:299
+#: transcria/web/admin_routes.py:341
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation requise : la restauration remplace les données et redémarre le service."
 
-#: transcria/web/admin_routes.py:302
+#: transcria/web/admin_routes.py:344
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 
-#: transcria/web/admin_routes.py:310
+#: transcria/web/admin_routes.py:352
 msgid "Archive invalide — restauration refusée : "
 msgstr "Archive invalide — restauration refusée : "
 
-#: transcria/web/admin_routes.py:322
+#: transcria/web/admin_routes.py:364
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 
-#: transcria/web/admin_routes.py:325
+#: transcria/web/admin_routes.py:367
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Échec du déclenchement de la restauration : %(e)s"
 
-#: transcria/web/admin_routes.py:434
+#: transcria/web/admin_routes.py:476
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 
-#: transcria/web/admin_routes.py:438
+#: transcria/web/admin_routes.py:480
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 
-#: transcria/web/admin_routes.py:441
+#: transcria/web/admin_routes.py:483
 msgid "Cette réunion est déjà surveillée."
 msgstr "Cette réunion est déjà surveillée."
 
-#: transcria/web/admin_routes.py:443
+#: transcria/web/admin_routes.py:485
 msgid "Aucun lien de réunion fourni."
 msgstr "Aucun lien de réunion fourni."
 
-#: transcria/web/admin_routes.py:516
+#: transcria/web/admin_routes.py:558
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "Test %(id)s : %(verdict)s"
 
-#: transcria/web/admin_routes.py:535
+#: transcria/web/admin_routes.py:577
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Test Zoom : %(verdict)s"
 
-#: transcria/web/admin_routes.py:565
+#: transcria/web/admin_routes.py:607
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "Fichier « %(label)s » refusé : %(raison)s"
 
-#: transcria/web/admin_routes.py:602
+#: transcria/web/admin_routes.py:644
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 
-#: transcria/web/admin_routes.py:603
+#: transcria/web/admin_routes.py:645
 msgid "Aucun changement."
 msgstr "Aucun changement."
 
-#: transcria/web/admin_routes.py:621
+#: transcria/web/admin_routes.py:663
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Activez d'abord la fonctionnalité (bouton « Activer »)."
 
-#: transcria/web/admin_routes.py:626
+#: transcria/web/admin_routes.py:668
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:633
+#: transcria/web/admin_routes.py:675
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 
-#: transcria/web/admin_routes.py:638
+#: transcria/web/admin_routes.py:680
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Compte de service absent — utilisez d'abord le bouton « Activer »."
 
-#: transcria/web/admin_routes.py:657
+#: transcria/web/admin_routes.py:699
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Exécutant « %(name)s » révoqué."
 
-#: transcria/web/admin_routes.py:674
+#: transcria/web/admin_routes.py:716
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 
-#: transcria/web/admin_routes.py:679
+#: transcria/web/admin_routes.py:721
 msgid "Téléchargement refusé — "
 msgstr "Téléchargement refusé — "
 
-#: transcria/web/admin_routes.py:682
+#: transcria/web/admin_routes.py:724
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Téléchargement de « %(l)s » lancé en arrière-plan."
 
-#: transcria/web/admin_routes.py:696
+#: transcria/web/admin_routes.py:738
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Téléchargez d'abord ce modèle avant de l'activer."
 
-#: transcria/web/admin_routes.py:705
+#: transcria/web/admin_routes.py:747
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:708
+#: transcria/web/admin_routes.py:750
 msgid "Échec de l'activation : "
 msgstr "Échec de l'activation : "
 
-#: transcria/web/admin_routes.py:710
+#: transcria/web/admin_routes.py:752
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Échec de l'activation : %(e)s"
 
-#: transcria/web/admin_routes.py:733
+#: transcria/web/admin_routes.py:775
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 
-#: transcria/web/admin_routes.py:767
+#: transcria/web/admin_routes.py:809
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Rien à appliquer : le plan n'est plus d'actualité."
 
-#: transcria/web/admin_routes.py:772
+#: transcria/web/admin_routes.py:814
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Échec de l'application du plan : %(err)s"
 
-#: transcria/web/admin_routes.py:778
+#: transcria/web/admin_routes.py:820
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
@@ -2875,7 +2891,7 @@ msgid "Réunions en ligne (planification par les utilisateurs)"
 msgstr "Réunions en ligne (planification par les utilisateurs)"
 
 #: transcria/web/templates/admin_connectors.html:19
-#: transcria/web/templates/admin_maintenance.html:59
+#: transcria/web/templates/admin_maintenance.html:97
 #: transcria/web/templates/schedule.html:220
 msgid "Désactiver"
 msgstr "Désactiver"
@@ -3201,129 +3217,164 @@ msgstr "Aucune préconisation : aucun backend STT servi n'est configuré (voir l
 msgid "Maintenance"
 msgstr "Maintenance"
 
-#: transcria/web/templates/admin_maintenance.html:11
+#: transcria/web/templates/admin_maintenance.html:15
+#, python-format
+msgid "nouvelle version : %(tag)s"
+msgstr "nouvelle version : %(tag)s"
+
+#: transcria/web/templates/admin_maintenance.html:17
+msgid "à jour"
+msgstr "à jour"
+
+#: transcria/web/templates/admin_maintenance.html:23
+msgid "Compare la version installée à la dernière publication GitHub. Aucun appel réseau sans votre action : le bouton interroge l'API à la demande ; la clé <code>maintenance.update_check.enabled</code> (config) active en plus une vérification automatique (au plus une par jour, lors de la visite de cette page)."
+msgstr "Compare la version installée à la dernière publication GitHub. Aucun appel réseau sans votre action : le bouton interroge l'API à la demande ; la clé <code>maintenance.update_check.enabled</code> (config) active en plus une vérification automatique (au plus une par jour, lors de la visite de cette page)."
+
+#: transcria/web/templates/admin_maintenance.html:24
+msgid "Vérification automatique : désactivée."
+msgstr "Vérification automatique : désactivée."
+
+#: transcria/web/templates/admin_maintenance.html:28
+msgid "Vérifier maintenant"
+msgstr "Vérifier maintenant"
+
+#: transcria/web/templates/admin_maintenance.html:33
+msgid "Publications GitHub"
+msgstr "Publications GitHub"
+
+#: transcria/web/templates/admin_maintenance.html:37
+#, python-format
+msgid "Dernière vérification : %(d)s"
+msgstr "Dernière vérification : %(d)s"
+
+#: transcria/web/templates/admin_maintenance.html:38
+#, python-format
+msgid "dernière publication : %(tag)s"
+msgstr "dernière publication : %(tag)s"
+
+#: transcria/web/templates/admin_maintenance.html:49
 msgid "Sauvegarde"
 msgstr "Sauvegarde"
 
-#: transcria/web/templates/admin_maintenance.html:15
+#: transcria/web/templates/admin_maintenance.html:53
 #, python-format
 msgid "Crée une archive complète (base de données + jobs + voix + prompts + manifeste) dans <code>%(backup_dir)s</code>. La sauvegarde tourne en arrière-plan — rafraîchissez la page pour voir la nouvelle archive apparaître."
 msgstr "Crée une archive complète (base de données + jobs + voix + prompts + manifeste) dans <code>%(backup_dir)s</code>. La sauvegarde tourne en arrière-plan — rafraîchissez la page pour voir la nouvelle archive apparaître."
 
-#: transcria/web/templates/admin_maintenance.html:19
+#: transcria/web/templates/admin_maintenance.html:57
 msgid "Rotation (garder N archives)"
 msgstr "Rotation (garder N archives)"
 
-#: transcria/web/templates/admin_maintenance.html:25
+#: transcria/web/templates/admin_maintenance.html:63
 msgid "Exclure les audios originaux (archive plus légère)"
 msgstr "Exclure les audios originaux (archive plus légère)"
 
-#: transcria/web/templates/admin_maintenance.html:30
+#: transcria/web/templates/admin_maintenance.html:68
 msgid "Sauvegarder maintenant"
 msgstr "Sauvegarder maintenant"
 
-#: transcria/web/templates/admin_maintenance.html:39
+#: transcria/web/templates/admin_maintenance.html:77
 msgid "Sauvegarde planifiée"
 msgstr "Sauvegarde planifiée"
 
-#: transcria/web/templates/admin_maintenance.html:41
+#: transcria/web/templates/admin_maintenance.html:79
 msgid "active"
 msgstr "active"
 
-#: transcria/web/templates/admin_maintenance.html:43
+#: transcria/web/templates/admin_maintenance.html:81
 msgid "inactive"
 msgstr "inactive"
 
-#: transcria/web/templates/admin_maintenance.html:48
+#: transcria/web/templates/admin_maintenance.html:86
 #, python-format
 msgid "Installe un <strong>timer systemd</strong> qui lance une sauvegarde selon la cadence configurée. Cadence : <code>%(cal)s</code> (syntaxe <code>OnCalendar</code>), rotation <strong>%(keep)s</strong> archives, %(audio)s. Modifiable dans <code>maintenance.schedule</code> (config)."
 msgstr "Installe un <strong>timer systemd</strong> qui lance une sauvegarde selon la cadence configurée. Cadence : <code>%(cal)s</code> (syntaxe <code>OnCalendar</code>), rotation <strong>%(keep)s</strong> archives, %(audio)s. Modifiable dans <code>maintenance.schedule</code> (config)."
 
-#: transcria/web/templates/admin_maintenance.html:48
+#: transcria/web/templates/admin_maintenance.html:86
 msgid "sans les audios"
 msgstr "sans les audios"
 
-#: transcria/web/templates/admin_maintenance.html:48
-#: transcria/web/templates/admin_maintenance.html:102
+#: transcria/web/templates/admin_maintenance.html:86
+#: transcria/web/templates/admin_maintenance.html:140
 msgid "audios inclus"
 msgstr "audios inclus"
 
-#: transcria/web/templates/admin_maintenance.html:53
+#: transcria/web/templates/admin_maintenance.html:91
 msgid "Activer / mettre à jour le timer"
 msgstr "Activer / mettre à jour le timer"
 
-#: transcria/web/templates/admin_maintenance.html:63
+#: transcria/web/templates/admin_maintenance.html:101
 msgid "État systemd :"
 msgstr "État systemd :"
 
-#: transcria/web/templates/admin_maintenance.html:71
+#: transcria/web/templates/admin_maintenance.html:109
 msgid "Archives disponibles"
 msgstr "Archives disponibles"
 
-#: transcria/web/templates/admin_maintenance.html:78
+#: transcria/web/templates/admin_maintenance.html:116
 msgid "Archive"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_maintenance.html:78
+#: transcria/web/templates/admin_maintenance.html:116
 msgid "Taille"
 msgstr "Taille"
 
-#: transcria/web/templates/admin_maintenance.html:78
+#: transcria/web/templates/admin_maintenance.html:116
 msgid "Date (UTC)"
 msgstr "Date (UTC)"
 
-#: transcria/web/templates/admin_maintenance.html:78
+#: transcria/web/templates/admin_maintenance.html:116
 #: transcria/web/templates/queue.html:98
 #: transcria/web/templates/schedule.html:200
 msgid "Actions"
 msgstr "Actions"
 
-#: transcria/web/templates/admin_maintenance.html:84
+#: transcria/web/templates/admin_maintenance.html:122
 #: transcria/web/templates/wizard/_step_file.html:11
 #, python-format
 msgid "%(mb)s Mo"
 msgstr "%(mb)s Mo"
 
-#: transcria/web/templates/admin_maintenance.html:89
+#: transcria/web/templates/admin_maintenance.html:127
 #: transcria/web/templates/admin_models.html:82
 msgid "Télécharger"
 msgstr "Télécharger"
 
-#: transcria/web/templates/admin_maintenance.html:93
+#: transcria/web/templates/admin_maintenance.html:131
 msgid "Restaurer…"
 msgstr "Restaurer…"
 
-#: transcria/web/templates/admin_maintenance.html:102
+#: transcria/web/templates/admin_maintenance.html:140
 #, python-format
 msgid "Contenu : version <strong>%(ver)s</strong>, base <strong>%(db)s</strong>, créée le %(created)s, %(audio)s"
 msgstr "Contenu : version <strong>%(ver)s</strong>, base <strong>%(db)s</strong>, créée le %(created)s, %(audio)s"
 
-#: transcria/web/templates/admin_maintenance.html:102
+#: transcria/web/templates/admin_maintenance.html:140
 msgid "sans audios"
 msgstr "sans audios"
 
-#: transcria/web/templates/admin_maintenance.html:102
+#: transcria/web/templates/admin_maintenance.html:140
 #, python-format
 msgid "arbres : %(t)s"
 msgstr "arbres : %(t)s"
 
-#: transcria/web/templates/admin_maintenance.html:107
+#: transcria/web/templates/admin_maintenance.html:145
 msgid "<strong>Opération destructive.</strong> Le service va <strong>s'arrêter</strong>, la base et les fichiers seront <strong>remplacés</strong> par le contenu de l'archive, puis le service redémarrera. Vous serez déconnecté quelques instants."
 msgstr "<strong>Opération destructive.</strong> Le service va <strong>s'arrêter</strong>, la base et les fichiers seront <strong>remplacés</strong> par le contenu de l'archive, puis le service redémarrera. Vous serez déconnecté quelques instants."
 
-#: transcria/web/templates/admin_maintenance.html:115
+#: transcria/web/templates/admin_maintenance.html:153
 msgid "Ressaisissez le nom exact de l'archive pour confirmer"
 msgstr "Ressaisissez le nom exact de l'archive pour confirmer"
 
-#: transcria/web/templates/admin_maintenance.html:119
+#: transcria/web/templates/admin_maintenance.html:157
 msgid "Je comprends et je confirme"
 msgstr "Je comprends et je confirme"
 
-#: transcria/web/templates/admin_maintenance.html:123
+#: transcria/web/templates/admin_maintenance.html:161
 msgid "Restaurer cette archive"
 msgstr "Restaurer cette archive"
 
-#: transcria/web/templates/admin_maintenance.html:133
+#: transcria/web/templates/admin_maintenance.html:171
 msgid "Aucune archive pour l'instant. Lancez une première sauvegarde ci-dessus."
 msgstr "Aucune archive pour l'instant. Lancez une première sauvegarde ci-dessus."
 
@@ -3564,12 +3615,21 @@ msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a hr
 
 #: transcria/web/templates/base.html:149
 #, python-format
+msgid "Nouvelle version <strong>%(tag)s</strong> disponible."
+msgstr "Nouvelle version <strong>%(tag)s</strong> disponible."
+
+#: transcria/web/templates/base.html:150
+msgid "Voir la page Maintenance"
+msgstr "Voir la page Maintenance"
+
+#: transcria/web/templates/base.html:159
+#, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
 
-#: transcria/web/templates/base.html:150
+#: transcria/web/templates/base.html:160
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 

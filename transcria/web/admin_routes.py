@@ -26,6 +26,8 @@ from flask import (
 from flask_babel import gettext as _
 from flask_login import login_required
 
+# Accès PAR MODULE (pas `from … import fonction`) : les tests substituent ces
+# fonctions à la source (monkeypatch) — un import par nom figerait la référence.
 from transcria import models_download
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
@@ -50,12 +52,10 @@ from transcria.ingestion.runner_provisioning import (
     revoke_runner,
 )
 from transcria.ingestion.session_store import MeetingSessionStore
-
-# Accès PAR MODULE (pas `from … import fonction`) : les tests substituent ces
-# fonctions à la source (monkeypatch) — un import par nom figerait la référence.
 from transcria.maintenance import backup as maintenance_backup
 from transcria.maintenance import restore_service
 from transcria.maintenance import schedule as maintenance_schedule
+from transcria.maintenance import update_check as maintenance_update_check
 from transcria.maintenance.restore import describe_restore
 from transcria.maintenance.schedule import BackupSchedule
 from transcria.models_catalog import catalog_with_status, resolve_hf_home, resolve_models_dir
@@ -259,7 +259,48 @@ def admin_maintenance():
         backup_dir=str(MaintenanceService.backup_dir(cfg)),
         schedule=(cfg.get("maintenance", {}) or {}).get("schedule", {}) or {},
         schedule_status=status,
+        update_view=_update_check_view(cfg),
+        update_check_enabled=bool(
+            ((cfg.get("maintenance", {}) or {}).get("update_check", {}) or {}).get("enabled", False)),
     )
+
+
+def _update_check_view(cfg: dict) -> dict:
+    """Vue « nouvelle version » de la page Maintenance — depuis le CACHE.
+
+    En mode automatique (opt-in), rafraîchit le cache s'il est périmé (au plus un
+    appel réseau par jour, plafonné à quelques secondes). Best-effort : un échec
+    réseau n'empêche jamais la page de s'afficher (le cache précédent fait foi)."""
+    cached = maintenance_update_check.read_cache(maintenance_update_check.cache_path(cfg))
+    auto = ((cfg.get("maintenance", {}) or {}).get("update_check", {}) or {}).get("enabled", False)
+    if auto and maintenance_update_check.is_stale(cached):
+        try:
+            cached = maintenance_update_check.check_for_update(cfg)
+        except maintenance_update_check.UpdateCheckError:
+            pass
+    return maintenance_update_check.summarize(cached, maintenance_update_check.current_version())
+
+
+@web_bp.route("/admin/maintenance/update-check", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_update_check():
+    """Vérification MANUELLE (toujours disponible, indépendante de l'opt-in) :
+    l'opérateur demande explicitement l'appel réseau — c'est son consentement."""
+    cfg = ConfigService.get_singleton()
+    try:
+        release = maintenance_update_check.check_for_update(cfg)
+    except maintenance_update_check.UpdateCheckError as exc:
+        flash(_("Vérification impossible : %(e)s", e=exc), "error")
+        return redirect(url_for("web.admin_maintenance"))
+    current = maintenance_update_check.current_version()
+    if maintenance_update_check.is_newer(release["tag"], current):
+        flash(_("Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s).",
+                tag=release["tag"], cur=current), "success")
+    else:
+        flash(_("Vous êtes à jour (%(cur)s — dernière publication : %(tag)s).",
+                cur=current, tag=release["tag"]), "info")
+    return redirect(url_for("web.admin_maintenance"))
 
 
 @web_bp.route("/admin/maintenance/schedule", methods=["POST"])

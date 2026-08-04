@@ -238,6 +238,12 @@ def _check_maintenance(cfg: dict, r: ValidationResult) -> None:
         return
     if "backup_dir" in cfg:
         _check_str(cfg, "backup_dir", "maintenance.backup_dir", r)
+    update_check = cfg.get("update_check")
+    if update_check is not None:
+        if not isinstance(update_check, dict):
+            r.add_error("maintenance.update_check: doit être un objet YAML")
+        elif "enabled" in update_check:
+            _check_bool(update_check, "enabled", "maintenance.update_check.enabled", r)
     sched = cfg.get("schedule")
     if sched is None:
         return

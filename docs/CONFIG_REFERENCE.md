@@ -1698,3 +1698,4 @@ Outillage opérateur (sauvegardes + planification), piloté par la page *Adminis
 | `maintenance.schedule.keep` | `7` | Rotation : nombre d'archives conservées |
 | `maintenance.schedule.exclude_audio` | `false` | Sauvegardes planifiées sans les audios originaux (archives plus légères) |
 | `maintenance.schedule.purge_on_calendar` | `*-*-* 03:30:00` | Cadence systemd du timer de PURGE de rétention (`maintenance schedule --enable --purge`) — décalée après la sauvegarde pour n'effacer qu'une fois l'archive du jour produite |
+| `maintenance.update_check.enabled` | `false` | **Opt-in** : vérification automatique de nouvelle version (API GitHub Releases, au plus un appel/jour, mis en cache) lors de la visite de la page Maintenance. Le bouton « Vérifier maintenant » reste utilisable quel que soit ce réglage ; aucune donnée locale n'est transmise |

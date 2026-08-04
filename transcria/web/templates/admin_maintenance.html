@@ -8,6 +8,44 @@
 
 <div class="card mb-4">
   <div class="card-header d-flex align-items-center">
+    <i class="bi bi-arrow-up-circle me-2"></i> {{ _('Version') }}
+    <span class="badge bg-secondary ms-2 font-monospace">{{ update_view.current }}</span>
+    {% if update_view.tag %}
+      {% if update_view.newer %}
+        <span class="badge bg-info ms-2">{{ _('nouvelle version : %(tag)s', tag=update_view.tag) }}</span>
+      {% else %}
+        <span class="badge bg-success ms-2">{{ _('à jour') }}</span>
+      {% endif %}
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      {% trans %}Compare la version installée à la dernière publication GitHub. Aucun appel réseau sans votre action : le bouton interroge l'API à la demande ; la clé <code>maintenance.update_check.enabled</code> (config) active en plus une vérification automatique (au plus une par jour, lors de la visite de cette page).{% endtrans %}
+      {% if not update_check_enabled %}<span class="text-muted">{{ _('Vérification automatique : désactivée.') }}</span>{% endif %}
+    </p>
+    <form method="post" action="{{ url_for('web.admin_maintenance_update_check') }}" class="d-inline">
+      <button type="submit" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-search"></i> {{ _('Vérifier maintenant') }}
+      </button>
+    </form>
+    <a class="btn btn-outline-secondary btn-sm ms-2" href="{{ update_view.url or update_view.releases_page }}"
+       target="_blank" rel="noopener">
+      <i class="bi bi-box-arrow-up-right"></i> {{ _('Publications GitHub') }}
+    </a>
+    {% if update_view.checked_at %}
+    <div class="small text-muted mt-2">
+      {{ _('Dernière vérification : %(d)s', d=update_view.checked_at[:16]|replace('T', ' ')) }} (UTC)
+      {% if update_view.tag %} · {{ _('dernière publication : %(tag)s', tag=update_view.tag) }}{% endif %}
+    </div>
+    {% endif %}
+    {% if update_view.newer and update_view.notes %}
+    <div class="border rounded bg-body-tertiary p-2 mt-3 small" style="white-space: pre-wrap; max-height: 14rem; overflow-y: auto;">{{ update_view.notes }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center">
     <i class="bi bi-save me-2"></i> {{ _('Sauvegarde') }}
   </div>
   <div class="card-body">

@@ -27,6 +27,7 @@ from transcria.auth.models import Role
 from transcria.config import get_config
 from transcria.jobs import artifact_store
 from transcria.jobs.store import JobStore
+from transcria.maintenance import update_check as maintenance_update_check
 from transcria.web.blueprint import web_bp
 from transcria.web.connector_catalog import load_catalog
 from transcria.web.ui_labels import state_badge, state_label
@@ -72,6 +73,26 @@ def inject_vram_waiting_count():
     except Exception:  # noqa: BLE001
         pass
     return {"vram_waiting_count": 0}
+
+
+@web_bp.app_context_processor
+def inject_update_available():
+    """Expose le tag d'une nouvelle version aux templates (bandeau admin).
+
+    Lecture du CACHE uniquement — jamais d'appel réseau au rendu d'une page.
+    Le cache est alimenté par la page Maintenance (bouton manuel, ou opt-in
+    ``maintenance.update_check.enabled``). Best-effort : ne casse jamais le rendu.
+    """
+    try:
+        if current_user and current_user.is_authenticated and current_user.has_role(Role.ADMIN):
+            cfg = get_config()
+            cached = maintenance_update_check.read_cache(maintenance_update_check.cache_path(cfg))
+            view = maintenance_update_check.summarize(cached, maintenance_update_check.current_version())
+            if view["newer"]:
+                return {"update_available_tag": view["tag"]}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"update_available_tag": None}
 
 
 @web_bp.before_app_request

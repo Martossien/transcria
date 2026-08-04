@@ -142,6 +142,16 @@
       </div>
     {% endif %}
 
+    {% if update_available_tag %}
+      <div class="alert alert-info d-flex align-items-center" role="alert">
+        <i class="bi bi-arrow-up-circle me-2"></i>
+        <div>
+          {% trans tag=update_available_tag %}Nouvelle version <strong>{{ tag }}</strong> disponible.{% endtrans %}
+          <a href="/admin/maintenance" class="alert-link">{{ _('Voir la page Maintenance') }}</a>
+        </div>
+      </div>
+    {% endif %}
+
     {% if vram_waiting_count and vram_waiting_count > 0 %}
       <div class="alert alert-warning d-flex align-items-center" role="alert">
         <i class="bi bi-gpu-card me-2"></i>

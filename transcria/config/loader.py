@@ -895,6 +895,12 @@ _DEFAULT_CONFIG = {
             # sauvegarde pour n'effacer qu'une fois l'archive du jour produite.
             "purge_on_calendar": "*-*-* 03:30:00",
         },
+        # Vérification de nouvelle version (API GitHub Releases). OPT-IN : aucun appel
+        # réseau sortant par défaut — le bouton « Vérifier maintenant » de la page
+        # Maintenance reste utilisable quel que soit ce réglage.
+        "update_check": {
+            "enabled": False,
+        },
     },
     # Internationalisation de l'INTERFACE (chrome applicatif). Distinct de la langue des
     # livrables générés, qui est un réglage PAR JOB (pré-rempli par la langue détectée de

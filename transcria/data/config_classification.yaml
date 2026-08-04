@@ -81,6 +81,7 @@ internal:
   maintenance.schedule.keep: rotation des sauvegardes planifiées — page Maintenance / CLI
   maintenance.schedule.exclude_audio: sauvegardes planifiées sans audio — page Maintenance / CLI
   maintenance.schedule.purge_on_calendar: cadence du timer de purge de rétention — CLI schedule --purge
+  maintenance.update_check.enabled: vérification automatique de version (opt-in) — gérée via la page Maintenance
   gpu.llm_vram_mb: calibration ÉCRITE par le système (recalage mesuré au 1er load)
   gpu.llm_gpu_indices: calibration écrite par le système (placement mesuré)
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
