@@ -9,6 +9,7 @@ anti-gel opencode, garde déterministe d'intégrité. Les coutures runner
 import logging
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
+from transcria.context.job_context_builder import JobContextBuilder
 from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language
@@ -115,6 +116,11 @@ def run(runner, job: Job, config: dict) -> dict:
         # Les sorties sont collectées du scratch puis écrites atomiquement au canonique.
         workspace = AgentWorkspace(fs, "correction", work_root=resolve_agent_work_root(config))
         staged_srt = workspace.stage("metadata/transcription.srt")
+        # Le contexte n'est reconstruit que par les endpoints utilisateur (mapping,
+        # lexique) : à l'heure de la correction il peut être PÉRIMÉ — vécu : hints de
+        # fiabilité écrits 16 s APRÈS le dernier build → la LLM recevait `segments: []`.
+        # Reprojection idempotente (pure lecture des canoniques) juste avant le staging.
+        JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
         staged_context = workspace.stage("context/job_context.yaml")
         staged_lexicon = workspace.stage(
             str(lexicon_path_for_correction.relative_to(fs.job_dir))

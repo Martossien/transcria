@@ -470,6 +470,7 @@ deferred:
 - workflow.scheduling.timezone
 - workflow.scheduling.windows
 - workflow.segment_reliability.degrade_on_text_flags
+- workflow.segment_reliability.delete_confirmed_hallucinations
 - workflow.segment_reliability.detect_generic_hallucinations
 - workflow.segment_reliability.detect_non_latin
 - workflow.segment_reliability.enabled

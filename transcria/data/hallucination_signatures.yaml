@@ -1,0 +1,48 @@
+# Signatures d'hallucination ASR, PAR MOTEUR (chargées par transcria/stt/hallucination_catalog.py).
+#
+# Chaque moteur STT a ses hallucinations typiques — des phrases apprises sur les données
+# d'entraînement (génériques YouTube, crédits de sous-titrage) qu'il « entend » sur le
+# silence, la musique ou le bruit. Ce catalogue les recense par identifiant de backend
+# (models.stt_backend) ; la clé `generic` s'applique à tous les moteurs, EN PLUS des
+# patterns configurables `workflow.segment_reliability.generic_hallucination_patterns`
+# (qui restent la surface de personnalisation locale — ce fichier est celle du projet).
+#
+# `action` par pattern :
+#   flag   — le segment est marqué (hint transmis à la passe de correction), jamais touché.
+#   delete — candidat à la SUPPRESSION, appliquée si et seulement si l'acoustique corrobore
+#            (segment muet/musical : no_speech_prob élevé, ou recouvrement majoritaire avec
+#            une zone noEnergy/music de la scène audio) — sinon rétrogradé en flag.
+#            Toute suppression est tracée (metadata/removed_hallucinations.json + rapport
+#            qualité) : jamais silencieuse, toujours récupérable.
+#
+# Règle d'or : n'ajouter ici que des signatures CONSTATÉES (bench corpus réel, littérature
+# communautaire du moteur) — jamais des suppositions. Les moteurs absents n'ont simplement
+# pas encore de signature documentée.
+
+generic:
+  # Formules de clôture vidéo qu'aucun moteur ne devrait produire en réunion, mais
+  # qu'on ne supprime pas sans corroboration acoustique.
+  - pattern: "\\bn['’]oubliez pas de (vous abonner|liker)\\b"
+    action: delete
+  - pattern: "\\bmerci d['’]avoir regardé\\b"
+    action: delete
+  - pattern: "^\\s*(thank you|thanks) for watching[\\s.!…]*$"
+    action: delete
+  - pattern: "\\bplease (like and )?subscribe\\b"
+    action: delete
+
+whisper:
+  # Les classiques Whisper, massivement documentés par la communauté : crédits de
+  # sous-titrage appris sur les corpus de sous-titres, produits sur silence/musique.
+  - pattern: "sous[- ]?titres? .{0,30}communauté d['’]?amara"
+    action: delete
+  - pattern: "\\bamara\\.org\\b"
+    action: delete
+  - pattern: "\\bsoustitreur\\.com\\b"
+    action: delete
+  - pattern: "sous[- ]?titrage (st['’ ]?501|société radio[- ]?canada)"
+    action: delete
+  - pattern: "^\\s*(sous[- ]?titrage|sous[- ]?titres?)[\\s.!…]*$"
+    action: flag
+  - pattern: "\\bwww\\.mooji\\.org\\b"
+    action: delete

@@ -52,6 +52,15 @@ répertoire de travail) :
 
 1. **SRT source** — la transcription à corriger.
 2. **job_context.yaml** — contexte de la réunion (participants, qualité, hints).
+   Sa section `quality_hints.segments` liste les segments jugés PEU FIABLES par le
+   système (probabilité de non-parole, confiance mots, signature d'hallucination du
+   moteur STT, débit anormal), avec leurs horodatages et raisons. Exploitation :
+   redouble d'exigence sur ces segments — une « correction » qui réécrit un segment
+   listé est probablement une invention sur du bruit. Si son texte ressemble à une
+   hallucination (générique vidéo, formule de clôture, crédits de sous-titrage) ou
+   ne se rattache à rien du contexte, marque `[INCERTAIN: hallucination probable —
+   <raison du hint>]` SANS le corriger ni le supprimer. Les hints signalent, ils ne
+   prouvent pas : jamais de suppression, jamais de réécriture sur leur seule foi.
 3. **session_lexicon_filtered.json** — le lexique validé par l'utilisateur. C'est la
    liste des formes à appliquer en contexte, PAS une simple référence. Chaque entrée
    a un `term` (la forme validée), des `variants` (formes erronées repérées) et
@@ -103,6 +112,10 @@ le rapport. Exige de chaque subagent un travail de haute qualité, en profondeur
 
 ### Consigne à transmettre à chaque subagent (à recopier dans son prompt)
 
+Joins à la consigne de chaque subagent les entrées de `quality_hints.segments`
+(job_context.yaml) dont l'horodatage tombe dans sa plage — copie-les telles quelles
+à la fin de son prompt. S'il n'y en a aucune, n'ajoute rien.
+
 > Tu corriges la plage de segments X à Y du fichier `transcription_corrigee.srt`
 > (répertoire de travail : <chemin>). Règles absolues : fidélité verbatim (jamais
 > reformuler, jamais ajouter ou retirer un mot, conserver l'oralité) ; préfixe
@@ -112,6 +125,10 @@ le rapport. Exige de chaque subagent un travail de haute qualité, en profondeur
 > Applique aussi le lexique validé `session_lexicon_filtered.json` en jugeant le
 > contexte de chaque occurrence (cible = `replace_by` sinon `term` ; homographe
 > légitime → ne pas toucher ; entrées `_preservation_only` → ne jamais modifier).
+> Les segments listés dans `quality_hints.segments` de `job_context.yaml` (fournis
+> ci-dessous s'il y en a dans ta plage) sont peu fiables : exigence redoublée — si
+> leur texte ressemble à une hallucination STT ou ne se rattache à rien, marque
+> `[INCERTAIN: hallucination probable — raison]` sans corriger ni supprimer.
 > Parcours ta plage par blocs de 80 segments avec Read (offset/limit). Pour chaque
 > bloc, écris dans ton raisonnement : le sujet du bloc en une phrase ; chaque
 > correction prévue AVANT de l'appliquer (numéro de segment + nature : orthographe ou

@@ -46,6 +46,14 @@ Files (exact paths given in the user instruction; all are in your working direct
 
 1. **Source SRT** — the transcription to correct.
 2. **job_context.yaml** — meeting context (participants, quality, hints).
+   Its `quality_hints.segments` section lists the segments the system judged UNRELIABLE
+   (no-speech probability, word confidence, STT-engine hallucination signature, abnormal
+   speech rate), with timestamps and reasons. How to use it: double your scrutiny on
+   those segments — a "correction" that rewrites a listed segment is probably an
+   invention over noise. If its text looks like a hallucination (video boilerplate,
+   closing formula, subtitle credits) or connects to nothing in the context, mark
+   `[UNCERTAIN: probable hallucination — <hint reason>]` WITHOUT correcting or deleting
+   it. Hints signal, they do not prove: never delete, never rewrite on their sole basis.
 3. **session_lexicon_filtered.json** — the glossary validated by the user. It is the list
    of forms to apply in context, NOT a mere reference. Each entry has a `term` (the
    validated form), `variants` (spotted erroneous forms) and possibly a `replace_by`. The
@@ -93,6 +101,10 @@ Require high-quality, in-depth work from each subagent.
 
 ### Instruction to pass to each subagent (to copy into its prompt)
 
+Append to each subagent's instruction the `quality_hints.segments` entries
+(job_context.yaml) whose timestamps fall within its range — copy them verbatim at the
+end of its prompt. If there are none, add nothing.
+
 > You correct the range of segments X to Y of the file `transcription_corrigee.srt`
 > (working directory: <path>). Absolute rules: verbatim fidelity (never rephrase, never add
 > or remove a word, keep orality); prefix `SPEAKER_XX(Name):` untouchable; no segment
@@ -106,7 +118,11 @@ Require high-quality, in-depth work from each subagent.
 > + nature: spelling or glossary); the running total of corrections since the start of the
 > range. If a block is clean: "block X-Y: 0 correction, checked — total: N". At one third
 > and two thirds of your range, run the re-anchoring grep (command provided) and keep only
-> the matches whose line number falls within your range. Mark segments in another language
+> the matches whose line number falls within your range. The segments listed under
+> `quality_hints.segments` of `job_context.yaml` (provided below if any fall in your
+> range) are unreliable: double scrutiny — if their text looks like an STT hallucination
+> or connects to nothing, mark `[UNCERTAIN: probable hallucination — reason]` without
+> correcting or deleting. Mark segments in another language
 > or in STT gibberish with `[FOREIGN: …]` without correcting or deleting them. At the end,
 > return the complete list of your corrections (segment, before, after, reason) for the
 > report.

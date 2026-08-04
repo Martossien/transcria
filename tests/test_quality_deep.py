@@ -778,3 +778,46 @@ class TestSuspiciousShortCorroboration:
         job = Job(id="j-deg", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value)
         report = reporter.run_all_checks(job)
         assert report["quality_score"] >= 80
+
+
+class TestRemovedHallucinationsInReport:
+    def test_les_suppressions_sont_visibles_dans_le_rapport(self):
+        # Une suppression d'hallucination (étage A) n'est JAMAIS silencieuse : le
+        # rapport qualité la montre, avec un extrait, pour que l'utilisateur puisse
+        # vérifier et récupérer (dossier complet dans removed_hallucinations.json).
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fs = JobFilesystem(tmp_dir, "test-q-hallu")
+            fs.save_text("metadata/transcription.srt", REAL_SRT)
+            fs.save_json("metadata/transcription_segments.json", _parse_srt(REAL_SRT))
+            fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 105})
+            fs.save_json("metadata/removed_hallucinations.json", [{
+                "start": 12.0, "end": 14.0, "speaker": "SPEAKER_00",
+                "text": "Merci d'avoir regardé cette vidéo",
+                "pattern": "\\bmerci d['’]avoir regardé\\b",
+                "signature_source": "generic",
+                "corroboration": "recouvrement_non_parole=87%",
+            }])
+
+            reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+            job = Job(id="test-q-hallu", owner_id="u1", title="Hallu",
+                      state=JobState.QUALITY_CHECKING.value)
+            report = reporter.run_all_checks(job)
+
+            check = next(c for c in report["checks"] if c["type"] == "removed_hallucinations")
+            assert check["count"] == 1 and check["severity"] == "info"
+            points = str(report["review_points"])
+            assert "Merci d'avoir regardé" in points
+            assert "removed_hallucinations.json" in points
+
+    def test_sans_suppression_pas_de_bruit(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fs = JobFilesystem(tmp_dir, "test-q-clean")
+            fs.save_text("metadata/transcription.srt", REAL_SRT)
+            fs.save_json("metadata/transcription_segments.json", _parse_srt(REAL_SRT))
+            fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 105})
+
+            reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+            job = Job(id="test-q-clean", owner_id="u1", title="Clean",
+                      state=JobState.QUALITY_CHECKING.value)
+            report = reporter.run_all_checks(job)
+            assert all(c["type"] != "removed_hallucinations" for c in report["checks"])

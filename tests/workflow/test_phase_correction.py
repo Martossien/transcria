@@ -471,3 +471,49 @@ class TestCorrectionRetryRelanceLaLlm:
             _FakeOcr(), _FakeJob(), staged_srt="s", staged_context="c",
             staged_lexicon="l", staged_invite=None)
         assert runs["n"] == 3 and result["success"] is False
+
+
+class TestContexteReprojetteAvantStaging:
+    def test_les_hints_frais_atteignent_la_correction(self, app, owner_id, monkeypatch, tmp_path):
+        """Vécu (audit 2026-08-04) : le contexte n'était rebâti que par les endpoints
+        utilisateur — des hints de fiabilité écrits APRÈS le dernier build n'atteignaient
+        jamais la LLM (`segments: []` stagé). La phase reprojette désormais le contexte."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Contexte frais")
+            runner = WorkflowRunner(JobStore, cfg)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready",
+                                lambda expected_model_id=None: True)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("metadata/transcription.srt",
+                         "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")
+            # Contexte PÉRIMÉ sur disque (comme après le dernier endpoint utilisateur)…
+            fs.save_text("context/job_context.yaml", "quality_hints:\n  segments: []\n")
+            # …alors que la transcription a depuis écrit un segment flagué.
+            fs.save_json("metadata/transcription_segments.json", [{
+                "start": 3.0, "end": 3.4, "text": "Tenez !",
+                "reliability": "suspect", "reliability_reasons": ["segment_court"],
+            }])
+
+            staged_yaml: dict = {}
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
+
+            def fake_run_correction(self_runner, srt_path, context_path, lexicon_path,
+                                    invite_path=None, **_kw):
+                from pathlib import Path
+                staged_yaml["content"] = Path(context_path).read_text(encoding="utf-8")
+                return {"success": True,
+                        "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n",
+                        "report": "# ok", "error": ""}
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+
+            result = runner.run_correction(job, cfg)
+            assert result["success"] is True
+            # La LLM a vu le hint (fichier STAGÉ, pas seulement le canonique).
+            assert "segment_court" in staged_yaml["content"]
+            assert "Tenez" in staged_yaml["content"]

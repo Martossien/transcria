@@ -458,6 +458,11 @@ _DEFAULT_CONFIG = {
             "non_latin_min_chars": 2,
             "detect_generic_hallucinations": True,
             "degrade_on_text_flags": True,
+            # Étage A anti-hallucination : suppression d'un segment quand une signature
+            # `delete` du catalogue par moteur (transcria/data/hallucination_signatures.yaml)
+            # est CORROBORÉE par l'acoustique (segment muet/musical). Toujours tracée
+            # dans metadata/removed_hallucinations.json + rapport qualité.
+            "delete_confirmed_hallucinations": True,
             "generic_hallucination_patterns": [
                 r"\bpour plus d['’]informations\b",
                 r"\babonnez[- ]?vous\b",

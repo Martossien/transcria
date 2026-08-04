@@ -937,7 +937,10 @@ Scoring de fiabilité post-STT. Chaque segment reçoit un statut (`ok`, `suspect
 basé sur les probabilités `no_speech_prob`, la confiance mot-à-mot et des flags textuels
 configurables. Les segments `degrade` alimentent le score composite d'hallucination de
 `QualityReporter`. Le moteur ne contient pas de termes métier codés en dur : les signatures
-textuelles doivent être déclarées dans la configuration.
+locales se déclarent dans la configuration (`generic_hallucination_patterns`), et les
+signatures **par moteur STT** connues du projet vivent dans le catalogue versionné
+`transcria/data/hallucination_signatures.yaml` (action `flag` ou `delete` par pattern —
+une suppression n'a lieu que corroborée par l'acoustique, et toujours tracée).
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -955,6 +958,7 @@ textuelles doivent être déclarées dans la configuration.
 | `detect_generic_hallucinations` | bool | `true` | Active les regex configurées dans `generic_hallucination_patterns` |
 | `generic_hallucination_patterns` | list[string] | liste configurable | Regex configurables pour signatures d'hallucination récurrentes connues ou observées localement ; inclut notamment les artefacts courts `thank you`/`thanks` observés sur audio français faible ou étroit |
 | `degrade_on_text_flags` | bool | `true` | Classe directement en `degrade` un segment portant `texte_non_latin` ou `hallucination_generique` |
+| `delete_confirmed_hallucinations` | bool | `true` | Étage A anti-hallucination : supprime un segment quand une signature `delete` du catalogue par moteur est **corroborée** par l'acoustique (`no_speech_prob` ≥ 0,8 ou recouvrement ≥ 50 % avec des zones `noEnergy`/`music`/`noise`). Signature seule = simple signalement. Suppression toujours tracée (`metadata/removed_hallucinations.json` + rapport qualité) |
 
 **Redémarrage requis :** non — lu à chaque pipeline.
 

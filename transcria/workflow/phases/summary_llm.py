@@ -10,6 +10,7 @@ import logging
 
 from transcria.auth.store import UserStore
 from transcria.context.invite_parser import render_invite_markdown
+from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.meeting_type_prompts import build_prompt_substitutions
 from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
@@ -97,6 +98,10 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
         invite_path = runner._materialize_meeting_invite(fs, job)
         workspace = AgentWorkspace(fs, "summary", work_root=resolve_agent_work_root(config))
         staged_transcript = workspace.stage("summary/quick_transcript.txt")
+        # Reprojection idempotente du contexte avant staging — même raison qu'en
+        # correction : le dernier build (endpoint utilisateur) peut précéder l'écriture
+        # des hints de fiabilité par la transcription.
+        JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
         staged_context = workspace.stage("context/job_context.yaml")
         staged_diar_ctx = workspace.stage("summary/diarization_context.md")
         staged_invite = str(workspace.stage("summary/meeting_invite.md")) if invite_path else None

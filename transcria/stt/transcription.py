@@ -20,6 +20,7 @@ from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.logging_setup import get_structured_logger
 from transcria.stt.corpus import build_segment_corpus, summarize_corpus
 from transcria.stt.forced_alignment import ForcedAlignmentService
+from transcria.stt.hallucination_policy import apply_deletion_policy
 from transcria.stt.provenance import stamp_provenance
 from transcria.stt.reliability import SegmentReliabilityScorer
 from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
@@ -199,7 +200,8 @@ class Transcriber:
                 segments, speaker_turns, speaker_mapping, sl
             )
         segments = self._cleanup_transcription_segments(segments, sl, language=lang)
-        segments = self._score_segment_reliability(segments, fs, sl)
+        segments = self._score_segment_reliability(segments, fs, sl, backend=backend)
+        segments = self._remove_confirmed_hallucinations(segments, fs, sl)
         # Couture 1 : le pipeline batch est la RÉFÉRENCE → provenance canonical
         # (défaut). Additif, ignoré par le SRT ; le live posera d'autres états.
         segments = stamp_provenance(segments)
@@ -987,11 +989,14 @@ class Transcriber:
             logger.warning("Réalignement locuteur mot-à-mot ignoré: %s", exc)
             return segments
 
-    def _score_segment_reliability(self, segments: list[dict], fs: JobFilesystem, sl) -> list[dict]:
+    def _score_segment_reliability(
+        self, segments: list[dict], fs: JobFilesystem, sl, backend: str | None = None
+    ) -> list[dict]:
         """Ajoute un score de fiabilité par segment sans modifier le texte."""
         try:
             preflight = fs.load_json("metadata/audio_preflight.json") or {}
-            scored = SegmentReliabilityScorer(self.config).score_segments(segments, preflight)
+            scored = SegmentReliabilityScorer(self.config).score_segments(
+                segments, preflight, backend=backend)
             counts: dict[str, int] = {}
             for segment in scored:
                 level = str(segment.get("reliability") or "unknown")
@@ -1001,6 +1006,27 @@ class Transcriber:
             return scored
         except Exception as exc:
             logger.warning("Scorage fiabilité segments ignoré: %s", exc)
+            return segments
+
+    def _remove_confirmed_hallucinations(self, segments: list[dict], fs: JobFilesystem, sl) -> list[dict]:
+        """Étage A anti-hallucination : suppression corroborée, TOUJOURS tracée.
+
+        Un segment ne disparaît que sur double preuve (signature moteur `delete` +
+        acoustique muette/musicale, cf. hallucination_policy). Le dossier de preuves
+        part dans `metadata/removed_hallucinations.json` — repris par le rapport
+        qualité pour que l'utilisateur voie ce qui a été retiré et puisse récupérer.
+        Best-effort : aucune erreur ne doit interrompre la transcription.
+        """
+        try:
+            scene = fs.load_json("metadata/audio_scene.json") or {}
+            kept, removed = apply_deletion_policy(segments, scene=scene, config=self.config)
+            if removed:
+                fs.save_json("metadata/removed_hallucinations.json", removed)
+                sl.info("Hallucinations supprimées (double preuve)",
+                        removed_count=len(removed))
+            return kept
+        except Exception as exc:
+            logger.warning("Politique de suppression d'hallucinations ignorée: %s", exc)
             return segments
 
     def _write_stt_corpus(self, job: Job, segments: list[dict], backend: str, fs: JobFilesystem, sl) -> dict | None:

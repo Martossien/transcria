@@ -61,6 +61,7 @@ def _check_segment_reliability(cfg: dict, r: ValidationResult) -> None:
     _check_bool(cfg, "enabled", "workflow.segment_reliability.enabled", r)
     for key in (
         "detect_non_latin", "detect_generic_hallucinations", "degrade_on_text_flags",
+        "delete_confirmed_hallucinations",
     ):
         _check_bool(cfg, key, f"workflow.segment_reliability.{key}", r)
     for key in (

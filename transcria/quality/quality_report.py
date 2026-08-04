@@ -39,6 +39,10 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "md_silence": "- Silence: {v}", "md_details": "## Détails des contrôles",
         "md_all_passed": "- Tous les contrôles sont passés avec succès.",
         "md_review_load": "## Charge de relecture", "risk_unknown": "inconnu",
+        "removed_hallucinations": (
+            "Hallucinations STT supprimées : {n} segment(s) (signature du moteur + "
+            "acoustique muette/musicale) — détail dans removed_hallucinations.json, "
+            "ex. « {example} »."),
     },
     "en": {
         "empty": "Empty segments: {n} — check and remove manually.",
@@ -58,6 +62,10 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "md_silence": "- Silence: {v}", "md_details": "## Check details",
         "md_all_passed": "- All checks passed successfully.",
         "md_review_load": "## Review load", "risk_unknown": "unknown",
+        "removed_hallucinations": (
+            "Removed STT hallucinations: {n} segment(s) (engine signature + "
+            "silent/musical audio) — details in removed_hallucinations.json, "
+            "e.g. “{example}”."),
     },
 }
 
@@ -717,6 +725,18 @@ class QualityReporter:
                  f"{len(srt_content)} car.) — vérifier la génération du résumé.")
             )
             warnings += 1
+
+        # 15. Hallucinations supprimées à la transcription (étage A, double preuve) :
+        # informatif — l'utilisateur doit VOIR ce qui a été retiré et pouvoir récupérer
+        # (le dossier de preuves complet vit dans metadata/removed_hallucinations.json).
+        removed_hallucinations = fs.load_json("metadata/removed_hallucinations.json") or []
+        if removed_hallucinations:
+            total_checks += 1
+            example = str((removed_hallucinations[0] or {}).get("text") or "")[:80]
+            checks.append({"type": "removed_hallucinations",
+                           "count": len(removed_hallucinations), "severity": "info"})
+            review_points.append(self.S["removed_hallucinations"].format(
+                n=len(removed_hallucinations), example=example))
 
         error_signals = {
             "speaker_name_violations": len(speaker_violations),

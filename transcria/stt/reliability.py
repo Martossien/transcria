@@ -42,7 +42,12 @@ class SegmentReliabilityScorer:
             "workflow.segment_reliability.generic_hallucination_patterns",
         )
 
-    def score_segments(self, segments: list[dict], preflight: dict | None = None) -> list[dict]:
+    def score_segments(
+        self,
+        segments: list[dict],
+        preflight: dict | None = None,
+        backend: str | None = None,
+    ) -> list[dict]:
         if not self.enabled:
             return segments
 
@@ -57,7 +62,14 @@ class SegmentReliabilityScorer:
         for segment in segments:
             current = dict(segment)
             reasons = self._segment_reasons(current)
-            if "texte_non_latin" in reasons or "hallucination_generique" in reasons:
+            signature = self._match_engine_signature(current, backend)
+            if signature is not None:
+                reasons.append("signature_hallucination_moteur")
+                # Consommé par la politique de suppression corroborée (hallucination_policy)
+                # et tracé tel quel dans les hints — jamais une autorité à lui seul.
+                current["hallucination_signature"] = signature
+            if ("texte_non_latin" in reasons or "hallucination_generique" in reasons
+                    or signature is not None):
                 text_flagged += 1
             if audio_degraded:
                 reasons.append("audio_preflight_degrade")
@@ -116,9 +128,20 @@ class SegmentReliabilityScorer:
 
         return reasons
 
+    @staticmethod
+    def _match_engine_signature(segment: dict, backend: str | None) -> dict | None:
+        from transcria.stt.hallucination_catalog import match_signature
+
+        text = str(segment.get("text") or "").strip()
+        matched = match_signature(text, backend)
+        if matched is None:
+            return None
+        return {"pattern": matched.regex.pattern, "action": matched.action,
+                "source": matched.source}
+
     def _is_degraded(self, reasons: list[str]) -> bool:
         strong = {"audio_preflight_degrade", "mots_faible_confiance", "no_speech_prob_eleve"}
-        text_strong = {"texte_non_latin", "hallucination_generique"}
+        text_strong = {"texte_non_latin", "hallucination_generique", "signature_hallucination_moteur"}
         reason_set = set(reasons)
         if self.degrade_on_text_flags:
             strong |= text_strong
