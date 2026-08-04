@@ -50,7 +50,7 @@
       } else {
         show(t('Mise à niveau demandée…'));
       }
-    } catch (err) {
+    } catch {
       show(t('Le service redémarre — reconnexion…'));
     }
     setTimeout(poll, 2000);
