@@ -23,6 +23,7 @@ from transcria.audit.store import AuditStore
 from transcria.config.loader import get_config_path, load_config
 from transcria.installer.opencode_lib import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
 from transcria.jobs.store import JobStore
+from transcria.maintenance import upgrade_service
 from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
 from transcria.maintenance.restore import describe_restore, restore_backup
 from transcria.maintenance.restore_service import apply_pending_restore
@@ -199,6 +200,39 @@ def _cmd_model_download(args: argparse.Namespace) -> int:
 
     return download_from_args(role=args.role, repo=args.repo, kind=args.kind,
                               file=args.file, subdir=args.subdir or "")
+
+
+def _cmd_upgrade_apply(args: argparse.Namespace) -> int:
+    """Applique une mise à niveau en attente (appelé par l'unité oneshot transcria-upgrade).
+
+    Même contrat que restore-apply : NE PAS lancer à la main sur une instance vivante —
+    c'est le rôle du oneshot privilégié déclenché par la page Maintenance. Le plan est
+    celui de ``upgrade`` (sauvegarde → checkout → alembic → restart → santé), la
+    progression est journalisée dans le fichier d'état sondé par l'UI."""
+    from pathlib import Path
+
+    cfg, resolved, version, revision = _load_cfg_and_meta(args.config)
+    # Sans --backup-dest explicite, l'archive de sécurité va DANS maintenance.backup_dir :
+    # c'est là que la page Maintenance liste les archives — le rollback proposé à l'écran
+    # doit pointer sur une sauvegarde que l'écran voit.
+    dest = Path(args.backup_dest or (cfg.get("maintenance", {}) or {}).get("backup_dir")
+                or "./backups")
+
+    def _backup():
+        return create_backup(cfg, resolved, dest, app_version=version,
+                             alembic_revision=revision,
+                             env_path=Path(".env") if Path(".env").exists() else None)
+
+    try:
+        upgrade_service.apply_pending_upgrade(
+            backup_fn=_backup,
+            healthcheck_fn=lambda: default_ready_check(args.ready_url),
+            units=args.units, ready_url=args.ready_url)
+    except UpgradeError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+    print("✅ Mise à niveau appliquée.")
+    return 0
 
 
 def _cmd_restore_apply(args: argparse.Namespace) -> int:
@@ -406,6 +440,16 @@ def main(argv: list[str] | None = None) -> int:
     md.add_argument("--file", default=None)
     md.add_argument("--subdir", default="")
     md.set_defaults(func=_cmd_model_download)
+
+    ua = sub.add_parser("upgrade-apply",
+                        help="[interne] applique une mise à niveau en attente (oneshot privilégié)")
+    ua.add_argument("--units", default="transcria.service",
+                    help="services systemd à redémarrer après la bascule")
+    ua.add_argument("--ready-url", default="http://127.0.0.1:7870/ready",
+                    help="URL du contrôle de santé")
+    ua.add_argument("--backup-dest", default=None,
+                    help="dossier de la sauvegarde de sécurité (défaut : maintenance.backup_dir)")
+    ua.set_defaults(func=_cmd_upgrade_apply)
 
     ra = sub.add_parser("restore-apply",
                         help="[interne] applique une restauration en attente (oneshot privilégié)")

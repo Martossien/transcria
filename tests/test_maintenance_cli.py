@@ -209,3 +209,48 @@ class TestResetAdminPassword:
         rc = self._run(app, monkeypatch, "fantome")
         assert rc == 1
         assert "inconnu" in capsys.readouterr().err
+
+
+class TestUpgradeApply:
+    def test_applique_et_sort_zero(self, monkeypatch, tmp_path, capsys):
+        _patch_meta(monkeypatch)
+        monkeypatch.setattr(cli, "create_backup", lambda *a, **kw: tmp_path / "a.tar.gz")
+        called: dict = {}
+        monkeypatch.setattr("transcria.maintenance.upgrade_service.apply_pending_upgrade",
+                            lambda **kw: called.update(kw) or {"steps": []})
+        rc = cli.main(["upgrade-apply", "--units", "transcria.service"])
+        assert rc == 0
+        assert "Mise à niveau appliquée" in capsys.readouterr().out
+        assert called["units"] == "transcria.service"
+
+    def test_echec_sort_un(self, monkeypatch, capsys):
+        _patch_meta(monkeypatch)
+        from transcria.maintenance.upgrade import UpgradeError
+
+        def boom(**kw):
+            raise UpgradeError("aucune demande de mise à niveau en attente")
+        monkeypatch.setattr("transcria.maintenance.upgrade_service.apply_pending_upgrade", boom)
+        rc = cli.main(["upgrade-apply"])
+        assert rc == 1
+        assert "aucune demande" in capsys.readouterr().err
+
+    def test_sans_backup_dest_va_dans_le_dossier_configure(self, monkeypatch, tmp_path, capsys):
+        # L'archive de rollback doit atterrir là où la page Maintenance liste les
+        # archives (maintenance.backup_dir), pas dans un ./backups implicite.
+        cfg = dict(_CFG)
+        cfg["maintenance"] = {"backup_dir": str(tmp_path / "coffre")}
+        monkeypatch.setattr(cli, "_load_cfg_and_meta",
+                            lambda config: (cfg, Path("/etc/transcria/config.yaml"), "9.9.9", "abc"))
+        seen: dict = {}
+
+        def fake_create_backup(c, resolved, dest, **kw):
+            seen["dest"] = dest
+            return dest / "a.tar.gz"
+        monkeypatch.setattr(cli, "create_backup", fake_create_backup)
+
+        def fake_apply(**kw):
+            kw["backup_fn"]()
+            return {"steps": []}
+        monkeypatch.setattr("transcria.maintenance.upgrade_service.apply_pending_upgrade", fake_apply)
+        assert cli.main(["upgrade-apply"]) == 0
+        assert seen["dest"] == tmp_path / "coffre"

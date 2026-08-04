@@ -80,6 +80,7 @@ class AuditAction(str, enum.Enum):
 
     MAINTENANCE_BACKUP_CREATE = "maintenance_backup_create"
     MAINTENANCE_BACKUP_RESTORE = "maintenance_backup_restore"
+    MAINTENANCE_UPGRADE = "maintenance_upgrade"
 
 _VERB_FR = {
     "login": "Connexion", "login_failed": "Échec de connexion", "logout": "Déconnexion",

@@ -152,6 +152,9 @@
 | `/admin/maintenance/backup/<name>/download` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/restore` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/schedule` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
+| `/admin/maintenance/update-check` | POST | connexion + Permission.MANAGE_CONFIG | Vérification MANUELLE (toujours disponible, indépendante de l'opt-in) : | `transcria.web.admin_routes` |
+| `/admin/maintenance/upgrade` | POST | connexion + Permission.MANAGE_CONFIG | Mise à niveau outillée depuis l'UI (bare-metal systemd uniquement). | `transcria.web.admin_routes` |
+| `/admin/maintenance/upgrade/status` | GET | connexion + Permission.MANAGE_CONFIG | Progression de la mise à niveau (sondée par la page — lecture du fichier d'état). | `transcria.web.admin_routes` |
 | `/admin/models` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/models/activate` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/models/download` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -215,7 +218,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 149 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 152 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

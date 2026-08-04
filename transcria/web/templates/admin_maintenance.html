@@ -41,6 +41,57 @@
     {% if update_view.newer and update_view.notes %}
     <div class="border rounded bg-body-tertiary p-2 mt-3 small" style="white-space: pre-wrap; max-height: 14rem; overflow-y: auto;">{{ update_view.notes }}</div>
     {% endif %}
+
+    {% if update_view.newer %}
+    <div class="border-top mt-3 pt-3">
+      {% if deploy_mode == 'docker' %}
+      <div class="alert alert-info py-2 small mb-0">
+        {% trans %}Instance en conteneur : la mise à niveau se fait en tirant la nouvelle image (<code>docker compose pull &amp;&amp; docker compose up -d</code>) — cf. <code>docs/DOCKER.md</code>. La base est migrée par le one-shot <code>migrate</code> au déploiement.{% endtrans %}
+      </div>
+      {% elif deploy_mode == 'systemd' %}
+      <div class="alert alert-warning py-2 small">
+        {% trans %}La mise à niveau <strong>sauvegarde d'abord</strong> (le rollback, c'est la restauration), bascule le code sur le tag publié, migre la base (Alembic) puis <strong>redémarre le service</strong> — vous serez déconnecté quelques instants.{% endtrans %}
+        {% if backup_disk_free_gb is not none %}<br>{{ _('Espace libre pour la sauvegarde : %(gb)s Go.', gb=backup_disk_free_gb) }}{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('web.admin_maintenance_upgrade') }}" class="row g-2 align-items-center">
+        <input type="hidden" name="target_tag" value="{{ update_view.tag }}">
+        <div class="col-auto form-check ms-2">
+          <input class="form-check-input" type="checkbox" name="acknowledge" id="upgrade-ack">
+          <label class="form-check-label small" for="upgrade-ack">{{ _('Je comprends et je confirme') }}</label>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-arrow-up-circle"></i> {{ _('Mettre à niveau vers %(tag)s', tag=update_view.tag) }}
+          </button>
+        </div>
+      </form>
+      {% else %}
+      <p class="small text-muted mb-0">
+        {% trans %}Environnement sans systemd : utilisez la CLI — <code>python -m transcria.maintenance.cli upgrade --ref &lt;tag&gt;</code> (cf. <code>docs/UPGRADE.md</code>).{% endtrans %}
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if deploy_mode == 'systemd' and upgrade_state %}
+    <div id="upgrade-progress" class="mt-3 small"
+         data-status="{{ upgrade_state.status }}"
+         data-current-version="{{ update_view.current }}">
+      {% if upgrade_state.status in ('requested', 'running') %}
+      <div class="progress mb-1" style="height: 6px;">
+        <div id="upgrade-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+      </div>
+      <span id="upgrade-progress-label" class="text-muted">{{ _('Mise à niveau en cours…') }}</span>
+      {% elif upgrade_state.status == 'failed' %}
+      <div class="alert alert-danger py-2 mb-0">
+        {{ _('La dernière mise à niveau a échoué : %(e)s', e=upgrade_state.error or '?') }}<br>
+        {{ _('Rollback : restaurez la sauvegarde créée juste avant (liste ci-dessous).') }}
+      </div>
+      {% elif upgrade_state.status == 'ok' %}
+      <div class="text-success">{{ _('Dernière mise à niveau réussie (vers %(t)s).', t=upgrade_state.target) }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -172,4 +223,5 @@
     {% endif %}
   </div>
 </div>
+<script src="{{ asset_url('js/admin_maintenance_page.js') }}"></script>
 {% endblock %}

@@ -157,6 +157,24 @@ venv/bin/python -m transcria.maintenance.cli upgrade
 Si une étape échoue, la mise à niveau **s'arrête** et affiche les étapes déjà faites ;
 restaurez la sauvegarde initiale pour revenir en arrière.
 
+### Depuis l'interface (page Maintenance)
+
+La page *Administration → Maintenance* porte une carte **Version** : comparaison avec la
+dernière publication GitHub (bouton « Vérifier maintenant » — aucun appel réseau sans votre
+action ; `maintenance.update_check.enabled` ajoute une vérification automatique quotidienne)
+et, sur une installation **systemd** (install.sh), un bouton de mise à niveau qui déroule
+exactement le plan ci-dessus.
+
+Mécanique : le worker web ne se met pas à niveau lui-même (le restart le tuerait en plein
+vol) — l'UI dépose une demande et déclenche l'unité one-shot privilégiée
+`transcria-upgrade.service` (même patron que la restauration), qui exécute
+`maintenance.cli upgrade-apply` et journalise sa progression dans un fichier d'état sondé
+par la page. Pendant le redémarrage, la page affiche « reconnexion… » puis se recharge sur
+la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une ref arbitraire).
+
+En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
+cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
+
 ### Notes spécifiques 0.4.0 → suivante
 
 Rien à faire. Trois clés de configuration **sans effet** ont été retirées du schéma —

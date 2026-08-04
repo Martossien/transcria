@@ -182,3 +182,88 @@ def test_update_banner_absent_for_viewer(viewer_client, monkeypatch):
                                       "checked_at": "2026-08-04T00:00:00+00:00"})
     body = viewer_client.get("/").get_data(as_text=True)
     assert "v99.0.0" not in body
+
+
+# --- Mise à niveau depuis l'UI (oneshot systemd) --------------------------------------
+
+
+def _prime_upgrade(monkeypatch, *, mode="systemd", cached_tag="v99.0.0"):
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.deployment_mode", lambda **_kw: mode)
+    monkeypatch.setattr("transcria.maintenance.update_check.read_cache",
+                        lambda path: {"tag": cached_tag, "url": "u",
+                                      "checked_at": "2026-08-04T00:00:00+00:00"})
+
+
+def test_upgrade_post_forbidden_for_viewer(viewer_client):
+    assert viewer_client.post("/admin/maintenance/upgrade", data={}).status_code == 403
+
+
+def test_upgrade_refused_in_docker(admin_client, monkeypatch):
+    _prime_upgrade(monkeypatch, mode="docker")
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.request_upgrade",
+                        lambda **kw: triggered.setdefault("hit", True))
+    resp = admin_client.post("/admin/maintenance/upgrade",
+                             data={"target_tag": "v99.0.0", "acknowledge": "on"},
+                             follow_redirects=True)
+    assert "docker pull" in resp.get_data(as_text=True)
+    assert "hit" not in triggered
+
+
+def test_upgrade_requires_acknowledge(admin_client, monkeypatch):
+    _prime_upgrade(monkeypatch)
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.request_upgrade",
+                        lambda **kw: triggered.setdefault("hit", True))
+    admin_client.post("/admin/maintenance/upgrade", data={"target_tag": "v99.0.0"})
+    assert "hit" not in triggered
+
+
+def test_upgrade_posted_tag_must_match_verified_cache(admin_client, monkeypatch):
+    # Un POST forgé ne peut pas faire déployer une ref arbitraire : seule la
+    # dernière publication VÉRIFIÉE (cache) est acceptée comme cible.
+    _prime_upgrade(monkeypatch, cached_tag="v99.0.0")
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.request_upgrade",
+                        lambda **kw: triggered.setdefault("hit", True))
+    admin_client.post("/admin/maintenance/upgrade",
+                      data={"target_tag": "v98.0.0", "acknowledge": "on"})
+    assert "hit" not in triggered
+
+
+def test_upgrade_refused_when_not_newer(admin_client, monkeypatch):
+    from transcria import __version__
+    _prime_upgrade(monkeypatch, cached_tag=f"v{__version__}")
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.request_upgrade",
+                        lambda **kw: triggered.setdefault("hit", True))
+    admin_client.post("/admin/maintenance/upgrade",
+                      data={"target_tag": f"v{__version__}", "acknowledge": "on"})
+    assert "hit" not in triggered
+
+
+def test_upgrade_happy_path_triggers_oneshot(admin_client, monkeypatch):
+    _prime_upgrade(monkeypatch)
+    called: dict = {}
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.request_upgrade",
+                        lambda **kw: called.update(kw))
+    resp = admin_client.post("/admin/maintenance/upgrade",
+                             data={"target_tag": "v99.0.0", "acknowledge": "on"},
+                             follow_redirects=True)
+    assert resp.status_code == 200
+    assert called.get("target_tag") == "v99.0.0"
+    assert "lancée" in resp.get_data(as_text=True)
+
+
+def test_upgrade_status_endpoint(admin_client, monkeypatch):
+    from transcria import __version__
+    monkeypatch.setattr("transcria.maintenance.upgrade_service.read_state",
+                        lambda *a, **kw: {"status": "running", "step": 2, "steps_total": 5,
+                                          "label": "Migration de la base (Alembic)"})
+    data = admin_client.get("/admin/maintenance/upgrade/status").get_json()
+    assert data["state"]["status"] == "running"
+    assert data["current_version"] == __version__
+
+
+def test_upgrade_status_forbidden_for_viewer(viewer_client):
+    assert viewer_client.get("/admin/maintenance/upgrade/status").status_code == 403

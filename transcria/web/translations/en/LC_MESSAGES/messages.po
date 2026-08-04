@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 18:02+0200\n"
+"POT-Creation-Date: 2026-08-04 18:13+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -1097,190 +1097,207 @@ msgid "Mise à jour de la synthèse impossible"
 msgstr "Synthesis update failed"
 
 #: transcria/i18n/js_catalog.py:225
+msgid "Mise à niveau demandée…"
+msgstr "Upgrade requested…"
+
+#: transcria/i18n/js_catalog.py:226
+msgid "Mise à niveau terminée — rechargement…"
+msgstr "Upgrade finished — reloading…"
+
+#: transcria/i18n/js_catalog.py:227
+#, python-format
+msgid "Échec de la mise à niveau : %(e)s"
+msgstr "Upgrade failed: %(e)s"
+
+#: transcria/i18n/js_catalog.py:228
+msgid "Le service redémarre — reconnexion…"
+msgstr "The service is restarting — reconnecting…"
+
+#: transcria/i18n/js_catalog.py:229
 msgid "Synthèse mise à jour (versionnée — restaurable depuis le chat d'affinage)."
 msgstr "Synthesis updated (versioned — restorable from the refine chat)."
 
-#: transcria/i18n/js_catalog.py:226
+#: transcria/i18n/js_catalog.py:230
 msgid "Télécharger le DOCX à jour"
 msgstr "Download the updated DOCX"
 
-#: transcria/i18n/js_catalog.py:227
+#: transcria/i18n/js_catalog.py:231
 msgid "Voir le détail dans le chat"
 msgstr "See the details in the chat"
 
-#: transcria/i18n/js_catalog.py:228
+#: transcria/i18n/js_catalog.py:232
 msgid "Votre navigateur ne permet pas l'enregistrement audio."
 msgstr "Your browser does not support audio recording."
 
-#: transcria/i18n/js_catalog.py:229
+#: transcria/i18n/js_catalog.py:233
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "To note (e.g. budget amounts explicitly cited)"
 
-#: transcria/i18n/js_catalog.py:230
+#: transcria/i18n/js_catalog.py:234
 msgid "À valider"
 msgstr "To validate"
 
-#: transcria/i18n/js_catalog.py:231
+#: transcria/i18n/js_catalog.py:235
 #, python-format
 msgid "À vérifier %(done)s/%(total)s"
 msgstr "To review %(done)s/%(total)s"
 
-#: transcria/i18n/js_catalog.py:232
+#: transcria/i18n/js_catalog.py:236
 msgid "Écouter ce segment"
 msgstr "Listen to this segment"
 
-#: transcria/i18n/js_catalog.py:233
+#: transcria/i18n/js_catalog.py:237
 msgid "⇤ suivants −500 ms"
 msgstr "⇤ following −500 ms"
 
-#: transcria/i18n/js_catalog.py:234
+#: transcria/i18n/js_catalog.py:238
 msgid "✂ — couper au curseur · ⧉ — fusionner avec le précédent"
 msgstr "✂ — cut at cursor · ⧉ — merge with the previous one"
 
-#: transcria/i18n/js_catalog.py:236
+#: transcria/i18n/js_catalog.py:240
 msgid "Proposition"
 msgstr "Proposal"
 
-#: transcria/i18n/js_catalog.py:237
+#: transcria/i18n/js_catalog.py:241
 msgid "Appliquer cette proposition"
 msgstr "Apply this proposal"
 
-#: transcria/i18n/js_catalog.py:238
+#: transcria/i18n/js_catalog.py:242
 #: transcria/web/templates/admin_maintenance.html:11
 msgid "Version"
 msgstr "Version"
 
-#: transcria/i18n/js_catalog.py:239
+#: transcria/i18n/js_catalog.py:243
 #, python-brace-format
 msgid "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 msgstr "Refinement applied (version v{v}) — the documents above are regenerated on every download and include your changes."
 
-#: transcria/i18n/js_catalog.py:240
+#: transcria/i18n/js_catalog.py:244
 msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
 msgstr "Describe the change to apply, or click \"Apply this proposal\" under an assistant reply."
 
-#: transcria/i18n/js_catalog.py:241
+#: transcria/i18n/js_catalog.py:245
 msgid "Écrivez d'abord votre demande."
 msgstr "Write your request first."
 
-#: transcria/i18n/js_catalog.py:242
+#: transcria/i18n/js_catalog.py:246
 msgid "Appliquer aux documents :"
 msgstr "Apply to the documents:"
 
-#: transcria/i18n/js_catalog.py:243
+#: transcria/i18n/js_catalog.py:247
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "A restorable version will be created (you can revert)."
 
-#: transcria/i18n/js_catalog.py:244 transcria/notifications/mailer.py:258
+#: transcria/i18n/js_catalog.py:248 transcria/notifications/mailer.py:258
 #: transcria/notifications/mailer.py:306 transcria/queue/routes.py:41
 msgid "Erreur"
 msgstr "Error"
 
-#: transcria/i18n/js_catalog.py:245
+#: transcria/i18n/js_catalog.py:249
 msgid "Erreur réseau — réessayez."
 msgstr "Network error — please retry."
 
-#: transcria/i18n/js_catalog.py:246
+#: transcria/i18n/js_catalog.py:250
 msgid "Options invalides"
 msgstr "Invalid options"
 
-#: transcria/i18n/js_catalog.py:247
+#: transcria/i18n/js_catalog.py:251
 #, python-brace-format
 msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
 msgstr "Restore version v{v}? The documents will return to this state."
 
-#: transcria/i18n/js_catalog.py:248
+#: transcria/i18n/js_catalog.py:252
 msgid "Restauration impossible"
 msgstr "Restore failed"
 
-#: transcria/i18n/js_catalog.py:250
+#: transcria/i18n/js_catalog.py:254
 msgid "Impossible de modifier l'agenda."
 msgstr "Cannot change the schedule."
 
-#: transcria/i18n/js_catalog.py:251
+#: transcria/i18n/js_catalog.py:255
 msgid "Modification impossible."
 msgstr "Change not possible."
 
-#: transcria/i18n/js_catalog.py:252
+#: transcria/i18n/js_catalog.py:256
 msgid "Sélectionne au moins un jour."
 msgstr "Select at least one day."
 
-#: transcria/i18n/js_catalog.py:253
+#: transcria/i18n/js_catalog.py:257
 msgid "Supprimer ce créneau ?"
 msgstr "Delete this slot?"
 
-#: transcria/i18n/js_catalog.py:255
+#: transcria/i18n/js_catalog.py:259
 msgid "Action impossible sur ce job."
 msgstr "Action not possible on this job."
 
-#: transcria/i18n/js_catalog.py:256
+#: transcria/i18n/js_catalog.py:260
 msgid "Annuler ce job ?"
 msgstr "Cancel this job?"
 
-#: transcria/i18n/js_catalog.py:257
+#: transcria/i18n/js_catalog.py:261
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "Priority must be between 1 and 100."
 
-#: transcria/i18n/js_catalog.py:258
+#: transcria/i18n/js_catalog.py:262
 msgid "Supprimer tous les jobs de test ?"
 msgstr "Delete all test jobs?"
 
-#: transcria/i18n/js_catalog.py:259
+#: transcria/i18n/js_catalog.py:263
 msgid "Les jobs en cours seront ignorés."
 msgstr "Running jobs will be skipped."
 
-#: transcria/i18n/js_catalog.py:260
+#: transcria/i18n/js_catalog.py:264
 msgid "Nettoyage impossible."
 msgstr "Cleanup failed."
 
-#: transcria/i18n/js_catalog.py:261
+#: transcria/i18n/js_catalog.py:265
 msgid "job(s) de test supprimé(s)."
 msgstr "test job(s) deleted."
 
-#: transcria/i18n/js_catalog.py:263
+#: transcria/i18n/js_catalog.py:267
 msgid "tout local"
 msgstr "all local"
 
-#: transcria/i18n/js_catalog.py:264
+#: transcria/i18n/js_catalog.py:268
 msgid "Aucune ressource distante configurée (tout intégré)."
 msgstr "No remote resource configured (all integrated)."
 
-#: transcria/i18n/js_catalog.py:265
+#: transcria/i18n/js_catalog.py:269
 msgid "injoignable"
 msgstr "unreachable"
 
-#: transcria/i18n/js_catalog.py:266
+#: transcria/i18n/js_catalog.py:270
 #, python-brace-format
 msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}."
 msgstr "Resource node unreachable — remote transcriptions are queued. Required: {reqs}."
 
-#: transcria/i18n/js_catalog.py:267
+#: transcria/i18n/js_catalog.py:271
 msgid "distant"
 msgstr "remote"
 
-#: transcria/i18n/js_catalog.py:268
+#: transcria/i18n/js_catalog.py:272
 msgid "GPU :"
 msgstr "GPU:"
 
-#: transcria/i18n/js_catalog.py:269
+#: transcria/i18n/js_catalog.py:273
 #, python-brace-format
 msgid "GPU {i} — libre {free} / {total} Mo"
 msgstr "GPU {i} — free {free} / {total} MB"
 
-#: transcria/i18n/js_catalog.py:270
+#: transcria/i18n/js_catalog.py:274
 msgid "Aucun moteur déclaré."
 msgstr "No engine declared."
 
-#: transcria/i18n/js_catalog.py:271
+#: transcria/i18n/js_catalog.py:275
 msgid "erreur"
 msgstr "error"
 
-#: transcria/i18n/js_catalog.py:272
+#: transcria/i18n/js_catalog.py:276
 #, python-brace-format
 msgid "Statut indisponible ({e})."
 msgstr "Status unavailable ({e})."
 
-#: transcria/i18n/js_catalog.py:274
+#: transcria/i18n/js_catalog.py:278
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
 #: transcria/web/templates/dashboard_status.html:28
@@ -1288,7 +1305,7 @@ msgstr "Status unavailable ({e})."
 msgid "Go"
 msgstr "GB"
 
-#: transcria/i18n/js_catalog.py:275
+#: transcria/i18n/js_catalog.py:279
 msgid "téléchargement…"
 msgstr "downloading…"
 
@@ -1606,197 +1623,219 @@ msgstr "Generation failed: %(e)s"
 msgid "Voix désactivée."
 msgstr "Voice disabled."
 
-#: transcria/web/admin_routes.py:169 transcria/web/admin_routes.py:228
+#: transcria/web/admin_routes.py:168 transcria/web/admin_routes.py:227
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s validation error(s). Save cancelled."
 
-#: transcria/web/admin_routes.py:173
+#: transcria/web/admin_routes.py:172
 msgid "Réglages sauvegardés."
 msgstr "Settings saved."
 
-#: transcria/web/admin_routes.py:178
+#: transcria/web/admin_routes.py:177
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Identity backend changed: restart the service to apply it (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:204
+#: transcria/web/admin_routes.py:203
 msgid "Aucun prompt modifié."
 msgstr "No prompt modified."
 
-#: transcria/web/admin_routes.py:211
+#: transcria/web/admin_routes.py:210
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Invalid YAML: %(e)s"
 
-#: transcria/web/admin_routes.py:215
+#: transcria/web/admin_routes.py:214
 msgid "La configuration doit être un objet YAML racine."
 msgstr "The configuration must be a root YAML object."
 
-#: transcria/web/admin_routes.py:231
+#: transcria/web/admin_routes.py:230
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration saved to %(p)s."
 
-#: transcria/web/admin_routes.py:296
+#: transcria/web/admin_routes.py:310
 #, python-format
 msgid "Vérification impossible : %(e)s"
 msgstr "Check failed: %(e)s"
 
-#: transcria/web/admin_routes.py:299
+#: transcria/web/admin_routes.py:314
 #, python-format
 msgid "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
 msgstr "New version available: %(tag)s (you are running %(cur)s)."
 
-#: transcria/web/admin_routes.py:302
+#: transcria/web/admin_routes.py:317
 #, python-format
 msgid "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
 msgstr "You are up to date (%(cur)s — latest release: %(tag)s)."
 
-#: transcria/web/admin_routes.py:320
+#: transcria/web/admin_routes.py:334
+msgid "Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image (docker pull) ; sans systemd, utilisez la CLI maintenance."
+msgstr "Upgrade unavailable here: in a container, pull the new image (docker pull); without systemd, use the maintenance CLI."
+
+#: transcria/web/admin_routes.py:338
+msgid "Confirmation requise : la mise à niveau sauvegarde, bascule le code, migre la base et redémarre le service."
+msgstr "Confirmation required: the upgrade backs up, switches the code, migrates the database and restarts the service."
+
+#: transcria/web/admin_routes.py:348
+msgid "Cible de mise à niveau invalide ou périmée — relancez « Vérifier maintenant » puis réessayez."
+msgstr "Invalid or stale upgrade target — run “Check now” again, then retry."
+
+#: transcria/web/admin_routes.py:361
+#, python-format
+msgid "Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, migration, redémarrage. La page suit la progression."
+msgstr "Upgrade to %(tag)s started: backup, code switch, migration, restart. This page tracks the progress."
+
+#: transcria/web/admin_routes.py:364
+#, python-format
+msgid "Échec du déclenchement de la mise à niveau : %(e)s"
+msgstr "Failed to trigger the upgrade: %(e)s"
+
+#: transcria/web/admin_routes.py:395
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Scheduled backup enabled (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:325
+#: transcria/web/admin_routes.py:400
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Scheduled backup disabled."
 
-#: transcria/web/admin_routes.py:327
+#: transcria/web/admin_routes.py:402
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Scheduling failed: %(e)s"
 
-#: transcria/web/admin_routes.py:341
+#: transcria/web/admin_routes.py:416
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation required: restoring replaces the data and restarts the service."
 
-#: transcria/web/admin_routes.py:344
+#: transcria/web/admin_routes.py:419
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "The re-entered name does not match the archive — restore cancelled."
 
-#: transcria/web/admin_routes.py:352
+#: transcria/web/admin_routes.py:427
 msgid "Archive invalide — restauration refusée : "
 msgstr "Invalid archive — restore denied: "
 
-#: transcria/web/admin_routes.py:364
+#: transcria/web/admin_routes.py:439
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restore started. The service will stop, restore, then restart — sign back in within a minute or so."
 
-#: transcria/web/admin_routes.py:367
+#: transcria/web/admin_routes.py:442
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
 
-#: transcria/web/admin_routes.py:476
+#: transcria/web/admin_routes.py:551
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Meeting removed: %(m)s — its subscription is left in place until it expires (7 days)."
 
-#: transcria/web/admin_routes.py:480
+#: transcria/web/admin_routes.py:555
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Meeting added: %(m)s — the service will create the subscription on its next cycle."
 
-#: transcria/web/admin_routes.py:483
+#: transcria/web/admin_routes.py:558
 msgid "Cette réunion est déjà surveillée."
 msgstr "This meeting is already being watched."
 
-#: transcria/web/admin_routes.py:485
+#: transcria/web/admin_routes.py:560
 msgid "Aucun lien de réunion fourni."
 msgstr "No meeting link provided."
 
-#: transcria/web/admin_routes.py:558
+#: transcria/web/admin_routes.py:633
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "%(id)s test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:577
+#: transcria/web/admin_routes.py:652
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Zoom test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:607
+#: transcria/web/admin_routes.py:682
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "“%(label)s” file rejected: %(raison)s"
 
-#: transcria/web/admin_routes.py:644
+#: transcria/web/admin_routes.py:719
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "“%(name)s” credentials saved — handed to runners at the next claim."
 
-#: transcria/web/admin_routes.py:645
+#: transcria/web/admin_routes.py:720
 msgid "Aucun changement."
 msgstr "No change."
 
-#: transcria/web/admin_routes.py:663
+#: transcria/web/admin_routes.py:738
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Enable the feature first (“Enable” button)."
 
-#: transcria/web/admin_routes.py:668
+#: transcria/web/admin_routes.py:743
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Invalid runner name (letters/digits/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:675
+#: transcria/web/admin_routes.py:750
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "Invalid portal URL (%(motif)s) — use the one the REMOTE machine can reach."
 
-#: transcria/web/admin_routes.py:680
+#: transcria/web/admin_routes.py:755
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Service account missing — use the “Enable” button first."
 
-#: transcria/web/admin_routes.py:699
+#: transcria/web/admin_routes.py:774
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Runner “%(name)s” revoked."
 
-#: transcria/web/admin_routes.py:716
+#: transcria/web/admin_routes.py:791
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
 
-#: transcria/web/admin_routes.py:721
+#: transcria/web/admin_routes.py:796
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
-#: transcria/web/admin_routes.py:724
+#: transcria/web/admin_routes.py:799
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/admin_routes.py:738
+#: transcria/web/admin_routes.py:813
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
-#: transcria/web/admin_routes.py:747
+#: transcria/web/admin_routes.py:822
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:750
+#: transcria/web/admin_routes.py:825
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/admin_routes.py:752
+#: transcria/web/admin_routes.py:827
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
 
-#: transcria/web/admin_routes.py:775
+#: transcria/web/admin_routes.py:850
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:809
+#: transcria/web/admin_routes.py:884
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:814
+#: transcria/web/admin_routes.py:889
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:820
+#: transcria/web/admin_routes.py:895
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2891,7 +2930,7 @@ msgid "Réunions en ligne (planification par les utilisateurs)"
 msgstr "Online meetings (user scheduling)"
 
 #: transcria/web/templates/admin_connectors.html:19
-#: transcria/web/templates/admin_maintenance.html:97
+#: transcria/web/templates/admin_maintenance.html:148
 #: transcria/web/templates/schedule.html:220
 msgid "Désactiver"
 msgstr "Disable"
@@ -3250,128 +3289,169 @@ msgid "dernière publication : %(tag)s"
 msgstr "latest release: %(tag)s"
 
 #: transcria/web/templates/admin_maintenance.html:49
+msgid "Instance en conteneur : la mise à niveau se fait en tirant la nouvelle image (<code>docker compose pull &amp;&amp; docker compose up -d</code>) — cf. <code>docs/DOCKER.md</code>. La base est migrée par le one-shot <code>migrate</code> au déploiement."
+msgstr "Containerized instance: upgrade by pulling the new image (<code>docker compose pull &amp;&amp; docker compose up -d</code>) — see <code>docs/DOCKER.md</code>. The database is migrated by the <code>migrate</code> one-shot at deploy time."
+
+#: transcria/web/templates/admin_maintenance.html:53
+msgid "La mise à niveau <strong>sauvegarde d'abord</strong> (le rollback, c'est la restauration), bascule le code sur le tag publié, migre la base (Alembic) puis <strong>redémarre le service</strong> — vous serez déconnecté quelques instants."
+msgstr "The upgrade <strong>backs up first</strong> (rollback = restore), switches the code to the published tag, migrates the database (Alembic) then <strong>restarts the service</strong> — you will be logged out for a moment."
+
+#: transcria/web/templates/admin_maintenance.html:54
+#, python-format
+msgid "Espace libre pour la sauvegarde : %(gb)s Go."
+msgstr "Free space for the backup: %(gb)s GB."
+
+#: transcria/web/templates/admin_maintenance.html:60
+#: transcria/web/templates/admin_maintenance.html:208
+msgid "Je comprends et je confirme"
+msgstr "I understand and confirm"
+
+#: transcria/web/templates/admin_maintenance.html:64
+#, python-format
+msgid "Mettre à niveau vers %(tag)s"
+msgstr "Upgrade to %(tag)s"
+
+#: transcria/web/templates/admin_maintenance.html:70
+msgid "Environnement sans systemd : utilisez la CLI — <code>python -m transcria.maintenance.cli upgrade --ref &lt;tag&gt;</code> (cf. <code>docs/UPGRADE.md</code>)."
+msgstr "No systemd here: use the CLI — <code>python -m transcria.maintenance.cli upgrade --ref &lt;tag&gt;</code> (see <code>docs/UPGRADE.md</code>)."
+
+#: transcria/web/templates/admin_maintenance.html:84
+msgid "Mise à niveau en cours…"
+msgstr "Upgrade in progress…"
+
+#: transcria/web/templates/admin_maintenance.html:87
+#, python-format
+msgid "La dernière mise à niveau a échoué : %(e)s"
+msgstr "The last upgrade failed: %(e)s"
+
+#: transcria/web/templates/admin_maintenance.html:88
+msgid "Rollback : restaurez la sauvegarde créée juste avant (liste ci-dessous)."
+msgstr "Rollback: restore the backup created just before (list below)."
+
+#: transcria/web/templates/admin_maintenance.html:91
+#, python-format
+msgid "Dernière mise à niveau réussie (vers %(t)s)."
+msgstr "Last upgrade succeeded (to %(t)s)."
+
+#: transcria/web/templates/admin_maintenance.html:100
 msgid "Sauvegarde"
 msgstr "Backup"
 
-#: transcria/web/templates/admin_maintenance.html:53
+#: transcria/web/templates/admin_maintenance.html:104
 #, python-format
 msgid "Crée une archive complète (base de données + jobs + voix + prompts + manifeste) dans <code>%(backup_dir)s</code>. La sauvegarde tourne en arrière-plan — rafraîchissez la page pour voir la nouvelle archive apparaître."
 msgstr "Creates a complete archive (database + jobs + voices + prompts + manifest) in <code>%(backup_dir)s</code>. The backup runs in the background — refresh the page to see the new archive appear."
 
-#: transcria/web/templates/admin_maintenance.html:57
+#: transcria/web/templates/admin_maintenance.html:108
 msgid "Rotation (garder N archives)"
 msgstr "Rotation (keep N archives)"
 
-#: transcria/web/templates/admin_maintenance.html:63
+#: transcria/web/templates/admin_maintenance.html:114
 msgid "Exclure les audios originaux (archive plus légère)"
 msgstr "Exclude original audio (lighter archive)"
 
-#: transcria/web/templates/admin_maintenance.html:68
+#: transcria/web/templates/admin_maintenance.html:119
 msgid "Sauvegarder maintenant"
 msgstr "Back up now"
 
-#: transcria/web/templates/admin_maintenance.html:77
+#: transcria/web/templates/admin_maintenance.html:128
 msgid "Sauvegarde planifiée"
 msgstr "Scheduled backup"
 
-#: transcria/web/templates/admin_maintenance.html:79
+#: transcria/web/templates/admin_maintenance.html:130
 msgid "active"
 msgstr "active"
 
-#: transcria/web/templates/admin_maintenance.html:81
+#: transcria/web/templates/admin_maintenance.html:132
 msgid "inactive"
 msgstr "inactive"
 
-#: transcria/web/templates/admin_maintenance.html:86
+#: transcria/web/templates/admin_maintenance.html:137
 #, python-format
 msgid "Installe un <strong>timer systemd</strong> qui lance une sauvegarde selon la cadence configurée. Cadence : <code>%(cal)s</code> (syntaxe <code>OnCalendar</code>), rotation <strong>%(keep)s</strong> archives, %(audio)s. Modifiable dans <code>maintenance.schedule</code> (config)."
 msgstr "Installs a <strong>systemd timer</strong> that runs a backup at the configured cadence. Cadence: <code>%(cal)s</code> (<code>OnCalendar</code> syntax), rotation <strong>%(keep)s</strong> archives, %(audio)s. Configurable in <code>maintenance.schedule</code> (config)."
 
-#: transcria/web/templates/admin_maintenance.html:86
+#: transcria/web/templates/admin_maintenance.html:137
 msgid "sans les audios"
 msgstr "without audio"
 
-#: transcria/web/templates/admin_maintenance.html:86
-#: transcria/web/templates/admin_maintenance.html:140
+#: transcria/web/templates/admin_maintenance.html:137
+#: transcria/web/templates/admin_maintenance.html:191
 msgid "audios inclus"
 msgstr "audio included"
 
-#: transcria/web/templates/admin_maintenance.html:91
+#: transcria/web/templates/admin_maintenance.html:142
 msgid "Activer / mettre à jour le timer"
 msgstr "Enable / update the timer"
 
-#: transcria/web/templates/admin_maintenance.html:101
+#: transcria/web/templates/admin_maintenance.html:152
 msgid "État systemd :"
 msgstr "systemd status:"
 
-#: transcria/web/templates/admin_maintenance.html:109
+#: transcria/web/templates/admin_maintenance.html:160
 msgid "Archives disponibles"
 msgstr "Available archives"
 
-#: transcria/web/templates/admin_maintenance.html:116
+#: transcria/web/templates/admin_maintenance.html:167
 msgid "Archive"
 msgstr "Archive"
 
-#: transcria/web/templates/admin_maintenance.html:116
+#: transcria/web/templates/admin_maintenance.html:167
 msgid "Taille"
 msgstr "Size"
 
-#: transcria/web/templates/admin_maintenance.html:116
+#: transcria/web/templates/admin_maintenance.html:167
 msgid "Date (UTC)"
 msgstr "Date (UTC)"
 
-#: transcria/web/templates/admin_maintenance.html:116
+#: transcria/web/templates/admin_maintenance.html:167
 #: transcria/web/templates/queue.html:98
 #: transcria/web/templates/schedule.html:200
 msgid "Actions"
 msgstr "Actions"
 
-#: transcria/web/templates/admin_maintenance.html:122
+#: transcria/web/templates/admin_maintenance.html:173
 #: transcria/web/templates/wizard/_step_file.html:11
 #, python-format
 msgid "%(mb)s Mo"
 msgstr "%(mb)s MB"
 
-#: transcria/web/templates/admin_maintenance.html:127
+#: transcria/web/templates/admin_maintenance.html:178
 #: transcria/web/templates/admin_models.html:82
 msgid "Télécharger"
 msgstr "Download"
 
-#: transcria/web/templates/admin_maintenance.html:131
+#: transcria/web/templates/admin_maintenance.html:182
 msgid "Restaurer…"
 msgstr "Restore…"
 
-#: transcria/web/templates/admin_maintenance.html:140
+#: transcria/web/templates/admin_maintenance.html:191
 #, python-format
 msgid "Contenu : version <strong>%(ver)s</strong>, base <strong>%(db)s</strong>, créée le %(created)s, %(audio)s"
 msgstr "Contents: version <strong>%(ver)s</strong>, database <strong>%(db)s</strong>, created on %(created)s, %(audio)s"
 
-#: transcria/web/templates/admin_maintenance.html:140
+#: transcria/web/templates/admin_maintenance.html:191
 msgid "sans audios"
 msgstr "without audio"
 
-#: transcria/web/templates/admin_maintenance.html:140
+#: transcria/web/templates/admin_maintenance.html:191
 #, python-format
 msgid "arbres : %(t)s"
 msgstr "trees: %(t)s"
 
-#: transcria/web/templates/admin_maintenance.html:145
+#: transcria/web/templates/admin_maintenance.html:196
 msgid "<strong>Opération destructive.</strong> Le service va <strong>s'arrêter</strong>, la base et les fichiers seront <strong>remplacés</strong> par le contenu de l'archive, puis le service redémarrera. Vous serez déconnecté quelques instants."
 msgstr "<strong>Destructive operation.</strong> The service will <strong>stop</strong>, the database and files will be <strong>replaced</strong> by the archive content, then the service will restart. You will be logged out for a few moments."
 
-#: transcria/web/templates/admin_maintenance.html:153
+#: transcria/web/templates/admin_maintenance.html:204
 msgid "Ressaisissez le nom exact de l'archive pour confirmer"
 msgstr "Re-enter the exact archive name to confirm"
 
-#: transcria/web/templates/admin_maintenance.html:157
-msgid "Je comprends et je confirme"
-msgstr "I understand and confirm"
-
-#: transcria/web/templates/admin_maintenance.html:161
+#: transcria/web/templates/admin_maintenance.html:212
 msgid "Restaurer cette archive"
 msgstr "Restore this archive"
 
-#: transcria/web/templates/admin_maintenance.html:171
+#: transcria/web/templates/admin_maintenance.html:222
 msgid "Aucune archive pour l'instant. Lancez une première sauvegarde ci-dessus."
 msgstr "No archive yet. Run a first backup above."
 

@@ -53,7 +53,7 @@ from transcria.ingestion.runner_provisioning import (
 )
 from transcria.ingestion.session_store import MeetingSessionStore
 from transcria.maintenance import backup as maintenance_backup
-from transcria.maintenance import restore_service
+from transcria.maintenance import restore_service, upgrade_service
 from transcria.maintenance import schedule as maintenance_schedule
 from transcria.maintenance import update_check as maintenance_update_check
 from transcria.maintenance.restore import describe_restore
@@ -262,7 +262,22 @@ def admin_maintenance():
         update_view=_update_check_view(cfg),
         update_check_enabled=bool(
             ((cfg.get("maintenance", {}) or {}).get("update_check", {}) or {}).get("enabled", False)),
+        deploy_mode=upgrade_service.deployment_mode(),
+        upgrade_state=upgrade_service.read_state(),
+        backup_disk_free_gb=_backup_disk_free_gb(cfg),
     )
+
+
+def _backup_disk_free_gb(cfg: dict) -> float | None:
+    """Espace libre du volume des sauvegardes (la mise à niveau commence par une archive)."""
+    import shutil
+
+    try:
+        directory = MaintenanceService.backup_dir(cfg)
+        probe = directory if directory.exists() else directory.parent
+        return round(shutil.disk_usage(probe).free / 1e9, 1)
+    except OSError:
+        return None
 
 
 def _update_check_view(cfg: dict) -> dict:
@@ -301,6 +316,66 @@ def admin_maintenance_update_check():
         flash(_("Vous êtes à jour (%(cur)s — dernière publication : %(tag)s).",
                 cur=current, tag=release["tag"]), "info")
     return redirect(url_for("web.admin_maintenance"))
+
+
+@web_bp.route("/admin/maintenance/upgrade", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_upgrade():
+    """Mise à niveau outillée depuis l'UI (bare-metal systemd uniquement).
+
+    Le tag cible n'est JAMAIS pris du formulaire seul : il doit correspondre à la
+    dernière publication vérifiée (cache) ET être plus récent que la version courante
+    — un POST forgé ne peut pas faire déployer une ref arbitraire en root."""
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+    if upgrade_service.deployment_mode() != "systemd":
+        flash(_("Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image "
+                "(docker pull) ; sans systemd, utilisez la CLI maintenance."), "error")
+        return redirect(url_for("web.admin_maintenance"))
+    if request.form.get("acknowledge") != "on":
+        flash(_("Confirmation requise : la mise à niveau sauvegarde, bascule le code, "
+                "migre la base et redémarre le service."), "error")
+        return redirect(url_for("web.admin_maintenance"))
+
+    cached = maintenance_update_check.read_cache(maintenance_update_check.cache_path(cfg))
+    target = str((cached or {}).get("tag") or "")
+    posted = (request.form.get("target_tag") or "").strip()
+    current = maintenance_update_check.current_version()
+    if (not upgrade_service.valid_target_tag(target) or posted != target
+            or not maintenance_update_check.is_newer(target, current)):
+        flash(_("Cible de mise à niveau invalide ou périmée — relancez « Vérifier "
+                "maintenant » puis réessayez."), "error")
+        return redirect(url_for("web.admin_maintenance"))
+
+    schedule = BackupSchedule.from_config(cfg, config_path)
+    try:
+        upgrade_service.request_upgrade(
+            install_dir=schedule.install_dir, python_bin=schedule.python_bin,
+            config_path=schedule.config_path, env_file=schedule.env_file,
+            target_tag=target,
+        )
+        audit_log(AuditAction.MAINTENANCE_UPGRADE, target_type="maintenance",
+                  target_label=f"{current} → {target}")
+        flash(_("Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, "
+                "migration, redémarrage. La page suit la progression.", tag=target), "success")
+    except Exception as exc:  # noqa: BLE001 — surface l'échec de déclenchement à l'opérateur
+        flash(_("Échec du déclenchement de la mise à niveau : %(e)s", e=exc), "error")
+    return redirect(url_for("web.admin_maintenance"))
+
+
+@web_bp.route("/admin/maintenance/upgrade/status")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_upgrade_status():
+    """Progression de la mise à niveau (sondée par la page — lecture du fichier d'état).
+
+    Renvoie aussi la version courante : après le redémarrage, elle change — c'est le
+    signal « terminé » le plus fiable côté navigateur."""
+    return jsonify({
+        "state": upgrade_service.read_state(),
+        "current_version": maintenance_update_check.current_version(),
+    })
 
 
 @web_bp.route("/admin/maintenance/schedule", methods=["POST"])

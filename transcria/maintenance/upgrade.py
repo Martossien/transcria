@@ -67,11 +67,16 @@ def run_plan(
     healthcheck_fn,
     runner=subprocess.run,
     echo=print,
+    on_step=None,
 ) -> dict:
     """Exécute la séquence. Toute étape en échec ARRÊTE la mise à niveau (le backup
-    initial permet un rollback manuel par restauration)."""
+    initial permet un rollback manuel par restauration). ``on_step(i, total, label)``
+    (optionnel) permet à un orchestrateur de journaliser la progression (fichier
+    d'état de la page Maintenance) sans analyser la sortie de ``echo``."""
     done: list[str] = []
     for i, step in enumerate(steps, 1):
+        if on_step is not None:
+            on_step(i, len(steps), step.label)
         echo(f"[{i}/{len(steps)}] {step.label}…")
         if step.internal == "backup":
             archive = backup_fn()

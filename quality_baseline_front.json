@@ -1,6 +1,7 @@
 {
  "inline_js_lines": 0,
  "js_lines": {
+  "transcria/web/static/js/admin_maintenance_page.js": 60,
   "transcria/web/static/js/admin_models_page.js": 32,
   "transcria/web/static/js/csrf.js": 65,
   "transcria/web/static/js/dashboard_status_page.js": 68,
@@ -24,10 +25,10 @@
   "transcria/web/templates/admin_config.html": 197,
   "transcria/web/templates/admin_connectors.html": 369,
   "transcria/web/templates/admin_hardware.html": 55,
-  "transcria/web/templates/admin_maintenance.html": 137,
+  "transcria/web/templates/admin_maintenance.html": 227,
   "transcria/web/templates/admin_models.html": 97,
   "transcria/web/templates/audit.html": 106,
-  "transcria/web/templates/base.html": 168,
+  "transcria/web/templates/base.html": 178,
   "transcria/web/templates/central_lexicon_detail.html": 238,
   "transcria/web/templates/central_lexicons.html": 72,
   "transcria/web/templates/change_password.html": 28,
