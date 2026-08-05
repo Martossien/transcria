@@ -136,7 +136,8 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
     cfg, resolved, version, revision = _load_cfg_and_meta(args.config)
     units = [u for u in (args.units or "transcria.service").split(",") if u]
     steps = build_plan(target_ref=args.ref, do_pull=not args.ref,
-                       restart_units=units, ready_url=args.ready_url)
+                       restart_units=units, ready_url=args.ready_url,
+                       repo_dir=str(Path.cwd()))
 
     if args.check:
         print("— Mise à niveau À BLANC (aucune action) —")

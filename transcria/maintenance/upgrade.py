@@ -34,17 +34,34 @@ def build_plan(
     do_pull: bool,
     restart_units: list[str],
     ready_url: str,
+    repo_dir: str | None = None,
 ) -> list[UpgradeStep]:
-    """Construit la séquence d'une mise à niveau (pur — testable sans effet de bord)."""
+    """Construit la séquence d'une mise à niveau (pur — testable sans effet de bord).
+
+    ``repo_dir`` : répertoire du dépôt — quand il est fourni, chaque commande git
+    porte ``-c safe.directory=<repo_dir>`` (portée commande, aucun état global).
+    Sans ce grant, git EN ROOT refuse un dépôt possédé par un autre utilisateur
+    (« dubious ownership ») — vécu au premier test réel du oneshot de mise à
+    niveau (2026-08-05, exit 128) : le clone appartient à l'opérateur, le
+    oneshot tourne en root, et TOUTE mise à niveau échouait.
+    """
+    git = ["git"] + (["-c", f"safe.directory={repo_dir}"] if repo_dir else [])
     steps: list[UpgradeStep] = [
         UpgradeStep("Sauvegarde de sécurité (rollback = restauration)", internal="backup"),
     ]
     if target_ref:
+        # Un tag fraîchement publié n'existe pas encore dans le clone local : la
+        # vérification de version lit l'API GitHub (métadonnées seulement), rien
+        # n'avait jamais rapatrié le tag — le checkout échouait sur « pathspec
+        # inconnu » pour toute VRAIE montée (masqué tant qu'on testait un tag
+        # déjà local, découvert au même test réel).
+        steps.append(UpgradeStep("Récupération des versions publiées",
+                                 command=git + ["fetch", "--tags", "origin"]))
         steps.append(UpgradeStep(f"Bascule du code sur {target_ref}",
-                                 command=["git", "checkout", target_ref]))
+                                 command=git + ["checkout", target_ref]))
     elif do_pull:
         steps.append(UpgradeStep("Récupération des dernières modifications",
-                                 command=["git", "pull", "--ff-only"]))
+                                 command=git + ["pull", "--ff-only"]))
     import sys as _sys
 
     steps.append(UpgradeStep("Migration de la base (Alembic)",

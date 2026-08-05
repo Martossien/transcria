@@ -143,7 +143,14 @@ class TestApplyPendingUpgrade:
                                  healthcheck_fn=lambda: True,
                                  request_path=request, state_path=state,
                                  run=self._ok_runner(calls), echo=lambda *_a: None)
-        assert ["git", "checkout", "v0.5.0"] in calls
+        # Chaque git porte le grant safe.directory du CWD (dépôt d'opérateur, oneshot
+        # root — vécu 2026-08-05) et le fetch des tags précède le checkout.
+        import os
+        grant = ["-c", f"safe.directory={os.getcwd()}"]
+        assert ["git", *grant, "fetch", "--tags", "origin"] in calls
+        assert ["git", *grant, "checkout", "v0.5.0"] in calls
+        assert calls.index(["git", *grant, "fetch", "--tags", "origin"]) < \
+               calls.index(["git", *grant, "checkout", "v0.5.0"])
         assert any(cmd[-3:] == ["alembic", "upgrade", "head"] for cmd in calls)
         assert ["sudo", "systemctl", "restart", "transcria.service"] in calls
         final = us.read_state(state)
@@ -156,7 +163,7 @@ class TestApplyPendingUpgrade:
         request.write_text(json.dumps({"target_ref": "v0.5.0"}), encoding="utf-8")
 
         def failing_run(cmd, **kw):
-            code = 1 if cmd[:2] == ["git", "checkout"] else 0
+            code = 1 if cmd[0] == "git" and "checkout" in cmd else 0
             return subprocess.CompletedProcess(cmd, code, stdout="", stderr="tag introuvable")
 
         with pytest.raises(UpgradeError, match="Bascule du code"):

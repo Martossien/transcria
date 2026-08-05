@@ -15,6 +15,7 @@ Tout est injectable (``run``/``write``/chemins) pour être testé sans systemd.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -162,8 +163,11 @@ def apply_pending_upgrade(
                       "error": f"tag cible invalide : {target!r}"}, state_path, write)
         raise UpgradeError(f"tag cible invalide dans la demande : {target!r}")
 
+    # repo_dir = CWD : l'unité oneshot fixe WorkingDirectory=<install_dir> — le grant
+    # safe.directory doit viser CE dépôt (git en root sur un clone d'opérateur).
     steps = build_plan(target_ref=target, do_pull=False,
-                       restart_units=[u for u in units.split(",") if u], ready_url=ready_url)
+                       restart_units=[u for u in units.split(",") if u], ready_url=ready_url,
+                       repo_dir=os.getcwd())
     log: list[str] = []
     state: dict = {"status": "running", "target": target,
                    "steps_total": len(steps), "step": 0, "label": "", "log": log}

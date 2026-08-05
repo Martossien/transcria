@@ -27,6 +27,30 @@ class TestPlan:
         assert any(s.command == ["git", "checkout", "v0.2.0"] for s in steps)
         assert not any("git pull" in " ".join(s.command or []) for s in steps)
 
+    def test_ref_explicite_fetch_les_tags_AVANT_le_checkout(self):
+        """Vécu (1er test réel du oneshot, 2026-08-05) : un tag fraîchement publié
+        n'existe pas dans le clone local — sans fetch, TOUTE vraie montée échouait
+        sur « pathspec inconnu » (masqué tant qu'on testait un tag déjà local)."""
+        steps = build_plan(target_ref="v0.4.2", do_pull=False,
+                           restart_units=[], ready_url="http://x/ready")
+        cmds = [s.command for s in steps if s.command]
+        i_fetch = next(i for i, c in enumerate(cmds) if "fetch" in c)
+        i_checkout = next(i for i, c in enumerate(cmds) if "checkout" in c)
+        assert "--tags" in cmds[i_fetch]
+        assert i_fetch < i_checkout
+
+    def test_repo_dir_pose_le_grant_safe_directory_sur_chaque_git(self):
+        """Vécu (même test réel) : git EN ROOT refuse un dépôt possédé par
+        l'opérateur (« dubious ownership », exit 128) — chaque commande git du plan
+        porte le grant en portée commande, jamais d'état global modifié."""
+        steps = build_plan(target_ref="v0.4.2", do_pull=False,
+                           restart_units=[], ready_url="http://x/ready",
+                           repo_dir="/srv/transcria")
+        git_cmds = [s.command for s in steps if s.command and s.command[0] == "git"]
+        assert git_cmds, "le plan doit contenir des commandes git"
+        for cmd in git_cmds:
+            assert cmd[1:3] == ["-c", "safe.directory=/srv/transcria"], cmd
+
 
 class TestRun:
     def _ok_runner(self, cmd, **kw):
