@@ -459,7 +459,10 @@ jobs/<job_id>/
   │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
 │   ├── srt_editor_draft.json      # Brouillon anti-crash de l'éditeur (revision, chunks, repères, progression) — purgé à « Enregistrer une version »
 │   ├── waveform_peaks.bin         # Pics de forme d'onde Int8 (20/s) + waveform_peaks.json (méta) — cache best-effort de l'éditeur
-│   ├── correction_report.md       # Rapport de correction opencode si disponible
+│   ├── correction_report.md       # Rapport de correction — celui de l'agent, ou un repli
+│   │                               #   déterministe par diff s'il ne l'a pas rendu (0.4.1)
+│   ├── removed_hallucinations.json # Trace des segments supprimés par la politique anti-
+│   │                               #   hallucination à double preuve (0.4.1) — absent si aucune
 │   └── final_review_report.md     # Rapport de la relecture finale (A+C+D+G) si exécutée
 │
 ├── summary/

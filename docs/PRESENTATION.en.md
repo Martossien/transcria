@@ -106,6 +106,13 @@ board meeting — the choice is one click, right when you drop the file.
 - **Team capitalisation** — shared lexicons, minutes templates per meeting type, groups
   with their own administrators: the second meeting costs less effort than the first,
   and the tool improves as the team uses it.
+- **The tool maintains itself from its own interface (0.4.1)** — the Maintenance page
+  can tell you when a newer release exists (only if you allow it: no network call
+  without opt-in) and upgrade the install in two clicks, fallback backup included.
+  Transcription also gains one more safety net: the ghost phrases speech engines
+  typically "hear" in silence (subtitle credits and the like) are removed when two
+  independent proofs agree — always traced, always recoverable — or flagged for review
+  when doubt remains.
 - **Meetings come to you (0.4.0)** — schedule from the interface, and the minutes are
   waiting for you. Four platforms: **Jitsi**, **Visio (La Suite numérique)**, **Zoom** and
   **Google Meet**. None of them requires opening an inbound port on your firewall —

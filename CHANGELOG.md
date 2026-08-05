@@ -6,6 +6,61 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.1] — 2026-08-05
+
+Le portail sait se mettre à jour lui-même, et les hallucinations STT certaines
+disparaissent des livrables.
+
+### Ajouté
+
+#### Mise à niveau depuis la page Maintenance
+
+- **Détection de version** : la page Maintenance peut vérifier si une version plus
+  récente existe (GitHub Releases). **Opt-in strict** : aucun appel réseau tant que
+  l'exploitant ne l'a pas demandé ; résultat mis en cache 24 h.
+- **Mise à niveau en deux clics** : sur une installation systemd, la page propose la
+  montée vers le **tag vérifié** (et lui seul — un POST forgé ne peut pas faire déployer
+  une référence arbitraire). Le service se remet à jour via une unité systemd oneshot
+  (sauvegarde de repli déposée dans le répertoire des sauvegardes, journal de
+  progression, reconnexion automatique de la page pendant le redémarrage).
+
+#### Anti-hallucination : les certaines disparaissent, les douteuses sont montrées
+
+- **Catalogue de signatures par moteur** (`transcria/data/hallucination_signatures.yaml`) :
+  les phrases apprises que chaque moteur « entend » sur le silence ou la musique —
+  crédits de sous-titrage whisper (dont « Sous-titres par <nom> »), formules de politesse
+  voxtral (« Je ne sais pas. »), tics cohere — constatées sur corpus réel (campagne de
+  minage : consensus inter-moteurs + bobines de non-parole).
+- **Suppression à double preuve** : un segment n'est supprimé que si une signature
+  `delete` correspond **et** que l'acoustique corrobore (probabilité de non-parole
+  élevée ou recouvrement majoritaire avec une zone silence/musique). Toujours tracée
+  (`metadata/removed_hallucinations.json` + rapport qualité), jamais silencieuse,
+  désactivable (`workflow.segment_reliability.delete_confirmed_hallucinations`).
+- **Les hints de fiabilité atteignent enfin la correction** : le contexte est reprojeté
+  juste avant l'appel LLM (il pouvait être périmé) et le prompt exige le marquage
+  `[INCERTAIN]` des segments à hint fort — sans jamais corriger ni supprimer sur leur foi.
+- **Outil de consensus multi-STT** (`scripts/bench/stt_consensus.py`) : même audio dans
+  N moteurs → zones de parole sûre vs zones à hallucination ; appendice « qualité ×
+  temps » ajouté au rapport de bench.
+
+### Corrigé
+
+- **Audio sans parole** (bruit, musique, silence) : échec clair en quelques secondes à
+  l'étape concernée — « Aucune parole détectée » — au lieu d'envoyer un transcript vide
+  à la LLM (résumé, transcription et correction court-circuitent chacun).
+- **Rapport de correction de repli** : si l'agent LLM ne rend pas `correction_report.md`
+  (rare et non déterministe), un rapport factuel par diff est généré — l'utilisateur a
+  toujours un artefact, et l'occurrence est journalisée.
+- **Le backend STT des métadonnées dit la vérité** : un backend servi non configuré
+  repliait silencieusement sur cohere en gardant le nom demandé dans les métadonnées ;
+  l'identité réelle du moteur construit fait désormais foi (métadonnées, gate E2E,
+  catalogue par moteur).
+- **Le repli granite→cohere sur audio dégradé** se journalise en WARNING (il était en
+  INFO, invisible dans un bench) et le gate E2E vérifie le backend effectif.
+- **Fausse alerte « canonique altéré »** : la reprojection du contexte s'exécutait après
+  la capture des empreintes de surveillance du workspace agent — chaque job accusait
+  l'agent à tort. Les écritures de préparation précèdent désormais le workspace.
+
 ## [0.4.0] — 2026-08-02
 
 Les réunions arrivent toutes seules — **sans ouvrir un port entrant**.

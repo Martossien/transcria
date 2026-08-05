@@ -470,6 +470,20 @@ dans le produit sans être mises en avant.
   consécutifs » décrit dans le benchmark doit être implémenté avant tout usage par
   défaut. Effort M (garde-fou) + validation.
 
+### 4.1-bis Nées du minage anti-hallucination (2026-08-05)
+
+- **Scorer `cohere_tf5` au banc corpus réel — P2, effort S.** Jamais mesuré, alors que la
+  campagne de minage l'a montré ~6× plus rapide que cohere natif et silencieux sur le
+  non-parole. S'il tient le WER de cohere, la place de défaut prod se rejoue (l'appendice
+  qualité × temps de `STT_BENCHMARK_REAL_MEETINGS.md` porte l'action). Réserve constatée :
+  muet sur le chuchotement réel (0 segment sur parole faible).
+- **Heuristique de dérive de langue — P2, effort M.** Parakeet bascule en franglais et
+  granite traduit silencieusement en anglais sur la parole française difficile (constaté
+  au consensus multi-moteurs) : ce sont des *comportements*, pas des phrases fixes — le
+  catalogue de signatures ne peut pas les attraper. Un détecteur de ratio de mots-outils
+  anglais par segment (le `EN%` de `score_reference_bench.py`, § BENCHMARKING) porté dans
+  `stt/reliability.py` en ferait un hint de fiabilité de première classe.
+
 ### 4.2 Diarisation : peu d'alternatives intégrées, un vrai sujet de veille
 
 **État actuel.** pyannote (2000 Mo, défaut) et sortformer (3500 Mo, streaming)

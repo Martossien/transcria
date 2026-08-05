@@ -125,6 +125,22 @@ venv/bin/python scripts/bench/score_reference_bench.py \
     --output score.md --csv score.csv
 ```
 
+## 4-bis. Consensus inter-moteurs — `scripts/bench/stt_consensus.py`
+
+Sans référence humaine : le **même audio** transcrit par plusieurs moteurs
+(`tests/test_e2e_workflow.py --stt-backend X --skip-llm --output-json runs/X.json`), puis
+comparaison par fenêtres temporelles. Une fenêtre où plusieurs moteurs convergent = parole
+réelle (même chuchotée — un moteur seul l'aurait classée hallucination, vécu) ; une
+fenêtre où chacun invente autre chose = zone à hallucination, matière première du
+catalogue par moteur (`transcria/data/hallucination_signatures.yaml`) et des corpus
+adversariaux. Détecte et exclut les doublons parfaits (repli silencieux d'un backend sur
+un autre) ; attention au régime « dictée courte propre », où la convergence byte-identique
+est honnête.
+
+```bash
+venv/bin/python scripts/bench/stt_consensus.py runs/*.json --zones-json zones.json
+```
+
 ## 5. Projeter la concurrence — `scripts/bench/estimate_local_b5.py`
 
 À partir des durées **mesurées** dans un `bench_root`, projette combien de jobs on peut traiter

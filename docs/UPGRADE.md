@@ -175,9 +175,23 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
-### Notes spécifiques 0.4.0 → suivante
+### Notes spécifiques 0.4.0 → 0.4.1
 
-Rien à faire. Trois clés de configuration **sans effet** ont été retirées du schéma —
+Aucune migration de base, aucune action requise. Deux changements de comportement à
+connaître :
+
+1. **Suppression des hallucinations STT confirmées, active par défaut.** Un segment n'est
+   supprimé que si une signature du catalogue par moteur correspond **et** que
+   l'acoustique corrobore (probabilité de non-parole élevée, ou zone silence/musique) ;
+   chaque suppression est tracée dans `metadata/removed_hallucinations.json` et listée au
+   rapport qualité — le texte reste récupérable via l'éditeur SRT. Pour revenir au
+   comportement 0.4.0 (signaler sans supprimer) :
+   `workflow.segment_reliability.delete_confirmed_hallucinations: false`.
+2. **Un audio sans parole détectable échoue tôt et clairement** (« Aucune parole
+   détectée ») au lieu de produire des livrables vides après un long passage LLM. Un job
+   qui « réussissait » hier sur un fichier muet échouera désormais — c'est voulu.
+
+Trois clés de configuration **sans effet** ont par ailleurs été retirées du schéma —
 `voice_enrollment.audit.log_match_suggestions`, `voice_enrollment.audit.log_match_scores`
 et `workflow.scheduling.poll_interval_s` : elles étaient validées mais consommées nulle
 part par le code (le poll de la file est `queue.poll_interval_s`). Si votre `config.yaml`

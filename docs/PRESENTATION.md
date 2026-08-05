@@ -105,6 +105,13 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
 - **Capitalisation d'équipe** — lexiques partagés, modèles de compte-rendu par type de
   réunion, groupes avec leurs propres administrateurs : la deuxième réunion coûte moins
   d'effort que la première, et l'outil s'améliore avec l'usage de l'équipe.
+- **L'outil s'entretient depuis son interface (0.4.1)** — la page Maintenance sait dire
+  si une version plus récente existe (uniquement si vous l'y autorisez : aucun appel
+  réseau sans opt-in) et faire la mise à niveau en deux clics, sauvegarde de repli
+  comprise. Et la transcription gagne un filet de plus : les phrases-fantômes typiques
+  des moteurs de reconnaissance (crédits de sous-titrage entendus dans du silence…) sont
+  supprimées quand deux preuves indépendantes concordent — toujours tracées, toujours
+  récupérables — ou signalées à la relecture quand le doute subsiste.
 - **Les réunions arrivent toutes seules (0.4.0)** — planifiez depuis l'interface, et le
   compte rendu vous attend. Quatre plateformes : **Jitsi**, **Visio (La Suite numérique)**,
   **Zoom** et **Google Meet**. Aucune n'exige d'ouvrir un port sur votre pare-feu — tout se
