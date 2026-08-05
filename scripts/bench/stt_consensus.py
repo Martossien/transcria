@@ -13,10 +13,14 @@ plusieurs moteurs (`tests/test_e2e_workflow.py --stt-backend X --skip-llm --keep
   chose) = bruit hallucinogène — matière première du catalogue par moteur
   (transcria/data/hallucination_signatures.yaml) et des corpus adversariaux.
 
-Garde-fou (vécu : granite replié silencieusement sur cohere, doublon parfait) :
+Garde-fou (vécu : granite replié silencieusement sur cohere, doublon parfait ;
+puis 3 backends servis non configurés = clones de cohere, minage 2026-08-05) :
 deux moteurs au transcript identique = un seul moteur réel — le doublon est
 détecté et EXCLU, avec avertissement. Vérifier aussi `effective_stt_backend`
 dans les JSON du gate (contrôle `backend_effectif` depuis 2026-08-04).
+Limite connue : sur un texte LU court et propre (régime dictée), de bons moteurs
+convergent honnêtement vers un transcript identique — sur ce régime, l'exclusion
+est un faux positif à arbitrer à l'œil (vécu 2026-08-05 : whisper == parakeet).
 
 Usage :
     venv/bin/python scripts/bench/stt_consensus.py runs/*.json
@@ -134,9 +138,19 @@ def merge_zones(rows: list[dict]) -> list[dict]:
 
 
 def texts_in_zone(segments: list[dict], t0: float, t1: float) -> str:
-    parts = [str(s.get("text") or "").strip() for s in segments
-             if min(float(s.get("end") or 0), t1) - max(float(s.get("start") or 0), t0) > 0]
-    return " | ".join(p for p in parts if p)
+    """Textes des segments MAJORITAIREMENT dans la zone (recouvrement ≥ 50 % de la
+    durée du segment) — un segment de 30 s qui effleure une zone de 2 s n'apprend
+    rien sur elle (vécu au minage 2026-08-05 : les moteurs mono-segment inondaient
+    l'inventaire des zones BRUIT! de vraie parole)."""
+    parts = []
+    for s in segments:
+        ss, se = float(s.get("start") or 0), float(s.get("end") or 0)
+        overlap = min(se, t1) - max(ss, t0)
+        if overlap > 0 and overlap / max(se - ss, 0.01) >= 0.5:
+            txt = str(s.get("text") or "").strip()
+            if txt:
+                parts.append(txt)
+    return " | ".join(parts)
 
 
 def main(argv: list[str] | None = None) -> int:

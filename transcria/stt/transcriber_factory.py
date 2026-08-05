@@ -27,7 +27,9 @@ def create_transcriber(
 
     if _should_use_remote_stt(config, backend):
         logger.info("Transcription : backend distant '%s' (inference.stt)", backend)
-        return RemoteTranscriber(config, backend=backend, device=device)
+        remote = RemoteTranscriber(config, backend=backend, device=device)
+        remote.backend_name = backend
+        return remote
 
     table = registry.backends()
     descriptor = table.get(backend)
@@ -39,7 +41,14 @@ def create_transcriber(
         )
         descriptor = table["cohere"]
 
-    return descriptor.build(config, device)
+    transcriber = descriptor.build(config, device)
+    # Identité CANONIQUE du moteur réellement construit. Sans elle, le repli
+    # ci-dessus est invisible en aval : les métadonnées de transcription
+    # estampillaient le backend DEMANDÉ — vécu 2026-08-05, trois backends servis
+    # non configurés ont produit 21/21 transcripts « nemotron/qwen3asr/voxtralrt »
+    # qui étaient en réalité du cohere, indétectable même au gate E2E.
+    transcriber.backend_name = descriptor.name
+    return transcriber
 
 
 # Registre PUBLIC des builders de backends NATIFS (consommé par le fallback local

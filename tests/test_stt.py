@@ -166,6 +166,25 @@ class TestCohereTranscriber:
         assert transcriber.chunk_length_s == 23
 
 
+class TestFactoryBackendIdentity:
+    """L'identité RÉELLE du moteur construit fait foi (vécu 2026-08-05 : trois
+    backends servis non configurés en mode local ont produit 21/21 transcripts
+    étiquetés nemotron/qwen3asr/voxtralrt qui étaient du cohere — indétectable
+    en aval car les métadonnées portaient le backend demandé)."""
+
+    def test_backend_connu_porte_sa_propre_identite(self):
+        cfg = {"models": {"stt_backend": "cohere"}}
+        transcriber = create_transcriber(cfg, backend="kroko", device="cpu")
+        assert transcriber.backend_name == "kroko"
+
+    def test_backend_servi_non_route_expose_le_repli_cohere(self):
+        # mode local sans inference.stt.backends.nemotron.url → repli factory.
+        cfg = {"models": {"stt_backend": "cohere"}}
+        transcriber = create_transcriber(cfg, backend="nemotron", device="cpu")
+        assert isinstance(transcriber, CohereTranscriber)
+        assert transcriber.backend_name == "cohere"
+
+
 class TestCohereTf5Transcriber:
     def test_cohere_tf5_backend_is_available_in_factory(self):
         assert "cohere_tf5" in list_available_backends()

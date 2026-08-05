@@ -59,6 +59,26 @@ def test_transcriber_respecte_le_backend_impose(monkeypatch):
     assert tr_default.backend == "cohere"
 
 
+def test_le_backend_effectif_de_la_factory_fait_foi(monkeypatch, caplog):
+    """Repli factory (backend servi non routé → cohere) : le Transcriber adopte
+    l'identité RÉELLE du moteur construit — métadonnées, check gate et catalogue
+    d'hallucinations parlent du moteur qui a tourné (vécu 2026-08-05)."""
+    import logging
+
+    def _fake_factory(config, backend=None, device=None):
+        return SimpleNamespace(concurrent_safe=False, model_name="fake:cohere",
+                               backend_name="cohere")
+
+    monkeypatch.setattr("transcria.stt.transcription.create_transcriber", _fake_factory)
+    from transcria.stt.transcription import Transcriber
+
+    with caplog.at_level(logging.WARNING, logger="transcria.stt.transcription"):
+        tr = Transcriber(_CFG, gpu_index=0, backend="nemotron")
+
+    assert tr.backend == "cohere"
+    assert any("repli factory" in r.getMessage() for r in caplog.records)
+
+
 def test_enveloppe_single_pass_refuse_les_reunions_longues(tmp_path):
     """§4.1 : profil srt_moss + audio > moss.single_pass_max_s → refus AVANT GPU."""
     import json

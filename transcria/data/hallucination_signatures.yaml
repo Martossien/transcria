@@ -46,3 +46,28 @@ whisper:
     action: flag
   - pattern: "\\bwww\\.mooji\\.org\\b"
     action: delete
+  # Crédit nominatif « Sous-titres par <nom> » — constaté au minage 2026-08-05
+  # (audio inaudible → « Sous-titres par Jérémy Diaz », nom inventé par le moteur).
+  # Ancré segment entier court : ne matche pas une phrase réelle qui PARLE de
+  # sous-titres au milieu d'un propos.
+  - pattern: "^\\s*sous[- ]?titres? (réalisés? )?par\\b.{0,40}$"
+    action: delete
+
+# Voxtral (ASR à base de LLM audio) : sur le non-parole, produit des formules de
+# politesse/remplissage apprises en conversation — constaté au minage 2026-08-05
+# (protocole bobines non-parole, corpus réel anonymisé). Flag uniquement : ces
+# phrases existent aussi en vraie réunion, seule l'acoustique peut trancher.
+voxtral:
+  # 3 sources indépendantes de non-parole.
+  - pattern: "^\\s*je ne sais pas[\\s.!…]*$"
+    action: flag
+  # 1 source + comportement de refus typique des audio-LLM.
+  - pattern: "^\\s*je suis désolée?[\\s.!…]*$"
+    action: flag
+
+cohere:
+  # Tic appris, émis à l'identique sur des zones muettes de 2 sources indépendantes
+  # (minage 2026-08-05), parfois en variante dégénérée « Enfin, en fait, c'est un
+  # peu comme ça ». Segment entier uniquement.
+  - pattern: "^\\s*(enfin, )?(en fait, )?c['’]est un peu comme ça[\\s.!…]*$"
+    action: flag

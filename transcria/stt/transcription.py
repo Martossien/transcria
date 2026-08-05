@@ -102,6 +102,17 @@ class Transcriber:
         device = f"cuda:{gpu_index}" if gpu_index is not None else "cuda:0"
         self.backend = backend or config.get("models", {}).get("stt_backend", "cohere")
         self.transcriber = create_transcriber(config, backend=self.backend, device=device)
+        # Réconciliation avec l'identité RÉELLE du moteur construit (la factory
+        # peut replier un backend inconnu sur cohere) : tout l'aval — métadonnées,
+        # check `backend_effectif` du gate, catalogue d'hallucinations par moteur —
+        # doit parler du moteur qui a tourné, pas de celui qui était demandé.
+        effective = getattr(self.transcriber, "backend_name", None)
+        if effective and effective != self.backend:
+            logger.warning(
+                "Backend STT effectif « %s » ≠ demandé « %s » (repli factory) — "
+                "les métadonnées porteront le backend effectif", effective, self.backend,
+            )
+            self.backend = effective
         self.gpu_index = gpu_index
         self._last_chunk_metrics: dict | None = None
 

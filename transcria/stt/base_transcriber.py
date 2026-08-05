@@ -7,6 +7,10 @@ class BaseTranscriber(ABC):
     vram_mb: int = 6000
     supported_languages: dict[str, str] = {}
     model_name: str = "base"
+    # Identité CANONIQUE du backend réellement construit, posée par la factory
+    # (create_transcriber). None = construction hors factory (tests, direct) ;
+    # l'aval (Transcriber) ne réconcilie que si elle est renseignée.
+    backend_name: str | None = None
     # True si plusieurs transcribe() concurrents sont sûrs (backend distant servant
     # plusieurs requêtes — batching continu). Faux pour un modèle local mono-GPU.
     concurrent_safe: bool = False

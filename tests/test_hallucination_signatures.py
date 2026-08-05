@@ -33,7 +33,7 @@ class TestCatalog:
     def test_le_catalogue_versionne_charge_whisper_et_generic(self):
         # Le VRAI fichier data/ : whisper hérite du générique + ses signatures propres.
         whisper = catalog.signatures_for_backend("whisper")
-        generic = catalog.signatures_for_backend("cohere")  # pas de section cohere → générique seul
+        generic = catalog.signatures_for_backend("kroko")  # pas de section kroko → générique seul
         assert len(whisper) > len(generic) > 0
         assert all(s.action in ("flag", "delete") for s in whisper)
 
@@ -44,6 +44,34 @@ class TestCatalog:
         # Un moteur SANS cette signature ne la voit pas (elle est propre à whisper).
         assert catalog.match_signature(
             "Sous-titres réalisés par la communauté d'Amara.org", "cohere") is None
+
+    def test_credit_nominatif_whisper_delete_mais_pas_le_propos_reel(self):
+        # Minage 2026-08-05 : « Sous-titres par <nom inventé> » sur audio inaudible.
+        matched = catalog.match_signature("Sous-titres par Jérémy Diaz", "whisper")
+        assert matched is not None and matched.action == "delete"
+        # Une phrase réelle qui PARLE de sous-titres n'est pas un crédit.
+        assert catalog.match_signature(
+            "Alors les sous-titres par défaut, il faudra les activer pour la salle",
+            "whisper") is None
+
+    def test_voxtral_formules_de_politesse_flag_seulement(self):
+        # Minage 2026-08-05 (bobines non-parole) : 3 sources indépendantes.
+        matched = catalog.match_signature("Je ne sais pas.", "voxtral")
+        assert matched is not None and matched.action == "flag"
+        assert catalog.match_signature("Je suis désolé.", "voxtral").action == "flag"
+        # Segment entier uniquement : la vraie phrase qui continue est indemne.
+        assert catalog.match_signature(
+            "Je ne sais pas si on aura le budget au T3", "voxtral") is None
+        # Signature propre à voxtral : un autre moteur ne la voit pas.
+        assert catalog.match_signature("Je ne sais pas.", "whisper") is None
+
+    def test_cohere_tic_appris_flag_avec_variante_degeneree(self):
+        # Minage 2026-08-05 : émis à l'identique sur zones muettes, 2 sources.
+        assert catalog.match_signature("C'est un peu comme ça.", "cohere").action == "flag"
+        assert catalog.match_signature(
+            "Enfin, en fait, c'est un peu comme ça.", "cohere").action == "flag"
+        assert catalog.match_signature(
+            "C'est un peu comme ça qu'on procède d'habitude", "cohere") is None
 
     def test_entrees_invalides_ignorees_sans_casser(self, monkeypatch):
         _fake_catalog(monkeypatch, {"generic": [
