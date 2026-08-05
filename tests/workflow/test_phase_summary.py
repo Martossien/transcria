@@ -86,6 +86,52 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             assert captured["model_ref"] == "local/summary-model-test"
             assert captured["summary_timeout"] == 4321
 
+    def test_la_reprojection_precede_la_surveillance_du_workspace(
+            self, app, owner_id, monkeypatch, tmp_path, caplog):
+        """Miroir du test correction (vécu 2026-08-05) : la reprojection du contexte
+        doit précéder la création de l'AgentWorkspace, sinon chaque job logge l'ERROR
+        mensongère « canonique altéré » sur context/job_context.json."""
+        import logging
+
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={
+                    "enable_quick_summary": True,
+                    "summary_llm": {"enabled": True},
+                    "arbitration_llm": {"model_id": "local/test-llm-arbitrage",
+                                        "opencode_bin": "opencode"},
+                },
+            )
+            job = JobStore.create_job(owner_id, "Reprojection résumé")
+            runner = WorkflowRunner(JobStore, cfg)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready",
+                                lambda expected_model_id=None: True)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
+
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("summary/quick_transcript.txt", "Bonjour")
+
+            monkeypatch.setattr(
+                OpenCodeRunner, "run_summary",
+                lambda self, transcript_path, context_path=None,
+                diarization_context_path=None, invite_path=None, **kwargs: {
+                    "summary_text": "Résumé", "title_suggere": "Titre"})
+
+            result = {"transcript_text": "Bonjour", "transcript_short": "Bonjour"}
+            with caplog.at_level(logging.ERROR, logger="transcria.workflow.agent_workspace"):
+                runner._run_llm_summary(
+                    job, result, cfg, type("SL", (), {"info": lambda *a, **k: None,
+                                                      "warning": lambda *a, **k: None})())
+
+            altered = [r for r in caplog.records if "altéré" in r.getMessage()]
+            assert not altered, f"alerte(s) mensongère(s) : {[r.getMessage() for r in altered]}"
+
 
 class TestWorkflowRunnerRunSummary:
     def test_run_summary_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):

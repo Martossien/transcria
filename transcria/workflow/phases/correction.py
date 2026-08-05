@@ -112,25 +112,8 @@ def run(runner, job: Job, config: dict) -> dict:
                 return {"vram_wait": True, "required_mb": 0, "phase": "llm_arbitration", "reason": msg}
             return {"success": False, "error": "LLM d'arbitrage non disponible"}
 
-        # Isolation : l'agent travaille dans un scratch avec des COPIES — jamais dans
-        # metadata/ (incident 4bda98cb : transcription.srt source réécrit par l'agent).
-        # Les sorties sont collectées du scratch puis écrites atomiquement au canonique.
-        workspace = AgentWorkspace(fs, "correction", work_root=resolve_agent_work_root(config))
-        staged_srt = workspace.stage("metadata/transcription.srt")
-        # Le contexte n'est reconstruit que par les endpoints utilisateur (mapping,
-        # lexique) : à l'heure de la correction il peut être PÉRIMÉ — vécu : hints de
-        # fiabilité écrits 16 s APRÈS le dernier build → la LLM recevait `segments: []`.
-        # Reprojection idempotente (pure lecture des canoniques) juste avant le staging.
-        JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
-        staged_context = workspace.stage("context/job_context.yaml")
-        staged_lexicon = workspace.stage(
-            str(lexicon_path_for_correction.relative_to(fs.job_dir))
-        )
-        # Référence d'orthographe des entités nommées (brief d'invitation + documents
-        # présentés), comme au résumé. Indicatif : jamais une autorité de contenu.
-        invite_path = runner._materialize_meeting_invite(fs, job)
-        staged_invite = (
-            str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
+        workspace, staged = _prepare_and_stage_inputs(
+            runner, fs, job, config, lexicon_path_for_correction
         )
 
         opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
@@ -141,12 +124,9 @@ def run(runner, job: Job, config: dict) -> dict:
         )
         result = _invoke_correction_with_retries(
             ocr, job,
-            staged_srt=str(staged_srt),
-            staged_context=str(staged_context),
-            staged_lexicon=str(staged_lexicon),
-            staged_invite=staged_invite,
             runner=runner,
             api_model_id=api_model_id,
+            **staged,
         )
         workspace.verify_and_restore_sources()
         result = _persist_correction_result(runner, fs, result)
@@ -175,6 +155,40 @@ def run(runner, job: Job, config: dict) -> dict:
         if llm_phase_reserved:
             runner.allocator.release_phase(job.id, "llm_arbitration")
         runner.allocator.release_llm(job.id)
+
+
+def _prepare_and_stage_inputs(runner, fs, job: Job, config: dict, lexicon_path):
+    """Prépare les canoniques PUIS crée le workspace et stage les entrées de l'agent.
+
+    L'ordre est un invariant : toute écriture canonique de préparation doit précéder
+    la création de l'AgentWorkspace, dont les empreintes de surveillance sont figées
+    à la construction — une écriture postérieure serait imputée à l'agent (ERROR
+    « canonique altéré » sur chaque job, vécu 2026-08-05 avec la reprojection).
+
+    - Reprojection idempotente du contexte (pure lecture des canoniques) : il n'est
+      sinon reconstruit que par les endpoints utilisateur (mapping, lexique) et peut
+      être PÉRIMÉ ici — vécu : hints de fiabilité écrits 16 s APRÈS le dernier build
+      → la LLM recevait ``segments: []``.
+    - Brief d'invitation : référence d'orthographe des entités nommées, comme au
+      résumé. Indicatif : jamais une autorité de contenu.
+    - Isolation : l'agent travaille dans un scratch avec des COPIES — jamais dans
+      metadata/ (incident 4bda98cb : transcription.srt source réécrit par l'agent).
+
+    Retourne ``(workspace, staged)`` où ``staged`` porte les chemins stagés sous les
+    noms attendus par :func:`_invoke_correction_with_retries`.
+    """
+    JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
+    invite_path = runner._materialize_meeting_invite(fs, job)
+    workspace = AgentWorkspace(fs, "correction", work_root=resolve_agent_work_root(config))
+    staged = {
+        "staged_srt": str(workspace.stage("metadata/transcription.srt")),
+        "staged_context": str(workspace.stage("context/job_context.yaml")),
+        "staged_lexicon": str(workspace.stage(str(lexicon_path.relative_to(fs.job_dir)))),
+        "staged_invite": (
+            str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
+        ),
+    }
+    return workspace, staged
 
 
 def _srt_source_error(srt_path) -> dict | None:
@@ -281,9 +295,11 @@ def _persist_correction_result(runner, fs, result: dict) -> dict:
         if result["report"]:
             fs.save_text("metadata/correction_report.md", result["report"])
         else:
-            # Constat 2026-08-04 : l'agent omet CHRONIQUEMENT son second livrable
-            # (correction_report.md absent de tous les jobs récents). Plutôt que rien,
-            # un rapport de repli DÉTERMINISTE : le diff factuel source→corrigé.
+            # RARE et non déterministe (enquête 2026-08-05 : 2 omissions le 04 au soir,
+            # puis 10/10 rapports rendus en reproduction — cause environnementale non
+            # identifiée, sessions perdues). Plutôt que rien, un rapport de repli
+            # DÉTERMINISTE : le diff factuel source→corrigé. Le WARNING rend chaque
+            # occurrence future visible et comptable.
             logger.warning("[correction] l'agent n'a pas rendu correction_report.md — "
                            "rapport de repli généré par diff")
             fs.save_text("metadata/correction_report.md",

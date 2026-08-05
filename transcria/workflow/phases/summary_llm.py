@@ -92,16 +92,18 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
         opencode_bin = config.get("workflow", {}).get(
             "arbitration_llm", {}
         ).get("opencode_bin")
+        # Écritures canoniques de préparation AVANT le workspace (ses empreintes de
+        # surveillance sont figées à la création — une écriture postérieure serait
+        # imputée à l'agent, vécu 2026-08-05 avec la reprojection). Reprojection
+        # idempotente du contexte : le dernier build (endpoint utilisateur) peut
+        # précéder l'écriture des hints de fiabilité par la transcription.
+        JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
+        invite_path = runner._materialize_meeting_invite(fs, job)
         # Isolation : l'agent ne tourne plus dans summary/ (canonique) mais dans un
         # scratch avec des copies — cf. AgentWorkspace. Le summary.md canonique est
         # écrit par le runner (_apply_llm_suggestions), jamais par l'agent.
-        invite_path = runner._materialize_meeting_invite(fs, job)
         workspace = AgentWorkspace(fs, "summary", work_root=resolve_agent_work_root(config))
         staged_transcript = workspace.stage("summary/quick_transcript.txt")
-        # Reprojection idempotente du contexte avant staging — même raison qu'en
-        # correction : le dernier build (endpoint utilisateur) peut précéder l'écriture
-        # des hints de fiabilité par la transcription.
-        JobContextBuilder.build(job, config["storage"]["jobs_dir"], config)
         staged_context = workspace.stage("context/job_context.yaml")
         staged_diar_ctx = workspace.stage("summary/diarization_context.md")
         staged_invite = str(workspace.stage("summary/meeting_invite.md")) if invite_path else None

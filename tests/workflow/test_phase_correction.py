@@ -518,6 +518,45 @@ class TestContexteReprojetteAvantStaging:
             assert "segment_court" in staged_yaml["content"]
             assert "Tenez" in staged_yaml["content"]
 
+    def test_la_reprojection_precede_la_surveillance_du_workspace(
+            self, app, owner_id, monkeypatch, tmp_path, caplog):
+        """Vécu 2026-08-05 : la reprojection tournait APRÈS la capture des empreintes
+        de surveillance de l'AgentWorkspace — CHAQUE job accusait l'agent d'avoir
+        altéré context/job_context.json (ERROR mensongère). Les écritures canoniques
+        de préparation précèdent désormais la création du workspace : un run nominal
+        ne déclenche plus aucune alerte « canonique altéré »."""
+        import logging
+
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Reprojection avant surveillance")
+            runner = WorkflowRunner(JobStore, cfg)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready",
+                                lambda expected_model_id=None: True)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("metadata/transcription.srt",
+                         "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")
+
+            from transcria.llm_tools.opencode_runner import OpenCodeRunner
+            monkeypatch.setattr(
+                OpenCodeRunner, "run_correction",
+                lambda self, srt, ctx, lex, invite_path=None, **_kw: {
+                    "success": True,
+                    "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n",
+                    "report": "# ok", "error": ""})
+
+            with caplog.at_level(logging.ERROR, logger="transcria.workflow.agent_workspace"):
+                result = runner.run_correction(job, cfg)
+
+            assert result["success"] is True
+            altered = [r for r in caplog.records if "altéré" in r.getMessage()]
+            assert not altered, f"alerte(s) mensongère(s) : {[r.getMessage() for r in altered]}"
+
 
 def test_run_correction_srt_vide_echoue_sans_llm(app, owner_id, monkeypatch, tmp_path):
     """SRT vide = rien à corriger : constat immédiat, AUCUNE tentative LLM
@@ -541,8 +580,9 @@ def test_run_correction_srt_vide_echoue_sans_llm(app, owner_id, monkeypatch, tmp
 
 
 def test_rapport_de_repli_quand_l_agent_n_en_rend_pas(app, owner_id, monkeypatch, tmp_path):
-    """L'agent omet chroniquement correction_report.md (constat 2026-08-04, tous jobs
-    récents) : un rapport de repli DIFF est généré — l'utilisateur a toujours un artefact."""
+    """L'agent peut (rarement, vécu 2 fois le 2026-08-04) ne pas rendre
+    correction_report.md : un rapport de repli DIFF est généré — l'utilisateur a
+    toujours un artefact, et le WARNING rend l'occurrence visible."""
     with app.app_context():
         cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
         job = JobStore.create_job(owner_id, "Correction sans rapport")
