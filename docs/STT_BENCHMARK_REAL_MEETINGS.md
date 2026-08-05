@@ -326,3 +326,41 @@ What we take away:
   several runs with the spread**, and we read the transcripts ourselves.
 - Speaker attribution quality (who said what) is NOT captured by text-only
   WER; a cpWER-style metric is future work.
+
+## Appendix — quality × time ranking of the native engines (2026-08-05)
+
+WER alone crowned one ranking; adding wall time and hallucination robustness
+rewrote it. This table merges three evidence sets: the WER above, the
+per-window wall times, and a hallucination-mining campaign run after this
+benchmark (11 backends × 21 anonymised excerpts through a cross-engine
+consensus tool, plus "provocation reels" — non-speech zones cut from the long
+recordings and fed to every engine; anything transcribed there is invented by
+construction). Same caveat as everything else in this report: **corpus-
+dependent** (narrowband French meetings), times measured on the maintainer's
+machine.
+
+| # | Engine | WER | Time / ~5-min window | Non-speech behaviour (mining) | Verdict |
+|---|--------|-----|---------------------|-------------------------------|---------|
+| 1 | Kroko-ASR FR | 0.43 | **10 s, CPU only** | near-clean (stray filler words) | 8–13× faster than everything, 155 MB, no GPU — the efficiency anomaly of the field |
+| 2 | MOSS-TD 0.9B | **0.41** | 65–104 s | clean (0 segments) | its time **includes speakers + timestamps**, so at equal deliverable it beats every GPU engine; mute on faint whispers |
+| 3 | cohere | 0.46 | 84 s | learned tics on mute zones (catalogued) | best GPU throughput, concurrent-safe — the operations default |
+| 4 | whisper large-v3 | 0.437 | 112 s | subtitle-credit hallucinations (catalogued) | only engine emitting `no_speech_prob` + word confidence — the diagnostics champion for doubtful audio |
+| 5 | Voxtral Mini 3B | 0.427 | 130 s | polite fillers ("Je ne sais pas.", catalogued) | pays +55 % time over cohere for 0.03 WER — the big loser once time counts |
+| 6 | cohere_tf5 | *not scored* | ~6× faster than cohere (smoke runs) | clean, but mute on real whispers | unranked on merit until scored — **action item: put it through this benchmark** |
+| 7 | Granite 4.1 2B | 0.643 | 143 s | silent English translation | slowest AND least faithful (drops ~20 % of words) |
+| 8 | Parakeet TDT v3 | EN drift | fast | clean | fast at producing Franglais is not a quality |
+
+The three swings versus a WER-only ranking:
+
+- **Kroko takes first place** on quality-per-second-per-euro: 0.005 WER behind
+  the runner-up at a tenth of the time on zero GPU.
+- **Voxtral drops from 2 to 5**: its WER edge over whisper is 0.01, its time
+  penalty over cohere is 55 %.
+- **MOSS holds the podium on an accounting argument no WER table shows**: its
+  single pass replaces the separate diarization phase (model, time and VRAM
+  included), so at equal pipeline output it is the fastest GPU option.
+
+Practical defaults that fall out: kroko wherever CPU suffices (summary pass,
+modest machines), MOSS when speakers are wanted, cohere as the throughput
+default, whisper reserved for doubtful audio where its acoustic signals feed
+the corroborated-deletion policy.
