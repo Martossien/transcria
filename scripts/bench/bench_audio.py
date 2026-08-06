@@ -11,7 +11,7 @@ Voir docs/archive/BENCHMARK.md pour la description complète des résultats et r
 Matrices disponibles (--matrix) :
   base     : 24 combos standard (5 dimensions : scene/sep/norm/filter/stt)
   extended : 12 combos exploration (diarization, décodage Whisper, Cohere rp)
-  stt      : 42 combos Profil A (7 backends STT × 3 diarizations × 2 VAD)
+  stt      : 48 combos Profil A (8 backends STT × 3 diarizations × 2 VAD)
   vad      : 8 combos ciblés VAD final / VAD interne Whisper
   cohere_tune : 9 combos Cohere + pyannote pour calibrage qualité/vitesse
   pyannote_tune : 14 combos calibrage diarisation / chunking pyannote
@@ -277,7 +277,9 @@ assert len(EXTENDED_COMBO_MATRIX) == 12, (
 # Ajouts APPEND-ONLY (les IDs SNN existants ne doivent jamais changer) :
 # voxtral S25-S30 (2026-07-11), kroko S31-S36 (CPU pur) et moss S37-S42 (une passe,
 # requiert moss.moss_site provisionné) le 2026-07-12.
-_STT_BACKENDS = ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"]
+# cohere_tf5 ajouté EN FIN (2026-08-06, S43-S48) : mêmes poids que cohere via la pile
+# Transformers 5 isolée (cohere_tf5.tf5_site → site moss). Action item du bench réel.
+_STT_BACKENDS = ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss", "cohere_tf5"]
 _DIARIZATION_OPTIONS = [
     {"key": "pyannote", "skip": False, "override": None},
     {"key": "sortformer", "skip": False, "override": "models.diarization_backend=sortformer"},
@@ -313,9 +315,9 @@ for _stt in _STT_BACKENDS:
                 "label_extra": f"{_stt}+{_dia['key']}+{_vad['key']}",
             })
 
-# 7 backends × 3 diarisations × 2 VAD (append-only — cf. commentaire de _STT_BACKENDS).
-assert len(STT_COMBO_MATRIX) == 42, (
-    f"La matrice STT devrait contenir 42 combos, pas {len(STT_COMBO_MATRIX)}"
+# 8 backends × 3 diarisations × 2 VAD (append-only — cf. commentaire de _STT_BACKENDS).
+assert len(STT_COMBO_MATRIX) == 48, (
+    f"La matrice STT devrait contenir 48 combos, pas {len(STT_COMBO_MATRIX)}"
 )
 
 

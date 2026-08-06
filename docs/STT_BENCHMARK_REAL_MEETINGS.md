@@ -89,14 +89,25 @@ STT), same GPU pool, deliverable language pinned to French, no session lexicon
 
 ## Results — Set L (vs human reference)
 
-8 windows × 4 engines, French pinned, no lexicon. Mean over the 8 windows:
+8 windows × 5 engines, French pinned, no lexicon. Mean over the 8 windows:
 
 | Engine | WER ↓ | CER ↓ | Word ratio | EN-drift ratio | Mean time/window |
 |---|---:|---:|---:|---:|---:|
 | **voxtral Mini 3B** | **0.427** | **0.203** | 0.97 | ~0.000 | 130 s |
 | whisper large-v3 | 0.437 | 0.204 | 0.96 | 0.000 | 112 s |
 | cohere | 0.460 | 0.211 | 1.02 | 0.000 | **84 s** |
+| cohere_tf5 (same weights, Transformers 5 stack) | 0.495 | 0.226 | 1.04 | 0.000 | 267 s ¹ |
 | granite 4.1 2B | 0.643 | 0.376 | **0.79** | 0.02–0.07 | 143 s |
+
+¹ cohere_tf5 scored 2026-08-06 on the same 8 windows. Its **pure transcription is
+genuinely fast** (~15 s per 5-min window, batched) — but each run pays ~3 min of
+cold start (isolated Transformers-5 site + model load in a fresh worker process),
+which dominates wall-clock in pipeline conditions. The WER gap vs native cohere
+(same weights) comes from its turn-batched chunking: **reading the outputs found
+119 hallucinated standalone "thank you"-type filler segments across the 8 windows
+vs 30 for native cohere** (4×) — micro-turns produced by per-turn chunking make the
+model invent polite fillers on near-silence. Per-segment text quality on real
+speech is otherwise equivalent to native.
 
 Reading the numbers:
 
@@ -346,7 +357,7 @@ machine.
 | 3 | cohere | 0.46 | 84 s | learned tics on mute zones (catalogued) | best GPU throughput, concurrent-safe — the operations default |
 | 4 | whisper large-v3 | 0.437 | 112 s | subtitle-credit hallucinations (catalogued) | only engine emitting `no_speech_prob` + word confidence — the diagnostics champion for doubtful audio |
 | 5 | Voxtral Mini 3B | 0.427 | 130 s | polite fillers ("Je ne sais pas.", catalogued) | pays +55 % time over cohere for 0.03 WER — the big loser once time counts |
-| 6 | cohere_tf5 | *not scored* | ~6× faster than cohere (smoke runs) | clean, but mute on real whispers | unranked on merit until scored — **action item: put it through this benchmark** |
+| 6 | cohere_tf5 | 0.495 *(scored 2026-08-06)* | 267 s total — **~15 s of pure transcription + ~3 min of per-run cold start** | 119 hallucinated standalone polite-filler segments over 8 windows (vs 30 native — 4×), bred by its per-turn chunking on micro-turns | the "6× faster" throughput is real but the cold start eats it in pipeline conditions; **does not challenge native cohere as the operations default**. If revisited: persistent worker + filter sub-second turns before submission |
 | 7 | Granite 4.1 2B | 0.643 | 143 s | silent English translation | slowest AND least faithful (drops ~20 % of words) |
 | 8 | Parakeet TDT v3 | EN drift | fast | clean | fast at producing Franglais is not a quality |
 

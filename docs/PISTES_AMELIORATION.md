@@ -472,11 +472,15 @@ dans le produit sans être mises en avant.
 
 ### 4.1-bis Nées du minage anti-hallucination (2026-08-05)
 
-- **Scorer `cohere_tf5` au banc corpus réel — P2, effort S.** Jamais mesuré, alors que la
-  campagne de minage l'a montré ~6× plus rapide que cohere natif et silencieux sur le
-  non-parole. S'il tient le WER de cohere, la place de défaut prod se rejoue (l'appendice
-  qualité × temps de `STT_BENCHMARK_REAL_MEETINGS.md` porte l'action). Réserve constatée :
-  muet sur le chuchotement réel (0 segment sur parole faible).
+- **Scorer `cohere_tf5` au banc corpus réel — FAIT (2026-08-06), verdict : n'y touche pas.**
+  WER 0,495 vs 0,460 pour cohere natif (mêmes poids !) sur les 8 fenêtres du Set L, et
+  267 s/fenêtre en conditions pipeline dont ~3 min de démarrage à froid du worker TF5
+  (la transcription pure fait bien ~15 s — le « 6× » était vrai mais hors sol). La lecture
+  des fichiers a trouvé la cause du WER : son découpage par tours fabrique des micro-tours
+  quasi silencieux où le modèle invente des remerciements — 119 segments parasites sur
+  8 fenêtres contre 30 au natif (4×). Le défaut prod reste cohere natif. Si on y revient un
+  jour : worker persistant + filtrage des tours < 1 s avant soumission — les chiffres et le
+  détail sont dans `STT_BENCHMARK_REAL_MEETINGS.md` (Set L + appendice qualité × temps).
 - **Heuristique de dérive de langue — P2, effort M.** Parakeet bascule en franglais et
   granite traduit silencieusement en anglais sur la parole française difficile (constaté
   au consensus multi-moteurs) : ce sont des *comportements*, pas des phrases fixes — le
