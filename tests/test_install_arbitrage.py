@@ -199,7 +199,9 @@ def test_recommend_tier_from_total_vram():
     assert recommend_tier(23000) == "24"
     assert recommend_tier(15500) == "16"
     assert recommend_tier(11500) == "12"
-    assert recommend_tier(11499) == "0"
+    assert recommend_tier(11499) == "8"    # palier 8 Go (LFM2.5-2.6B, 2026-08)
+    assert recommend_tier(7500) == "8"
+    assert recommend_tier(7499) == "0"
 
 
 def test_parse_gpu_sizes_csv_accepts_commas_and_spaces():
@@ -220,12 +222,20 @@ def test_recommend_placement_tier_prefers_topology_planner():
 
 
 def test_recommend_placement_tier_does_not_fallback_when_topology_has_no_feasible_tier():
-    recommendation = recommend_placement_tier(gpu_sizes_csv="8192,8192", total_vram_mb=16384)
+    # Sous le palier 8 (2026-08) : des cartes de 6 Go restent infaisables.
+    recommendation = recommend_placement_tier(gpu_sizes_csv="6144,6144", total_vram_mb=12288)
 
     assert recommendation.tier == ""
     assert recommendation.planner_fallback is False
     assert recommendation.feasible is False
-    assert recommendation.warnings
+
+
+def test_recommend_placement_tier_two_gaming_cards_pick_tier_8():
+    # 2× 8 Go : le palier 8 mono (LFM2.5-2.6B) est désormais plaçable sur une carte.
+    recommendation = recommend_placement_tier(gpu_sizes_csv="8192,8192", total_vram_mb=16384)
+
+    assert recommendation.tier == "8"
+    assert recommendation.feasible is True
 
 
 def test_recommend_placement_tier_falls_back_only_without_gpu_sizes():

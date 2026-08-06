@@ -97,10 +97,13 @@ PostgreSQL local avec mot de passe généré, token HF → choix des modèles), 
 récapitulatif « voilà ce que je vais faire »**, pose **une seule confirmation**, puis
 déroule le chemin non-interactif existant. Deux décisions propres à l'express :
 
-- **Sans token HF, sur une config fraîche**, les backends passent à **whisper +
-  Sortformer** (aucun compte requis — même choix que le quickstart Docker) ; la qualité
-  de référence Cohere + pyannote reste activable ensuite depuis *Administration →
-  Modèles* avec un token. Une `config.yaml` existante n'est **jamais** retouchée.
+- **Sans token HF, sur une config fraîche**, les backends passent au duo non-gated
+  choisi selon le matériel : **whisper + Sortformer** avec un GPU ≥ 12 Go (même choix
+  que le quickstart Docker) ; **Kroko (STT CPU) + Sortformer** sur un GPU < 12 Go — le
+  GPU entier reste à la LLM du palier 8 — ainsi que **sans GPU** (Kroko et Sortformer
+  tournent alors tous deux sur CPU, validé E2E). La qualité de référence Cohere +
+  pyannote reste activable ensuite depuis *Administration → Modèles* avec un token.
+  Une `config.yaml` existante n'est **jamais** retouchée.
 - Le mot de passe admin reste `CHANGE-ME`, assumé dans le récapitulatif : un bandeau
   permanent de l'interface le rappelle jusqu'au changement.
 
@@ -237,7 +240,8 @@ Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et
 
 | Seuil¹ | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
 |---|---|---|---|---|
-| < 12 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
+| < 8 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
+| ≥ 8 Go | 8 | LFM2.5-2.6B **Q8_0** ² | `LiquidAI/LFM2.5-2.6B-GGUF` | 128K |
 | ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
 | ≥ 16 Go | 16 | Qwen3.5-9B Q6_K | `unsloth/Qwen3.5-9B-GGUF` | 256K |
 | ≥ 24 Go | 24 | Qwen3.6-35B-A3B **UD-IQ4_NL_XL** | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
@@ -245,7 +249,9 @@ Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et
 | ≥ 48 Go | 48 | Qwen3.6-35B-A3B UD-Q6_K | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 | ≥ 64 Go | 64 | Qwen3.6-35B-A3B UD-Q8_K_XL | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 
-> ¹ La sélection se fait par **placement réel**, pas sur la VRAM totale : un palier **mono-GPU** (12/16/24) exige **une** carte ≥ l'empreinte du modèle ; un palier **splité** (32/48/64) exige **N** cartes tenant chacune leur part (+ marge). La somme seule ne suffit pas — *2× 8 Go ≠ palier 16* (aucun modèle mono ne tient sur 8 Go), et *2× 5090 (64 Go)* donne le palier **48** (profil 2 cartes), pas 64 (profil 3 cartes). Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) ; les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
+> ¹ La sélection se fait par **placement réel**, pas sur la VRAM totale : un palier **mono-GPU** (8/12/16/24) exige **une** carte ≥ l'empreinte du modèle ; un palier **splité** (32/48/64) exige **N** cartes tenant chacune leur part (+ marge). La somme seule ne suffit pas — *2× 8 Go ≠ palier 16* (le placement retombe au palier **8** mono), et *2× 5090 (64 Go)* donne le palier **48** (profil 2 cartes), pas 64 (profil 3 cartes). Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) ; les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
+>
+> ² **Palier 8 Go (cartes gaming, 2026-08)** : LFM2.5-2.6B Q8_0 mesuré **4 555 Mio au contexte natif max (131 072, KV Q8)** — ≥3,4 Go de marge sur une carte de 8 Go. Sur ce palier, l'installation express choisit **Kroko (STT CPU)** pour laisser le GPU entier à la LLM. E2E réel (test2.mp3) : **résumé validé** ; la **correction SRT échoue la garde de conformité** (le modèle réécrit au lieu de corriger — le SRT brut est alors conservé, jamais dégradé) : sur ce palier, envisager `workflow.arbitration_llm.enabled: false` (résumé seul).
 
 **Portabilité des profils** : les scripts `scripts/arbitrage_profiles/<palier>_*.sh` référencent leurs chemins via `${MODELS_DIR:-…}` et `${LLAMA_SERVER:-…}`. install.sh écrit les bons défauts pour votre machine (répertoire des modèles choisi, binaire `llama-server` détecté), puis `scripts/switch_arbitrage_llm.sh <palier>` recopie le profil sur `launch_arbitrage.sh`. **La calibration VRAM par carte** (`gpu.llm_vram_mb` / `llm_gpu_indices` / `llm_vram_mb_per_gpu`) est ensuite écrite par le planner selon le placement **réel** de la machine (`scripts/plan_llm_placement.py … --apply`, round-trip non destructif) — elle remplace les valeurs de banc du `switch`. Pour changer de palier après coup : télécharger le modèle, `scripts/switch_arbitrage_llm.sh <palier>`, puis **re-mesurer** avec `scripts/check_arbitrage_llm.sh` (compare la VRAM réelle par carte au déclaré : dérive, marge critique, débordement ; et **qualifie le binaire `llama-server`** : version réelle ≥ b9630 résolue via l'arbre git — le numéro de `--version` étant non fiable —, résolution des `.so` et build CUDA).
 

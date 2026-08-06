@@ -61,8 +61,13 @@ class TestRecap:
         assert "LLM d'arbitrage" not in joined  # « hw_none » a déjà tout dit
 
     def test_vram_sous_le_plancher_transcription_brute(self):
-        recap = "\n".join(_plan(gpu_count=1, total_vram_mb=8000, gpu_sizes_csv="8000").recap)
+        # Sous le palier 8 Go (plancher 7500 depuis le palier LFM2.5-2.6B).
+        recap = "\n".join(_plan(gpu_count=1, total_vram_mb=7000, gpu_sizes_csv="7000").recap)
         assert "transcription brute" in recap
+
+    def test_carte_gaming_8go_resout_le_palier_8(self):
+        recap = "\n".join(_plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192").recap)
+        assert "palier 8" in recap and "LFM2.5-2.6B" in recap
 
     def test_gros_gpu_resout_le_palier(self):
         # Dans le venv de test, PyYAML est là : la ligne LLM porte un palier résolu
@@ -81,9 +86,36 @@ class TestRecap:
 class TestShellRendering:
     def test_lignes_machine(self):
         out = render_shell(_plan())
-        assert out.splitlines() == ["EXPRESS_SETUP_PG=true", "EXPRESS_OPEN_MODELS=true"]
+        assert out.splitlines() == [
+            "EXPRESS_SETUP_PG=true", "EXPRESS_OPEN_MODELS=true",
+            "EXPRESS_STT_BACKEND=whisper", "EXPRESS_DIAR_BACKEND=sortformer",
+        ]
         out = render_shell(_plan(psql_available=False, has_hf_token=True))
-        assert out.splitlines() == ["EXPRESS_SETUP_PG=false", "EXPRESS_OPEN_MODELS=false"]
+        assert out.splitlines() == [
+            "EXPRESS_SETUP_PG=false", "EXPRESS_OPEN_MODELS=false",
+            "EXPRESS_STT_BACKEND=", "EXPRESS_DIAR_BACKEND=",
+        ]
+
+
+class TestBackendsSansToken:
+    """Matrice matériel → backends du duo sans token (E2E réels du 2026-08-06)."""
+
+    def test_gpu_confortable_whisper(self):
+        p = _plan()  # 2× 24 Go
+        assert (p.stt_backend, p.diarization_backend) == ("whisper", "sortformer")
+
+    def test_petit_gpu_kroko_pour_laisser_le_gpu_a_la_llm(self):
+        p = _plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192")
+        assert p.stt_backend == "kroko" and p.diarization_backend == "sortformer"
+        assert "Kroko" in "\n".join(p.recap)
+
+    def test_sans_gpu_kroko_cpu(self):
+        p = _plan(gpu_count=0, total_vram_mb=0, gpu_sizes_csv="")
+        assert p.stt_backend == "kroko" and p.diarization_backend == "sortformer"
+
+    def test_avec_token_ou_config_existante_aucune_bascule(self):
+        assert _plan(has_hf_token=True).stt_backend == ""
+        assert _plan(config_exists=True).stt_backend == ""
 
 
 class TestLlmLineBestEffort:
@@ -155,5 +187,8 @@ class TestInstallShWiring:
         assert '[[ "$EXPRESS_SETUP_PG" = true && -z "$SETUP_PG" ]] && SETUP_PG=true' in self._CONTENT
 
     def test_bascule_open_models_seulement_si_demande(self):
-        assert '"$EXPRESS_OPEN_MODELS" = true && -f "$CONFIG_PATH"' in self._CONTENT
-        assert 'yaml_set "models.stt_backend" "whisper"' in self._CONTENT
+        # Les backends viennent du module express (jamais en dur dans le shell).
+        assert '"$EXPRESS_OPEN_MODELS" = true && -f "$CONFIG_PATH" && -n "$EXPRESS_STT_BACKEND"' \
+            in self._CONTENT
+        assert 'yaml_set "models.stt_backend" "$EXPRESS_STT_BACKEND"' in self._CONTENT
+        assert 'yaml_set "models.diarization_backend" "$EXPRESS_DIAR_BACKEND"' in self._CONTENT

@@ -30,7 +30,8 @@ class TestCatalogue:
 
     def test_llamacpp_anchored_on_bench_models(self):
         models = [t["model"]["file"] for t in _P["engines"]["llamacpp"]["tiers"]]
-        assert models[0] == "Qwen3.5-9B-Q5_K_M.gguf"
+        assert models[0] == "LFM2.5-2.6B-Q8_0.gguf"    # palier 8 Go (cartes gaming, 2026-08)
+        assert models[1] == "Qwen3.5-9B-Q5_K_M.gguf"
         assert any("35B-A3B" in m for m in models)
 
 
@@ -68,8 +69,13 @@ class TestSelectLlamacpp:
         c = select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=24000, total_vram_mb=24000)
         assert c.tier_id == "24"     # 35B-A3B IQ4 mono-carte (tensor-split=1)
 
+    def test_carte_8go_atteint_le_palier_8(self):
+        c = select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=8000, total_vram_mb=8000)
+        assert c is not None and c.tier_id == "8"
+
     def test_below_minimum_returns_none(self):
-        assert select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=8000, total_vram_mb=8000) is None
+        # Sous le plancher du palier 8 Go (min_vram_mb 7500).
+        assert select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=7000, total_vram_mb=7000) is None
 
 
 class TestSelectOllama:

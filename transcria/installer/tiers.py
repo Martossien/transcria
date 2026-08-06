@@ -23,6 +23,7 @@ class LlmTierMetadata:
     directory: str
     label: str
     context: int = 0
+    est_gb: float = 0.0  # taille déclarée au catalogue ; 0 = heuristique par nom de quant
 
 
 def _llamacpp_engine() -> dict:
@@ -43,6 +44,7 @@ def _build_llamacpp_tables() -> tuple[dict[str, int], dict[str, list[int]], dict
         meta[tid] = LlmTierMetadata(
             tier=tid, repo=m["repo"], file=m["file"], directory=m["dir"],
             label=f"{Path(m['file']).stem} ({ctx // 1024}K ctx)", context=ctx,
+            est_gb=float(m.get("est_gb", 0.0)),
         )
     return vram, gpu_idx, meta
 
@@ -64,6 +66,8 @@ def recommend_tier(total_vram_mb: int) -> str:
         return "16"
     if total_vram_mb >= 11500:
         return "12"
+    if total_vram_mb >= 7500:
+        return "8"
     return "0"
 
 

@@ -3,8 +3,9 @@
 *([Version française](QUICKSTART.md))*
 
 One page, two paths — pick **one**. Common prerequisite: a Linux machine with an NVIDIA
-GPU (compute capability ≥ 7.5, ≥ 12 GB VRAM) and its driver installed (`nvidia-smi`
-must respond).
+GPU (compute capability ≥ 7.5; **≥ 12 GB VRAM for Docker**, the native install works
+from **8 GB** — and even **without a GPU**: CPU transcription via the Kroko engine, no
+LLM phases) and its driver installed (`nvidia-smi` must respond).
 
 ## Path 1 — Docker (try the project, recommended)
 

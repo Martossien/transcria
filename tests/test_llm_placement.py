@@ -26,7 +26,7 @@ class TestRecommendSingleCard:
     @pytest.mark.parametrize(
         "size,expected_tier",
         [
-            (MB_8, 0),    # 8 Go : aucun modèle mono ne tient → transcription brute
+            (MB_8, 8),    # 8 Go : palier 8 mono (LFM2.5-2.6B Q8, 2026-08)
             (MB_12, 12),  # 12 Go : palier 12 mono
             (MB_16, 16),  # 16 Go : palier 16 mono
             (MB_24, 24),  # 24 Go : palier 24 mono (35B 4-bit)
@@ -45,11 +45,12 @@ class TestRecommendSingleCard:
 
 
 class TestRecommendHomogeneousMulti:
-    def test_two_8gb_is_raw_but_hints_a_custom_split(self):
-        # 2× 8 Go : le modèle 16 tiendrait en split (6,35 Go/carte) mais profil mono only.
+    def test_two_8gb_picks_tier_8_mono(self):
+        # 2× 8 Go : depuis le palier 8 (2026-08), le LFM2.5-2.6B tient sur UNE carte —
+        # fini le « brut avec hint de split personnalisé » d'avant.
         p = recommend([MB_8, MB_8])
-        assert not p.feasible and p.tier_gb == 0
-        assert any("split" in w and "personnalisé" in w for w in p.warnings)
+        assert p.feasible and p.tier_gb == 8
+        assert len(p.gpu_indices) == 1
 
     def test_two_24gb_picks_48_split(self):
         # Banc mainteneur 2× 3090 : palier 48 (Q6) réparti sur 2 cartes.
@@ -216,4 +217,4 @@ class TestTierTable:
         for tier in TIERS_BY_GB.values():
             assert tier.footprint_mb > 0
             assert tier.profile_gpus >= 1
-            assert tier.ctx in (196608, 262144)
+            assert tier.ctx in (131072, 196608, 262144)

@@ -127,8 +127,8 @@ declare -A _MSG=(
     [en:ask_express]="Install with these choices?"
     [fr:express_declined]="Installation annulée — relancez avec --expert pour choisir pas à pas."
     [en:express_declined]="Installation cancelled — run again with --expert to choose step by step."
-    [fr:express_open_models]="Modèles : whisper + Sortformer (sans token HF) écrits dans config.yaml."
-    [en:express_open_models]="Models: whisper + Sortformer (no HF token) written to config.yaml."
+    [fr:express_open_models]="Modèles sans token HF écrits dans config.yaml"
+    [en:express_open_models]="Token-free models written to config.yaml"
     [fr:ask_admin_pw]="Définir le mot de passe admin maintenant ?"
     [en:ask_admin_pw]="Set the admin password now?"
     [fr:ask_ollama]="Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"
@@ -680,6 +680,8 @@ fi
 # helper retombe silencieusement sur le pas-à-pas historique.
 EXPRESS_SETUP_PG=false
 EXPRESS_OPEN_MODELS=false
+EXPRESS_STT_BACKEND=""
+EXPRESS_DIAR_BACKEND=""
 if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_PROFILE" == "all-in-one" ]]; then
     EXPRESS_CLI_ARGS=(
         -m transcria.installer.cli express
@@ -698,7 +700,7 @@ if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_
         # Lignes machine séparées AVANT l'eval (convention recommend-llm) : les lignes
         # humaines du récapitulatif ne doivent pas déclencher de « sortie ignorée ».
         eval_named_shell_assignments "$(printf '%s\n' "$EXPRESS_OUT" | grep '^EXPRESS_' || true)" \
-            EXPRESS_SETUP_PG EXPRESS_OPEN_MODELS
+            EXPRESS_SETUP_PG EXPRESS_OPEN_MODELS EXPRESS_STT_BACKEND EXPRESS_DIAR_BACKEND
         while IFS= read -r line; do
             [[ -z "$line" || "$line" == EXPRESS_* ]] && continue
             log_info "$line"
@@ -799,15 +801,16 @@ if [[ -f "$CONFIG_PATH" ]]; then
 fi
 
 # Mode express, config FRAÎCHE et sans token HF (EXPRESS_OPEN_MODELS encode les deux) :
-# bascule sur le duo non-gated whisper + Sortformer — même choix que le quickstart
-# Docker. La qualité de référence (Cohere + pyannote) reste activable ensuite depuis
-# la page Modèles avec un token.
-if [[ "$EXPRESS_OPEN_MODELS" = true && -f "$CONFIG_PATH" ]]; then
-    if yaml_set "models.stt_backend" "whisper" >/dev/null 2>&1 && \
-       yaml_set "models.diarization_backend" "sortformer" >/dev/null 2>&1; then
-        log_info "$(t express_open_models)"
+# bascule sur le duo non-gated CHOISI PAR LE MODULE express selon le matériel
+# (whisper+sortformer avec GPU ≥ 12 Go ; kroko CPU en dessous et sans GPU — le GPU
+# entier reste à la LLM). La qualité de référence (Cohere + pyannote) reste
+# activable ensuite depuis la page Modèles avec un token.
+if [[ "$EXPRESS_OPEN_MODELS" = true && -f "$CONFIG_PATH" && -n "$EXPRESS_STT_BACKEND" ]]; then
+    if yaml_set "models.stt_backend" "$EXPRESS_STT_BACKEND" >/dev/null 2>&1 && \
+       yaml_set "models.diarization_backend" "$EXPRESS_DIAR_BACKEND" >/dev/null 2>&1; then
+        log_info "$(t express_open_models) ($EXPRESS_STT_BACKEND + $EXPRESS_DIAR_BACKEND)"
     else
-        log_warn "Bascule whisper/sortformer impossible — config.yaml garde ses backends par défaut"
+        log_warn "Bascule $EXPRESS_STT_BACKEND/$EXPRESS_DIAR_BACKEND impossible — config.yaml garde ses backends par défaut"
     fi
 fi
 
@@ -1264,7 +1267,8 @@ else
 
 # GPU_SIZES_CSV = tailles PAR carte (Mio), calculé par transcria.installer.hardware
 # pour raisonner par placement réel et non sur la simple somme.
-if (( GPU_VRAM_TOTAL_MB < 11500 )); then
+# Plancher du palier 8 Go (LFM2.5-2.6B — cartes gaming) ; sous ce seuil = brut.
+if (( GPU_VRAM_TOTAL_MB < 7500 )); then
     log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
     log_llm_setup_event raw-mode
 elif [[ -z "${OPENCODE_BIN:-}" ]]; then

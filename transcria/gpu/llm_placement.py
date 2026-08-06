@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import ceil
 
+CTX_128K = 131072
 CTX_192K = 196608
 CTX_256K = 262144
 
@@ -47,6 +48,9 @@ class Tier:
 # `profile_gpus` reflète le placement des profils livrés (scripts/arbitrage_profiles/ ;
 # cf. scripts/switch_arbitrage_llm.sh) : 12/16/24 = mono-GPU, 32/48 = 2 cartes, 64 = 3.
 TIERS: tuple[Tier, ...] = (
+    # Palier 8 Go (2026-08-06) : LFM2.5-2.6B Q8_0 mesuré 4 555 Mio @131 072 (contexte
+    # natif max) KV q8 sur RTX 3090 — arrondi 4 700 avec marge compute.
+    Tier(8, 4700, 1, CTX_128K, "LFM2.5-2.6B Q8_0"),
     Tier(12, 10400, 1, CTX_192K, "Qwen3.5-9B Q5_K_M"),
     Tier(16, 12700, 1, CTX_256K, "Qwen3.5-9B Q6_K"),
     Tier(24, 22300, 1, CTX_256K, "Qwen3.6-35B-A3B UD-IQ4_NL_XL"),

@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from transcria.cli_i18n import make_translator
 
 # Plancher VRAM des phases LLM — même seuil que la SECTION 9-bis d'install.sh
-# (< 12 Go ⇒ transcription brute, aucun modèle d'arbitrage).
-LLM_VRAM_FLOOR_MB = 11500
+# (sous le palier 8 Go ⇒ transcription brute, aucun modèle d'arbitrage).
+LLM_VRAM_FLOOR_MB = 7500
 
 EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
     "fr": {
@@ -33,6 +33,10 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "models_token": "Modèles : Cohere + pyannote (qualité de référence — token HF fourni)",
         "models_open": ("Modèles : whisper + Sortformer, sans token HF — la qualité de référence "
                         "(Cohere + pyannote) restera activable depuis la page Modèles"),
+        "models_open_small_gpu": ("Modèles : Kroko (transcription CPU, sans token) + Sortformer — "
+                                  "le GPU entier reste à la LLM d'arbitrage (palier 8 Go)"),
+        "models_open_cpu": ("Modèles : Kroko (transcription CPU pure, sans token) + Sortformer sur "
+                            "CPU — machine sans GPU"),
         "models_kept": "Modèles : configuration existante conservée (config.yaml déjà présent)",
         "llm_tier": "LLM d'arbitrage : llama.cpp, palier {tier} Go — {label}, téléchargé automatiquement",
         "llm_generic": "LLM d'arbitrage : llama.cpp, palier choisi selon la VRAM ({gb} Go), modèle téléchargé automatiquement",
@@ -51,6 +55,10 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "models_token": "Models: Cohere + pyannote (reference quality — HF token provided)",
         "models_open": ("Models: whisper + Sortformer, no HF token — reference quality "
                         "(Cohere + pyannote) stays available later from the Models page"),
+        "models_open_small_gpu": ("Models: Kroko (CPU transcription, no token) + Sortformer — "
+                                  "the whole GPU stays free for the arbitration LLM (8 GB tier)"),
+        "models_open_cpu": ("Models: Kroko (pure-CPU transcription, no token) + Sortformer on "
+                            "CPU — machine without GPU"),
         "models_kept": "Models: existing configuration kept (config.yaml already present)",
         "llm_tier": "Arbitration LLM: llama.cpp, {tier} GB tier — {label}, downloaded automatically",
         "llm_generic": "Arbitration LLM: llama.cpp, tier picked from VRAM ({gb} GB), model downloaded automatically",
@@ -67,10 +75,14 @@ class ExpressPlan:
     """Décisions du mode express + récapitulatif prêt à afficher.
 
     ``open_models`` encode déjà « config fraîche ET sans token » : install.sh n'a
-    pas à re-vérifier la fraîcheur au moment d'écrire whisper/sortformer."""
+    pas à re-vérifier la fraîcheur au moment d'écrire les backends. ``stt_backend``/
+    ``diarization_backend`` portent le CHOIX (décidé ici, jamais en dur dans le
+    shell) : whisper + sortformer avec GPU, kroko (CPU pur) sans GPU."""
 
     setup_pg: bool
     open_models: bool
+    stt_backend: str
+    diarization_backend: str
     recap: tuple[str, ...]
 
 
@@ -110,6 +122,17 @@ def build_express_plan(
     setup_pg = psql_available and can_admin_pg
     open_models = (not has_hf_token) and (not config_exists)
 
+    # Backends du duo sans token, selon le matériel (jamais en dur dans install.sh) :
+    # - GPU ≥ 12 Go : whisper (GPU) + Sortformer — le confort classique ;
+    # - GPU < 12 Go (palier 8) : Kroko (CPU) + Sortformer — whisper (~3 Go GPU)
+    #   étoufferait la LLM d'arbitrage résidente (4,6 Go) sur une carte de 8 Go ;
+    # - sans GPU : Kroko + Sortformer, tous deux sur CPU (E2E validé 2026-08-06).
+    stt_backend, diar_backend = "", ""
+    if open_models:
+        small_gpu = 0 < total_vram_mb < 11500
+        stt_backend = "kroko" if (gpu_count == 0 or small_gpu) else "whisper"
+        diar_backend = "sortformer"
+
     lines: list[str] = [t("profile")]
     if gpu_count > 0:
         lines.append(t("hw_gpus", n=gpu_count, gb=round(total_vram_mb / 1024)))
@@ -125,6 +148,8 @@ def build_express_plan(
         lines.append(t("models_kept"))
     elif has_hf_token:
         lines.append(t("models_token"))
+    elif stt_backend == "kroko":
+        lines.append(t("models_open_cpu") if gpu_count == 0 else t("models_open_small_gpu"))
     else:
         lines.append(t("models_open"))
     llm = _llm_line(t, gpu_count=gpu_count, total_vram_mb=total_vram_mb, gpu_sizes_csv=gpu_sizes_csv)
@@ -132,12 +157,16 @@ def build_express_plan(
         lines.append(llm)
     lines.append(t("service_yes", user=service_user) if install_service else t("service_no"))
     lines.append(t("admin"))
-    return ExpressPlan(setup_pg=setup_pg, open_models=open_models, recap=tuple(lines))
+    return ExpressPlan(setup_pg=setup_pg, open_models=open_models,
+                       stt_backend=stt_backend, diarization_backend=diar_backend,
+                       recap=tuple(lines))
 
 
 def render_shell(plan: ExpressPlan) -> str:
     """Lignes machine consommées par install.sh (``eval_named_shell_assignments``)."""
     return (
         f"EXPRESS_SETUP_PG={'true' if plan.setup_pg else 'false'}\n"
-        f"EXPRESS_OPEN_MODELS={'true' if plan.open_models else 'false'}"
+        f"EXPRESS_OPEN_MODELS={'true' if plan.open_models else 'false'}\n"
+        f"EXPRESS_STT_BACKEND={plan.stt_backend}\n"
+        f"EXPRESS_DIAR_BACKEND={plan.diarization_backend}"
     )

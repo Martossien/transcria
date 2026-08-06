@@ -68,14 +68,19 @@ class TestSelectLlamacppParPalier:
         assert c.tier_id == expected_tier, f"attendu palier {expected_tier}, eu {c.tier_id}"
         assert c.gpus == expected_gpus
 
-    def test_sous_12_go_retourne_none(self):
-        """8 Go : aucun palier llama.cpp → None (transcription brute)."""
+    def test_8_go_atteint_le_palier_8(self):
+        """8 Go : palier 8 (LFM2.5-2.6B Q8, 2026-08) — fini la transcription brute."""
         c = select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=MB_8, total_vram_mb=MB_8)
-        assert c is None
+        assert c is not None and c.tier_id == "8"
 
-    def test_juste_sous_seuil_12_go_retourne_none(self):
-        """11 Go (11400 Mo < 11500) → None."""
+    def test_juste_sous_seuil_12_go_retombe_au_palier_8(self):
+        """11 Go (11400 Mo < 11500) → palier 8 (le plus haut atteignable)."""
         c = select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=11400, total_vram_mb=11400)
+        assert c is not None and c.tier_id == "8"
+
+    def test_sous_le_plancher_8_retourne_none(self):
+        """7 Go (< 7500) → None (transcription brute)."""
+        c = select_profile(_P, "llamacpp", gpu_count=1, per_card_vram_mb=7000, total_vram_mb=7000)
         assert c is None
 
 
@@ -184,20 +189,15 @@ class TestCoherenceCataloguePlacement:
         assert c.tier_id == "64"
         assert p.tier_gb == 64
 
-    def test_2x8go_catalogue_retourne_none_placement_hint(self):
-        """2× 8 Go : le catalogue dit None (pas de profil split pour petit palier),
-        recommend dit infaisable MAIS donne un hint de split personnalisé."""
+    def test_2x8go_placement_reel_retombe_au_palier_8(self):
+        """2× 8 Go : le catalogue par TOTAL dirait 16 (mono, ne tient pas sur 8 Go) —
+        le placement RÉEL corrige en palier 8 mono (LFM2.5-2.6B, 2026-08)."""
         c = select_profile(_P, "llamacpp", gpu_count=2,
                            per_card_vram_mb=MB_8, total_vram_mb=MB_8 * 2)
-        # total=16384 >= 15500 → select_profile retourne palier 16 (select_by=total)
-        # MAIS le profil 16 est mono-GPU → recommend doit dire que ça ne tient pas
-        # en mono sur 8 Go. C'est exactement le cas que llm_placement gère.
-        if c is not None:
-            p = recommend([MB_8, MB_8])
-            # recommend peut trouver palier 12 (mono sur 8 → non) ou 16 (mono sur 8 → non)
-            # ou infaisable avec hint
-            assert not p.feasible or p.tier_gb == 0, \
-                "2× 8 Go ne doit pas produire un placement faisable en mono-GPU"
+        assert c is not None                       # total=16384 ≥ 15500 → « palier 16 »
+        p = recommend([MB_8, MB_8])
+        assert p.feasible and p.tier_gb == 8, \
+            "2× 8 Go doit se placer au palier 8 mono, jamais au 16 mono infaisable"
 
 
 # ── 3. Cartes hétérogènes ──────────────────────────────────────────────────
@@ -239,44 +239,45 @@ class TestCartesHeterogenes:
         assert p.feasible and p.tier_gb == 64
         assert p.gpu_indices == [0, 1, 2]
 
-    def test_all_8go_picks_raw_with_hint(self):
-        """8× 8 Go : aucun palier mono ne tient sur 8 Go → transcription brute + hint."""
+    def test_all_8go_picks_tier_8(self):
+        """8× 8 Go : le palier 8 mono (LFM2.5-2.6B) tient sur une carte (2026-08)."""
         p = recommend([MB_8] * 8)
-        assert not p.feasible and p.tier_gb == 0
-        assert "transcription brute" in p.reason
+        assert p.feasible and p.tier_gb == 8
 
 
 # ── 4. Chemin « transcription brute » (< 12 Go) ─────────────────────────────
 
 
 class TestTranscriptionBrute:
-    """Sous le seuil minimum (11500 Mo), aucun palier ne doit être sélectionné."""
+    """Sous le plancher du palier 8 (7500 Mo), aucun palier ne doit être sélectionné."""
 
     @pytest.mark.parametrize("engine", ["llamacpp", "ollama"])
     @pytest.mark.parametrize("gpu_count", [1])
     def test_sous_seuil_retourne_none(self, engine, gpu_count):
-        """Sur 1× 8 Go (mono), aucun palier n'est atteint (seuil min 11500 Mo)."""
-        per_card = MB_8
+        """Sur 1× 6 Go (mono), aucun palier n'est atteint — llamacpp plancher 7500,
+        ollama plancher 11500 (pas de palier 8 côté Ollama : pas de LFM2.5 vérifié
+        au registre)."""
+        per_card = 6144
         total = per_card * gpu_count
         c = select_profile(_P, engine, gpu_count=gpu_count,
                            per_card_vram_mb=per_card, total_vram_mb=total)
-        assert c is None, f"{engine} sur {gpu_count}× 8Go doit retourner None, eu {c}"
+        assert c is None, f"{engine} sur {gpu_count}× 6Go doit retourner None, eu {c}"
 
     def test_multi_8go_select_profile_choisit_palier_total(self):
         """2× 8 Go : select_profile utilise le total (16384 ≥ 15500) → palier 16,
-        MAIS le profil 16 est mono-GPU (gpus=1) → recommend() doit dire infaisable
-        car la carte de 8 Go ne tient pas 12700+1500 Mo. C'est exactement la
-        séparation des rôles : select_profile choisit par VRAM cumulée,
+        MAIS le profil 16 est mono-GPU (gpus=1) et ne tient pas sur une carte de
+        8 Go → recommend() (placement RÉEL) retombe au palier 8 mono (2026-08).
+        Séparation des rôles : select_profile choisit par VRAM cumulée,
         recommend() valide par carte. Le test documente ce contrat."""
         # llamacpp : select_by=total_vram_mb → 16384 ≥ 15500 → palier 16
         c = select_profile(_P, "llamacpp", gpu_count=2,
                            per_card_vram_mb=MB_8, total_vram_mb=MB_8 * 2)
         assert c is not None and c.tier_id == "16"
         assert c.gpus == 1  # mono-GPU profile
-        # recommend() doit dire infaisable sur carte de 8 Go
+        # recommend() corrige : palier 8 mono, le seul plaçable par carte.
         p = recommend([MB_8, MB_8])
-        assert not p.feasible or p.tier_gb == 0, \
-            "2× 8 Go : recommend() doit rejeter le placement mono sur carte de 8 Go"
+        assert p.feasible and p.tier_gb == 8, \
+            "2× 8 Go : recommend() doit retomber au palier 8 mono, jamais au 16"
 
     @pytest.mark.parametrize("engine", ["llamacpp", "ollama"])
     def test_juste_above_seuil_12(self, engine):

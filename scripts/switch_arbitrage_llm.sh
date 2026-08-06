@@ -6,7 +6,7 @@
 # Génère un wrapper local dans scripts/generated/launch_arbitrage.local.sh et
 # pointe services.arbitrage_script vers ce fichier dans config.yaml.
 #
-#   Usage : ./scripts/switch_arbitrage_llm.sh {12gb|16gb|24gb|32gb|48gb|64gb|status}
+#   Usage : ./scripts/switch_arbitrage_llm.sh {8gb|12gb|16gb|24gb|32gb|48gb|64gb|status}
 #
 # Variables optionnelles :
 #   MODELS_DIR    défaut local injecté dans le wrapper généré

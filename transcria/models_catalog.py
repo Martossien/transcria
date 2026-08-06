@@ -151,7 +151,11 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
                 role="arbitrage_llm", label=f"LLM d'arbitrage ({meta.file})",
                 repo_id=meta.repo, file=meta.file, kind="gguf", target_subdir=meta.directory,
                 gated=False, license="Apache-2.0 / MIT (quantifications unsloth)",
-                license_url="https://huggingface.co/" + meta.repo, est_gb=_gguf_est_gb(meta.file),
+                license_url="https://huggingface.co/" + meta.repo,
+                # est_gb du catalogue s'il est déclaré (ex. palier 8 : un 2,6B en Q8 —
+                # l'heuristique par nom « q8 ⇒ 38 Go » est calibrée pour le 35B) ;
+                # sinon l'heuristique historique.
+                est_gb=meta.est_gb or _gguf_est_gb(meta.file),
                 tier=tier,
             ))
         except Exception:  # noqa: BLE001 — pas de palier résoluble ⇒ on n'ajoute pas la ligne LLM
