@@ -512,8 +512,11 @@ réutilisation ; la pleine passe reste raisonnable sur GPU).
 
 **Mesure décisive (2026-08-06, audio réel 99 min)** : MOSS en une passe entière
 **s'arrête à 18 min 45 sans erreur** (plafond de contexte interne — 81 % de l'audio
-silencieusement absent), reproduit ses sauts silencieux (2 × >15 s sur la partie
-produite), RTF ~0,34, 4 locuteurs plausibles. Le chantier « une passe » n'est donc
+silencieusement absent), RTF ~0,34, 4 locuteurs plausibles. Contre-mesure kroko
+sur le MÊME fichier (99 min COUVERTES de bout en bout en 223 s, CPU pur) : les 2
+« sauts » de MOSS à 552 s/919 s sont des trous chez kroko AUSSI → vrais silences
+de la réunion, pas des omissions (le saut W05 du banc, vérifié contre référence
+humaine, reste documenté). Le chantier « une passe » n'est donc
 PAS un swap de backend : fenêtrage ~15 min + raccord des labels locuteurs
 inter-fenêtres + mitigation des sauts — à re-chiffrer avant engagement. Trouvaille
 distincte : la phase RÉSUMÉ appelle `transcribe()` par chunk VAD, ce qui pour moss
