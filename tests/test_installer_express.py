@@ -67,7 +67,7 @@ class TestRecap:
 
     def test_carte_gaming_8go_resout_le_palier_8(self):
         recap = "\n".join(_plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192").recap)
-        assert "palier 8" in recap and "LFM2.5-2.6B" in recap
+        assert "palier 8" in recap and "Qwen3.5-4B" in recap
 
     def test_gros_gpu_resout_le_palier(self):
         # Dans le venv de test, PyYAML est là : la ligne LLM porte un palier résolu

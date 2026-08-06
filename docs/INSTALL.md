@@ -241,7 +241,7 @@ Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et
 | Seuil¹ | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
 |---|---|---|---|---|
 | < 8 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
-| ≥ 8 Go | 8 | LFM2.5-2.6B **Q8_0** ² | `LiquidAI/LFM2.5-2.6B-GGUF` | 128K |
+| ≥ 8 Go | 8 | Qwen3.5-4B **Q5_K_M** ² | `unsloth/Qwen3.5-4B-GGUF` | 128K |
 | ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
 | ≥ 16 Go | 16 | Qwen3.5-9B Q6_K | `unsloth/Qwen3.5-9B-GGUF` | 256K |
 | ≥ 24 Go | 24 | Qwen3.6-35B-A3B **UD-IQ4_NL_XL** | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
@@ -251,7 +251,7 @@ Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et
 
 > ¹ La sélection se fait par **placement réel**, pas sur la VRAM totale : un palier **mono-GPU** (8/12/16/24) exige **une** carte ≥ l'empreinte du modèle ; un palier **splité** (32/48/64) exige **N** cartes tenant chacune leur part (+ marge). La somme seule ne suffit pas — *2× 8 Go ≠ palier 16* (le placement retombe au palier **8** mono), et *2× 5090 (64 Go)* donne le palier **48** (profil 2 cartes), pas 64 (profil 3 cartes). Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](archive/BENCH_LLM_PALIERS.md) ; les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
 >
-> ² **Palier 8 Go (cartes gaming, 2026-08)** : LFM2.5-2.6B Q8_0 mesuré **4 555 Mio au contexte natif max (131 072, KV Q8)** — ≥3,4 Go de marge sur une carte de 8 Go. Sur ce palier, l'installation express choisit **Kroko (STT CPU)** pour laisser le GPU entier à la LLM. E2E réel (test2.mp3) : **résumé validé** ; la **correction SRT échoue la garde de conformité** (le modèle réécrit au lieu de corriger — le SRT brut est alors conservé, jamais dégradé) : sur ce palier, envisager `workflow.arbitration_llm.enabled: false` (résumé seul).
+> ² **Palier 8 Go (cartes gaming, 2026-08)** : Qwen3.5-4B Q5_K_M — même famille que la référence du palier 12 — mesuré **6 378 Mio à 131 072 de contexte (KV Q8)**, ~1,8 Go de marge sur une carte de 8 Go (le natif 262K déborde : 9 194 Mio). E2E réel (test2.mp3) : **17/17, correction conforme**. Sur ce palier, l'installation express choisit **Kroko (STT CPU)** pour laisser le GPU entier à la LLM. (Candidat LFM2.5-2.6B écarté : VRAM royale mais structure SRT cassée à la correction.)
 
 **Portabilité des profils** : les scripts `scripts/arbitrage_profiles/<palier>_*.sh` référencent leurs chemins via `${MODELS_DIR:-…}` et `${LLAMA_SERVER:-…}`. install.sh écrit les bons défauts pour votre machine (répertoire des modèles choisi, binaire `llama-server` détecté), puis `scripts/switch_arbitrage_llm.sh <palier>` recopie le profil sur `launch_arbitrage.sh`. **La calibration VRAM par carte** (`gpu.llm_vram_mb` / `llm_gpu_indices` / `llm_vram_mb_per_gpu`) est ensuite écrite par le planner selon le placement **réel** de la machine (`scripts/plan_llm_placement.py … --apply`, round-trip non destructif) — elle remplace les valeurs de banc du `switch`. Pour changer de palier après coup : télécharger le modèle, `scripts/switch_arbitrage_llm.sh <palier>`, puis **re-mesurer** avec `scripts/check_arbitrage_llm.sh` (compare la VRAM réelle par carte au déclaré : dérive, marge critique, débordement ; et **qualifie le binaire `llama-server`** : version réelle ≥ b9630 résolue via l'arbre git — le numéro de `--version` étant non fiable —, résolution des `.so` et build CUDA).
 

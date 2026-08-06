@@ -107,9 +107,9 @@ Pourquoi un même palier n'accueille pas le même modèle selon le moteur (compr
 | Multi-carte | tensor-split | spread (`OLLAMA_SCHED_SPREAD`) | tensor-parallel (`TP`) |
 | Base du palier | VRAM **totale** | par-carte → totale (spread) | VRAM **totale** ÷ TP |
 
-Modèles par palier (ancrés bench llama.cpp ; voir le YAML pour la table exacte) :
-**LFM2.5-2.6B** (palier 8 Go — llama.cpp uniquement, pas d'équivalent Ollama vérifié) /
-famille **Qwen3.5-9B** (petits paliers) / **Qwen3.6-27B** + **Qwen3.6-35B-A3B** (paliers hauts).
+Modèles par palier (ancrés bench llama.cpp ; voir le YAML pour la table exacte) : famille
+**Qwen3.5-4B/9B** (palier 8 Go — llama.cpp uniquement — et petits paliers) /
+**Qwen3.6-27B** + **Qwen3.6-35B-A3B** (paliers hauts).
 Un point mesuré de référence : `qwen3.5:9b` Ollama ≈ **14,7 Go** (poids 6,6 + KV 256K ~8).
 
 ### Réduire l'empreinte (lever la contrainte du KV grand contexte)

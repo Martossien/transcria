@@ -19,7 +19,7 @@ deliverable. So every tier was judged against a fixed human reading grid, with
 
 | VRAM tier | Model | Quant | Context | Status |
 |---|---|---|---|---|
-| 8 GB | **LFM2.5-2.6B** | Q8_0 | 128K ⁰ | ⚠ summary validated (E2E); SRT correction fails the conformity guard (rewrites) — consider `arbitration_llm.enabled: false` on this tier |
+| 8 GB | **Qwen3.5-4B** | Q5_K_M | 128K ⁰ | ✅ validated (real E2E 17/17, conforming correction; LFM2.5-2.6B was tried first and discarded — it broke the SRT structure) |
 | 12 GB | **Qwen3.5-9B** | Q5_K_M | 192K ¹ | ✅ validated (replaces LFM2.5-8B, which failed the agentic workflow) |
 | 16 GB | Qwen3.5-9B | Q6_K | 256K | ✅ validated |
 | 24 GB | **Qwen3.6-35B-A3B** | UD-IQ4_NL_XL | 256K | ✅ validated (replaces Gemma 4 12B: 5× slower, regressions) |
@@ -27,7 +27,7 @@ deliverable. So every tier was judged against a fixed human reading grid, with
 | 48 GB | Qwen3.6-35B-A3B | UD-Q6_K | 256K | ⭐ reference — cleanest emission, finest summary |
 | 64 GB | Qwen3.6-35B-A3B | UD-Q8_K_XL | 256K | reference |
 
-⁰ 8 GB (gaming cards, 2026-08): 4 555 MiB measured at the model's native max context (131,072, Q8 KV) → ≥3.4 GB headroom. The express install pairs this tier with **Kroko (CPU STT)** so the whole GPU stays free for the LLM.
+⁰ 8 GB (gaming cards, 2026-08): 6 378 MiB measured at 131,072 context (Q8 KV) → ~1.8 GB headroom (native 262K = 9 194 MiB, does not fit). Same gated-delta family as the 12 GB reference. The express install pairs this tier with **Kroko (CPU STT)** so the whole GPU stays free for the LLM.
 ¹ 12 GB: 192K context = 10 401 MiB measured → ~1.9 GB headroom; 256K would leave ~0.5 GB (not recommended).
 ² 32 GB: 192K = 29 168 MiB measured → ~3.6 GB headroom on one 32 GB card, ~1.4 GB on the most-loaded card of a 2×16 GB split.
 

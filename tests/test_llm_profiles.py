@@ -30,7 +30,9 @@ class TestCatalogue:
 
     def test_llamacpp_anchored_on_bench_models(self):
         models = [t["model"]["file"] for t in _P["engines"]["llamacpp"]["tiers"]]
-        assert models[0] == "LFM2.5-2.6B-Q8_0.gguf"    # palier 8 Go (cartes gaming, 2026-08)
+        # Palier 8 Go (cartes gaming, 2026-08) : Qwen3.5-4B — même famille que la réf 12 Go.
+        # LFM2.5-2.6B essayé d'abord et écarté (structure SRT cassée à la correction).
+        assert models[0] == "Qwen3.5-4B-Q5_K_M.gguf"
         assert models[1] == "Qwen3.5-9B-Q5_K_M.gguf"
         assert any("35B-A3B" in m for m in models)
 

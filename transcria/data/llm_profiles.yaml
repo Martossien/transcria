@@ -47,13 +47,14 @@ engines:
     kv_dtype_bytes: 1              # cache-type q8_0 ≈ 1 octet/élément (KV calculé)
     download: hf                   # hf download <repo> <file>  (le NOM suffit, pas d'URL)
     tiers:
-      # Palier 8 Go (2026-08-06) : LFM2.5-2.6B Q8_0 — cartes gaming 8 Go, mesuré sur
-      # RTX 3090 : 4 555 Mio @131 072 (contexte NATIF max) KV q8 → ≥3,4 Go de marge.
-      # Modèle « thinking » (raisonnement avant réponse) ; params officiels LiquidAI
-      # temp 0.1 / top_k 50 / repeat 1.1. est_gb explicite : l'heuristique par nom
-      # (« q8 » ⇒ 38 Go, calibrée 35B) serait absurde pour un 2,6B de 2,87 Go.
+      # Palier 8 Go (2026-08-06) : Qwen3.5-4B Q5_K_M — cartes gaming 8 Go, MÊME famille
+      # que la réf du palier 12 (gated-delta 3:1, KV léger). Mesuré RTX 3090 KV q8 :
+      # 262K natif = 9 194 Mio (non), 192K = 7 786 (limite), **131K = 6 378 → ~1,8 Go
+      # de marge** ← retenu. E2E test2.mp3 : 17/17, correction CONFORME (le candidat
+      # LFM2.5-2.6B, VRAM royale à 4,5 Go, cassait la structure SRT — écarté).
+      # est_gb explicite : l'heuristique par nom (« q5 » ⇒ 25 Go) est calibrée 35B.
       - {id: "8", min_vram_mb: 7500, vram_budget_mb: 8000, gpus: 1, context: 131072,
-         model: {repo: "LiquidAI/LFM2.5-2.6B-GGUF", file: "LFM2.5-2.6B-Q8_0.gguf", dir: "LFM2.5-2.6B-Q8_0", est_gb: 2.9}}
+         model: {repo: "unsloth/Qwen3.5-4B-GGUF", file: "Qwen3.5-4B-Q5_K_M.gguf", dir: "Qwen3.5-4B-Q5_K_M", est_gb: 3.2}}
       - {id: "12", min_vram_mb: 11500, vram_budget_mb: 12000, gpus: 1, context: 196608,
          model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q5_K_M.gguf", dir: "Qwen3.5-9B-Q5_K_M"}}
       - {id: "16", min_vram_mb: 15500, vram_budget_mb: 16000, gpus: 1, context: 262144,
