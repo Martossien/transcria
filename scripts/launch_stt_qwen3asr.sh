@@ -15,7 +15,8 @@
 #   STT_GPU=0            GPU dédié (CUDA_VISIBLE_DEVICES — le JSON serveur vise
 #                        toujours device 0, index RELATIF au masque)
 #   STT_PORT=8021        port HTTP (hors llm_cleanup_ports)
-#   STT_MODEL            chemin du modèle (défaut: runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf)
+#   STT_MODEL            chemin du modèle (défaut: GGUF Q8 release-0.5.1 si présent,
+#                        sinon runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf)
 #   STT_SERVED_NAME=qwen3-asr-1.7b   id servi (doit matcher inference.stt.backends.qwen3asr.model)
 #
 # BON À SAVOIR
@@ -41,6 +42,12 @@ STT_ENGINE="custom"
 STT_GPU="$(_stt_default STT_GPU VLLM_GPU 0)"
 STT_PORT="$(_stt_default STT_PORT VLLM_PORT 8021)"
 STT_HOST="${STT_HOST:-0.0.0.0}"
+# Défaut : le GGUF Q8 (paquet release-0.5.1, ~1,9 Go) s'il est présent, sinon le
+# répertoire HF f16 des installs antérieures (toujours servable directement).
+_QWEN3_GGUF="$AUDIOCPP_HOME/src/models/Qwen3-ASR-1.7B-GGUF/qwen3-asr-1.7b-q8_0.gguf"
+if [[ -z "${STT_MODEL:-}" && -f "$_QWEN3_GGUF" ]]; then
+    STT_MODEL="$_QWEN3_GGUF"
+fi
 STT_MODEL="${STT_MODEL:-$AUDIOCPP_HOME/src/models/Qwen3-ASR-1.7B-hf}"
 STT_SERVED_NAME="${STT_SERVED_NAME:-qwen3-asr-1.7b}"
 # Famille du loader audio.cpp — permet de servir un AUTRE modèle du même runtime :

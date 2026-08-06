@@ -170,7 +170,7 @@ class TestServedSttCatalog:
         assert len(served) == 1
         assert served[0].repo_id == "Qwen/Qwen3-ASR-1.7B-hf"
         assert served[0].kind == "runtime"
-        assert served[0].file == "qwen3_asr_1_7b_hf"  # id du paquet délégué
+        assert served[0].file == "qwen3_asr_1_7b_q8_0"  # id du paquet délégué (v2, release-0.5.1)
 
     def test_backend_route_sans_manifeste_propose_aussi(self):
         from transcria.models_catalog import build_catalog
@@ -202,7 +202,7 @@ class TestServedSttCatalog:
                 if s.role == "stt_served"][0]
         st = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "m")
         assert st["present"] is False
-        target = tmp_path / "audiocpp" / "src" / "models" / "Qwen3-ASR-1.7B-hf"
+        target = tmp_path / "audiocpp" / "src" / "models" / "Qwen3-ASR-1.7B-GGUF"
         target.mkdir(parents=True)
         (target / "config.json").write_text("{}")
         st = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "m")

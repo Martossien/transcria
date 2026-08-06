@@ -49,13 +49,16 @@ def _stt_sources() -> dict[str, dict]:
 # (audio.cpp model_manager) — présence sondée sous runtimes/, téléchargement délégué.
 _SERVED_STT_SOURCES: dict[str, dict] = {
     # kind runtime : target_subdir = chemin RELATIF sous runtimes/ (présence),
-    # file = id du paquet dans le model_manager du runtime (téléchargement délégué).
+    # file = id du paquet dans le model_manager_v2 du runtime (téléchargement délégué).
     "qwen3asr": {
+        # release-0.5.1 (2026-08-06) : le paquet HF f16 est remplacé par le GGUF Q8
+        # (spec v1). Une install antérieure garde son répertoire HF servable (le
+        # lanceur le prend en repli) — cette ligne propose le format ACTUEL.
         "repo": "Qwen/Qwen3-ASR-1.7B-hf", "kind": "runtime",
-        "target_subdir": "audiocpp/src/models/Qwen3-ASR-1.7B-hf",
-        "file": "qwen3_asr_1_7b_hf",
+        "target_subdir": "audiocpp/src/models/Qwen3-ASR-1.7B-GGUF",
+        "file": "qwen3_asr_1_7b_q8_0",
         "gated": False, "license": "Apache-2.0",
-        "license_url": "https://huggingface.co/Qwen/Qwen3-ASR-1.7B-hf", "est_gb": 3.9,
+        "license_url": "https://huggingface.co/Qwen/Qwen3-ASR-1.7B-hf", "est_gb": 1.9,
     },
     "nemotron": {
         "repo": "mudler/parakeet-cpp-gguf", "kind": "gguf",
@@ -65,11 +68,12 @@ _SERVED_STT_SOURCES: dict[str, dict] = {
     },
     # Voxtral Mini 4B Realtime (Mistral) servi par audio.cpp en GGUF Q8_0 — MÊME
     # runtime/binaire que qwen3asr (famille voxtral_realtime), poids délégués au
-    # model_manager (paquet voxtral_realtime, repo audio-cpp/audio.cpp-gguf).
+    # model_manager_v2 (paquet voxtral_realtime_q8_0 depuis release-0.5.1 ;
+    # le répertoire cible est INCHANGÉ — les poids déjà tirés restent vus).
     "voxtralrt": {
         "repo": "audio-cpp/audio.cpp-gguf", "kind": "runtime",
         "target_subdir": "audiocpp/src/models/Voxtral-Mini-4B-Realtime-2602-GGUF",
-        "file": "voxtral_realtime",
+        "file": "voxtral_realtime_q8_0",
         "gated": False, "license": "Apache-2.0",
         "license_url": "https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602", "est_gb": 5.1,
     },

@@ -18,13 +18,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé = état qualifié Nemotron (0,492 WER 8/8, 3 requêtes identiques —
-# pas de bug de session), bumpé pour le fix encodeur #49 (lignes de padding
-# maintenues finies dans les masques d'attention à contexte limité). Nemotron
-# re-qualifié par smoke après le bump.
+# Commit épinglé = tag v0.5.0 (bump 2026-08-06 depuis 1da85342) : expose les
+# log-probs CTC via la C-API (#57), beam N-best opt-in (#56), libération des poids
+# hôte après upload GPU (#53). Aucune rupture d'API serveur constatée ; Nemotron
+# re-qualifié par le gate moteurs après le bump.
 PARAKEETCPP_REPO = "https://github.com/mudler/parakeet.cpp"
 # SHA COMPLET requis : `git fetch origin <sha>` refuse les SHA courts (exit 128).
-PARAKEETCPP_PINNED_COMMIT = "1da853421de9710cbe894a0110711de5a0516486"
+PARAKEETCPP_PINNED_COMMIT = "1bfbebfaaf493866f49597cd3b7901959d395c60"
 
 
 class Runner(Protocol):

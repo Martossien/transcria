@@ -86,10 +86,10 @@ def test_with_model_delegue_au_model_manager(tmp_path):
 
     apply_audiocpp(AudiocppPlan(runtimes_dir=tmp_path, with_model=True),
                    console=FakeConsole(), runner=runner)
-    manager_calls = [(c, cwd) for c, cwd in calls if any("model_manager.py" in str(x) for x in c)]
+    manager_calls = [(c, cwd) for c, cwd in calls if any("model_manager_v2.py" in str(x) for x in c)]
     assert len(manager_calls) == 1
     cmd, cwd = manager_calls[0]
-    assert cmd[-2:] == ["install", "qwen3_asr_1_7b_hf"]
+    assert cmd[-2:] == ["install", "qwen3_asr_1_7b_q8_0"]
     assert cwd and cwd.endswith("src")
 
 
@@ -146,7 +146,7 @@ def test_issue_7_runtimes_dir_relatif_donne_des_chemins_absolus(tmp_path, monkey
     apply_audiocpp(AudiocppPlan(runtimes_dir=Path("./runtimes"), with_model=True),
                    console=FakeConsole(), runner=runner)
 
-    manager_calls = [(c, cwd) for c, cwd in calls if any("model_manager.py" in str(x) for x in c)]
+    manager_calls = [(c, cwd) for c, cwd in calls if any("model_manager_v2.py" in str(x) for x in c)]
     assert len(manager_calls) == 1
     cmd, cwd = manager_calls[0]
     python_path = Path(cmd[0])

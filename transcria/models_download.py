@@ -158,11 +158,12 @@ def run_download(
             subprocess.run(["ollama", "pull", spec.repo_id], check=True)
         elif spec.kind == "runtime":
             # Poids gérés par le runtime servi (audio.cpp) : téléchargement DÉLÉGUÉ à
-            # SON model_manager (venv dédié, provisionnés par `installer.cli audiocpp`).
+            # SON model_manager_v2 (spec v1 depuis release-0.5.1 — l'historique est
+            # renommé _deprecated ; venv dédié, provisionné par `installer.cli audiocpp`).
             # spec.file porte l'id du paquet chez eux (cf. _SERVED_STT_SOURCES).
 
             home = resolve_runtimes_dir() / "audiocpp"
-            manager = home / "src" / "tools" / "model_manager.py"
+            manager = home / "src" / "tools" / "model_manager_v2.py"
             py = home / "venv" / "bin" / "python"
             if not (py.exists() and manager.exists()):
                 raise RuntimeError(

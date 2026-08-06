@@ -622,7 +622,7 @@ def _add_audiocpp_parser(sub: argparse._SubParsersAction) -> None:
                    help="Racine des runtimes (défaut ./runtimes, surchargeable TRANSCRIA_RUNTIMES_DIR)")
     p.add_argument("--commit", default=None, help="Commit épinglé (défaut : celui qualifié sur le benchmark)")
     p.add_argument("--with-model", action="store_true",
-                   help="Télécharge aussi le modèle recommandé Qwen3-ASR-1.7B-hf (~3,9 Go)")
+                   help="Télécharge aussi le modèle recommandé Qwen3-ASR-1.7B GGUF Q8 (~1,9 Go)")
     p.add_argument("--force", action="store_true", help="Reconstruire même si le runtime semble complet")
 
 

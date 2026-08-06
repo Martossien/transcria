@@ -8,7 +8,7 @@ intégrés, **épinglés sur les commits qualifiés** par notre benchmark de ré
 
 | Backend | Runtime | Modèle recommandé | Mesuré chez nous | Port |
 |---|---|---|---|---|
-| `qwen3asr` | [audio.cpp](https://github.com/0xShug0/audio.cpp) (0xShug0) | Qwen3-ASR-1.7B (Apache-2.0, ~3,9 Go) | **WER 0,421 — 2ᵉ du banc entier**, ~12 s/fenêtre de 5 min | 8021 |
+| `qwen3asr` | [audio.cpp](https://github.com/0xShug0/audio.cpp) (0xShug0) | Qwen3-ASR-1.7B (Apache-2.0 ; GGUF Q8 ~1,9 Go depuis release-0.5.1, snapshot HF ~3,9 Go des installs antérieures toujours servable) | **WER 0,421 — 2ᵉ du banc entier**, ~12 s/fenêtre de 5 min | 8021 |
 | `nemotron` | [parakeet.cpp](https://github.com/mudler/parakeet.cpp) (mudler, MIT) | Nemotron 3.5 ASR 0.6B (GGUF f16, 1,4 Go) | **WER 0,492 — ~2 s/fenêtre de 5 min** | 8022 |
 | `voxtralrt` | [audio.cpp](https://github.com/0xShug0/audio.cpp) (0xShug0) | Voxtral-Mini-4B-Realtime (Mistral, Apache-2.0, GGUF Q8_0 ~5,1 Go) | transcription cohérente validée (smoke) — **WER réunions réelles à mesurer** | 8024 |
 
@@ -20,9 +20,10 @@ runtimes servis sont **additifs, jamais une dépendance dure**.
 ```bash
 # audio.cpp : clone épinglé + build CUDA + venv outils (+ modèle recommandé qwen3)
 venv/bin/python -m transcria.installer.cli audiocpp --with-model
-# GGUF Voxtral (facultatif, backend voxtralrt) via le model_manager d'audio.cpp :
-#   runtimes/audiocpp/venv/bin/python runtimes/audiocpp/src/tools/model_manager.py \
-#       install voxtral_realtime   (cwd = runtimes/audiocpp/src ; ou page « Modèles »)
+# GGUF Voxtral (facultatif, backend voxtralrt) via le model_manager V2 d'audio.cpp
+# (spec v1 depuis release-0.5.1 — l'historique model_manager.py est déprécié) :
+#   runtimes/audiocpp/venv/bin/python runtimes/audiocpp/src/tools/model_manager_v2.py \
+#       install voxtral_realtime_q8_0   (cwd = runtimes/audiocpp/src ; ou page « Modèles »)
 
 # parakeet.cpp : clone épinglé (submodules ggml) + build CUDA
 venv/bin/python -m transcria.installer.cli parakeetcpp
@@ -94,7 +95,7 @@ tête des scripts de lancement).
 - **Nemotron via audio.cpp** (alternative au parakeet-server, ~4× plus rapide au bench :
   ~2 s / fenêtre de 5 min) : même lanceur avec la famille dédiée —
   `STT_FAMILY=nemotron_asr STT_MODEL=…/nemotron-3.5-asr-streaming-0.6b STT_SERVED_NAME=nemotron
-  STT_PORT=8022 ./scripts/launch_stt_qwen3asr.sh` (modèle : `model_manager.py install nemotron_asr`
+  STT_PORT=8022 ./scripts/launch_stt_qwen3asr.sh` (modèle : `model_manager_v2.py install <paquet nemotron>` — `list` pour l'id exact —
   dans le venv du runtime). L'API expose alors `/v1/models` (pas besoin de `health_path`).
 - **Voxtral via audio.cpp** (backend `voxtralrt`) : Voxtral-Mini-4B-Realtime (Mistral,
   Apache-2.0), servi en GGUF Q8_0 par le MÊME binaire audio.cpp (famille `voxtral_realtime`,

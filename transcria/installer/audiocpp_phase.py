@@ -24,14 +24,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé : conserve qwen3-asr (0,421 WER) et le fix de session Nemotron,
-# et ajoute le support Voxtral realtime GGUF (paquet `voxtral_realtime`, ajouté
-# upstream au commit 6313916). qwen3 re-qualifié par smoke après le bump.
+# Commit épinglé = tag release-0.5.1 (2026-08-03, bump du 2026-08-06 depuis edbdf586).
+# Nouveautés embarquées : endpoint live PCM + deltas streaming (#127/#144), chemin
+# streaming Qwen3-ASR, durcissement des allocations (#143), fusion Q8 CUDA (#154).
+# RUPTURES absorbées ici : tools/model_manager.py → model_manager_v2.py (spec v1),
+# paquet qwen3 `qwen3_asr_1_7b_hf` (snapshot HF f16) → `qwen3_asr_1_7b_q8_0`
+# (GGUF Q8, ~1,9 Go au lieu de 3,9) — le serveur sert TOUJOURS un répertoire HF
+# fourni directement : les installs antérieures restent servables (le lanceur
+# préfère le GGUF s'il existe, sinon retombe sur le répertoire HF).
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
-AUDIOCPP_PINNED_COMMIT = "edbdf586f2784218db4d7d11e66d1e45629dc8f2"
-# Modèle recommandé (Apache-2.0, ~3,9 Go) — id du paquet dans LEUR model_manager.
-AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_hf"
-AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-hf"
+AUDIOCPP_PINNED_COMMIT = "238ab6a9e321c17de8e120559f57efeedaeb1345"
+# Modèle recommandé (Apache-2.0) — id du paquet dans LEUR model_manager_v2 (spec v1).
+AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_q8_0"
+AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-GGUF"
 
 
 class Runner(Protocol):
@@ -190,11 +195,12 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
         except Exception as exc:  # noqa: BLE001
             raise AudiocppPhaseError(f"venv outils audio.cpp échoué : {exc}") from exc
 
-    # 4) Modèle recommandé (opt-in --with-model) via LEUR gestionnaire.
+    # 4) Modèle recommandé (opt-in --with-model) via LEUR gestionnaire v2 (spec v1 —
+    # model_manager.py historique renommé _deprecated à release-0.5.1).
     if plan.with_model:
-        console.info(f"Téléchargement du modèle {AUDIOCPP_DEFAULT_MODEL_PACKAGE} (~3,9 Go)…")
+        console.info(f"Téléchargement du modèle {AUDIOCPP_DEFAULT_MODEL_PACKAGE} (~1,9 Go)…")
         try:
-            runner([str(venv_dir / "bin" / "python"), str(src / "tools" / "model_manager.py"),
+            runner([str(venv_dir / "bin" / "python"), str(src / "tools" / "model_manager_v2.py"),
                     "install", AUDIOCPP_DEFAULT_MODEL_PACKAGE], cwd=str(src))
         except Exception as exc:  # noqa: BLE001
             raise AudiocppPhaseError(f"téléchargement du modèle échoué : {exc}") from exc

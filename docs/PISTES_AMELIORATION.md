@@ -488,6 +488,21 @@ dans le produit sans être mises en avant.
   anglais par segment (le `EN%` de `score_reference_bench.py`, § BENCHMARKING) porté dans
   `stt/reliability.py` en ferait un hint de fiabilité de première classe.
 
+### 4.1-ter Nées du bump runtimes servis (release-0.5.1 audio.cpp, 2026-08-06)
+
+- **Streaming temps réel via audio.cpp — P2, effort M.** L'amont a ajouté
+  `POST /v1/audio/transcriptions/live` (ingestion PCM en direct) et l'émission de
+  **deltas** de transcript (au lieu de rejouer tout le texte), plus un chemin
+  streaming pour Qwen3-ASR. C'est exactement la brique qui manquait au chantier
+  temps réel réunions (`TEMPS_REEL_REUNIONS.md`) — à prototyper contre la façade.
+- **Consolidation des runtimes — veille.** audio.cpp 0.5.x héberge désormais AUSSI
+  Nemotron, Parakeet-TDT et Kroko (streaming compris) : à terme, UN seul runtime
+  servi pourrait remplacer le couple audio.cpp + parakeet.cpp (moins de builds,
+  moins de binaires bakés). Ne bouger qu'après un bench comparatif nemotron
+  audio.cpp vs parakeet.cpp (le nôtre mesurait déjà audio.cpp ~4× plus rapide).
+- **parakeet.cpp v0.5.0 expose les log-probs CTC (C-API #57)** : de la matière pour
+  des hints de fiabilité par segment côté nemotron (confiance réelle, pas proxy).
+
 ### 4.2 Diarisation : peu d'alternatives intégrées, un vrai sujet de veille
 
 **État actuel.** pyannote (2000 Mo, défaut) et sortformer (3500 Mo, streaming)
