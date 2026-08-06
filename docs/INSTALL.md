@@ -89,6 +89,25 @@ cd transcria
 ./install.sh
 ```
 
+### Mode express (défaut interactif)
+
+Sans drapeau, sur un terminal, le profil `all-in-one` passe en **mode express** : le
+script détecte tout (matériel → palier LLM par placement réel, `psql` + sudo →
+PostgreSQL local avec mot de passe généré, token HF → choix des modèles), affiche **un
+récapitulatif « voilà ce que je vais faire »**, pose **une seule confirmation**, puis
+déroule le chemin non-interactif existant. Deux décisions propres à l'express :
+
+- **Sans token HF, sur une config fraîche**, les backends passent à **whisper +
+  Sortformer** (aucun compte requis — même choix que le quickstart Docker) ; la qualité
+  de référence Cohere + pyannote reste activable ensuite depuis *Administration →
+  Modèles* avec un token. Une `config.yaml` existante n'est **jamais** retouchée.
+- Le mot de passe admin reste `CHANGE-ME`, assumé dans le récapitulatif : un bandeau
+  permanent de l'interface le rappelle jusqu'au changement.
+
+`./install.sh --expert` restaure le pas-à-pas historique (une question par choix) ;
+`--non-interactive` reste le mode CI sans aucun prompt. Répondre `n` au récapitulatif
+sort proprement **avant toute mutation**.
+
 ### Ce que fait install.sh
 
 | Étape | Action |
@@ -127,6 +146,7 @@ cd transcria
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts ; installe opencode automatiquement si le profil requiert le LLM)
+./install.sh --expert              # Pas-à-pas historique (une question par choix) — sinon, TTY all-in-one = mode express (cf. § ci-dessus)
 ./install.sh --skip-doctor         # Sauter explicitement la validation post-install doctor
 ./install.sh --strict-doctor       # Validation post-install stricte (warnings doctor = échec)
 ./install.sh --locale en           # Langue (fr|en) : interface, livrables ET sortie de l'installateur

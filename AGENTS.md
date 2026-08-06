@@ -170,12 +170,13 @@ transcria/
       checks/               # les vérifications PAR DOMAINE (vague 0) : common (socle), probes (sondes injectables), database, llm, remote, storage, deployment, identity — golden tests/test_doctor_registry_golden.py
       doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
     installer/              # TOUTE la logique d'installation (C6 : plus aucun install_*.py à la racine)
-      cli.py                # `python -m transcria.installer.cli <phase|helper>` — SEUL point d'entrée Python d'install.sh : 14 phases (python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, recommend-llm, moss-site, audiocpp, parakeetcpp) + 9 helpers transférés (prerequisites, hardware, paths, profiles, check-imports, models, arbitrage, summary-log, postgres-tools). Tête stdlib-pure : python-env tourne AVANT requirements avec le python système
+      cli.py                # `python -m transcria.installer.cli <phase|helper>` — SEUL point d'entrée Python d'install.sh : 15 phases (python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, recommend-llm, express, moss-site, audiocpp, parakeetcpp) + 9 helpers transférés (prerequisites, hardware, paths, profiles, check-imports, models, arbitrage, summary-log, postgres-tools). Tête stdlib-pure : python-env tourne AVANT requirements avec le python système
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
       messages.py           # catalogue fr/en des messages installateur ; fr = libellés historiques mot pour mot
       python_env.py / i18n_phase.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
       moss_site_phase.py / audiocpp_phase.py / parakeetcpp_phase.py # phases OPT-IN : site Transformers 5 du backend moss ; runtimes STT servis ÉPINGLÉS (clone SHA complet + build CUDA arch native — pièges vécus : SHA court refusé par git fetch, arch 75 par défaut ⇒ SIGABRT ggml)
       prerequisites.py / hardware.py / paths.py / profiles.py / imports_check.py # helpers pré-venv (stdlib-purs, python système)
+      express.py            # mode EXPRESS d'install.sh (défaut TTY all-in-one) : décisions par défaut (PostgreSQL si faisable, whisper+sortformer sans token sur config fraîche) + récapitulatif fr/en avant l'UNIQUE confirmation ; pré-venv stdlib, palier LLM best-effort
       models.py / models_lib.py # CLI+rendu modèles ; models_lib = ids et cache HF consommés au RUNTIME (models_catalog, cohere_transcriber)
       arbitrage.py / tiers.py   # CLI LLM d'arbitrage (paliers, placement, prebuilt ai-dock) ; tiers = paliers llama.cpp consommés au RUNTIME (models_catalog, entrypoint)
       torch_env.py / systemd_lib.py / summary_lib.py / opencode_lib.py / postgres_lib.py # bibliothèques des phases (plans torch/unités systemd/rendus/primitives opencode/PostgreSQL)
@@ -188,7 +189,7 @@ transcria/
       schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
       restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
-    models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF)
+    models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF) ; backend Ollama → ligne du modèle CONFIGURÉ (kind ollama, présence via /api/tags), jamais un GGUF re-déduit
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
@@ -396,8 +397,9 @@ transcria/
       downloads_api.py      # téléchargements : SRT, package ZIP, audio, DOCX, extraits audio, clips locuteurs
       refine_api.py         # chat d'affinage : submit, chat (polling), render-options, revert
       editor_routes.py      # éditeur SRT intégré : state (un appel), draft (verrou optimiste 409), save (snapshot pool commun), stream Range, peaks — cf. docs/archive/EDITEUR_SRT_INTEGRE.md
-      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models, /admin/hardware (préconisations matériel, apply multi-instance STT)
+      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models, /admin/hardware (préconisations matériel, apply multi-instance STT), /admin/first-run-status (fragment checklist premier démarrage, 204 = tout vert)
       health_routes.py      # /health, /ready, /metrics (Prometheus)
+      first_run.py          # bilan de premier démarrage (accueil admin) : compose les MÊMES sources que les pages de réparation (catalogue Modèles, checks doctor légers, inventaire GPU/nœuds) — faits structurés, rédaction dans _first_run_checklist.html
       job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job
       request_helpers.py    # json_body (corps JSON typé/tolérant), clean_job_title, audit_origin_from_url
       lexicon_views.py      # vues lexique partagées wizard/API : promote_*_view, enrich_lexicon_context_audio, resolve_context_audio_range

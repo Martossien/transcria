@@ -7,8 +7,9 @@ languages** ([English](../README.md) · [français](../README.fr.md)) and covers
 install + Docker quickstart. These deeper reference documents are written in **French**;
 this index is the English entry point (English summaries below).
 
-New here? Start with the [project README](../README.md), then
-[INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) to get a running instance.
+New here? The single-page walkthrough **[QUICKSTART.en.md](QUICKSTART.en.md)** (français :
+[QUICKSTART.md](QUICKSTART.md)) takes you from zero to your first meeting minutes; then
+[INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) for the full reference.
 Non-technical readers (business owners, project managers, decision makers) have a
 dedicated overview: [PRESENTATION.md](PRESENTATION.md) (French) · [PRESENTATION.en.md](PRESENTATION.en.md) (English) — use cases, benefits,
 example results and the user journey.
@@ -18,6 +19,7 @@ example results and the user journey.
 | Document | What it covers |
 |---|---|
 | [TESTERS.md](TESTERS.md) | **In English** — testing TranscrIA: what to expect (disk, first startup, models, GPU floor), the 15-minute smoke test, topologies we need tested, diagnostics and the report template |
+| [QUICKSTART.md](QUICKSTART.md) · [QUICKSTART.en.md](QUICKSTART.en.md) | **From zero to your first minutes on one page** — host prerequisites, one Docker command or the express native install, first login, first job |
 | [INSTALL.md](INSTALL.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting |
 | [DOCKER.md](DOCKER.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
 | [UPGRADE.md](UPGRADE.md) | Upgrade and rollback procedure, obsolete configuration keys, database migrations |

@@ -103,6 +103,11 @@ Conteneur vierge → amorçage OS → `install.sh` → service → sonde GPU ré
 complet. Compter ~35 min, dont le téléchargement du GGUF d'arbitrage du palier détecté.
 `--topology frontale-split` existe et exerce l'autre chemin d'installation.
 
+> Le gate tourne en `--non-interactive` (pas de TTY en conteneur) : le **mode express**
+> (défaut TTY all-in-one depuis 0.4.2) n'y passe pas. Si `install.sh` ou
+> `transcria/installer/` a changé, dérouler AUSSI le chemin express une fois (terminal
+> réel ou pty, réponse `O` au récapitulatif) — répondre `n` ne teste que l'affichage.
+
 ## 5. Images Docker — construire et vérifier AVANT le tag
 
 **Règle C7 : tout `Dockerfile` modifié est buildé avant le tag.** La CI ne construit que

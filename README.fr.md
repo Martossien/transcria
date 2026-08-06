@@ -259,7 +259,9 @@ que de vraies personnes partagent l'outil, semaine après semaine.
 
 ## Installation
 
-TranscrIA tourne sous Linux avec un GPU NVIDIA. Deux chemins, selon votre objectif.
+TranscrIA tourne sous Linux avec un GPU NVIDIA. Deux chemins, selon votre objectif —
+et une page unique « de zéro au premier compte-rendu » :
+**[docs/QUICKSTART.md](docs/QUICKSTART.md)**.
 
 ### Recommandé — installer sur une machine GPU
 
@@ -270,9 +272,14 @@ télécharger la LLM d'arbitrage adaptée à votre VRAM, et installe un service 
 ```bash
 git clone https://github.com/Martossien/transcria.git
 cd transcria
-./install.sh          # guidé : détection GPU/CUDA, venv, PyTorch, backend LLM, unité systemd
+./install.sh          # mode EXPRESS : tout est détecté, UN récapitulatif, UNE confirmation
 ./start.sh            # migrations de base, puis démarrage du serveur -> http://localhost:7870
 ```
+
+Vous préférez décider chaque étape ? `./install.sh --expert` restaure le pas-à-pas
+historique. Après connexion, une **checklist de premier démarrage** sur l'accueil
+signale ce qui manque encore (modèles, GPU, moteur de correction) avec un lien de
+correction par point — elle disparaît quand tout est vert.
 
 Une fois installé en service, gérez-le comme d'habitude (c'est ainsi qu'il tourne en
 production) :

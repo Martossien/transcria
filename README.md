@@ -245,7 +245,9 @@ once real people share the tool week after week.
 
 ## Installation
 
-TranscrIA runs on Linux with an NVIDIA GPU. Two paths, depending on your goal.
+TranscrIA runs on Linux with an NVIDIA GPU. Two paths, depending on your goal —
+and a single-page walkthrough from zero to your first minutes:
+**[docs/QUICKSTART.en.md](docs/QUICKSTART.en.md)**.
 
 ### Recommended — install on a GPU host
 
@@ -256,9 +258,14 @@ arbitration LLM that best fits your VRAM, and installs a `systemd` service.
 ```bash
 git clone https://github.com/Martossien/transcria.git
 cd transcria
-./install.sh          # guided: GPU/CUDA detection, venv, PyTorch, LLM backend, systemd unit
+./install.sh          # EXPRESS mode: detects everything, shows ONE summary, asks ONE confirmation
 ./start.sh            # database migrations, then start the server -> http://localhost:7870
 ```
+
+Prefer to decide each step yourself? `./install.sh --expert` restores the historical
+question-by-question flow. After login, a **first-run checklist** on the home page
+points out anything still missing (models, GPU, correction engine) with a fix link
+per item — it disappears once everything is green.
 
 Once installed as a service, manage it the usual way (this is how it runs in production):
 
