@@ -11,6 +11,12 @@
     <span class="se-title"><i class="bi bi-pencil-square me-1"></i>{{ job.title }}</span>
     <span class="text-muted small" id="se-meta"></span>
     <span class="se-gauge text-muted small" id="se-gauge" title="{{ _('Progression de la relecture (segments visités)') }}"></span>
+    {# Relecture ciblée : compteur + navigation entre segments douteux (couche fiabilité). #}
+    <div class="input-group input-group-sm se-doubt d-none" id="se-doubt" style="max-width: 220px">
+      <span class="input-group-text se-doubt-badge" id="se-doubt-count"></span>
+      <button class="btn btn-outline-secondary" id="se-doubt-prev" title="{{ _('Segment douteux précédent') }}">↑</button>
+      <button class="btn btn-outline-secondary" id="se-doubt-next" title="{{ _('Segment douteux suivant') }}">↓</button>
+    </div>
     <div class="input-group input-group-sm se-search" style="max-width: 240px">
       <input class="form-control" id="se-search" placeholder="{{ _('Rechercher… (Ctrl+F)') }}">
       <button class="btn btn-outline-secondary" id="se-search-prev" title="{{ _('Précédent') }}">↑</button>
@@ -28,6 +34,8 @@
   </div>
 
   <div id="se-banners"></div>
+  {# Hallucinations supprimées (double preuve) — panneau repliable, restauration. #}
+  <div id="se-removed"></div>
 
   <!-- Carte de reprise du brouillon (affichée seule si brouillon présent) -->
   <div class="se-resume-card d-none" id="se-resume">

@@ -395,3 +395,52 @@ class TestSummaryStaleMarker:
         xml = zipfile.ZipFile(BytesIO(r.data)).read("word/document.xml").decode("utf-8")
         assert "antérieure à la dernière édition" in xml
 
+
+
+class TestReliabilityLayer:
+    """Couche fiabilité (2026-08) : intervalles douteux + hallucinations supprimées
+    exposés par l'état — les MÊMES faits que le pipeline, en millisecondes."""
+
+    def _seed_reliability(self, app, job_id):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+            fs.save_json("metadata/transcription_segments.json", [
+                {"start": 0.0, "end": 2.0, "text": "ok", "reliability": "ok", "reliability_reasons": []},
+                {"start": 2.0, "end": 4.5, "text": "hm", "reliability": "suspect",
+                 "reliability_reasons": ["segment_court", "no_speech_prob_eleve"]},
+                {"start": 5.0, "end": 6.0, "text": "??", "reliability": "degrade",
+                 "reliability_reasons": ["hallucination_generique"]},
+            ])
+            fs.save_json("metadata/removed_hallucinations.json", [
+                {"start": 7.5, "end": 9.0, "speaker": "SPEAKER_01",
+                 "text": "Sous-titres réalisés par la communauté",
+                 "pattern": "^\\s*sous[- ]?titres", "signature_source": "whisper",
+                 "corroboration": {"kind": "no_speech"}},
+            ])
+
+    def test_state_expose_les_intervalles_douteux_en_ms(self, admin_client, app, editor_job):
+        self._seed_reliability(app, editor_job)
+        data = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        rel = data["reliability"]
+        assert [r["level"] for r in rel] == ["suspect", "degrade"]   # les « ok » ne voyagent pas
+        assert rel[0]["start_ms"] == 2000 and rel[0]["end_ms"] == 4500
+        assert rel[0]["reasons"] == ["segment_court", "no_speech_prob_eleve"]
+
+    def test_state_expose_les_segments_supprimes(self, admin_client, app, editor_job):
+        self._seed_reliability(app, editor_job)
+        data = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        removed = data["removed_segments"]
+        assert len(removed) == 1
+        assert removed[0]["start_ms"] == 7500 and removed[0]["speaker"] == "SPEAKER_01"
+        assert "Sous-titres" in removed[0]["text"]
+
+    def test_sans_artefacts_les_champs_sont_vides(self, admin_client, editor_job):
+        data = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        assert data["reliability"] == [] and data["removed_segments"] == []
+
+    def test_page_porte_la_navigation_douteux(self, admin_client, editor_job):
+        html = admin_client.get(f"/jobs/{editor_job}/editor").data.decode()
+        assert 'id="se-doubt"' in html and 'id="se-removed"' in html

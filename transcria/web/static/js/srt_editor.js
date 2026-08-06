@@ -47,6 +47,8 @@
     visited: new Set(),    // chunks visités (jauge de relecture, persistée au brouillon)
     searchHits: [], searchPos: -1,
     review: {points: [], anchors: [], done: new Set()},   // points qualité (tiroir)
+    reliability: [],       // intervalles douteux du pipeline ({start_ms,end_ms,level,reasons}, triés)
+    removedSegments: [],   // hallucinations supprimées (double preuve) — restaurables
   };
 
   const audio = $("se-audio");
@@ -144,6 +146,11 @@
       audio.src = `/api/jobs/${JOB}/audio/stream`;
       loadPeaks();
     }
+    // Couche fiabilité AVANT le premier rendu : les cartes et la fresque lisent
+    // ces intervalles (vécu : affectés après renderList, seuls les [INCERTAIN]
+    // textuels sortaient au premier affichage).
+    state.reliability = (data.reliability || []).slice().sort((a, b) => a.start_ms - b.start_ms);
+    state.removedSegments = data.removed_segments || [];
     renderList();
     drawFresque();
     state.zoom.spanMs = Math.min(60000, totalMs());
@@ -152,6 +159,7 @@
     state.review.points = data.review_points || [];
     state.review.anchors = data.review_anchors || [];
     renderReviewMenu();
+    renderRemovedPanel();
     if (opts && opts.fromDraft) {
       for (let i = 0; i < state.chunks.length; i++) state.dirty.add(i);
       setSaveState(_t("brouillon repris — pensez à enregistrer une version"), "saving");
@@ -184,16 +192,56 @@
     $("se-banners").appendChild(div);
   }
 
+  // ── Couche fiabilité (2026-08) ────────────────────────────────────────────
+  // Rattachement chunk ↔ intervalle douteux par RECOUVREMENT temporel (≥ 40 % de
+  // l'intervalle) — robuste aux découpes/fusions faites ensuite dans l'éditeur.
+  const _REL_REASON_LABELS = {
+    segment_micro: () => _t("segment très court"),
+    segment_court: () => _t("segment court et pauvre en mots"),
+    debit_parole_anormal: () => _t("débit de parole anormal"),
+    no_speech_prob_eleve: () => _t("probabilité de non-parole élevée"),
+    mots_faible_confiance: () => _t("mots à faible confiance"),
+    texte_non_latin: () => _t("texte non latin"),
+    hallucination_generique: () => _t("motif d'hallucination générique"),
+    signature_hallucination_moteur: () => _t("signature d'hallucination connue de ce moteur"),
+    audio_preflight_degrade: () => _t("zone audio dégradée (diagnostic)"),
+  };
+  function chunkReliability(c) {
+    // [INCERTAIN] posé par la correction = douteux par définition, même sans intervalle.
+    const marked = /\[INCERTAIN\]/.test(c.text || "");
+    let level = marked ? "suspect" : null;
+    const reasons = new Set(marked ? [_t("marqué [INCERTAIN] par la correction")] : []);
+    for (const r of state.reliability) {
+      if (r.start_ms >= c.end_ms) break;
+      if (r.end_ms <= c.start_ms) continue;
+      const overlap = Math.min(r.end_ms, c.end_ms) - Math.max(r.start_ms, c.start_ms);
+      if (overlap < 0.4 * Math.max(1, r.end_ms - r.start_ms)) continue;
+      if (r.level === "degrade" || level === null) level = (r.level === "degrade") ? "degrade" : "suspect";
+      for (const reason of r.reasons || []) {
+        const label = _REL_REASON_LABELS[reason];
+        reasons.add(label ? label() : reason);
+      }
+    }
+    return level ? { level, reasons: [...reasons] } : null;
+  }
+  function doubtIndices() {
+    const out = [];
+    for (let i = 0; i < state.chunks.length; i++) if (chunkReliability(state.chunks[i])) out.push(i);
+    return out;
+  }
+
   // ── Rendu de la liste (cartes paresseuses) ─────────────────────────────────
   function cardHtml(c, i) {
     const color = speakerColor(c.speaker_id);
+    const rel = chunkReliability(c);
     return `
-      <div class="se-card${state.dirty.has(i) ? " dirty" : ""}" data-i="${i}" style="--se-color:${color}">
+      <div class="se-card${state.dirty.has(i) ? " dirty" : ""}${rel ? " rel-" + rel.level : ""}" data-i="${i}" style="--se-color:${color}">
         <div class="se-card-head">
           <span class="se-speaker-chip" data-act="speaker" title="${_t('Changer le locuteur')}">
             <span class="se-speaker-dot"></span>${esc(speakerLabel(c))}</span>
           <span class="se-times" data-act="seek" title="${_t('Aller à cet instant')}">${fmt(c.start_ms)} → ${fmt(c.end_ms)}</span>
           <span class="se-dirty-dot" title="${_t('Modifié depuis la dernière version')}"></span>
+          ${rel ? `<span class="se-rel-pill se-rel-${rel.level}" title="${esc(rel.reasons.join(" · "))}">${rel.level === "degrade" ? _t("douteux") : _t("à vérifier")}</span>` : ""}
           ${i > 0 && c.start_ms < state.chunks[i - 1].end_ms
             ? `<span class="se-overlap-pill" title="${_t('Commence avant la fin du segment précédent')}">${_t('chevauche')}</span>` : ""}
           <span class="ms-auto">#${i + 1}</span>
@@ -234,6 +282,7 @@
     $("se-meta").textContent =
       _t("%(seg)s segments · %(spk)s locuteurs", { seg: state.chunks.length, spk: knownSpeakers().size }) +
       (state.audio.duration_ms ? ` · ${fmt(state.audio.duration_ms)}` : "");
+    renderDoubtNav();   // le compteur « à vérifier » suit les éditions (suppressions, fusions…)
   }
 
   function rerenderCard(i) {
@@ -294,6 +343,11 @@
     } else if (delta.op === "delete") {
       if (forward) state.chunks.splice(delta.i, 1);
       else state.chunks.splice(delta.i, 0, structuredClone(delta.before));
+      renderList();
+    } else if (delta.op === "restore") {
+      // Restauration d'une hallucination supprimée : miroir inversé du delete.
+      if (forward) state.chunks.splice(delta.i, 0, structuredClone(delta.after));
+      else state.chunks.splice(delta.i, 1);
       renderList();
     }
     drawFresque();
@@ -555,6 +609,13 @@
         const ox = (c.start_ms / total) * width;
         const ow = Math.max(2, ((state.chunks[i - 1].end_ms - c.start_ms) / total) * width);
         ctx.fillRect(ox, 2, ow, 30);
+      }
+      // Tick de doute (bande haute) : ambre = à vérifier, rouge = douteux — la
+      // fresque devient la minimap de relecture ciblée.
+      const rel = chunkReliability(c);
+      if (rel) {
+        ctx.fillStyle = rel.level === "degrade" ? "rgba(220, 38, 38, 0.9)" : "rgba(217, 119, 6, 0.9)";
+        ctx.fillRect(x, 0, Math.max(2, w), 4);
       }
     }
     // repères (triangles) + cadre de la fenêtre zoomée
@@ -1007,6 +1068,8 @@
   $("se-search").addEventListener("input", () => { state.searchPos = -1; });
   $("se-search-next").onclick = () => (state.searchPos < 0 ? runSearch() : gotoHit(state.searchPos + 1));
   $("se-search-prev").onclick = () => gotoHit(state.searchPos - 1);
+  $("se-doubt-next").onclick = () => gotoDoubt(1);
+  $("se-doubt-prev").onclick = () => gotoDoubt(-1);
 
   // ── Points à vérifier (rapport qualité → liste de travail cliquable) ────────
   function renderReviewMenu() {
@@ -1029,6 +1092,74 @@
         <span>${esc(t)}</span></div>`;
     });
     $("se-review-menu").innerHTML = html;
+  }
+
+  // ── Navigation « douteux suivant » + panneau des segments supprimés ────────
+  function renderDoubtNav() {
+    const cluster = $("se-doubt");
+    if (!cluster) return;
+    const n = doubtIndices().length;
+    cluster.classList.toggle("d-none", n === 0);
+    const badge = $("se-doubt-count");
+    if (badge) badge.textContent = _t("%(n)s à vérifier", { n });
+  }
+  function gotoDoubt(dir) {
+    const idx = doubtIndices();
+    if (!idx.length) return;
+    const from = state.activeIndex;
+    let target;
+    if (dir > 0) target = idx.find((i) => i > from) ?? idx[0];
+    else target = [...idx].reverse().find((i) => i < from) ?? idx[idx.length - 1];
+    state.activeIndex = target;
+    const el = $("se-list").querySelector(`.se-card[data-i="${target}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.remove("rel-pulse");
+      void el.offsetWidth;   // redémarre l'animation CSS
+      el.classList.add("rel-pulse");
+    }
+  }
+
+  function renderRemovedPanel() {
+    const host = $("se-removed");
+    if (!host) return;
+    const items = state.removedSegments;
+    if (!items.length) { host.innerHTML = ""; return; }
+    state._restored = state._restored || new Set();
+    const rows = items.map((s, k) => `
+      <div class="se-removed-row${state._restored.has(k) ? " restored" : ""}" data-k="${k}">
+        <span class="se-times">${fmt(s.start_ms)} → ${fmt(s.end_ms)}</span>
+        <span class="se-removed-text">${esc(s.text)}</span>
+        <button class="btn btn-sm btn-outline-secondary se-restore-btn" data-k="${k}"
+                ${state._restored.has(k) || state.readonly ? "disabled" : ""}>
+          ${state._restored.has(k) ? _t("restauré") : _t("restaurer")}</button>
+      </div>`).join("");
+    host.innerHTML = `
+      <details class="se-removed-panel">
+        <summary><i class="bi bi-eraser me-1"></i>${_t("%(n)s segment(s) retirés comme hallucinations confirmées — vérifier / restaurer", { n: items.length })}</summary>
+        <p class="se-removed-hint">${_t("Retirés sur double preuve (signature du moteur + zone sans parole). La restauration réinsère le texte à sa place — enregistrez ensuite une version.")}</p>
+        ${rows}
+      </details>`;
+    host.querySelectorAll(".se-restore-btn").forEach((b) => {
+      b.addEventListener("click", () => restoreRemoved(parseInt(b.dataset.k, 10)));
+    });
+  }
+  function restoreRemoved(k) {
+    const s = state.removedSegments[k];
+    if (!s || state.readonly) return;
+    const chunk = {
+      start_ms: s.start_ms, end_ms: s.end_ms,
+      speaker_id: s.speaker || "", speaker_name: "", text: s.text,
+    };
+    let i = state.chunks.findIndex((c) => c.start_ms > s.start_ms);
+    if (i < 0) i = state.chunks.length;
+    pushUndo({ op: "restore", i, after: structuredClone(chunk) });
+    state.chunks.splice(i, 0, chunk);
+    (state._restored = state._restored || new Set()).add(k);
+    renderList();
+    drawFresque();
+    renderDoubtNav();
+    renderRemovedPanel();
   }
 
   $("se-review-menu").addEventListener("click", (ev) => {

@@ -216,6 +216,12 @@ def editor_state(job_id: str):
         },
         "review_points": fs.load_json("quality/review_points.json") or [],
         "review_anchors": fs.load_json("quality/review_points_anchors.json") or [],
+        # Couche fiabilité (2026-08-06) : les MÊMES faits que le pipeline — niveaux
+        # suspect/degrade du SegmentReliabilityScorer et hallucinations supprimées
+        # (double preuve, toujours restaurables). La relecture devient ciblée :
+        # l'éditeur colore, navigue de douteux en douteux, et propose la restauration.
+        "reliability": _reliability_view(fs),
+        "removed_segments": _removed_segments_view(fs),
         "audio": {
             "available": audio is not None,
             "duration_ms": duration_ms,
@@ -224,6 +230,56 @@ def editor_state(job_id: str):
         "readonly": _is_readonly(job, fs),
         "warnings": validate_chunks(chunks, audio_duration_ms=duration_ms),
     })
+
+
+def _reliability_view(fs) -> list[dict]:
+    """Intervalles douteux du scorage pipeline, en millisecondes pour l'éditeur.
+
+    Seuls les segments non-« ok » voyagent (payload léger) ; l'éditeur les
+    rattache aux chunks du SRT par recouvrement temporel — robuste aux
+    découpes/fusions faites ensuite dans l'éditeur."""
+    raw = fs.load_json("metadata/transcription_segments.json") or []
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for seg in raw:
+        if not isinstance(seg, dict):
+            continue
+        level = str(seg.get("reliability") or "ok")
+        if level == "ok":
+            continue
+        try:
+            out.append({
+                "start_ms": int(float(seg.get("start") or 0.0) * 1000),
+                "end_ms": int(float(seg.get("end") or 0.0) * 1000),
+                "level": level,
+                "reasons": [str(r) for r in (seg.get("reliability_reasons") or [])],
+            })
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _removed_segments_view(fs) -> list[dict]:
+    """Hallucinations supprimées (double preuve) — texte + temps, pour restauration."""
+    raw = fs.load_json("metadata/removed_hallucinations.json") or []
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for seg in raw:
+        if not isinstance(seg, dict):
+            continue
+        try:
+            out.append({
+                "start_ms": int(float(seg.get("start") or 0.0) * 1000),
+                "end_ms": int(float(seg.get("end") or 0.0) * 1000),
+                "speaker": str(seg.get("speaker") or ""),
+                "text": str(seg.get("text") or ""),
+                "pattern": str(seg.get("pattern") or ""),
+            })
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _sha256(text: str) -> str:
