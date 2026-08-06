@@ -15,7 +15,7 @@ Matrices disponibles (--matrix) :
   vad      : 8 combos ciblés VAD final / VAD interne Whisper
   cohere_tune : 9 combos Cohere + pyannote pour calibrage qualité/vitesse
   pyannote_tune : 14 combos calibrage diarisation / chunking pyannote
-  all      : base + extended + stt + vad + cohere_tune + pyannote_tune (91 combos)
+  all      : base + extended + stt + vad + cohere_tune + pyannote_tune (115 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
     python scripts/bench/bench_audio.py \\
@@ -721,7 +721,7 @@ def parse_args() -> argparse.Namespace:
              "vad (8 combos ciblés VAD final / VAD interne Whisper), "
              "cohere_tune (9 combos Cohere + pyannote), "
              "pyannote_tune (14 combos diarisation/chunking pyannote), "
-             "all (91 combos) — défaut: base",
+             "all (115 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,

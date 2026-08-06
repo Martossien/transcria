@@ -6,6 +6,71 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.2] — 2026-08-07
+
+L'installation devient accessible à l'utilisateur lambda — et aux cartes gaming
+8 Go, du natif au Docker bundled.
+
+### Ajouté
+
+#### Installation express + premier démarrage guidé
+
+- **Mode express d'`install.sh`** (nouveau défaut) : détections automatiques (GPU →
+  palier LLM, `psql` → PostgreSQL, token HF → choix des modèles), un récapitulatif
+  « voilà ce que je vais faire », une confirmation. `--expert` redonne le pas-à-pas
+  question par question.
+- **Checklist de premier démarrage** sur l'accueil : modèles absents, GPU non vu,
+  mot de passe admin à changer… chaque point avec un lien pour corriger ; la
+  checklist disparaît quand tout est vert.
+- **Page QUICKSTART** (FR/EN) : « de zéro au premier compte-rendu », deux chemins
+  (Docker ou natif), une page.
+
+#### Palier LLM 8 Go + profil CPU
+
+- **Nouveau palier d'arbitrage 8 Go** : Qwen3.5-4B Q5_K_M (contexte 131K, ~6,4 Go
+  chargé) — qualifié en E2E réel (correction chirurgicale, résumé fidèle). Les
+  cartes gaming 8-11 Go font désormais tourner le workflow complet.
+- **Profil CPU** (sans GPU) : transcription Kroko + diarisation, phases LLM
+  désactivées proprement.
+- **Docker bundled dès 8 Go** : l'image bake AUSSI le palier 8, et l'entrypoint
+  **rétrograde automatiquement** le palier par défaut sur carte < 12 Go (jamais de
+  montée automatique). Plancher preflight aligné : « dès 8 Go de VRAM » vaut pour
+  toutes les images.
+
+#### Page Modèles : Ollama de bout en bout
+
+- La page Modèles **honore le backend Ollama** (liste des modèles servis, bascule
+  de modèle en un clic) au lieu de proposer un téléchargement GGUF trompeur.
+
+#### Éditeur SRT : couche de fiabilité
+
+- **Indicateurs de doute par segment** (issus de la fiabilité STT et des marqueurs
+  d'incertitude), **navigation « douteux suivant »**, repères sur la fresque, et
+  **panneau des segments supprimés** par l'anti-hallucination — restaurables en un
+  clic. La relecture devient un contrôle ciblé au lieu d'une lecture intégrale.
+
+### Modifié
+
+- **Résumé batché** pour les moteurs STT à worker dédié (MOSS, cohere_tf5) : un
+  seul chargement du modèle pour tous les chunks (au lieu d'un par chunk —
+  rédhibitoire sur les réunions longues) ; horodatages absolus conservés.
+- **Le résumé démarre à l'upload par défaut** (`workflow.summary_autostart`) : le
+  compte-rendu est souvent prêt avant la fin de la relecture.
+- **Runtimes STT servis** mis à niveau et requalifiés en réel : audio.cpp
+  release-0.5.1 (gestionnaire de modèles v2, paquet GGUF Qwen3-ASR) et
+  parakeet.cpp v0.5.0.
+- **Visibilité de file d'attente** revue sur les topologies hors all-in-one
+  (frontale/nœud) : les estimations tiennent compte de la charge réelle du nœud.
+- **Benchmark STT** : addendum long-format (réunion réelle de 99 minutes) —
+  plafond une-passe MOSS mesuré (18 min 45), kroko intégral en 223 s CPU, duo
+  cohere+pyannote 7× plus rapide que la une-passe à qualité supérieure ;
+  cohere_tf5 scoré et écarté.
+
+### Corrigé
+
+- Palier 8 Go : LFM2.5-2.6B écarté après lecture réelle des livrables (corruption
+  de la correction, contresens du résumé) — remplacé par Qwen3.5-4B Q5_K_M.
+
 ## [0.4.1] — 2026-08-05
 
 Le portail sait se mettre à jour lui-même, et les hallucinations STT certaines

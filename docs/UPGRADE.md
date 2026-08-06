@@ -175,6 +175,26 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.1 → 0.4.2
+
+Aucune migration de base, aucune action requise. Trois changements de comportement à
+connaître :
+
+1. **Le résumé démarre à l'upload par défaut.** Si votre `config.yaml` ne porte pas la
+   clé `workflow.summary_autostart.enabled`, le résumé (et la transcription qui le
+   nourrit) démarre désormais dès l'audio déposé, sans attendre la fin de l'assistant —
+   le compte-rendu est souvent prêt avant la relecture. Une clé déjà présente (quelle
+   que soit sa valeur) est respectée ; pour revenir à l'ancien comportement :
+   `workflow.summary_autostart.enabled: false`.
+2. **`install.sh` passe en mode express par défaut** : détections automatiques, un
+   récapitulatif, une confirmation. Le pas-à-pas historique reste disponible via
+   `./install.sh --expert`. Sans effet sur une installation existante tant que vous ne
+   relancez pas l'installateur.
+3. **Conteneurs : palier LLM automatique sous 12 Go.** Sans `TRANSCRIA_LLM_TIER`
+   explicite, une carte < 12 Go reçoit désormais le palier 8 (Qwen3.5-4B) au lieu
+   d'échouer à charger le 9B. Un palier explicite est toujours respecté ; au-delà de
+   12 Go, rien ne change (jamais de montée automatique).
+
 ### Notes spécifiques 0.4.0 → 0.4.1
 
 Aucune migration de base, aucune action requise. Deux changements de comportement à

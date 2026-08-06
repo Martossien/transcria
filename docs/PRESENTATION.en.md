@@ -106,6 +106,14 @@ board meeting — the choice is one click, right when you drop the file.
 - **Team capitalisation** — shared lexicons, minutes templates per meeting type, groups
   with their own administrators: the second meeting costs less effort than the first,
   and the tool improves as the team uses it.
+- **Installs without expertise, runs on a gaming card (0.4.2)** — installation is one
+  command and one confirmation: the detections (GPU, database, reachable models) do the
+  rest, and a first-run checklist shows what is missing, each item with a link to fix
+  it. The full workflow — summary and correction included — now runs **from 8 GB of
+  video memory**, the card of ordinary gaming PCs, native and Docker alike; without any
+  compatible card, transcription still works on the CPU. During review, the editor
+  highlights doubtful passages and lets you jump from doubt to doubt instead of
+  re-reading everything.
 - **The tool maintains itself from its own interface (0.4.1)** — the Maintenance page
   can tell you when a newer release exists (only if you allow it: no network call
   without opt-in) and upgrade the install in two clicks, fallback backup included.

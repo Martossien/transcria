@@ -38,11 +38,11 @@ Matrices intégrées (`--matrix`) :
 |---|---:|---|
 | `base` | 24 | scène / séparation de sources / normalisation / filtre / STT (5 dimensions) |
 | `extended` | 12 | diarisation, décodage Whisper, pénalité de répétition Cohere |
-| `stt` | 42 | 7 backends STT (cohere/whisper/granite/parakeet/voxtral/kroko/moss) × 3 diarisations × 2 VAD (comparatif moteurs ; kroko = CPU pur, moss requiert `moss.moss_site`) |
+| `stt` | 48 | 8 backends STT (cohere/whisper/granite/parakeet/voxtral/kroko/moss/cohere_tf5) × 3 diarisations × 2 VAD (comparatif moteurs ; kroko = CPU pur, moss et cohere_tf5 requièrent leur site Transformers 5 isolé) |
 | `vad` | 8 | VAD final vs VAD interne Whisper |
 | `cohere_tune` | 9 | calibrage qualité/vitesse Cohere + pyannote |
 | `pyannote_tune` | 14 | calibrage diarisation / chunking pyannote |
-| `all` | 91 | tout ce qui précède |
+| `all` | 115 | tout ce qui précède |
 
 **Toujours commencer par un aperçu** (`--dry-run` n'exécute rien, il liste les commandes) :
 
