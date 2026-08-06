@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-06 14:34+0200\n"
+"POT-Creation-Date: 2026-08-06 14:59+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -3424,7 +3424,7 @@ msgid "%(mb)s Mo"
 msgstr "%(mb)s Mo"
 
 #: transcria/web/templates/admin_maintenance.html:178
-#: transcria/web/templates/admin_models.html:82
+#: transcria/web/templates/admin_models.html:93
 msgid "Télécharger"
 msgstr "Télécharger"
 
@@ -3475,7 +3475,7 @@ msgstr "Cache HuggingFace (STT, diarisation)"
 #: transcria/web/templates/admin_models.html:14
 #: transcria/web/templates/admin_models.html:21
 #: transcria/web/templates/admin_models.html:51
-#: transcria/web/templates/admin_models.html:62
+#: transcria/web/templates/admin_models.html:69
 #, python-format
 msgid "%(n)s Go"
 msgstr "%(n)s Go"
@@ -3512,7 +3512,7 @@ msgid "Action"
 msgstr "Action"
 
 #: transcria/web/templates/admin_models.html:46
-#: transcria/web/templates/admin_models.html:79
+#: transcria/web/templates/admin_models.html:90
 msgid "token HF"
 msgstr "token HF"
 
@@ -3533,15 +3533,23 @@ msgstr "échec"
 msgid "absent"
 msgstr "absent"
 
-#: transcria/web/templates/admin_models.html:69
+#: transcria/web/templates/admin_models.html:64
+msgid "démon Ollama injoignable — le démarrer pour connaître le statut réel"
+msgstr "démon Ollama injoignable — le démarrer pour connaître le statut réel"
+
+#: transcria/web/templates/admin_models.html:66
+msgid "taille selon le modèle (magasin Ollama)"
+msgstr "taille selon le modèle (magasin Ollama)"
+
+#: transcria/web/templates/admin_models.html:79
 msgid "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
 msgstr "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
 
-#: transcria/web/templates/admin_models.html:70
+#: transcria/web/templates/admin_models.html:80
 msgid "Activer (servir)"
 msgstr "Activer (servir)"
 
-#: transcria/web/templates/admin_models.html:85
+#: transcria/web/templates/admin_models.html:96
 msgid "token HF configuré utilisé"
 msgstr "token HF configuré utilisé"
 

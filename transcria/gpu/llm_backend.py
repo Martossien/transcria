@@ -8,6 +8,7 @@ from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu._port_utils import kill_port_listeners
+from transcria.gpu.arbitrage_endpoint import ollama_model_name, ollama_name_matches
 from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
 
 logger = logging.getLogger(__name__)
@@ -349,21 +350,13 @@ class OllamaLLMBackend(LLMBackend):
 
     @property
     def model_id(self) -> str:
-        # Nom de modèle Ollama NATIF (ex. "qwen3:8b") pour l'API /api/*. `services.ollama_model`
-        # fait autorité ; sinon on retire le préfixe provider opencode ("local/…") du model_id
-        # d'arbitrage (opencode, lui, consomme "local/qwen3:8b" ; Ollama attend "qwen3:8b").
-        svc = self.config.get("services", {}) or {}
-        explicit = svc.get("ollama_model")
-        if explicit:
-            return str(explicit)
-        raw = self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
-        return raw[len("local/"):] if raw.startswith("local/") else raw
+        # Nom de modèle Ollama NATIF (ex. "qwen3:8b") pour l'API /api/* — résolution
+        # partagée avec la page Modèles (source unique dans arbitrage_endpoint).
+        return ollama_model_name(self.config)
 
     @staticmethod
     def _name_matches(candidate: str, wanted: str) -> bool:
-        # Ollama nomme "qwen3:8b" ; on tolère l'absence de tag (":latest" implicite).
-        base = wanted.split(":")[0] if ":" in wanted else wanted
-        return bool(candidate) and bool(base) and candidate.startswith(base)
+        return ollama_name_matches(candidate, wanted)
 
     def _pulled(self) -> bool:
         """Le modèle est-il téléchargé (présent dans /api/tags) ?"""

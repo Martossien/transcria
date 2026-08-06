@@ -24,6 +24,30 @@ def is_ollama_backend(config: dict) -> bool:
     return bool(services.get("ollama_url"))
 
 
+def ollama_model_name(config: dict) -> str:
+    """Nom de modèle Ollama NATIF configuré (ex. ``qwen3.6:27b``) — source unique.
+
+    ``services.ollama_model`` fait autorité ; sinon le ``model_id`` d'arbitrage sans le
+    préfixe provider opencode (opencode consomme ``local/qwen3.6:27b`` ; Ollama attend
+    ``qwen3.6:27b``). Partagée par ``OllamaLLMBackend.model_id`` et la page Modèles :
+    la page doit montrer le modèle que le workflow UTILISERA, jamais une re-déduction.
+    """
+    services = config.get("services", {}) or {}
+    explicit = services.get("ollama_model")
+    if explicit:
+        return str(explicit)
+    raw = config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
+    return raw[len("local/"):] if raw.startswith("local/") else raw
+
+
+def ollama_name_matches(candidate: str, wanted: str) -> bool:
+    """Ollama nomme ``qwen3:8b`` ; on tolère l'absence de tag (``:latest`` implicite).
+
+    Même règle pour le backend (``_pulled``) et le statut de la page Modèles."""
+    base = wanted.split(":")[0] if ":" in wanted else wanted
+    return bool(candidate) and bool(base) and candidate.startswith(base)
+
+
 def _parse_host_port(url: str, default_port: int) -> tuple[str, int]:
     from urllib.parse import urlparse
 

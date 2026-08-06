@@ -4,18 +4,29 @@ Piloté par la config : on ne liste que ce dont CETTE installation a besoin (bac
 configuré + palier LLM recommandé pour le VRAM). Sert la page « Modèles » : statut présent/absent,
 taille sur disque, caractère *gated* (token HF + licence), estimation de taille, place disque.
 
-Pur et sans réseau (le téléchargement vit ailleurs). Réutilise les primitives de
-``installer/models_lib`` (cache HF) et ``installer/tiers`` (palier GGUF).
+Pur et sans réseau (le téléchargement vit ailleurs) — à l'exception d'une sonde
+loopback du démon Ollama (``/api/tags``, timeout court) quand le backend d'arbitrage
+est Ollama : la présence d'un modèle Ollama n'existe nulle part sur disque pour nous.
+Réutilise les primitives de ``installer/models_lib`` (cache HF) et ``installer/tiers``
+(palier GGUF).
 """
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shutil
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from transcria.gpu.arbitrage_endpoint import (
+    is_ollama_backend,
+    ollama_model_name,
+    ollama_name_matches,
+    resolve_arbitrage_endpoint,
+)
 from transcria.installer.models_lib import PYANNOTE_MODEL_ID, find_hf_cache_model
 from transcria.installer.tiers import get_tier_metadata, recommend_tier
 from transcria.stt.registry import backends as _stt_backends
@@ -95,7 +106,7 @@ class ModelSpec:
     label: str
     repo_id: str
     file: str | None     # fichier unique (GGUF) ou None = snapshot complet
-    kind: str            # gguf (→ models_dir) | hf_cache (→ HF_HOME)
+    kind: str            # gguf (→ models_dir) | hf_cache (→ HF_HOME) | runtime (→ runtimes/) | ollama (→ démon)
     target_subdir: str   # gguf : sous-dossier de models_dir
     gated: bool
     license: str
@@ -117,8 +128,22 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
     models = cfg.get("models", {}) or {}
     specs: list[ModelSpec] = []
 
+    # LLM d'arbitrage — backend Ollama : montrer le modèle CONFIGURÉ (celui que le
+    # workflow utilisera), jamais le GGUF du palier — llm_profiles.yaml déclare
+    # `download: ollama_pull` mais la page proposait un GGUF qu'Ollama n'utilisera
+    # jamais (constat analyse installation 2026-08-06).
+    if is_ollama_backend(cfg):
+        model = ollama_model_name(cfg)
+        if model:
+            specs.append(ModelSpec(
+                role="arbitrage_llm", label=f"LLM d'arbitrage (Ollama : {model})",
+                repo_id=model, file=None, kind="ollama", target_subdir="",
+                gated=False, license="selon le modèle (registre Ollama)",
+                license_url=f"https://ollama.com/library/{model.split(':')[0]}",
+                est_gb=0.0,
+            ))
     # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort).
-    if total_vram_mb:
+    elif total_vram_mb:
         try:
             tier = recommend_tier(total_vram_mb)
             meta = get_tier_metadata(tier)
@@ -225,12 +250,25 @@ def model_status(
     models_dir: Path,
     served_path: Path | None = None,
     extra_roots: tuple[Path, ...] = (),
+    ollama_tags: list[dict] | None = None,
 ) -> dict:
     """Présence + taille sur disque, en cherchant à PLUSIEURS endroits (aucun réseau).
 
     GGUF : le ``--model`` réellement servi d'abord, puis le fichier cherché sous plusieurs racines
     (le sous-dossier peut différer de l'attendu). HF cache : plusieurs répertoires ``hub/``.
-    Résilient aux dossiers non lisibles (ex. ``/root/models`` pour un process non-root)."""
+    Résilient aux dossiers non lisibles (ex. ``/root/models`` pour un process non-root).
+
+    Ollama : la présence vient de ``ollama_tags`` (réponse ``/api/tags`` fournie par
+    l'appelant, ``None`` = démon injoignable → ``daemon_up: False`` pour que l'UI
+    distingue « pas tiré » de « Ollama arrêté »)."""
+    if spec.kind == "ollama":
+        if ollama_tags is None:
+            return {"present": False, "path": None, "size_bytes": 0, "daemon_up": False}
+        for m in ollama_tags:
+            if ollama_name_matches(str(m.get("name") or ""), spec.repo_id):
+                return {"present": True, "path": None,
+                        "size_bytes": int(m.get("size") or 0), "daemon_up": True}
+        return {"present": False, "path": None, "size_bytes": 0, "daemon_up": True}
     if spec.kind == "runtime":
         # Poids gérés par un runtime servi (audio.cpp…) : présence = dossier non vide
         # sous runtimes/<target_subdir> (aucun réseau, comme le reste du statut).
@@ -283,16 +321,31 @@ def disk_free_bytes(path: Path) -> int:
     return shutil.disk_usage(probe).free
 
 
+def fetch_ollama_tags(cfg: dict, *, timeout: float = 2.0) -> list[dict] | None:
+    """Modèles tirés du démon Ollama (``/api/tags``), ``None`` si injoignable.
+
+    Seule sonde réseau du module (loopback, timeout court) — la présence d'un modèle
+    Ollama ne se lit nulle part ailleurs. Endpoint résolu par la source unique."""
+    host, port = resolve_arbitrage_endpoint(cfg)
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/tags", timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return list(data.get("models") or [])
+    except Exception:  # noqa: BLE001 — démon arrêté/injoignable : statut honnête, pas d'erreur
+        return None
+
+
 def catalog_with_status(cfg: dict, *, total_vram_mb: int | None = None) -> dict:
     """Vue complète pour l'UI : modèles + statut + place disque des deux cibles."""
     hf_home, models_dir = resolve_hf_home(), resolve_models_dir()
     served = served_llm_gguf(cfg)                              # GGUF réellement servi (script de lancement)
     extra_roots = (served.parent,) if served else ()          # + son dossier comme racine de recherche
     specs = build_catalog(cfg, total_vram_mb=total_vram_mb)
+    tags = fetch_ollama_tags(cfg) if any(s.kind == "ollama" for s in specs) else None
     items = []
     for spec in specs:
         status = model_status(spec, hf_home=hf_home, models_dir=models_dir,
-                              served_path=served, extra_roots=extra_roots)
+                              served_path=served, extra_roots=extra_roots, ollama_tags=tags)
         items.append({"spec": spec, **status})
     return {
         "items": items,

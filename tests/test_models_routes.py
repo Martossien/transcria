@@ -103,3 +103,40 @@ def test_models_activate_requires_present(admin_client, monkeypatch):
 
 def test_models_activate_forbidden_for_viewer(viewer_client):
     assert viewer_client.post("/admin/models/activate").status_code == 403
+
+
+class TestOllamaRendering:
+    """Backend Ollama : rendu des branches spécifiques (badge démon, pas de bouton
+    « Activer (servir) » — il bascule un profil llama.cpp, hors sujet pour Ollama)."""
+
+    def _view(self, present, daemon_up):
+        from transcria.models_catalog import ModelSpec
+        spec = ModelSpec("arbitrage_llm", "LLM d'arbitrage (Ollama : qwen3.6:27b)",
+                         "qwen3.6:27b", None, "ollama", "", False, "lic", "u", 0.0)
+        return {"items": [{"spec": spec, "present": present, "path": None,
+                           "size_bytes": 17_000_000_000 if present else 0,
+                           "daemon_up": daemon_up, "progress": {"status": "absent"}}],
+                "hf_home": "/hf", "models_dir": "/m", "hf_free_gb": 100.0, "models_free_gb": 100.0}
+
+    def _render(self, admin_client, monkeypatch, view):
+        _no_detect(monkeypatch)
+        monkeypatch.setattr("transcria.web.admin_routes.catalog_with_status",
+                            lambda cfg, total_vram_mb=None: view)
+        resp = admin_client.get("/admin/models")
+        assert resp.status_code == 200
+        return resp.get_data(as_text=True)
+
+    def test_present_sans_bouton_activer(self, admin_client, monkeypatch):
+        body = self._render(admin_client, monkeypatch, self._view(present=True, daemon_up=True))
+        assert "qwen3.6:27b" in body and "présent" in body
+        assert "Activer (servir)" not in body
+
+    def test_absent_daemon_up_offre_le_pull(self, admin_client, monkeypatch):
+        body = self._render(admin_client, monkeypatch, self._view(present=False, daemon_up=True))
+        assert "Télécharger" in body
+        assert "magasin Ollama" in body and "~" not in body.split("magasin Ollama")[0][-200:]
+
+    def test_daemon_injoignable_message_sans_pull(self, admin_client, monkeypatch):
+        body = self._render(admin_client, monkeypatch, self._view(present=False, daemon_up=False))
+        assert "démon Ollama injoignable" in body
+        assert "Télécharger" not in body

@@ -28,7 +28,7 @@
   "transcria/web/templates/admin_connectors.html": 369,
   "transcria/web/templates/admin_hardware.html": 55,
   "transcria/web/templates/admin_maintenance.html": 227,
-  "transcria/web/templates/admin_models.html": 97,
+  "transcria/web/templates/admin_models.html": 108,
   "transcria/web/templates/audit.html": 106,
   "transcria/web/templates/base.html": 178,
   "transcria/web/templates/central_lexicon_detail.html": 238,

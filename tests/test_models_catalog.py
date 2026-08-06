@@ -207,3 +207,64 @@ class TestServedSttCatalog:
         (target / "config.json").write_text("{}")
         st = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "m")
         assert st["present"] is True and st["size_bytes"] > 0
+
+
+class TestOllamaBackendCatalog:
+    """Backend Ollama : la page montre le modèle CONFIGURÉ, jamais un GGUF trompeur
+    (llm_profiles.yaml déclarait `download: ollama_pull` sans que l'UI ne l'utilise —
+    constat de l'analyse installation 2026-08-06)."""
+
+    def _cfg(self, model_id="local/qwen3.6:27b", **services) -> dict:
+        return {
+            "models": {"stt_backend": "whisper", "diarization_backend": "sortformer"},
+            "services": {"backend": "ollama", **services},
+            "workflow": {"arbitration_llm": {"model_id": model_id}},
+        }
+
+    def test_ligne_ollama_remplace_le_gguf(self):
+        specs = {s.role: s for s in build_catalog(self._cfg(), total_vram_mb=64000)}
+        llm = specs["arbitrage_llm"]
+        assert llm.kind == "ollama" and llm.repo_id == "qwen3.6:27b"
+        assert "Ollama" in llm.label and llm.file is None and llm.gated is False
+
+    def test_ollama_model_explicite_prime(self):
+        specs = build_catalog(self._cfg(ollama_model="qwen3.5:9b"), total_vram_mb=64000)
+        llm = next(s for s in specs if s.role == "arbitrage_llm")
+        assert llm.repo_id == "qwen3.5:9b"
+
+    def test_sans_model_resoluble_pas_de_ligne(self):
+        specs = build_catalog(self._cfg(model_id=""), total_vram_mb=64000)
+        assert not [s for s in specs if s.role == "arbitrage_llm"]
+
+    def test_backend_llamacpp_inchange(self):
+        cfg = self._cfg()
+        cfg["services"]["backend"] = "http"
+        llm = next(s for s in build_catalog(cfg, total_vram_mb=64000) if s.role == "arbitrage_llm")
+        assert llm.kind == "gguf"
+
+    def _spec(self) -> ModelSpec:
+        return ModelSpec("arbitrage_llm", "LLM (Ollama : qwen3.6:27b)", "qwen3.6:27b",
+                         None, "ollama", "", False, "l", "u", 0.0)
+
+    def test_statut_present_via_tags_avec_tolerance_latest(self, tmp_path: Path):
+        tags = [{"name": "qwen3.6:27b", "size": 17_000_000_000}]
+        st = model_status(self._spec(), hf_home=tmp_path, models_dir=tmp_path, ollama_tags=tags)
+        assert st == {"present": True, "path": None, "size_bytes": 17_000_000_000, "daemon_up": True}
+
+    def test_statut_absent_daemon_up(self, tmp_path: Path):
+        st = model_status(self._spec(), hf_home=tmp_path, models_dir=tmp_path,
+                          ollama_tags=[{"name": "gemma4:12b", "size": 1}])
+        assert st["present"] is False and st["daemon_up"] is True
+
+    def test_statut_daemon_injoignable_distingue(self, tmp_path: Path):
+        # None = /api/tags injoignable — l'UI doit distinguer « pas tiré » de « Ollama arrêté ».
+        st = model_status(self._spec(), hf_home=tmp_path, models_dir=tmp_path, ollama_tags=None)
+        assert st["present"] is False and st["daemon_up"] is False
+
+    def test_catalog_with_status_sonde_les_tags_seulement_si_ollama(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(mc, "fetch_ollama_tags", lambda cfg, **k: calls.append(1) or [])
+        catalog_with_status(_cfg(), total_vram_mb=None)          # backend http : pas de sonde
+        assert calls == []
+        catalog_with_status(self._cfg(), total_vram_mb=None)     # backend ollama : une sonde
+        assert calls == [1]

@@ -52,6 +52,10 @@ def _write_status(path: Path, data: dict) -> None:
 
 def check_space(spec: ModelSpec, *, hf_home: Path, models_dir: Path, margin: float = 1.15) -> tuple[bool, str]:
     """Assez de place pour ~``est_gb`` × marge ? Retourne (ok, message)."""
+    if spec.kind == "ollama":
+        # Le démon Ollama stocke ses poids dans SON magasin (~/.ollama, éventuellement sur
+        # une autre machine) et refuse lui-même un disque plein : rien à vérifier ici.
+        return True, "stockage géré par le démon Ollama"
     target = target_dir_for(spec, hf_home=hf_home, models_dir=models_dir)
     needed = spec.est_gb * margin * 1e9
     free = disk_free_bytes(target)
@@ -134,15 +138,24 @@ def run_download(
         return {"role": spec.role, "repo": spec.repo_id, "kind": spec.kind,
                 "subdir": spec.target_subdir, "file": spec.file, "started_at": started, **extra}
 
-    try:
-        total = (total_fn or _repo_total_bytes)(spec, token)
-    except Exception:  # noqa: BLE001 — total indisponible ⇒ progression indéterminée, pas d'échec
-        total = 0
+    if spec.kind == "ollama":
+        total = 0  # le repo n'est pas sur HF : progression indéterminée, pas d'appel réseau inutile
+    else:
+        try:
+            total = (total_fn or _repo_total_bytes)(spec, token)
+        except Exception:  # noqa: BLE001 — total indisponible ⇒ progression indéterminée, pas d'échec
+            total = 0
     _write_status(status_file, _base(status="downloading", total_bytes=total))
 
     try:
         if hf_download is not None:
             hf_download(spec, hf_home, models_dir, token)
+        elif spec.kind == "ollama":
+            # Pull DÉLÉGUÉ au client ollama (progression gérée par le démon ; un démon
+            # distant se cible par OLLAMA_HOST dans l'environnement du service). Le
+            # workflow ne pull JAMAIS au runtime (cf. OllamaLLMBackend.ensure_available)
+            # — cette page est justement l'endroit prévu pour le faire.
+            subprocess.run(["ollama", "pull", spec.repo_id], check=True)
         elif spec.kind == "runtime":
             # Poids gérés par le runtime servi (audio.cpp) : téléchargement DÉLÉGUÉ à
             # SON model_manager (venv dédié, provisionnés par `installer.cli audiocpp`).

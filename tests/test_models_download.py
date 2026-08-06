@@ -167,3 +167,41 @@ def test_kill_switch_env_desactive_la_voie_rapide(monkeypatch):
 
     monkeypatch.setenv("TRANSCRIA_NO_HF_TRANSFER", "1")
     assert md._configure_hf_transfer() is False
+
+
+class TestOllamaPull:
+    """kind « ollama » : pull délégué au client ollama, pas de total HF, espace géré par le démon."""
+
+    def _spec(self) -> ModelSpec:
+        return ModelSpec("arbitrage_llm", "LLM (Ollama)", "qwen3.6:27b", None, "ollama",
+                         "", False, "l", "u", 0.0)
+
+    def test_run_download_invoque_ollama_pull(self, tmp_path: Path, monkeypatch):
+        from transcria import models_download as md
+        calls: list = []
+        monkeypatch.setattr(md.subprocess, "run",
+                            lambda cmd, check: calls.append((cmd, check)))
+        totals: list = []
+        result = run_download(self._spec(), hf_home=tmp_path, models_dir=tmp_path,
+                              token=None, status_file=tmp_path / "s.json",
+                              total_fn=lambda spec, token: totals.append(1) or 0)
+        assert result == {"ok": True}
+        assert calls == [(["ollama", "pull", "qwen3.6:27b"], True)]
+        assert totals == []  # le repo n'est pas sur HF : aucun appel de total
+        assert json.loads((tmp_path / "s.json").read_text())["status"] == "done"
+
+    def test_echec_du_pull_rapporte_dans_le_statut(self, tmp_path: Path, monkeypatch):
+        from transcria import models_download as md
+
+        def boom(cmd, check):
+            raise RuntimeError("démon injoignable")
+
+        monkeypatch.setattr(md.subprocess, "run", boom)
+        result = run_download(self._spec(), hf_home=tmp_path, models_dir=tmp_path,
+                              token=None, status_file=tmp_path / "s.json")
+        assert result["ok"] is False
+        assert json.loads((tmp_path / "s.json").read_text())["status"] == "error"
+
+    def test_check_space_delegue_au_demon(self, tmp_path: Path):
+        ok, msg = check_space(self._spec(), hf_home=tmp_path, models_dir=tmp_path)
+        assert ok is True and "Ollama" in msg

@@ -59,11 +59,21 @@
               <div class="small text-danger">{{ it.progress.message }}</div>
             {% else %}
               <span class="badge bg-secondary">{{ _('absent') }}</span>
+              {% if s.kind == 'ollama' %}
+                {% if it.get('daemon_up') is sameas false %}
+                <div class="small text-warning">{{ _('démon Ollama injoignable — le démarrer pour connaître le statut réel') }}</div>
+                {% else %}
+                <span class="small text-muted">{{ _('taille selon le modèle (magasin Ollama)') }}</span>
+                {% endif %}
+              {% else %}
               <span class="small text-muted">~{{ _('%(n)s Go', n=s.est_gb) }}</span>
+              {% endif %}
             {% endif %}
           </td>
           <td class="text-end">
-            {% if it.present and s.role == 'arbitrage_llm' %}
+            {# « Activer (servir) » bascule le profil llama.cpp : réservé aux GGUF —
+               un modèle Ollama est servi par le démon, rien à basculer ici. #}
+            {% if it.present and s.role == 'arbitrage_llm' and s.kind == 'gguf' %}
             <form method="post" action="{{ url_for('web.admin_models_activate') }}" class="d-inline">
               <button type="submit" class="btn btn-outline-success btn-sm"
                       title="{{ _('Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)') }}">
@@ -71,7 +81,8 @@
               </button>
             </form>
             {% endif %}
-            {% if not it.present and not inprog %}
+            {# Ollama arrêté : un pull échouerait — le message de statut explique quoi faire. #}
+            {% if not it.present and not inprog and not (s.kind == 'ollama' and it.get('daemon_up') is sameas false) %}
             <form method="post" action="{{ url_for('web.admin_models_download') }}" class="d-inline-flex gap-1 align-items-center">
               <input type="hidden" name="role" value="{{ s.role }}">
               {% if s.gated and not has_token %}
