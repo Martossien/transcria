@@ -17,13 +17,14 @@ def test_classify_gpu_pascal_fails():
 
 
 def test_classify_gpu_vram_too_low_fails():
-    status, msg = gp.classify_gpu(8.6, 8_000)  # Ampere 8 Go
+    # Sous le plancher SLIM (7 500 — palier 8 Go, 2026-08-07) : 6 Go = refus.
+    status, msg = gp.classify_gpu(8.6, 6_000)
     assert status == gp.FAIL
     assert "vram" in msg.lower()
 
 
 def test_classify_gpu_borderline_vram_warns():
-    status, _ = gp.classify_gpu(7.5, 11_800)  # ≥ MIN mais < recommandé
+    status, _ = gp.classify_gpu(7.5, 7_900)  # ≥ MIN slim (7 500) mais < recommandé (8 192)
     assert status == gp.WARN
 
 
@@ -75,7 +76,8 @@ def test_evaluate_all_incompatible_fails():
 
 
 def test_evaluate_only_borderline_warns():
-    status, _ = gp.evaluate([(7.5, 11_800)])
+    # Zone limite du mode BUNDLED (11 500-12 288) — en slim, 11 800 est confortable.
+    status, _ = gp.evaluate([(7.5, 11_800)], bundled=True)
     assert status == gp.WARN
 
 
@@ -101,3 +103,19 @@ def test_main_nvidia_smi_error_returns_1(monkeypatch):
 
     monkeypatch.setattr(gp, "_query_nvidia_smi", _boom)
     assert gp.main([]) == 1
+
+
+# --- Seuils par mode (2026-08-07) : slim palier 8 / bundled palier 12 baké ---------------
+def test_carte_gaming_8go_passe_en_slim():
+    status, _ = gp.classify_gpu(8.6, 8_192)
+    assert status == gp.OK
+
+
+def test_evaluate_bundled_garde_le_plancher_12():
+    status, msg = gp.evaluate([(8.6, 8_192)], bundled=True)
+    assert status == gp.FAIL and "11500" in msg.replace(" ", "")
+
+
+def test_evaluate_slim_accepte_8go_et_bundled_24go_ok():
+    assert gp.evaluate([(8.6, 8_192)])[0] == gp.OK
+    assert gp.evaluate([(8.9, 24_000)], bundled=True)[0] == gp.OK

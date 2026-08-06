@@ -72,7 +72,11 @@ if [[ "$MODE" == "gpu" ]]; then
     # un message clair plutôt que de laisser un crash CUDA cryptique survenir au 1er job. Module
     # stdlib pur (pas de venv requis côté hôte).
     if command -v python3 >/dev/null; then
-        if ! python3 -m transcria.deploy.gpu_preflight; then
+        # Seuils VRAM par mode : bundled bake la LLM du palier 12 (≥ ~12 Go) ; slim
+        # télécharge et peut servir le palier 8 (≥ ~8 Go).
+        _PREFLIGHT_ARGS=()
+        [[ "${BUNDLED:-0}" = 1 ]] && _PREFLIGHT_ARGS+=(--bundled)
+        if ! python3 -m transcria.deploy.gpu_preflight "${_PREFLIGHT_ARGS[@]}"; then
             err "GPU incompatible (voir ci-dessus). Cartes supportées : compute ≥ 7.5 (Turing/RTX 20xx"
             err "  et plus récent) avec ≥ 12 Go de VRAM — table complète dans docs/DOCKER.md."
             exit 1

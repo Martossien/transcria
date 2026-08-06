@@ -70,19 +70,32 @@ class SummaryGenerator:
         transcriber = create_transcriber(self.config, backend=backend, device=device)
         segments = []
 
-        for chunk in vad_chunks:
-            chunk_segs = transcriber.transcribe(
-                audio_path=None,
-                language=stt_language,
-                audio_array=chunk["audio"],
-                sample_rate=int(sr),
-            )
-            for seg in chunk_segs:
-                if seg.get("error"):
-                    continue
-                seg["start"] = round(chunk["start"] + seg["start"], 3)
-                seg["end"] = round(chunk["start"] + seg["end"], 3)
-                segments.append(seg)
+        # Voie BATCHÉE quand le backend la propose (moss, cohere_tf5) : ces moteurs
+        # tournent en sous-process et rechargent le modèle À CHAQUE appel transcribe()
+        # — vécu 2026-08-06 : 578 chunks VAD × rechargement ≈ 5-7 h sur un audio de
+        # 99 min, contre quelques minutes en une invocation (même dispatch que le
+        # pipeline principal, transcription.py). Les temps renvoyés sont ABSOLUS
+        # (le batché lit start/end du chunk), pas de re-décalage à faire.
+        prechunked = getattr(transcriber, "transcribe_prechunked", None)
+        if callable(prechunked):
+            sl.info("[summary] Transcription par chunks BATCHÉE (un seul chargement) : "
+                    "backend=%s chunks=%d", backend, len(vad_chunks))
+            segments = [seg for seg in prechunked(vad_chunks, language=stt_language)
+                        if not seg.get("error")]
+        else:
+            for chunk in vad_chunks:
+                chunk_segs = transcriber.transcribe(
+                    audio_path=None,
+                    language=stt_language,
+                    audio_array=chunk["audio"],
+                    sample_rate=int(sr),
+                )
+                for seg in chunk_segs:
+                    if seg.get("error"):
+                        continue
+                    seg["start"] = round(chunk["start"] + seg["start"], 3)
+                    seg["end"] = round(chunk["start"] + seg["end"], 3)
+                    segments.append(seg)
 
         sl.info("[summary] Transcription terminée: %d segments produits", len(segments))
         transcriber.offload()

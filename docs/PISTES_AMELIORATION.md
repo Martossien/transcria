@@ -259,7 +259,12 @@ est la valeur ajoutée visible du produit (fromager/vendeur, lexique métier). T
 économie ici doit passer par le banc de validation LLM avant d'être un défaut.
 À traiter comme un chantier de fond avec métriques, pas comme une optimisation.
 
-### 2.5 Le préflight audio est exécuté deux fois — **P2, effort S**
+### 2.5 Le préflight audio est exécuté deux fois — **LIVRÉ**
+
+> **État réel (revue 2026-08-07)** : la réutilisation décrite ci-dessous est
+> implémentée (`pipeline_steps/preflight.py` : garde `source_fingerprint`, flag
+> `audio_preflight.reuse_analysis` défaut `true`) et OBSERVÉE en E2E (« Pré-diagnostic
+> audio réutilisé »). Le texte historique décrit l'AVANT.
 
 **État actuel.** `AudioPreflightAnalyzer.analyze()` tourne une première fois à la
 phase « analyze » du wizard (`services/job_service.py:69-73`, résultat écrit dans

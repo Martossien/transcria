@@ -70,3 +70,59 @@ class TestSummaryGeneratorGenerateQuickSummary:
             summary_md = fs.load_text("summary/summary.md")
             assert summary_md is not None
             assert "Résumé" in summary_md or "Extrait" in summary_md
+
+
+class TestSummaryBatchedPath:
+    """Voie batchée (2026-08-07) : quand le backend expose transcribe_prechunked
+    (moss, cohere_tf5 — sous-process qui recharge le modèle à CHAQUE transcribe),
+    la phase résumé fait UNE invocation au lieu d'une par chunk VAD (vécu :
+    578 rechargements ≈ 5-7 h sur 99 min)."""
+
+    def test_prechunked_appele_une_fois_avec_tous_les_chunks(self, app, owner_id, tmp_path, monkeypatch):
+        with app.app_context():
+            cfg = _default_cfg(tmp_path)
+            from transcria.audio.vad import SileroVAD
+            from transcria.jobs.store import JobStore
+            from transcria.stt import summary as summary_mod
+
+            monkeypatch.setitem(
+                sys.modules, "librosa",
+                SimpleNamespace(load=lambda *a, **kw: (_FAKE_AUDIO, 16000)),
+            )
+            job = JobStore.create_job(owner_id, "Batched Summary")
+            chunks = [
+                {"start": 0.0, "end": 0.5, "audio": _FAKE_AUDIO[:8000]},
+                {"start": 0.5, "end": 1.0, "audio": _FAKE_AUDIO[8000:]},
+            ]
+            monkeypatch.setattr(SileroVAD, "build_speech_chunks", lambda self, *a, **kw: chunks)
+
+            calls = {"prechunked": 0, "transcribe": 0}
+
+            class _Batched:
+                def load(self):
+                    return True
+
+                def offload(self):
+                    return None
+
+                def transcribe(self, *a, **kw):
+                    calls["transcribe"] += 1
+                    return []
+
+                def transcribe_prechunked(self, got_chunks, language="fr", **kw):
+                    calls["prechunked"] += 1
+                    assert got_chunks is chunks           # TOUS les chunks, en un appel
+                    return [
+                        {"start": 0.0, "end": 0.5, "text": "un"},
+                        {"start": 0.5, "end": 1.0, "text": "deux"},
+                        {"error": "chunk illisible"},      # filtré
+                    ]
+
+            monkeypatch.setattr(summary_mod, "create_transcriber",
+                                lambda *a, **kw: _Batched())
+            gen = SummaryGenerator(cfg)
+            result = gen.generate_quick_summary(job, tmp_path / "audio.wav")
+
+        assert calls == {"prechunked": 1, "transcribe": 0}
+        assert result.get("error") is None
+        assert result["segments_count"] == 2 if "segments_count" in result else True

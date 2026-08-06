@@ -67,7 +67,7 @@ scripts/docker_quickstart.sh --down
 > **télécharge la LLM plus grosse au runtime** dans le volume persistant — le modèle baké
 > n'empêche pas la mise à niveau.
 
-> Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 **et** VRAM ≥ ~12 Go,
+> Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 ; VRAM ≥ ~8 Go en slim, ≥ ~12 Go en bundled — la LLM bakée du palier 12,
 > cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
 > un crash CUDA survenir au 1ᵉ job.
 
