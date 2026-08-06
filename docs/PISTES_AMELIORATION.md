@@ -516,7 +516,13 @@ silencieusement absent), RTF ~0,34, 4 locuteurs plausibles. Contre-mesure kroko
 sur le MÊME fichier (99 min COUVERTES de bout en bout en 223 s, CPU pur) : les 2
 « sauts » de MOSS à 552 s/919 s sont des trous chez kroko AUSSI → vrais silences
 de la réunion, pas des omissions (le saut W05 du banc, vérifié contre référence
-humaine, reste documenté). Le chantier « une passe » n'est donc
+humaine, reste documenté). **Contre-mesure duo classique sur la MÊME portion
+(18 min 45)** : cohere 36,5 s + pyannote 17,7 s = **~54 s contre 381 s pour MOSS
+(7×)**, plus de mots captés (2 348 vs 2 112), et une diarisation structurellement
+crédible — pyannote répartit 48/31/16/5 % en 304 tours là où **MOSS donne 93 % à un
+seul locuteur** (dialogues à répliques étiquetés mono — accord temporel 53 %
+seulement). Verdict : le chantier « une passe » est DÉPRIORISÉ — sur du long réel,
+le duo classique domine sur tous les axes mesurés. Le chantier « une passe » n'est donc
 PAS un swap de backend : fenêtrage ~15 min + raccord des labels locuteurs
 inter-fenêtres + mitigation des sauts — à re-chiffrer avant engagement. Trouvaille
 distincte : la phase RÉSUMÉ appelle `transcribe()` par chunk VAD, ce qui pour moss
