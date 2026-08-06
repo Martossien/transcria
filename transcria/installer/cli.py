@@ -483,6 +483,48 @@ def _add_recommend_llm_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--config", default=None)
 
 
+def _add_express_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "express",
+        help="mode express : décisions par défaut + récapitulatif unique (pré-venv, stdlib)",
+    )
+    p.add_argument("--gpu-count", type=int, required=True)
+    p.add_argument("--total-vram-mb", type=int, required=True)
+    p.add_argument("--gpu-sizes-csv", default="")
+    p.add_argument("--config", required=True, help="chemin de config.yaml (existence = install déjà configurée)")
+    p.add_argument("--service-user", required=True)
+    p.add_argument("--have-sudo", action="store_true")
+    p.add_argument("--is-root", action="store_true")
+    p.add_argument("--has-hf-token", action="store_true")
+    p.add_argument("--no-service", action="store_true")
+
+
+def _cmd_express(args: argparse.Namespace) -> int:
+    """Imprime les lignes machine (``EXPRESS_*=``) puis le récapitulatif humain.
+
+    install.sh consomme les premières via ``eval_named_shell_assignments`` et
+    affiche le reste tel quel avant l'unique confirmation."""
+    import shutil as _shutil
+
+    from transcria.installer import express
+
+    plan = express.build_express_plan(
+        gpu_count=args.gpu_count,
+        total_vram_mb=args.total_vram_mb,
+        gpu_sizes_csv=args.gpu_sizes_csv,
+        psql_available=_shutil.which("psql") is not None,
+        can_admin_pg=args.is_root or args.have_sudo,
+        has_hf_token=args.has_hf_token,
+        config_exists=Path(args.config).exists(),
+        install_service=not args.no_service,
+        service_user=args.service_user,
+    )
+    print(express.render_shell(plan))
+    for line in plan.recap:
+        print(line)
+    return 0
+
+
 def _cmd_recommend_llm(args: argparse.Namespace) -> int:
     """Affiche la recommandation (lignes humaines) et termine par ``ENGINE=<moteur>``
     (ligne machine, consommée par install.sh). Ne choisit jamais À LA PLACE de
@@ -686,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_systemd_parser(sub)
     _add_summary_parser(sub)
     _add_recommend_llm_parser(sub)
+    _add_express_parser(sub)
     _add_moss_site_parser(sub)
     _add_audiocpp_parser(sub)
     _add_parakeetcpp_parser(sub)
@@ -711,6 +754,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_systemd(args)
     if args.command == "summary":
         return _cmd_summary(args)
+    if args.command == "express":
+        return _cmd_express(args)
     if args.command == "recommend-llm":
         return _cmd_recommend_llm(args)
     if args.command == "connectors":

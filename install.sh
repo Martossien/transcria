@@ -23,6 +23,10 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --expert           Mode pas-à-pas historique (une question par choix). Sans lui,
+#                      un terminal interactif en all-in-one passe en mode EXPRESS :
+#                      défauts détectés (matériel, psql, token HF) + récapitulatif
+#                      + UNE confirmation.
 #   --with-meeting-bots  Provisionner le meeting-runner (réunions planifiées, opt-in) :
 #                        dépendances connecteurs + runner.yaml + unité systemd.
 #   --with-stt-runtimes  Provisionner aussi les runtimes STT servis (opt-in) :
@@ -117,6 +121,14 @@ declare -A _MSG=(
     [en:locale_set]="Language: English (interface, deliverables and installer)."
     [fr:ask_pg]="Configurer PostgreSQL ? (choix principal hors dev ; non = SQLite dev local explicite)"
     [en:ask_pg]="Set up PostgreSQL? (recommended outside dev; no = explicit local SQLite dev)"
+    [fr:sec_express]="Mode express — récapitulatif"
+    [en:sec_express]="Express mode — summary"
+    [fr:ask_express]="Installer avec ces choix ?"
+    [en:ask_express]="Install with these choices?"
+    [fr:express_declined]="Installation annulée — relancez avec --expert pour choisir pas à pas."
+    [en:express_declined]="Installation cancelled — run again with --expert to choose step by step."
+    [fr:express_open_models]="Modèles : whisper + Sortformer (sans token HF) écrits dans config.yaml."
+    [en:express_open_models]="Models: whisper + Sortformer (no HF token) written to config.yaml."
     [fr:ask_admin_pw]="Définir le mot de passe admin maintenant ?"
     [en:ask_admin_pw]="Set the admin password now?"
     [fr:ask_ollama]="Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"
@@ -169,6 +181,7 @@ LOCALE_EXPLICIT=false   # --locale ou env fournis → pas de question interactiv
 [[ -n "$INSTALL_LOCALE" ]] && LOCALE_EXPLICIT=true
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
+EXPERT_MODE=false      # --expert : pas-à-pas historique (sinon, TTY all-in-one = express)
 SKIP_DOCTOR=false
 WITH_STT_RUNTIMES=false   # --with-stt-runtimes : phases audiocpp+parakeetcpp (opt-in, GPU)
 WITH_MEETING_BOTS=false   # --with-meeting-bots : phase connectors (meeting-runner, opt-in)
@@ -218,6 +231,7 @@ while [[ $# -gt 0 ]]; do
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
         --force-config)    FORCE_CONFIG=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
+        --expert)          EXPERT_MODE=true; shift ;;
         --skip-doctor)     SKIP_DOCTOR=true; shift ;;
         --with-stt-runtimes) WITH_STT_RUNTIMES=true; shift ;;
         --with-meeting-bots) WITH_MEETING_BOTS=true; shift ;;
@@ -655,6 +669,53 @@ if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]]; then
 fi
 
 # ============================================================================
+# SECTION 1-bis — Mode express (défaut interactif all-in-one)
+# ============================================================================
+# L'utilisateur lambda ne devrait pas répondre à ~10 questions : sans --expert ni
+# --non-interactive, sur un terminal, le profil all-in-one affiche les défauts
+# détectés (matériel → palier LLM, psql+sudo → PostgreSQL, token HF → modèles),
+# pose UNE confirmation, puis déroule le chemin non-interactif existant. Placé
+# APRÈS les prérequis (détections faites) et AVANT le venv (première mutation).
+# Les décisions vivent dans transcria/installer/express.py (testé) ; un échec du
+# helper retombe silencieusement sur le pas-à-pas historique.
+EXPRESS_SETUP_PG=false
+EXPRESS_OPEN_MODELS=false
+if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_PROFILE" == "all-in-one" ]]; then
+    EXPRESS_CLI_ARGS=(
+        -m transcria.installer.cli express
+        --gpu-count "${GPU_COUNT:-0}"
+        --total-vram-mb "${GPU_VRAM_TOTAL_MB:-0}"
+        --gpu-sizes-csv "${GPU_SIZES_CSV:-}"
+        --config "$CONFIG_PATH"
+        --service-user "$SERVICE_USER"
+    )
+    [[ "$HAVE_SUDO" = true ]] && EXPRESS_CLI_ARGS+=(--have-sudo)
+    [[ $EUID -eq 0 ]] && EXPRESS_CLI_ARGS+=(--is-root)
+    [[ -n "${HF_TOKEN:-}" ]] && EXPRESS_CLI_ARGS+=(--has-hf-token)
+    [[ "$INSTALL_SERVICE" = false ]] && EXPRESS_CLI_ARGS+=(--no-service)
+    if EXPRESS_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "${EXPRESS_CLI_ARGS[@]}" 2>/dev/null); then
+        log_section "$(t sec_express)"
+        # Lignes machine séparées AVANT l'eval (convention recommend-llm) : les lignes
+        # humaines du récapitulatif ne doivent pas déclencher de « sortie ignorée ».
+        eval_named_shell_assignments "$(printf '%s\n' "$EXPRESS_OUT" | grep '^EXPRESS_' || true)" \
+            EXPRESS_SETUP_PG EXPRESS_OPEN_MODELS
+        while IFS= read -r line; do
+            [[ -z "$line" || "$line" == EXPRESS_* ]] && continue
+            log_info "$line"
+        done <<< "$EXPRESS_OUT"
+        echo -n "  $(t ask_express) [O/n] : "
+        read -r _express_answer
+        if [[ "$_express_answer" =~ ^[nN] ]]; then
+            log_info "$(t express_declined)"
+            exit 0
+        fi
+        NON_INTERACTIVE=true
+        # PostgreSQL seulement si non déjà tranché par un drapeau (--postgres/--sqlite-dev).
+        [[ "$EXPRESS_SETUP_PG" = true && -z "$SETUP_PG" ]] && SETUP_PG=true
+    fi
+fi
+
+# ============================================================================
 # SECTION 2 — Environnement Python (venv + PyTorch + dépendances)
 # ============================================================================
 log_section "$(t sec_python)"
@@ -735,6 +796,19 @@ PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${CONFI
 if [[ -f "$CONFIG_PATH" ]]; then
     yaml_set "i18n.default_locale" "$INSTALL_LOCALE" >/dev/null 2>&1 || \
         log_warn "Impossible d'écrire i18n.default_locale=$INSTALL_LOCALE dans config.yaml"
+fi
+
+# Mode express, config FRAÎCHE et sans token HF (EXPRESS_OPEN_MODELS encode les deux) :
+# bascule sur le duo non-gated whisper + Sortformer — même choix que le quickstart
+# Docker. La qualité de référence (Cohere + pyannote) reste activable ensuite depuis
+# la page Modèles avec un token.
+if [[ "$EXPRESS_OPEN_MODELS" = true && -f "$CONFIG_PATH" ]]; then
+    if yaml_set "models.stt_backend" "whisper" >/dev/null 2>&1 && \
+       yaml_set "models.diarization_backend" "sortformer" >/dev/null 2>&1; then
+        log_info "$(t express_open_models)"
+    else
+        log_warn "Bascule whisper/sortformer impossible — config.yaml garde ses backends par défaut"
+    fi
 fi
 
 # ── Proxy d'entreprise ──────────────────────────────────────────────────────
