@@ -510,6 +510,16 @@ sont intégrés ; le checkpoint inter-phases fonctionne (§2.2). La diarisation 
 **pas** un poste de coût mesuré significatif sur les jobs courants (0,9 s en
 réutilisation ; la pleine passe reste raisonnable sur GPU).
 
+**Mesure décisive (2026-08-06, audio réel 99 min)** : MOSS en une passe entière
+**s'arrête à 18 min 45 sans erreur** (plafond de contexte interne — 81 % de l'audio
+silencieusement absent), reproduit ses sauts silencieux (2 × >15 s sur la partie
+produite), RTF ~0,34, 4 locuteurs plausibles. Le chantier « une passe » n'est donc
+PAS un swap de backend : fenêtrage ~15 min + raccord des labels locuteurs
+inter-fenêtres + mitigation des sauts — à re-chiffrer avant engagement. Trouvaille
+distincte : la phase RÉSUMÉ appelle `transcribe()` par chunk VAD, ce qui pour moss
+relance un sous-process avec RECHARGEMENT modèle par chunk (578× sur 99 min ≈ 5-7 h) ;
+la voie batchée `transcribe_prechunked` existe et n'est pas branchée — **correctif P2**.
+
 **Pistes** (aucune urgente) :
 - la voie la plus prometteuse n'est pas un nouveau moteur mais **MOSS single-pass**
   (cf. 4.1) qui supprime l'étape ;
