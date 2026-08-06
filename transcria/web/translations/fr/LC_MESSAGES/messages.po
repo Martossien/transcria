@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-05 17:25+0200\n"
+"POT-Creation-Date: 2026-08-06 14:34+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -265,7 +265,7 @@ msgstr "Ajouter cette forme validée à un lexique central, partagé et réutili
 
 #: transcria/i18n/js_catalog.py:34
 #: transcria/web/templates/change_password.html:24
-#: transcria/web/templates/index.html:86
+#: transcria/web/templates/index.html:91
 #: transcria/web/templates/meeting_types.html:141
 #: transcria/web/templates/queue.html:173
 #: transcria/web/templates/srt_editor.html:105
@@ -1723,116 +1723,116 @@ msgstr "Restauration lancée. Le service va s'arrêter, restaurer, puis redémar
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Échec du déclenchement de la restauration : %(e)s"
 
-#: transcria/web/admin_routes.py:550
+#: transcria/web/admin_routes.py:567
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 
-#: transcria/web/admin_routes.py:554
+#: transcria/web/admin_routes.py:571
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 
-#: transcria/web/admin_routes.py:557
+#: transcria/web/admin_routes.py:574
 msgid "Cette réunion est déjà surveillée."
 msgstr "Cette réunion est déjà surveillée."
 
-#: transcria/web/admin_routes.py:559
+#: transcria/web/admin_routes.py:576
 msgid "Aucun lien de réunion fourni."
 msgstr "Aucun lien de réunion fourni."
 
-#: transcria/web/admin_routes.py:632
+#: transcria/web/admin_routes.py:649
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "Test %(id)s : %(verdict)s"
 
-#: transcria/web/admin_routes.py:651
+#: transcria/web/admin_routes.py:668
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Test Zoom : %(verdict)s"
 
-#: transcria/web/admin_routes.py:681
+#: transcria/web/admin_routes.py:698
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "Fichier « %(label)s » refusé : %(raison)s"
 
-#: transcria/web/admin_routes.py:718
+#: transcria/web/admin_routes.py:735
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 
-#: transcria/web/admin_routes.py:719
+#: transcria/web/admin_routes.py:736
 msgid "Aucun changement."
 msgstr "Aucun changement."
 
-#: transcria/web/admin_routes.py:737
+#: transcria/web/admin_routes.py:754
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Activez d'abord la fonctionnalité (bouton « Activer »)."
 
-#: transcria/web/admin_routes.py:742
+#: transcria/web/admin_routes.py:759
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:749
+#: transcria/web/admin_routes.py:766
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 
-#: transcria/web/admin_routes.py:754
+#: transcria/web/admin_routes.py:771
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Compte de service absent — utilisez d'abord le bouton « Activer »."
 
-#: transcria/web/admin_routes.py:773
+#: transcria/web/admin_routes.py:790
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Exécutant « %(name)s » révoqué."
 
-#: transcria/web/admin_routes.py:790
+#: transcria/web/admin_routes.py:807
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 
-#: transcria/web/admin_routes.py:795
+#: transcria/web/admin_routes.py:812
 msgid "Téléchargement refusé — "
 msgstr "Téléchargement refusé — "
 
-#: transcria/web/admin_routes.py:798
+#: transcria/web/admin_routes.py:815
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Téléchargement de « %(l)s » lancé en arrière-plan."
 
-#: transcria/web/admin_routes.py:812
+#: transcria/web/admin_routes.py:829
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Téléchargez d'abord ce modèle avant de l'activer."
 
-#: transcria/web/admin_routes.py:821
+#: transcria/web/admin_routes.py:838
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:824
+#: transcria/web/admin_routes.py:841
 msgid "Échec de l'activation : "
 msgstr "Échec de l'activation : "
 
-#: transcria/web/admin_routes.py:826
+#: transcria/web/admin_routes.py:843
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Échec de l'activation : %(e)s"
 
-#: transcria/web/admin_routes.py:849
+#: transcria/web/admin_routes.py:866
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 
-#: transcria/web/admin_routes.py:883
+#: transcria/web/admin_routes.py:900
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Rien à appliquer : le plan n'est plus d'actualité."
 
-#: transcria/web/admin_routes.py:888
+#: transcria/web/admin_routes.py:905
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Échec de l'application du plan : %(err)s"
 
-#: transcria/web/admin_routes.py:894
+#: transcria/web/admin_routes.py:911
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
@@ -2684,6 +2684,33 @@ msgstr "Option avancée"
 #: transcria/web/templates/_central_lexicon_entry_fields.html:28
 msgid "Remplacer par"
 msgstr "Remplacer par"
+
+#: transcria/web/templates/_first_run_checklist.html:8
+msgid "Premier démarrage — quelques points à finaliser"
+msgstr "Premier démarrage — quelques points à finaliser"
+
+#: transcria/web/templates/_first_run_checklist.html:15
+msgid "Les nœuds d'inférence distants ne répondent pas"
+msgstr "Les nœuds d'inférence distants ne répondent pas"
+
+#: transcria/web/templates/_first_run_checklist.html:18
+msgid "Aucun GPU détecté sur cette machine — la transcription CPU (moteur Kroko) reste possible, mais les moteurs GPU et les phases LLM ne le seront pas."
+msgstr "Aucun GPU détecté sur cette machine — la transcription CPU (moteur Kroko) reste possible, mais les moteurs GPU et les phases LLM ne le seront pas."
+
+#: transcria/web/templates/_first_run_checklist.html:23
+#, python-format
+msgid "Un modèle requis par cette installation est absent :"
+msgid_plural "%(count)s modèles requis par cette installation sont absents :"
+msgstr[0] "Un modèle requis par cette installation est absent :"
+msgstr[1] "%(count)s modèles requis par cette installation sont absents :"
+
+#: transcria/web/templates/_first_run_checklist.html:25
+msgid "les télécharger depuis la page Modèles"
+msgstr "les télécharger depuis la page Modèles"
+
+#: transcria/web/templates/_first_run_checklist.html:29
+msgid "Le moteur de correction (opencode) est introuvable — les phases LLM échoueront."
+msgstr "Le moteur de correction (opencode) est introuvable — les phases LLM échoueront."
 
 #: transcria/web/templates/account_tokens.html:2
 #: transcria/web/templates/base.html:114
@@ -3610,7 +3637,7 @@ msgstr "%(n)s entrée(s)"
 msgid "Menu"
 msgstr "Menu"
 
-#: transcria/web/templates/base.html:27 transcria/web/templates/index.html:5
+#: transcria/web/templates/base.html:27 transcria/web/templates/index.html:10
 msgid "Traitements"
 msgstr "Traitements"
 
@@ -3876,7 +3903,7 @@ msgid "Supprimer cette entrée ?"
 msgstr "Supprimer cette entrée ?"
 
 #: transcria/web/templates/central_lexicon_detail.html:220
-#: transcria/web/templates/index.html:102
+#: transcria/web/templates/index.html:107
 #: transcria/web/templates/schedule.html:223
 #: transcria/web/templates/srt_editor.html:104
 msgid "Supprimer"
@@ -3921,7 +3948,7 @@ msgid "dernier %(d)s"
 msgstr "dernier %(d)s"
 
 #: transcria/web/templates/central_lexicons.html:61
-#: transcria/web/templates/index.html:93 transcria/web/templates/voices.html:45
+#: transcria/web/templates/index.html:98 transcria/web/templates/voices.html:45
 msgid "Ouvrir"
 msgstr "Ouvrir"
 
@@ -4155,95 +4182,95 @@ msgstr "Aucun groupe accessible."
 msgid "Accueil"
 msgstr "Accueil"
 
-#: transcria/web/templates/index.html:7
+#: transcria/web/templates/index.html:12
 msgid "Nom de la réunion"
 msgstr "Nom de la réunion"
 
-#: transcria/web/templates/index.html:8
+#: transcria/web/templates/index.html:13
 msgid "Nouveau traitement"
 msgstr "Nouveau traitement"
 
-#: transcria/web/templates/index.html:11
+#: transcria/web/templates/index.html:16
 msgid "Depuis une réunion"
 msgstr "Depuis une réunion"
 
-#: transcria/web/templates/index.html:22
+#: transcria/web/templates/index.html:27
 msgid "Plateforme"
 msgstr "Plateforme"
 
-#: transcria/web/templates/index.html:28
+#: transcria/web/templates/index.html:33
 msgid "Lien ou numéro de réunion"
 msgstr "Lien ou numéro de réunion"
 
-#: transcria/web/templates/index.html:32
+#: transcria/web/templates/index.html:37
 #: transcria/web/templates/wizard/_step_context.html:13
 msgid "Titre"
 msgstr "Titre"
 
-#: transcria/web/templates/index.html:38
+#: transcria/web/templates/index.html:43
 msgid "Code d'accès"
 msgstr "Code d'accès"
 
-#: transcria/web/templates/index.html:41
+#: transcria/web/templates/index.html:46
 msgid "facultatif"
 msgstr "Actif"
 
-#: transcria/web/templates/index.html:42
+#: transcria/web/templates/index.html:47
 msgid "Uniquement si la salle est protégée par un mot de passe"
 msgstr "Uniquement si la salle est protégée par un mot de passe"
 
-#: transcria/web/templates/index.html:45
+#: transcria/web/templates/index.html:50
 msgid "Quand"
 msgstr "Quand"
 
-#: transcria/web/templates/index.html:48
+#: transcria/web/templates/index.html:53
 msgid "Vide = dès que possible"
 msgstr "Vide = dès que possible"
 
-#: transcria/web/templates/index.html:50
+#: transcria/web/templates/index.html:55
 msgid "Dès que possible"
 msgstr "Dès que possible"
 
-#: transcria/web/templates/index.html:50
+#: transcria/web/templates/index.html:55
 msgid "Maintenant"
 msgstr "Maintenant"
 
-#: transcria/web/templates/index.html:55
+#: transcria/web/templates/index.html:60
 msgid "Planifier"
 msgstr "Planifier"
 
-#: transcria/web/templates/index.html:59
+#: transcria/web/templates/index.html:64
 msgid "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 msgstr "Un participant « TranscrIA » rejoindra la réunion, micro coupé. L'hôte devra peut-être l'admettre et autoriser l'enregistrement."
 
-#: transcria/web/templates/index.html:73
+#: transcria/web/templates/index.html:78
 #, python-format
 msgid "Partagé par %(name)s"
 msgstr "Partagé par %(name)s"
 
-#: transcria/web/templates/index.html:81
+#: transcria/web/templates/index.html:86
 #: transcria/web/templates/job_wizard.html:21
 msgid "Incident technique — nouvel essai prévu"
 msgstr "Incident technique — nouvel essai prévu"
 
-#: transcria/web/templates/index.html:95
+#: transcria/web/templates/index.html:100
 #: transcria/web/templates/srt_editor.html:10
 msgid "Résultats"
 msgstr "Résultats"
 
-#: transcria/web/templates/index.html:97
+#: transcria/web/templates/index.html:102
 msgid "Package"
 msgstr "Package"
 
-#: transcria/web/templates/index.html:101
+#: transcria/web/templates/index.html:106
 msgid "Supprimer ce traitement ? Cette action est irréversible."
 msgstr "Supprimer ce traitement ? Cette action est irréversible."
 
-#: transcria/web/templates/index.html:114
+#: transcria/web/templates/index.html:119
 msgid "Aucun traitement pour le moment."
 msgstr "Aucun traitement pour le moment."
 
-#: transcria/web/templates/index.html:115
+#: transcria/web/templates/index.html:120
 msgid "Créez votre premier traitement pour transcrire une réunion."
 msgstr "Créez votre premier traitement pour transcrire une réunion."
 

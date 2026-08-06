@@ -60,7 +60,7 @@ from transcria.maintenance.restore import describe_restore
 from transcria.maintenance.schedule import BackupSchedule
 from transcria.models_catalog import catalog_with_status, resolve_hf_home, resolve_models_dir
 from transcria.services.config_service import ConfigService
-from transcria.web import prompt_files
+from transcria.web import first_run, prompt_files
 from transcria.web.blueprint import web_bp
 from transcria.web.config_form import (
     CONFIG_FORM_SECTIONS,
@@ -457,6 +457,23 @@ def admin_models():
     for item in view["items"]:
         item["progress"] = models_download.read_progress(item["spec"], hf_home=hf_home, models_dir=models_dir)
     return render_template("admin_models.html", view=view, has_token=bool(os.environ.get("HF_TOKEN")))
+
+
+@web_bp.route("/admin/first-run-status")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_first_run_status():
+    """Fragment HTML de la checklist de premier démarrage (204 quand tout est vert).
+
+    Chargé en asynchrone depuis l'accueil (``first_run_checklist.js``) : l'affichage
+    de la page ne paie jamais les sondes, et un échec du bilan n'affecte pas l'accueil.
+    """
+    cfg = ConfigService.get_singleton()
+    total_vram_mb = int(ConfigService.detect_system().get("total_vram_mb") or 0) or None
+    items = first_run.needs_attention(first_run.first_run_report(cfg, total_vram_mb=total_vram_mb))
+    if not items:
+        return "", 204
+    return render_template("_first_run_checklist.html", items=items)
 
 
 @web_bp.route("/admin/connecteurs")

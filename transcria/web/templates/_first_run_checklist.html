@@ -1,0 +1,35 @@
+{# Checklist de premier démarrage — fragment servi par /admin/first-run-status,
+   inséré dans l'accueil par first_run_checklist.js. N'existe que s'il y a des
+   points à finaliser (la route répond 204 quand tout est vert). La rédaction vit
+   ici ; transcria/web/first_run.py ne fournit que des faits structurés. #}
+<div class="alert alert-info" role="alert" data-first-run-checklist>
+  <h6 class="alert-heading">
+    <i class="bi bi-clipboard-check me-1"></i>
+    {% trans %}Premier démarrage — quelques points à finaliser{% endtrans %}
+  </h6>
+  <ul class="mb-0">
+    {% for it in items %}
+      {% if it.key == 'compute' %}
+        <li>
+          {% if it.data.get('mode') %}
+            {% trans %}Les nœuds d'inférence distants ne répondent pas{% endtrans %}
+            — <span class="text-muted">{{ it.data.detail }}</span>
+          {% else %}
+            {% trans %}Aucun GPU détecté sur cette machine — la transcription CPU (moteur Kroko) reste possible, mais les moteurs GPU et les phases LLM ne le seront pas.{% endtrans %}
+          {% endif %}
+        </li>
+      {% elif it.key == 'models' %}
+        <li>
+          {% trans count=it.data.missing|length %}Un modèle requis par cette installation est absent :{% pluralize %}{{ count }} modèles requis par cette installation sont absents :{% endtrans %}
+          {{ it.data.missing|join(', ') }}
+          — <a href="{{ url_for('web.admin_models') }}" class="alert-link">{% trans %}les télécharger depuis la page Modèles{% endtrans %}</a>
+        </li>
+      {% elif it.key == 'opencode' %}
+        <li>
+          {% trans %}Le moteur de correction (opencode) est introuvable — les phases LLM échoueront.{% endtrans %}
+          <span class="text-muted">{{ it.data.detail }}</span>
+        </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</div>

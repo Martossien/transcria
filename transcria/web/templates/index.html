@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Accueil') }} — TranscrIA{% endblock %}
 {% block content %}
+{% if Permission.MANAGE_CONFIG in user_permissions %}
+{# Checklist de premier démarrage : remplie en asynchrone (first_run_checklist.js),
+   reste vide quand l'installation est complète (la route répond 204). #}
+<div id="first-run-checklist" data-url="{{ url_for('web.admin_first_run_status') }}"></div>
+{% endif %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1 class="h3 mb-0">{{ _('Traitements') }}</h1>
   <form method="POST" action="/jobs/new" class="d-flex gap-2">
@@ -120,5 +125,8 @@
 {% block scripts %}
 {% if meeting_providers or meeting_sessions %}
 <script src="{{ asset_url('js/meetings_page.js') }}"></script>
+{% endif %}
+{% if Permission.MANAGE_CONFIG in user_permissions %}
+<script src="{{ asset_url('js/first_run_checklist.js') }}"></script>
 {% endif %}
 {% endblock %}
