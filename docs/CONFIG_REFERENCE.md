@@ -1041,7 +1041,7 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `enabled` | bool | `false` | Dès la fin de l'upload, enchaîne en tâche de fond analyse → mise en FILE du résumé (SUMMARY_MODE : admission VRAM par le scheduler, exécution locale en all-in-one, worker GPU en frontal). L'attente perçue de l'étape résumé du wizard fond pendant la saisie. Les gardes d'`api_summary` s'appliquent (jamais de doublon) |
+| `enabled` | bool | `true` *(défaut depuis 2026-08-06 ; `false` = opt-out)* | Dès la fin de l'upload, enchaîne en tâche de fond analyse → mise en FILE du résumé (SUMMARY_MODE : admission VRAM par le scheduler, exécution locale en all-in-one, worker GPU en frontal). L'attente perçue de l'étape résumé du wizard fond pendant la saisie. Les gardes d'`api_summary` s'appliquent (jamais de doublon) |
 
 #### `workflow.vram_wait`
 

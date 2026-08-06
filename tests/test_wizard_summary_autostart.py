@@ -1,6 +1,6 @@
 """Autostart du résumé dès la fin de l'upload (PISTES_AMELIORATION §5.6).
 
-Opt-in (`workflow.summary_autostart.enabled`, défaut false) : enchaîne en fond
+Actif par défaut depuis 2026-08-06 (`enabled: false` = opt-out) : enchaîne en fond
 analyse → mise en FILE du résumé (SUMMARY_MODE — admission VRAM, all-in-one ET
 frontal). Coutures substituées au CONSOMMATEUR (wizard_api), thread rendu
 synchrone pour le déterminisme.
@@ -71,7 +71,7 @@ def _cfg(enabled: bool) -> dict:
 
 
 class TestAutostart:
-    def test_defaut_desactive_aucun_thread(self, app, uploaded_job, monkeypatch):
+    def test_opt_out_explicite_aucun_thread(self, app, uploaded_job, monkeypatch):
         executor = _FakeExecutor()
         with app.app_context():
             _wire(monkeypatch, app, executor)
@@ -81,6 +81,18 @@ class TestAutostart:
 
         assert _ImmediateThread.started == 0
         assert executor.submitted == []
+
+    def test_defaut_sans_cle_autostart_actif(self, app, uploaded_job, monkeypatch):
+        # Défaut TRUE depuis 2026-08-06 (décision utilisateur) : sans la clé, l'autostart part.
+        executor = _FakeExecutor()
+        with app.app_context():
+            analyzed = _wire(monkeypatch, app, executor)
+            cfg = _cfg(False)
+            cfg["workflow"].pop("summary_autostart", None)
+            with app.test_request_context():
+                wizard_api._maybe_autostart_summary(cfg, uploaded_job)
+
+        assert analyzed["n"] == 1 and len(executor.submitted) == 1
 
     def test_active_analyse_puis_enfile_le_resume(self, app, uploaded_job, monkeypatch):
         executor = _FakeExecutor()

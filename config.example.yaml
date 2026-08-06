@@ -392,8 +392,9 @@ gpu:
 workflow:
   # Autostart du résumé (§5.6) : dès la fin de l'upload, analyse + résumé partent en
   # tâche de fond (file SUMMARY_MODE) pendant que l'utilisateur remplit le wizard.
+  # ACTIF PAR DÉFAUT depuis 2026-08-06 — décommenter pour le désactiver (opt-out).
   # summary_autostart:
-  #   enabled: true
+  #   enabled: false
 
   enable_quick_summary: true
   enable_speaker_detection: true

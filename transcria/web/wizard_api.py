@@ -178,7 +178,9 @@ def _maybe_autostart_summary(cfg: dict, job_id: str) -> None:
     ou en cours est respectée (mêmes gardes qu'api_summary).
     """
     autostart_cfg = cfg.get("workflow", {}).get("summary_autostart") or {}
-    if not autostart_cfg.get("enabled", False):
+    # Défaut TRUE depuis 2026-08-06 (décision utilisateur) : l'attente perçue de
+    # l'étape résumé fond pour tout le monde ; `enabled: false` reste l'opt-out.
+    if not autostart_cfg.get("enabled", True):
         return
     # Patron Flask canonique : current_app est un LocalProxy, _get_current_object
     # rend la vraie app pour le thread de fond.

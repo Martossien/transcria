@@ -567,7 +567,12 @@ déjà protégé (no-op) ; le risque vLLM concerne le vLLM *local piloté par sc
 
 ## 5. Parcours utilisateur et exports
 
-### 5.1 Profils « SRT seul » : autoriser le DOCX après coup — **P2, effort M**
+### 5.1 Profils « SRT seul » : autoriser le DOCX après coup — **LIVRÉ (0.3.8)**
+
+> **État réel (revue 2026-08-06)** : la route DOCX génère À LA DEMANDE un Word
+> verbatim pour les profils SRT (dégradation propre des sections sans artefact),
+> et la page résultat porte le bouton « Word verbatim (.docx) ». Le texte
+> historique ci-dessous décrit l'état d'AVANT.
 
 **État actuel.** Les profils `srt_express` et `srt_locuteurs` déclarent
 `docx_level="none"` (`workflow/profiles.py:139-188`) et le téléchargement DOCX
@@ -593,7 +598,12 @@ LLM, correction), la mécanique de reprise par phases existant déjà
   sans diarisation, la section locuteurs doit disparaître proprement. À tester par
   profil.
 
-### 5.2 Synthèse non resynchronisée après édition du SRT — **P2, effort S**
+### 5.2 Synthèse non resynchronisée après édition du SRT — **LIVRÉ**
+
+> **État réel (revue 2026-08-06)** : flag persistant `metadata/summary_stale.json`
+> posé au save de l'éditeur, bandeau d'avertissement sur la page résultat avec
+> lien de resynchronisation, ET mention dans le DOCX lui-même
+> (`docx_report.summary_stale`). Le texte historique ci-dessous décrit l'AVANT.
 
 **État actuel.** Après un save de l'éditeur, le DOCX téléchargé reflète le SRT
 édité (régénération au download) **sauf la section Synthèse**, qui reste celle
@@ -660,10 +670,9 @@ Quinze minutes de travail, à faire au prochain passage sur l'i18n.
 ### 5.6 Le wizard exécute du GPU en synchrone au milieu du parcours — **LIVRÉ (opt-in)**
 
 > **État 2026-08-06 : implémenté** — `workflow.summary_autostart.enabled` (défaut
-> false) : dès la fin de l'upload, analyse + mise en file du résumé partent en
-> tâche de fond (`_maybe_autostart_summary`, testé). Décision restante : le passer
-> à `true` par défaut (ou l'activer à l'install express) pour que l'utilisateur
-> lambda en profite sans le savoir. Le texte historique ci-dessous décrit l'état
+> false à l'origine) : dès la fin de l'upload, analyse + mise en file du résumé
+> partent en tâche de fond (`_maybe_autostart_summary`, testé). **Décision prise
+> 2026-08-06 : défaut `true`** (`enabled: false` = opt-out). Le texte historique ci-dessous décrit l'état
 > d'AVANT.
 
 **État actuel.** Deux étapes du wizard déclenchent du GPU avant la soumission
