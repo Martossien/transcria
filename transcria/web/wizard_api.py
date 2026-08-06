@@ -91,13 +91,27 @@ _SUMMARY_LLM_UNREACHABLE_MESSAGE = (
 )
 
 
-def _speaker_vram_profile(cfg: dict) -> dict:
+def _queue_audio_seconds(cfg: dict, job_id: str) -> float:
+    """Durée audio portée par l'entrée de file (DB) — sans elle, l'estimation
+    d'attente compte 0 s pour cette entrée quand les fichiers du job ne sont pas
+    accessibles (frontale/split, cf. wait_estimate). Best-effort : 0.0 si
+    l'analyse n'existe pas encore."""
+    try:
+        aa = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).load_json("metadata/audio_analysis.json") or {}
+        return float(aa.get("duration_seconds") or 0.0)
+    except Exception:  # noqa: BLE001 — enrichissement d'estimation, jamais bloquant
+        return 0.0
+
+
+def _speaker_vram_profile(cfg: dict, job_id: str) -> dict:
     """Profil VRAM d'une détection de locuteurs (pyannote) routée vers le worker."""
     pyannote = int(cfg.get("gpu", {}).get("pyannote_vram_mb", 2000))
-    return {"mode": "speakers", "peak_vram_mb": pyannote, "phases": {"speaker_detection": pyannote}}
+    return {"mode": "speakers", "peak_vram_mb": pyannote,
+            "phases": {"speaker_detection": pyannote},
+            "audio_seconds": _queue_audio_seconds(cfg, job_id)}
 
 
-def _summary_vram_profile(cfg: dict) -> dict:
+def _summary_vram_profile(cfg: dict, job_id: str) -> dict:
     """Profil VRAM d'une reprise serveur du résumé : pilote l'admission du scheduler.
 
     Le résumé ne charge que le STT rapide ; l'admission ne dispatchera l'entrée que
@@ -110,6 +124,7 @@ def _summary_vram_profile(cfg: dict) -> dict:
         "mode": "summary",
         "peak_vram_mb": summary_vram,
         "phases": {"summary_stt": summary_vram},
+        "audio_seconds": _queue_audio_seconds(cfg, job_id),
     }
 
 
@@ -194,7 +209,7 @@ def _maybe_autostart_summary(cfg: dict, job_id: str) -> None:
                     return
                 executor.submit_process(
                     job_id, str(audio_path), SUMMARY_MODE,
-                    vram_profile=_summary_vram_profile(cfg),
+                    vram_profile=_summary_vram_profile(cfg, job_id),
                 )
                 logger.info("[autostart] Résumé enfilé dès l'upload (job=%s)", job_id)
         except Exception:  # noqa: BLE001 — opportuniste, jamais bloquant pour l'upload
@@ -284,7 +299,7 @@ def api_summary(job_id: str):
         if executor is None:
             return jsonify({"error": "Worker de traitement indisponible"}), 503
         executor.submit_process(
-            job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg)
+            job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg, job.id)
         )
         return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
 
@@ -309,7 +324,7 @@ def api_summary(job_id: str):
                 job.id,
                 str(audio_path),
                 SUMMARY_MODE,
-                vram_profile=_summary_vram_profile(cfg),
+                vram_profile=_summary_vram_profile(cfg, job.id),
             )
         else:
             logger.warning("Reprise serveur du résumé indisponible (worker absent) — job=%s", job.id)
@@ -656,7 +671,7 @@ def api_speakers_detect(job_id: str):
         if executor is None:
             return jsonify({"error": "Worker de traitement indisponible"}), 503
         executor.submit_process(
-            job.id, str(audio_path), SPEAKER_MODE, vram_profile=_speaker_vram_profile(cfg)
+            job.id, str(audio_path), SPEAKER_MODE, vram_profile=_speaker_vram_profile(cfg, job.id)
         )
         return jsonify({"queued": True, "message": _SPEAKER_QUEUED_MESSAGE})
 

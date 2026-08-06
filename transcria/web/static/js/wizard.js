@@ -1035,6 +1035,16 @@ var TranscrIA = window.TranscrIA || {};
         return t('mis à jour il y a %(n)sh', { n: Math.floor(minutes / 60) });
     }
 
+    function _formatWaitDuration(seconds) {
+        // Durée d'attente localisée depuis les secondes (jamais le texte serveur).
+        var mins = Math.round(seconds / 60);
+        if (mins < 1) { return t('moins d’une minute'); }
+        if (mins < 60) { return t('%(n)s min', { n: mins }); }
+        var h = Math.floor(mins / 60);
+        var rest = mins % 60;
+        return rest > 0 ? t('%(h)s h %(m)s min', { h: h, m: rest }) : t('%(h)s h', { h: h });
+    }
+
     function _renderWorkflowStatusBanner(banner, state, progress, queueInfo) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
         if (!isLive && !(progress && progress.message) &&
@@ -1048,9 +1058,12 @@ var TranscrIA = window.TranscrIA || {};
         var message = progress && progress.message ? progress.message : label;
         if (queueInfo && queueInfo.position) {
             var queueText = t('Position %(n)s dans la file', { n: queueInfo.position });
-            if (queueInfo.estimate && queueInfo.estimate.text) {
-                queueText += ' — ' + (queueInfo.estimate.seconds > 0
-                    ? t('démarrage estimé dans ~%(d)s', { d: queueInfo.estimate.text })
+            if (queueInfo.estimate) {
+                // Formatage CLIENT depuis les secondes : le `text` serveur est en
+                // français dur (format_duration_fr) — un utilisateur EN le recevait tel quel.
+                var secs = queueInfo.estimate.seconds || 0;
+                queueText += ' — ' + (secs > 0
+                    ? t('démarrage estimé dans ~%(d)s', { d: _formatWaitDuration(secs) })
                     : t('démarrage imminent'));
             }
             message = message ? (message + ' · ' + queueText) : queueText;

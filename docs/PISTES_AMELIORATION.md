@@ -619,7 +619,15 @@ sources vs mtime du zip) au backend local. Le code de comparaison existe déjà 
 `pg` (`newest_synced_mtime_ns`) ; en local, un simple `max(mtime des fichiers du
 manifeste)` suffit.
 
-### 5.4 L'utilisateur n'a aucune visibilité sur la file — **P1, effort S**
+### 5.4 L'utilisateur n'a aucune visibilité sur la file — **LIVRÉ (0.3.8) + complété 2026-08-06**
+
+> **État réel** : `queue_position` + `wait_estimate` sont exposés dans
+> `GET /api/jobs/<id>/status` (champs additifs du contrat ⭐, 0.3.8) et la bannière
+> du wizard les AFFICHE (`wizard.js`). La revue multi-topologies du 2026-08-06 a
+> comblé les deux restes : les entrées résumé/locuteurs n'écrivaient pas
+> `audio_seconds` en base (estimation faussée en split), et le texte de durée
+> était du français codé en dur servi aux utilisateurs EN (désormais formaté côté
+> client depuis les secondes). Le texte historique ci-dessous décrit l'état d'AVANT.
 
 **État actuel.** La position dans la file et l'estimation d'attente calibrée
 machine **existent et sont calculées** (`queue/wait_estimate.py:16-56`) mais ne
@@ -649,7 +657,14 @@ statique.
 → « See technical details ») + 1 msgstr vide (placeholder d'exemple, ligne 4019).
 Quinze minutes de travail, à faire au prochain passage sur l'i18n.
 
-### 5.6 Le wizard exécute du GPU en synchrone au milieu du parcours — **P2, effort M**
+### 5.6 Le wizard exécute du GPU en synchrone au milieu du parcours — **LIVRÉ (opt-in)**
+
+> **État 2026-08-06 : implémenté** — `workflow.summary_autostart.enabled` (défaut
+> false) : dès la fin de l'upload, analyse + mise en file du résumé partent en
+> tâche de fond (`_maybe_autostart_summary`, testé). Décision restante : le passer
+> à `true` par défaut (ou l'activer à l'install express) pour que l'utilisateur
+> lambda en profite sans le savoir. Le texte historique ci-dessous décrit l'état
+> d'AVANT.
 
 **État actuel.** Deux étapes du wizard déclenchent du GPU avant la soumission
 finale : le résumé (STT + pyannote + LLM, `wizard_api.py:154-250`) et la détection

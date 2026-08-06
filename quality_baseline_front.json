@@ -18,7 +18,7 @@
   "transcria/web/static/js/srt_time.js": 49,
   "transcria/web/static/js/ui_actions.js": 84,
   "transcria/web/static/js/wizard-api.js": 59,
-  "transcria/web/static/js/wizard.js": 1319
+  "transcria/web/static/js/wizard.js": 1332
  },
  "template_lines": {
   "transcria/web/templates/_central_lexicon_entry_fields.html": 31,
