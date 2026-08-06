@@ -76,8 +76,8 @@ def test_evaluate_all_incompatible_fails():
 
 
 def test_evaluate_only_borderline_warns():
-    # Zone limite du mode BUNDLED (11 500-12 288) — en slim, 11 800 est confortable.
-    status, _ = gp.evaluate([(7.5, 11_800)], bundled=True)
+    # Zone limite commune (7 500-8 192) : sous le recommandé mais au-dessus du plancher.
+    status, _ = gp.evaluate([(7.5, 7_900)], bundled=True)
     assert status == gp.WARN
 
 
@@ -105,15 +105,15 @@ def test_main_nvidia_smi_error_returns_1(monkeypatch):
     assert gp.main([]) == 1
 
 
-# --- Seuils par mode (2026-08-07) : slim palier 8 / bundled palier 12 baké ---------------
+# --- Seuils par mode (0.4.2) : palier 8 partout — la bundled bake AUSSI le Qwen3.5-4B ----
 def test_carte_gaming_8go_passe_en_slim():
     status, _ = gp.classify_gpu(8.6, 8_192)
     assert status == gp.OK
 
 
-def test_evaluate_bundled_garde_le_plancher_12():
-    status, msg = gp.evaluate([(8.6, 8_192)], bundled=True)
-    assert status == gp.FAIL and "11500" in msg.replace(" ", "")
+def test_evaluate_bundled_accepte_8go_depuis_0_4_2():
+    # La bundled bake les paliers 8 ET 12 ; l'entrypoint rétrograde < 12 Go → 8 Go = OK.
+    assert gp.evaluate([(8.6, 8_192)], bundled=True)[0] == gp.OK
 
 
 def test_evaluate_slim_accepte_8go_et_bundled_24go_ok():

@@ -3,8 +3,9 @@
 *([English version](QUICKSTART.en.md))*
 
 Une page, deux chemins — choisissez-en **un**. Prérequis commun : une machine Linux avec
-un GPU NVIDIA (compute capability ≥ 7.5 ; **dès 8 Go de VRAM** — natif comme Docker
-slim ; l'image bundled, qui embarque une LLM plus grosse, demande **≥ 12 Go** — et fonctionne même **sans GPU** : transcription CPU via le
+un GPU NVIDIA (compute capability ≥ 7.5 ; **dès 8 Go de VRAM** — natif comme Docker,
+slim et bundled ; sur une carte < 12 Go la LLM du palier 8 est choisie automatiquement —
+et fonctionne même **sans GPU** : transcription CPU via le
 moteur Kroko, sans phases LLM) et son pilote installé (`nvidia-smi` doit répondre).
 
 ## Chemin 1 — Docker (essayer le projet, recommandé)

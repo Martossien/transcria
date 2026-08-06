@@ -287,8 +287,9 @@ Options, model prerequisites, and distributed roles are documented in
 ### Just evaluating — one Docker command
 
 The bundled image ships with default models baked in, so there is no token, no download,
-and it works offline. You only need an NVIDIA GPU (compute capability 7.5 or newer, 12 GB
-VRAM or more) with Docker GPU access.
+and it works offline. You only need an NVIDIA GPU (compute capability 7.5 or newer, 8 GB
+VRAM or more — under 12 GB the smaller LLM tier is picked automatically) with Docker GPU
+access.
 
 ```bash
 scripts/docker_quickstart.sh --bundled       # try it: models included, no token
@@ -333,7 +334,7 @@ We keep this list honest and current.
 | Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
 | Speakers (Sortformer diarization) | Up to 4 | Use pyannote (gated) for more |
 | Interface language | French / English | Bilingual (UI, deliverables, installer, doctor); more languages need no rewrite (French fallback) |
-| Below 12 GB VRAM | No summary/correction LLM | Falls back to raw transcription |
+| Below 8 GB VRAM | No summary/correction LLM | Falls back to raw transcription (8-11 GB cards get the 4B tier automatically) |
 | Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
 | Retention | Jobs 365 days, audit 1095 days (configurable) | Automatic purge plus a `maintenance.cli purge` command |
 

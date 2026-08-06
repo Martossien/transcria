@@ -2,8 +2,9 @@
 #
 # Image ALL-IN-ONE GPU « BUNDLED » — identique à Dockerfile.allinone-gpu, MAIS avec les
 # modèles par défaut NON gated EMBARQUÉS (whisper + Sortformer + Voxtral Mini 3B +
-# MOSS-Transcribe-Diarize + LLM d'arbitrage Qwen3.5-9B). Objectif : « pull & run »
-# DÉTERMINISTE et HORS-LIGNE — aucun téléchargement au runtime, et plus aucun contact avec
+# MOSS-Transcribe-Diarize + LLM d'arbitrage Qwen3.5-9B ET Qwen3.5-4B, paliers 12 et 8 Go
+# — l'entrypoint rétrograde automatiquement au palier 8 sur carte < 12 Go). Objectif :
+# « pull & run » DÉTERMINISTE et HORS-LIGNE — aucun téléchargement au runtime, et plus aucun contact avec
 # le cache HF de l'hôte (⇒ supprime le piège « File exists »). Voxtral (0.3.4) sert de
 # SECONDAIRE au multi-STT ciblé (ON par défaut) ; MOSS (0.3.5) est le backend opt-in
 # « une passe ASR+locuteurs » (models.stt_backend=moss) — poids ET site Transformers 5
@@ -13,7 +14,7 @@
 # embarqués — ils restent en opt-in via HF_TOKEN / TRANSCRIA_LLM_TIER (cf. docs/DOCKER.md).
 # Kroko-ASR (CC-BY-SA community) n'est pas baké non plus : page « Modèles » (opt-in).
 #
-# LICENCES (redistribution vérifiée OK) : Qwen3.5-9B-GGUF = Apache-2.0, faster-whisper-large-v3
+# LICENCES (redistribution vérifiée OK) : Qwen3.5-9B-GGUF et Qwen3.5-4B-GGUF = Apache-2.0, faster-whisper-large-v3
 #   = MIT, Voxtral-Mini-3B-2507 = Apache-2.0, MOSS-Transcribe-Diarize = Apache-2.0,
 #   Sortformer = NVIDIA Open Model License (redistribution + commercial autorisés sous
 #   attribution + Trustworthy AI + guardrails intacts). Les textes/attributions sont bakés
@@ -75,6 +76,10 @@ snapshot_download("OpenMOSS-Team/MOSS-Transcribe-Diarize")
 # LLM d'arbitrage (Apache-2.0), palier 12 Go — chemin attendu par l'entrypoint/les profils.
 hf_hub_download("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q5_K_M.gguf",
                 local_dir="/baked/models/Qwen3.5-9B-Q5_K_M")
+# Palier 8 Go AUSSI baké (0.4.2, +3,1 Go) : l'entrypoint rétrograde automatiquement vers
+# ce palier quand la carte fait < 12 Go — la bundled sert les GPU gaming 8 Go hors-ligne.
+hf_hub_download("unsloth/Qwen3.5-4B-GGUF", "Qwen3.5-4B-Q5_K_M.gguf",
+                local_dir="/baked/models/Qwen3.5-4B-Q5_K_M")
 # Qwen3-ASR-1.7B (Apache-2.0, ~3,9 Go) : poids du runtime servi audio.cpp, bakés au
 # chemin par DÉFAUT du lanceur (scripts/launch_stt_qwen3asr.sh) — « pull & run » pour
 # models.summary_stt_backend=qwen3asr (bench : meilleure qualité, ×2,4 vs cohere).

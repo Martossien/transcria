@@ -61,13 +61,15 @@ scripts/docker_quickstart.sh --down
 > `models.summary_stt_backend: qwen3asr` (phase résumé ×2,4, meilleure qualité au bench)
 > est « pull & run ». Configuration : `docs/EXTERNAL_STT_RUNTIMES.md`.
 >
-> **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque le palier 12 Go
-> (Qwen3.5-9B), mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :
+> **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque les paliers 12 Go
+> (Qwen3.5-9B) **et 8 Go** (Qwen3.5-4B — choisi automatiquement sur carte < 12 Go),
+> mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :
 > passer `TRANSCRIA_LLM_TIER=16|24|32|48|64` (ou télécharger depuis **Administration → Modèles**)
 > **télécharge la LLM plus grosse au runtime** dans le volume persistant — le modèle baké
 > n'empêche pas la mise à niveau.
 
-> Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 ; VRAM ≥ ~8 Go en slim, ≥ ~12 Go en bundled — la LLM bakée du palier 12,
+> Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 ; VRAM ≥ ~8 Go — slim
+> comme bundled depuis 0.4.2, les paliers LLM 8 et 12 étant tous deux bakés,
 > cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
 > un crash CUDA survenir au 1ᵉ job.
 
@@ -354,12 +356,13 @@ NVIDIA Open Model License » : c'est fait dans `/licenses/`).
 
 #### Prérequis GPU / VRAM
 
-**GPU compatibles** : il faut **compute capability ≥ 7.5** **ET ≥ 12 Go** de VRAM (le 9B par défaut
-fait ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS `sm_75→sm_90` + le **PTX
+**GPU compatibles** : il faut **compute capability ≥ 7.5** **ET ≥ 8 Go** de VRAM (sur carte
+< 12 Go, le palier 8 — Qwen3.5-4B, ~6,4 Go chargé — est choisi automatiquement ; dès 12 Go
+le défaut est le 9B ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS `sm_75→sm_90` + le **PTX
 `sm_90`** (vérifié `cuobjdump`) qui JIT vers les archis plus récentes. **Driver NVIDIA ≥ 525**
 (CUDA 12.x ; **535+ recommandé** ; Blackwell exige un driver récent). torch cu126 couvre le STT/diar.
 
-| Génération (compute) | Statut | Cartes **≥ 12 Go** (exemples) |
+| Génération (compute) | Statut | Cartes **≥ 8 Go** (exemples, palier 12 dès 12 Go) |
 |---|---|---|
 | Pascal — GTX 10xx, P40/P100 (6.x) | ❌ non supporté | — |
 | Volta — V100, TITAN V (7.0) | ❌ non supporté (`< 7.5`) | — |
@@ -371,9 +374,9 @@ fait ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS `sm_7
 
 > ¹ Blackwell (RTX 50xx, B100/B200) : pas de SASS dédié → JIT du PTX `sm_90` au **1er lancement**
 > (plus lent une fois, puis caché). Pour du natif Blackwell, rebâtir l'image avec CUDA 12.8+ et `sm_120`.
-> Attention : la plupart des **consumer < 12 Go** (RTX 2070/2080, 3060 Ti, 3070, 4060(Ti), 5060…) sont
-> compute-compatibles mais **trop justes en VRAM** pour le 9B — choisir un palier LLM plus petit serait
-> nécessaire (non couvert par le défaut).
+> Les **consumer 8-11 Go** (RTX 2070/2080, 3060 Ti, 3070, 4060(Ti), 5060…) sont couverts depuis
+> 0.4.2 : trop justes pour le 9B, elles reçoivent **automatiquement le palier 8** (Qwen3.5-4B,
+> ~6,4 Go chargé, baké dans la bundled). Sous 8 Go, aucune LLM ne tient (transcription seule).
 
 **VRAM — NON additive** (vérifié sur les logs E2E) : l'autonomie VRAM charge/décharge les modèles
 **séquentiellement** — chaque phase réserve puis **libère** le GPU avant la suivante (STT → libéré →
@@ -382,7 +385,8 @@ Empreintes réelles (chemin zéro-token mesuré) :
 
 | Phase | VRAM réelle | Rôle |
 |---|---|---|
-| **LLM 9B** (palier 12 Go, Q5_K_M) | **~10,6 Go** | maillon dimensionnant |
+| **LLM 9B** (palier 12 Go, Q5_K_M) | **~10,6 Go** | maillon dimensionnant (≥ 12 Go) |
+| **LLM 4B** (palier 8 Go, Q5_K_M) | **~6,4 Go** | maillon dimensionnant (cartes 8-11 Go) |
 | Whisper large-v3 (fp16) | < 5 Go | STT |
 | Sortformer | ~3,5 Go | diarisation |
 | pyannote (référence) | ~2 Go | diarisation (avec token) |
@@ -392,8 +396,9 @@ lourde) est chargé **après** libération du STT/diar. Le prix du non-additif :
 entre phases est **plus lent** (pas de co-résidence). **16 Go+ confortable** ; un palier LLM
 supérieur ou la qualité de référence (cohere ~6 Go + pyannote) demandent davantage / multi-GPU.
 
-> Le quickstart **aligne automatiquement** `gpu.llm_vram_mb` sur le palier (12 Go → `12000`) — sinon
-> le défaut `60000` (palier 64 Go) ferait **refuser l'admission** du 9B sur une carte 12-24 Go.
+> Le quickstart **aligne automatiquement** `gpu.llm_vram_mb` sur le palier **effectif** (12 Go →
+> `12000` ; carte < 12 Go → palier 8 → `8000`, miroir de la rétrogradation de l'entrypoint) — sinon
+> le défaut `60000` (palier 64 Go) ferait **refuser l'admission** de la LLM sur toute carte réelle.
 
 ### Publication d'une image publique (GHCR)
 

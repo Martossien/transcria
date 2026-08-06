@@ -27,11 +27,13 @@ MIN_COMPUTE = 7.5
 # Plancher SLIM (défaut) abaissé au palier LLM 8 Go (Qwen3.5-4B, 2026-08-07) : l'image
 # slim télécharge ses modèles au 1ᵉʳ run dans les volumes hôte — sur une carte 8 Go, le
 # palier 8 est servi (pic maximal ~6,4 Go, phases séquencées par l'autonomie VRAM).
-# L'image BUNDLED garde l'ancien plancher : elle bake la LLM du palier 12 (9B, ~10,6 Go).
+# Depuis 0.4.2 la BUNDLED bake AUSSI la LLM du palier 8 (Qwen3.5-4B) et l'entrypoint
+# rétrograde automatiquement < 12 Go : mêmes seuils. Les constantes restent distinctes
+# pour pouvoir diverger à nouveau si une future bundled ne bake que de gros modèles.
 MIN_VRAM_MB = 7_500
 RECOMMENDED_VRAM_MB = 8_192
-BUNDLED_MIN_VRAM_MB = 11_500
-BUNDLED_RECOMMENDED_VRAM_MB = 12_288
+BUNDLED_MIN_VRAM_MB = 7_500
+BUNDLED_RECOMMENDED_VRAM_MB = 8_192
 
 # Statuts de verdict, du meilleur au pire.
 OK = "ok"

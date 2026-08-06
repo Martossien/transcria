@@ -12,7 +12,7 @@ and what a genuinely useful test report looks like. French or English are both w
 | **Disk space** | Docker `:latest` (slim): **~19 GB** image + **~12 GB** of model weights downloaded on first start. Docker `:bundled`: **~40 GB** image, weights baked in incl. Voxtral (works offline). Native install: plan **100 GB SSD** (the jobs directory grows with your audio). |
 | **First startup** | `:bundled` starts without any download. `:latest` and native installs download ~12 GB of weights on first run — duration is network-bound. **Please time your first start**: it is one of the data points we are collecting (see the report template). |
 | **Models used (default, no token)** | [whisper large-v3](https://huggingface.co/openai/whisper-large-v3) (STT, < 5 GB VRAM) · NVIDIA Sortformer (diarization, ~3.5 GB) · Qwen3.5-9B Q5_K_M (arbitration LLM, ~10.6 GB — the 12 GB tier; larger tiers in [LLM_TIERS.md](LLM_TIERS.md)). With `HF_TOKEN`: Cohere STT + pyannote (reference quality, gated models). |
-| **GPU floor** | Compute capability **≥ 7.5** and **≥ 12 GB VRAM** (the quickstart checks this and fails early with a clear message). |
+| **GPU floor** | Compute capability **≥ 7.5** and **≥ 8 GB VRAM** — under 12 GB the smaller 4B LLM tier is picked automatically (the quickstart checks this and fails early with a clear message). |
 | **Expected result** | A short recording run through the wizard ends with a downloadable package: speaker-attributed `transcription.srt` (raw + corrected), segments JSON with timestamps, a structured summary, Word minutes, and quality reports depending on the chosen profile. |
 
 ## The 15-minute smoke test

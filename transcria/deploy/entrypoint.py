@@ -303,6 +303,11 @@ def provision_translations(plan: EntrypointPlan, env: dict[str, str]) -> None:
 
 ModelDownloader = Callable[[str, str, str], None]  # (repo, filename, local_dir)
 
+# Sous ce plancher, une carte ne tient pas le palier 12 (Qwen3.5-9B ≈ 9,2 Go chargé) : le
+# palier par défaut est rétrogradé à 8 (Qwen3.5-4B). Même seuil que min_vram_mb du palier
+# 12 dans transcria/data/llm_profiles.yaml.
+_TIER12_MIN_VRAM_MB = 11_500
+
 
 def _default_model_downloader(repo: str, filename: str, local_dir: str) -> None:
     from huggingface_hub import hf_hub_download  # import paresseux : seulement au runtime conteneur
@@ -310,11 +315,27 @@ def _default_model_downloader(repo: str, filename: str, local_dir: str) -> None:
     hf_hub_download(repo_id=repo, filename=filename, local_dir=local_dir)
 
 
+def _detect_max_vram_mb() -> int | None:
+    """VRAM (Mo) de la plus grosse carte visible, ou None si nvidia-smi indisponible."""
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout
+        values = [int(line.strip()) for line in out.splitlines() if line.strip().isdigit()]
+        return max(values) if values else None
+    except Exception:  # noqa: BLE001 — best-effort : sans GPU visible on garde le défaut
+        return None
+
+
 def provision_arbitrage_model(
     plan: EntrypointPlan,
     env: dict[str, str],
     *,
     downloader: ModelDownloader = _default_model_downloader,
+    vram_probe: Callable[[], int | None] = _detect_max_vram_mb,
 ) -> bool:
     """Garantit la présence du GGUF d'arbitrage et résout le script de lancement (rôle `all`).
 
@@ -344,7 +365,19 @@ def provision_arbitrage_model(
         print("[INFO] arbitration_llm désactivée — aucun modèle d'arbitrage à provisionner.", file=sys.stderr, flush=True)
         return True
 
-    tier = env.get("TRANSCRIA_LLM_TIER", "12")
+    tier = env.get("TRANSCRIA_LLM_TIER", "")
+    if not tier:
+        # Rétrogradation automatique UNIQUEMENT (jamais de montée) : une carte < 12 Go
+        # reçoit le palier 8 (Qwen3.5-4B, baké dans la bundled) au lieu d'OOMer sur le
+        # défaut ; au-delà, le défaut reste 12 — les gros paliers sont un choix explicite
+        # (TRANSCRIA_LLM_TIER), pas un téléchargement surprise de 20 Go.
+        tier = "12"
+        vram = vram_probe()
+        if vram is not None and vram < _TIER12_MIN_VRAM_MB:
+            tier = "8"
+            print(f"[INFO] carte {vram} Mo < {_TIER12_MIN_VRAM_MB} — palier LLM rétrogradé "
+                  "automatiquement à 8 (forcer un autre palier via TRANSCRIA_LLM_TIER).",
+                  file=sys.stderr, flush=True)
     try:
         meta = get_tier_metadata(tier)
     except Exception as exc:  # noqa: BLE001

@@ -303,7 +303,8 @@ Options, prérequis modèles et rôles distribués sont documentés dans
 
 L'image « bundled » embarque les modèles par défaut : ni token, ni téléchargement, et ça
 fonctionne hors-ligne. Il vous faut seulement un GPU NVIDIA (compute capability 7.5 ou
-plus récent, 12 Go de VRAM ou plus) avec accès GPU pour Docker.
+plus récent, 8 Go de VRAM ou plus — sous 12 Go, le palier LLM plus petit est choisi
+automatiquement) avec accès GPU pour Docker.
 
 ```bash
 scripts/docker_quickstart.sh --bundled       # essayer : modèles inclus, sans token
@@ -348,7 +349,7 @@ Nous gardons cette liste honnête et à jour.
 | Taille d'un fichier | `security.max_upload_size_mb` (1 Go par défaut) | Message « fichier trop volumineux » (413), jamais d'erreur brute |
 | Locuteurs (diarisation Sortformer) | ≤ 4 | Utiliser pyannote (sous conditions) au-delà |
 | Langue de l'interface | Français / anglais | Bilingue (interface, livrables, installateur, doctor) ; autres langues sans refonte (repli français) |
-| VRAM < 12 Go | Pas de LLM de synthèse/correction | Repli sur la transcription brute |
+| VRAM < 8 Go | Pas de LLM de synthèse/correction | Repli sur la transcription brute (les cartes 8-11 Go reçoivent automatiquement le palier 4B) |
 | Espace disque | Surveillé par `doctor` (< 10 Go = alerte, < 2 Go = échec) | Un disque plein fait échouer un job proprement et apparaît au diagnostic |
 | Rétention | Traitements 365 j, audit 1095 j (configurable) | Purge automatique + commande `maintenance.cli purge` |
 

@@ -256,8 +256,69 @@ def test_provision_model_skips_when_present(tmp_path, monkeypatch):
     ok = ep.provision_arbitrage_model(_plan(tmp_path, "all"),
                                       {"MODELS_DIR": str(tmp_path / "models"),
                                        "TRANSCRIA_ARBITRAGE_SCRIPT": "/x.sh"},
-                                      downloader=lambda *a: calls.append(a))
+                                      downloader=lambda *a: calls.append(a),
+                                      vram_probe=lambda: None)  # déterministe : pas de nvidia-smi
     assert ok is True and calls == []
+
+
+# --- Rétrogradation automatique du palier (0.4.2) : carte < 12 Go → palier 8 -------------
+def test_provision_model_auto_downgrades_to_tier8_on_8gb_card(tmp_path, monkeypatch):
+    _patch_config(monkeypatch)
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_SCRIPT", "/x.sh")  # neutralise la résolution de script
+    calls = []
+
+    def dl(repo, filename, local_dir):
+        calls.append((repo, filename))
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        (Path(local_dir) / filename).write_text("gguf", encoding="utf-8")
+
+    ok = ep.provision_arbitrage_model(
+        _plan(tmp_path, "all"),
+        {"MODELS_DIR": str(tmp_path / "models"), "TRANSCRIA_ARBITRAGE_SCRIPT": "/x.sh"},
+        downloader=dl, vram_probe=lambda: 8_192,
+    )
+    assert ok is True
+    assert calls == [("unsloth/Qwen3.5-4B-GGUF", "Qwen3.5-4B-Q5_K_M.gguf")]
+
+
+def test_provision_model_env_tier_beats_probe(tmp_path, monkeypatch):
+    # TRANSCRIA_LLM_TIER explicite : la sonde VRAM n'est jamais consultée.
+    _patch_config(monkeypatch)
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_SCRIPT", "/x.sh")
+    dest = tmp_path / "models" / "Qwen3.5-9B-Q5_K_M"
+    dest.mkdir(parents=True)
+    (dest / "Qwen3.5-9B-Q5_K_M.gguf").write_text("gguf", encoding="utf-8")
+
+    def _boom():
+        raise AssertionError("sonde VRAM appelée malgré un palier explicite")
+
+    ok = ep.provision_arbitrage_model(
+        _plan(tmp_path, "all"),
+        {"MODELS_DIR": str(tmp_path / "models"), "TRANSCRIA_LLM_TIER": "12",
+         "TRANSCRIA_ARBITRAGE_SCRIPT": "/x.sh"},
+        downloader=lambda *a: (_ for _ in ()).throw(AssertionError("download inattendu")),
+        vram_probe=_boom,
+    )
+    assert ok is True
+
+
+def test_provision_model_big_card_keeps_default_tier12(tmp_path, monkeypatch):
+    # Jamais de MONTÉE automatique : 24 Go sans env → défaut 12, pas 24.
+    _patch_config(monkeypatch)
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_SCRIPT", "/x.sh")
+    calls = []
+
+    def dl(repo, filename, local_dir):
+        calls.append(repo)
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        (Path(local_dir) / filename).write_text("gguf", encoding="utf-8")
+
+    ok = ep.provision_arbitrage_model(
+        _plan(tmp_path, "all"),
+        {"MODELS_DIR": str(tmp_path / "models"), "TRANSCRIA_ARBITRAGE_SCRIPT": "/x.sh"},
+        downloader=dl, vram_probe=lambda: 24_564,
+    )
+    assert ok is True and calls == ["unsloth/Qwen3.5-9B-GGUF"]
 
 
 def test_provision_model_skips_when_disabled(tmp_path, monkeypatch):

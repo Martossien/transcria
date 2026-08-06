@@ -56,5 +56,5 @@ where the daemon stays up and only the model is unloaded.
 `install.sh` detects the GPUs, computes the usable VRAM for the LLM (per-card and total),
 proposes the highest tier that fits, downloads the model, and wires the profile script.
 The *Administration → Models* page does the same from the UI, including switching to a
-bigger tier later (e.g. on the bundled Docker image, which ships the 12 GB tier baked in:
-set `TRANSCRIA_LLM_TIER` or use the Models page — model volumes are writable).
+bigger tier later (e.g. on the bundled Docker image, which ships the 8 GB and 12 GB tiers
+baked in: set `TRANSCRIA_LLM_TIER` or use the Models page — model volumes are writable).

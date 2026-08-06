@@ -145,7 +145,17 @@ if [[ ! -f "config.yaml" ]]; then
         # Aligner la réservation VRAM de la LLM sur le palier embarqué (l'exemple vaut 60000 =
         # palier 64 Go multi-GPU). SANS ça, l'admission GPU refuserait le 9B (~10,6 Go) sur une
         # carte 12-24 Go (60000 > VRAM). Mapping palier→budget (cf. install_arbitrage.TIER_VRAM_MB).
-        case "${TRANSCRIA_LLM_TIER:-12}" in
+        # Palier effectif : MIROIR de la rétrogradation automatique de l'entrypoint
+        # (transcria/deploy/entrypoint.py, seuil _TIER12_MIN_VRAM_MB=11500) — sans env,
+        # une carte < 12 Go recevra le palier 8, la réservation doit suivre (8000 ≤ VRAM).
+        _llm_tier="${TRANSCRIA_LLM_TIER:-}"
+        if [[ -z "$_llm_tier" ]]; then
+            _llm_tier=12
+            _max_vram="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -rn | head -1 | tr -dc '0-9')"
+            if [[ -n "$_max_vram" && "$_max_vram" -lt 11500 ]]; then _llm_tier=8; fi
+        fi
+        case "$_llm_tier" in
+            8)  _llm_vram=8000  ;;
             12) _llm_vram=12000 ;; 16) _llm_vram=16000 ;; 24) _llm_vram=24000 ;;
             32) _llm_vram=32000 ;; 48) _llm_vram=48000 ;; 64) _llm_vram=60000 ;;
             *)  _llm_vram=12000 ;;
@@ -159,7 +169,7 @@ if [[ ! -f "config.yaml" ]]; then
         else
             ok "Calibration LLM existante conservée (config non générée par ce script)."
         fi
-        ok "LLM d'arbitrage embarquée (palier ${TRANSCRIA_LLM_TIER:-12} Go, llm_vram_mb=${_llm_vram}) → résumé/correction/qualité actifs."
+        ok "LLM d'arbitrage embarquée (palier ${_llm_tier} Go, llm_vram_mb=${_llm_vram}) → résumé/correction/qualité actifs."
     elif [[ -n "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
         ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."
     else
