@@ -117,6 +117,37 @@ def recommend_engine(
     return {"engine": engine, "reason": reason, "llamacpp": llamacpp, "ollama": ollama}
 
 
+def reachable_tiers(
+    profiles: dict,
+    engine: str,
+    *,
+    gpu_count: int,
+    per_card_vram_mb: int,
+    total_vram_mb: int,
+) -> list[dict]:
+    """Paliers dont le seuil VRAM est satisfait par CE matériel, ordre du catalogue.
+
+    Source unique de l'atteignabilité — ``select_profile`` (recommandation = dernier
+    palier atteignable) et la liste de bascule de la page Modèles la partagent : les
+    deux ne peuvent pas diverger sur « ce qui tient sur cette machine »."""
+    spec, tiers = _engine_tiers(profiles, engine)
+    if not tiers:
+        return []
+
+    select_by = spec.get("select_by", "total_vram_mb")
+    multi_cfg = spec.get("multi_gpu", {}) or {}
+    multi_threshold = int(multi_cfg.get("enable_when_gpus_gte", 2))
+    multi_gpu = gpu_count >= multi_threshold
+
+    # VRAM de sélection selon la stratégie du moteur.
+    if select_by == "per_card_then_total":
+        selection_vram = total_vram_mb if multi_gpu else per_card_vram_mb
+    else:  # total_vram_mb (llama.cpp tensor-split, vLLM TP)
+        selection_vram = total_vram_mb
+
+    return [t for t in tiers if selection_vram >= int(t.get("min_vram_mb", 0))]
+
+
 def select_profile(
     profiles: dict,
     engine: str,
@@ -134,19 +165,13 @@ def select_profile(
     multi_cfg = spec.get("multi_gpu", {}) or {}
     multi_threshold = int(multi_cfg.get("enable_when_gpus_gte", 2))
     multi_gpu = gpu_count >= multi_threshold
-
-    # VRAM de sélection selon la stratégie du moteur.
-    if select_by == "per_card_then_total":
-        selection_vram = total_vram_mb if multi_gpu else per_card_vram_mb
-    else:  # total_vram_mb (llama.cpp tensor-split, vLLM TP)
-        selection_vram = total_vram_mb
+    if select_by != "per_card_then_total":
         multi_gpu = gpu_count >= 2
 
-    # Palier le plus haut dont le seuil est satisfait.
-    chosen = None
-    for tier in tiers:
-        if selection_vram >= int(tier.get("min_vram_mb", 0)):
-            chosen = tier
+    # Palier le plus haut dont le seuil est satisfait (dernier des atteignables).
+    reachable = reachable_tiers(profiles, engine, gpu_count=gpu_count,
+                                per_card_vram_mb=per_card_vram_mb, total_vram_mb=total_vram_mb)
+    chosen = reachable[-1] if reachable else None
     if chosen is None:
         return None
 

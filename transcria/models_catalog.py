@@ -353,4 +353,62 @@ def catalog_with_status(cfg: dict, *, total_vram_mb: int | None = None) -> dict:
         "models_dir": str(models_dir),
         "hf_free_gb": round(disk_free_bytes(hf_home) / 1e9, 1),
         "models_free_gb": round(disk_free_bytes(models_dir) / 1e9, 1),
+        # None = pas de ligne ollama (ou démon injoignable) ; réutilisé par la liste de
+        # bascule pour ne pas sonder /api/tags une seconde fois.
+        "ollama_tags": tags,
     }
+
+
+def ollama_model_choices(
+    cfg: dict,
+    tags: list[dict] | None,
+    *,
+    gpu_count: int,
+    per_card_vram_mb: int,
+    total_vram_mb: int,
+) -> list[dict]:
+    """Modèles Ollama proposables : paliers du catalogue ATTEIGNABLES + modèles déjà tirés.
+
+    Alimente le bloc « changer de modèle » de la page Modèles (backend Ollama) —
+    symétrique du « Activer (servir) » des GGUF. L'atteignabilité et la recommandation
+    viennent de la MÊME source (``llm_profiles.reachable_tiers``/``select_profile``) :
+    la liste ne peut pas proposer un palier que la recommandation jugerait intenable.
+
+    Chaque entrée : ``{model, context, pulled, size_bytes, recommended, active}``.
+    Les modèles tirés hors catalogue sont proposés aussi (l'opérateur les a voulus).
+    """
+    # Différé §8.3(c) : tire PyYAML — inutile pour les backends non-Ollama.
+    from transcria.config.llm_profiles import load_llm_profiles, reachable_tiers, select_profile
+
+    profiles = load_llm_profiles(cfg)
+    hw = {"gpu_count": gpu_count, "per_card_vram_mb": per_card_vram_mb, "total_vram_mb": total_vram_mb}
+    rec = select_profile(profiles, "ollama", **hw)
+    recommended = str(rec.model) if rec else ""
+    active = ollama_model_name(cfg)
+    pulled = {str(m.get("name") or ""): int(m.get("size") or 0) for m in (tags or [])}
+
+    def _pulled_size(model: str) -> tuple[bool, int]:
+        for name, size in pulled.items():
+            if ollama_name_matches(name, model):
+                return True, size
+        return False, 0
+
+    choices: list[dict] = []
+    seen: set[str] = set()
+    for tier in reachable_tiers(profiles, "ollama", **hw):
+        model = str(tier.get("model") or "")
+        if not model or model in seen:
+            continue  # 12/16 Go partagent le même modèle : une seule ligne
+        seen.add(model)
+        is_pulled, size = _pulled_size(model)
+        choices.append({
+            "model": model, "context": int(tier.get("context", 0)),
+            "pulled": is_pulled, "size_bytes": size,
+            "recommended": model == recommended, "active": model == active,
+        })
+    for name, size in pulled.items():
+        if not name or any(ollama_name_matches(name, c["model"]) for c in choices):
+            continue
+        choices.append({"model": name, "context": 0, "pulled": True, "size_bytes": size,
+                        "recommended": False, "active": name == active or ollama_name_matches(name, active)})
+    return choices

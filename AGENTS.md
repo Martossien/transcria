@@ -397,7 +397,7 @@ transcria/
       downloads_api.py      # téléchargements : SRT, package ZIP, audio, DOCX, extraits audio, clips locuteurs
       refine_api.py         # chat d'affinage : submit, chat (polling), render-options, revert
       editor_routes.py      # éditeur SRT intégré : state (un appel), draft (verrou optimiste 409), save (snapshot pool commun), stream Range, peaks — cf. docs/archive/EDITEUR_SRT_INTEGRE.md
-      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models, /admin/hardware (préconisations matériel, apply multi-instance STT), /admin/first-run-status (fragment checklist premier démarrage, 204 = tout vert)
+      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models (+ /ollama-activate : bascule du modèle Ollama — config + opencode, pull si absent), /admin/hardware (préconisations matériel, apply multi-instance STT), /admin/first-run-status (fragment checklist premier démarrage, 204 = tout vert)
       health_routes.py      # /health, /ready, /metrics (Prometheus)
       first_run.py          # bilan de premier démarrage (accueil admin) : compose les MÊMES sources que les pages de réparation (catalogue Modèles, checks doctor légers, inventaire GPU/nœuds) — faits structurés, rédaction dans _first_run_checklist.html
       job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job

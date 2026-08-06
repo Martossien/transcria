@@ -103,6 +103,52 @@
   </div>
 </div>
 
+{% if ollama_choices %}
+{# Bascule de modèle Ollama — symétrique du « Activer (servir) » des GGUF : paliers
+   du catalogue atteignables sur CE matériel + modèles déjà tirés dans le magasin. #}
+<div class="card mt-4">
+  <div class="card-header">
+    <i class="bi bi-arrow-repeat me-2"></i>{{ _("LLM d'arbitrage (Ollama) — changer de modèle") }}
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr><th>{{ _('Modèle') }}</th><th>{{ _('Contexte') }}</th><th>{{ _('Statut') }}</th><th class="text-end">{{ _('Action') }}</th></tr>
+      </thead>
+      <tbody>
+        {% for c in ollama_choices %}
+        <tr>
+          <td>
+            <span class="font-monospace">{{ c.model }}</span>
+            {% if c.active %}<span class="badge bg-success ms-1">{{ _('actif') }}</span>{% endif %}
+            {% if c.recommended %}<span class="badge bg-info text-dark ms-1">{{ _('recommandé pour cette machine') }}</span>{% endif %}
+          </td>
+          <td class="small">{% if c.context %}{{ c.context // 1024 }}K{% else %}—{% endif %}</td>
+          <td class="small">
+            {% if c.pulled %}{{ _('tiré') }} · {{ _('%(n)s Go', n=(c.size_bytes / 1e9)|round(1)) }}
+            {% else %}{{ _('à télécharger (ollama pull)') }}{% endif %}
+          </td>
+          <td class="text-end">
+            {% if not c.active %}
+            <form method="post" action="{{ url_for('web.admin_models_ollama_activate') }}" class="d-inline">
+              <input type="hidden" name="model" value="{{ c.model }}">
+              <button type="submit" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-play-circle"></i> {{ _('Utiliser ce modèle') }}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="small text-muted px-3 py-2">
+      {{ _("Aucun redémarrage requis : Ollama charge le modèle à la demande. Un modèle absent est tiré en arrière-plan à l'activation.") }}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# Progression des téléchargements : JS extrait (vague A3) — admin_models_page.js. #}
 <script src="{{ asset_url('js/admin_models_page.js') }}"></script>
 {% endblock %}

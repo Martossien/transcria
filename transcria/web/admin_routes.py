@@ -34,6 +34,7 @@ from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
+from transcria.gpu import inventory
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
 from transcria.ingestion.meet_links import MeetLinkError, normalize_meeting_input
@@ -58,7 +59,13 @@ from transcria.maintenance import schedule as maintenance_schedule
 from transcria.maintenance import update_check as maintenance_update_check
 from transcria.maintenance.restore import describe_restore
 from transcria.maintenance.schedule import BackupSchedule
-from transcria.models_catalog import catalog_with_status, resolve_hf_home, resolve_models_dir
+from transcria.models_catalog import (
+    ModelSpec,
+    catalog_with_status,
+    ollama_model_choices,
+    resolve_hf_home,
+    resolve_models_dir,
+)
 from transcria.services.config_service import ConfigService
 from transcria.web import first_run, prompt_files
 from transcria.web.blueprint import web_bp
@@ -448,6 +455,19 @@ def _models_view():
     return catalog_with_status(cfg, total_vram_mb=total_vram_mb)
 
 
+def _ollama_choices(view: dict) -> list[dict]:
+    """Choix de bascule Ollama — vide hors backend Ollama (le bloc UI n'apparaît pas)."""
+    if not any(it["spec"].kind == "ollama" for it in view["items"]):
+        return []
+    states = inventory.snapshot()
+    return ollama_model_choices(
+        ConfigService.get_singleton(), view.get("ollama_tags"),
+        gpu_count=len(states),
+        per_card_vram_mb=max((int(s.total_gib * 1024) for s in states), default=0),
+        total_vram_mb=sum(int(s.total_gib * 1024) for s in states),
+    )
+
+
 @web_bp.route("/admin/models")
 @login_required
 @requires(Permission.MANAGE_CONFIG)
@@ -456,7 +476,8 @@ def admin_models():
     hf_home, models_dir = resolve_hf_home(), resolve_models_dir()
     for item in view["items"]:
         item["progress"] = models_download.read_progress(item["spec"], hf_home=hf_home, models_dir=models_dir)
-    return render_template("admin_models.html", view=view, has_token=bool(os.environ.get("HF_TOKEN")))
+    return render_template("admin_models.html", view=view, ollama_choices=_ollama_choices(view),
+                           has_token=bool(os.environ.get("HF_TOKEN")))
 
 
 @web_bp.route("/admin/first-run-status")
@@ -841,6 +862,60 @@ def admin_models_activate():
             flash(_("Échec de l'activation : ") + ((result.stderr or result.stdout).strip()[:300]), "error")
     except Exception as exc:  # noqa: BLE001 — surface l'échec du script à l'opérateur
         flash(_("Échec de l'activation : %(e)s", e=exc), "error")
+    return redirect(url_for("web.admin_models"))
+
+
+@web_bp.route("/admin/models/ollama-activate", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_ollama_activate():
+    """Bascule le modèle Ollama servi — symétrique du « Activer (servir) » des GGUF.
+
+    Écrit ``services.ollama_model`` + les ``model_id`` des DEUX blocs LLM (mêmes clés
+    que la phase ollama d'install.sh), réaligne le provider opencode, et tire le
+    modèle en arrière-plan s'il est absent. Aucun redémarrage : Ollama charge à la
+    demande et l'endpoint ne change pas.
+    """
+    model = (request.form.get("model") or "").strip()
+    choice = next((c for c in _ollama_choices(_models_view()) if c["model"] == model), None)
+    if choice is None:
+        # Jamais une valeur libre : elle part dans config.yaml ET dans l'argv d'ollama pull.
+        flash(_("Modèle Ollama inconnu ou hors des choix proposés."), "error")
+        return redirect(url_for("web.admin_models"))
+    if choice["active"]:
+        flash(_("« %(m)s » est déjà le modèle actif.", m=model), "info")
+        return redirect(url_for("web.admin_models"))
+
+    cfg = copy.deepcopy(ConfigService.get_singleton())
+    cfg.setdefault("services", {})["ollama_model"] = model
+    for block in ("summary_llm", "arbitration_llm"):
+        cfg.setdefault("workflow", {}).setdefault(block, {})["model_id"] = f"local/{model}"
+    ok, errors, _warnings = ConfigService.save_if_valid(cfg)
+    if not ok:
+        flash(_("Bascule refusée — configuration invalide : ") + "; ".join(errors)[:300], "error")
+        return redirect(url_for("web.admin_models"))
+
+    # Réaligner le provider opencode (même patron que l'entrypoint Docker) — best-effort :
+    # un échec n'annule pas la bascule, le prochain provisioning le rattrapera.
+    try:
+        from transcria.gpu.arbitrage_endpoint import default_base_url
+        from transcria.llm_tools import opencode_setup
+
+        opencode_setup.ensure_local_provider(opencode_setup.resolve_config_path(),
+                                             default_base_url(cfg), model)
+    except Exception as exc:  # noqa: BLE001 — surfacé à l'opérateur, jamais bloquant
+        flash(_("Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py.", e=exc),
+              "warning")
+
+    if not choice["pulled"]:
+        spec = ModelSpec(role="arbitrage_llm", label=f"LLM d'arbitrage (Ollama : {model})",
+                         repo_id=model, file=None, kind="ollama", target_subdir="",
+                         gated=False, license="", license_url="", est_gb=0.0)
+        models_download.start_download(spec)
+        flash(_("Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull).",
+                m=model), "success")
+    else:
+        flash(_("Modèle « %(m)s » activé — aucun redémarrage requis.", m=model), "success")
     return redirect(url_for("web.admin_models"))
 
 

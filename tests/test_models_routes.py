@@ -118,10 +118,13 @@ class TestOllamaRendering:
                            "daemon_up": daemon_up, "progress": {"status": "absent"}}],
                 "hf_home": "/hf", "models_dir": "/m", "hf_free_gb": 100.0, "models_free_gb": 100.0}
 
-    def _render(self, admin_client, monkeypatch, view):
+    def _render(self, admin_client, monkeypatch, view, choices=None):
         _no_detect(monkeypatch)
         monkeypatch.setattr("transcria.web.admin_routes.catalog_with_status",
                             lambda cfg, total_vram_mb=None: view)
+        # Liste de bascule contrôlée : pas de sonde GPU (inventory) ni de catalogue réel en test.
+        monkeypatch.setattr("transcria.web.admin_routes._ollama_choices",
+                            lambda v: choices or [])
         resp = admin_client.get("/admin/models")
         assert resp.status_code == 200
         return resp.get_data(as_text=True)
@@ -140,3 +143,87 @@ class TestOllamaRendering:
         body = self._render(admin_client, monkeypatch, self._view(present=False, daemon_up=False))
         assert "démon Ollama injoignable" in body
         assert "Télécharger" not in body
+
+
+class TestOllamaSwitch:
+    """Bascule de modèle Ollama — symétrique du « Activer (servir) » GGUF."""
+
+    def _choices(self):
+        return [
+            {"model": "qwen3.5:9b", "context": 262144, "pulled": True,
+             "size_bytes": 6_000_000_000, "recommended": False, "active": True},
+            {"model": "qwen3.6:27b", "context": 262144, "pulled": False,
+             "size_bytes": 0, "recommended": True, "active": False},
+        ]
+
+    def _setup(self, monkeypatch, saved: dict, pulls: list):
+        monkeypatch.setattr("transcria.web.admin_routes._models_view",
+                            lambda: {"items": []})
+        monkeypatch.setattr("transcria.web.admin_routes._ollama_choices",
+                            lambda v: self._choices())
+        def fake_save(cfg, config_path=None):
+            saved.update(cfg)
+            return True, [], []
+        monkeypatch.setattr("transcria.services.config_service.ConfigService.save_if_valid",
+                            staticmethod(fake_save))
+        monkeypatch.setattr("transcria.llm_tools.opencode_setup.ensure_local_provider",
+                            lambda path, base, model, **k: saved.setdefault("_opencode", model))
+        monkeypatch.setattr("transcria.web.admin_routes.models_download.start_download",
+                            lambda spec, **k: pulls.append((spec.kind, spec.repo_id)))
+
+    def test_bascule_ecrit_les_memes_cles_que_l_install_et_pull_si_absent(self, admin_client, monkeypatch):
+        saved: dict = {}
+        pulls: list = []
+        self._setup(monkeypatch, saved, pulls)
+        resp = admin_client.post("/admin/models/ollama-activate", data={"model": "qwen3.6:27b"})
+        assert resp.status_code == 302
+        # Mêmes clés que la phase ollama d'install.sh (_write_backend_config).
+        assert saved["services"]["ollama_model"] == "qwen3.6:27b"
+        assert saved["workflow"]["summary_llm"]["model_id"] == "local/qwen3.6:27b"
+        assert saved["workflow"]["arbitration_llm"]["model_id"] == "local/qwen3.6:27b"
+        assert saved["_opencode"] == "qwen3.6:27b"           # provider opencode réaligné
+        assert pulls == [("ollama", "qwen3.6:27b")]          # absent → pull en arrière-plan
+
+    def test_modele_deja_tire_pas_de_pull(self, admin_client, monkeypatch):
+        saved: dict = {}
+        pulls: list = []
+        self._setup(monkeypatch, saved, pulls)
+        monkeypatch.setattr("transcria.web.admin_routes._ollama_choices",
+                            lambda v: [{**self._choices()[1], "pulled": True, "size_bytes": 1}])
+        admin_client.post("/admin/models/ollama-activate", data={"model": "qwen3.6:27b"})
+        assert pulls == [] and saved["services"]["ollama_model"] == "qwen3.6:27b"
+
+    def test_modele_hors_choix_refuse_sans_effet(self, admin_client, monkeypatch):
+        # La valeur part dans config.yaml ET l'argv d'ollama pull : jamais de valeur libre.
+        saved: dict = {}
+        pulls: list = []
+        self._setup(monkeypatch, saved, pulls)
+        resp = admin_client.post("/admin/models/ollama-activate", data={"model": "evil; rm -rf"})
+        assert resp.status_code == 302
+        assert saved == {} and pulls == []
+
+    def test_modele_deja_actif_sans_effet(self, admin_client, monkeypatch):
+        saved: dict = {}
+        pulls: list = []
+        self._setup(monkeypatch, saved, pulls)
+        admin_client.post("/admin/models/ollama-activate", data={"model": "qwen3.5:9b"})
+        assert saved == {} and pulls == []
+
+    def test_config_invalide_bascule_refusee(self, admin_client, monkeypatch):
+        saved: dict = {}
+        pulls: list = []
+        self._setup(monkeypatch, saved, pulls)
+        monkeypatch.setattr("transcria.services.config_service.ConfigService.save_if_valid",
+                            staticmethod(lambda cfg, config_path=None: (False, ["clé invalide"], [])))
+        admin_client.post("/admin/models/ollama-activate", data={"model": "qwen3.6:27b"})
+        assert pulls == [] and "_opencode" not in saved      # rien après le refus
+
+    def test_bloc_de_bascule_rendu(self, admin_client, monkeypatch):
+        rendering = TestOllamaRendering()
+        body = rendering._render(admin_client, monkeypatch,
+                                 rendering._view(present=True, daemon_up=True),
+                                 choices=self._choices())
+        assert "changer de modèle" in body
+        assert "Utiliser ce modèle" in body
+        assert "recommandé pour cette machine" in body
+        assert "qwen3.6:27b" in body

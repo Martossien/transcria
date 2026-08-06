@@ -268,3 +268,41 @@ class TestOllamaBackendCatalog:
         assert calls == []
         catalog_with_status(self._cfg(), total_vram_mb=None)     # backend ollama : une sonde
         assert calls == [1]
+
+
+class TestOllamaModelChoices:
+    """Liste de bascule Ollama : paliers atteignables (catalogue réel) + modèles tirés."""
+
+    def _cfg(self, model="qwen3.5:9b"):
+        return {"services": {"backend": "ollama", "ollama_model": model}}
+
+    def _choices(self, tags=None, per_card=24500, count=1, model="qwen3.5:9b"):
+        from transcria.models_catalog import ollama_model_choices
+        return ollama_model_choices(self._cfg(model), tags, gpu_count=count,
+                                    per_card_vram_mb=per_card, total_vram_mb=per_card * count)
+
+    def test_paliers_dedupliques_et_recommandation(self):
+        # 24,5 Go mono-GPU : paliers 12/16 (même modèle 9b, UNE ligne) + 24 (27b, recommandé).
+        choices = self._choices()
+        assert [c["model"] for c in choices] == ["qwen3.5:9b", "qwen3.6:27b"]
+        assert [c["recommended"] for c in choices] == [False, True]
+        assert choices[0]["active"] is True          # modèle configuré
+
+    def test_vram_insuffisante_aucun_palier(self):
+        assert self._choices(per_card=8000) == []
+
+    def test_tags_marquent_tires_avec_taille(self):
+        tags = [{"name": "qwen3.6:27b", "size": 17_000_000_000}]
+        by_model = {c["model"]: c for c in self._choices(tags)}
+        assert by_model["qwen3.6:27b"]["pulled"] is True
+        assert by_model["qwen3.6:27b"]["size_bytes"] == 17_000_000_000
+        assert by_model["qwen3.5:9b"]["pulled"] is False
+
+    def test_modele_tire_hors_catalogue_propose_aussi(self):
+        tags = [{"name": "mistral:7b", "size": 4_000_000_000}]
+        choices = self._choices(tags)
+        extra = next(c for c in choices if c["model"] == "mistral:7b")
+        assert extra["pulled"] is True and extra["recommended"] is False
+
+    def test_tags_none_demon_injoignable_rien_de_tire(self):
+        assert all(c["pulled"] is False for c in self._choices(None))

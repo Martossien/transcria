@@ -36,6 +36,20 @@ def _default_candidates(home: str) -> list[str]:
     ]
 
 
+def resolve_config_path() -> str:
+    """Chemin du ``opencode.json`` qu'opencode lirait pour CE process — source unique.
+
+    Suit la résolution d'opencode : ``OPENCODE_CONFIG`` explicite (fixé dans ``.env``
+    par install.sh), sinon ``$XDG_CONFIG_HOME/opencode/opencode.json``, sinon
+    ``~/.config/opencode/opencode.json``. Partagée par le doctor, l'entrypoint Docker
+    et la bascule de modèle Ollama de la page Modèles."""
+    env = os.environ.get("OPENCODE_CONFIG")
+    if env:
+        return env
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "opencode", "opencode.json")
+
+
 def find_opencode_binary(
     *,
     config_bin: str | None = None,

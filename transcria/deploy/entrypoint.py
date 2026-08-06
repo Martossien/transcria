@@ -230,9 +230,9 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         model = llm.get("model_id") or "arbitrage"
         if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"
             model = model.split("/", 1)[1]
-        config_path = env.get("OPENCODE_CONFIG") or os.path.expanduser(
-            os.path.join("~", ".config", "opencode", "opencode.json")
-        )
+        # Résolution partagée (source unique) — l'entrypoint honore aussi OPENCODE_CONFIG
+        # passé par l'environnement du conteneur.
+        config_path = env.get("OPENCODE_CONFIG") or opencode_setup.resolve_config_path()
         opencode_setup.ensure_local_provider(config_path, base_url, model)
         # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch
         # des agents, deny ailleurs) — sinon le défaut opencode `ask` suspend `opencode run`.

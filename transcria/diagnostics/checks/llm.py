@@ -160,16 +160,11 @@ def check_opencode(
     return CheckResult(name, OK, _t("oc_found", resolved=resolved))
 
 def _opencode_config_path() -> str:
-    """Chemin du opencode.json qu'opencode lirait pour CET utilisateur.
+    """Chemin du opencode.json — délègue à la source unique (llm_tools.opencode_setup)."""
+    # Différé §8.3(c) : chargé seulement si un check opencode tourne.
+    from transcria.llm_tools.opencode_setup import resolve_config_path
 
-    Suit la résolution d'opencode : ``OPENCODE_CONFIG`` explicite, sinon
-    ``$XDG_CONFIG_HOME/opencode/opencode.json``, sinon ``~/.config/opencode/...``.
-    """
-    env = os.environ.get("OPENCODE_CONFIG")
-    if env:
-        return env
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-    return os.path.join(base, "opencode", "opencode.json")
+    return resolve_config_path()
 
 def _read_opencode_config(path: str) -> dict | None:
     """Lit et parse le opencode.json ; None si absent/illisible/non-objet."""
