@@ -338,6 +338,47 @@ What we take away:
 - Speaker attribution quality (who said what) is NOT captured by text-only
   WER; a cpWER-style metric is future work.
 
+## Long-form addendum — one full 99-minute meeting (2026-08-06)
+
+Set L scores engines on 5-minute windows. Real meetings are 1–3 hours, so we ran
+a single **99-minute real recording** (same corpus family, not part of Set L/R)
+end-to-end through the candidates the windows had crowned. It rewrote two
+conclusions.
+
+**MOSS-TD one-pass has a hard length ceiling.** Fed the whole file in a single
+pass (one worker, one model load), it **stops at 18 min 45 s — silently**: no
+error, no warning, 81 % of the audio simply absent from the output. Same failure
+class as Voxtral whole-file (which OOMs at 46 min): current unified audio-LLMs do
+not ingest a full meeting. Any "single-pass" production use would need ~15-minute
+windowing **plus cross-window speaker-label reconciliation** — exactly the
+plumbing the single-pass promise was supposed to remove.
+
+**MOSS speaker labels collapse on long real audio.** On the portion it did
+transcribe, MOSS and pyannote both report 4 speakers — but MOSS assigns **93 % of
+the speech to a single label** (reading the outputs shows multi-party exchanges
+tagged as one voice), where pyannote distributes 48/31/16/5 % across 304 turns, a
+plausible structure for a chaired meeting. Best-mapping temporal agreement
+between the two: **53 %**. Its Set-L strength (text quality on short windows)
+stands; its embedded diarization does not survive long form.
+
+**The classic duo beats the one-pass on every measured axis.** On the *same*
+18 min 45 portion: cohere STT 36.5 s + pyannote 17.7 s ≈ **54 s vs 381 s** for
+MOSS one-pass (7×) — while capturing **more** words (2 348 vs 2 112) and, on
+reading, being the only engine to recover a key negated technical term and a
+full domain enumeration that both others garbled.
+
+**Kroko is the long-form workhorse.** Full 99-minute coverage to the last
+second, **223 s on CPU alone** (RTF 0.037, ~27× real time), 1 002 segments, no
+ceiling — streaming by construction keeps its promise. Its raw text stays
+run-on and mishearing-prone (consistent with its Set-L rank); in the pipeline,
+diarization and LLM correction compensate downstream.
+
+**Method note — cross-engine gap validation.** Two apparent MOSS "silent skips"
+(>15 s) turned out to be gaps in kroko's output *at the same timestamps* → real
+meeting silences, not omissions. Cheap rule: before blaming an engine for a
+skip, check whether an independent engine goes quiet at the same spot. (The
+Set-L W05 skip, verified against the human reference, remains a real one.)
+
 ## Appendix — quality × time ranking of the native engines (2026-08-05)
 
 WER alone crowned one ranking; adding wall time and hallucination robustness
@@ -352,8 +393,8 @@ machine.
 
 | # | Engine | WER | Time / ~5-min window | Non-speech behaviour (mining) | Verdict |
 |---|--------|-----|---------------------|-------------------------------|---------|
-| 1 | Kroko-ASR FR | 0.43 | **10 s, CPU only** | near-clean (stray filler words) | 8–13× faster than everything, 155 MB, no GPU — the efficiency anomaly of the field |
-| 2 | MOSS-TD 0.9B | **0.41** | 65–104 s | clean (0 segments) | its time **includes speakers + timestamps**, so at equal deliverable it beats every GPU engine; mute on faint whispers |
+| 1 | Kroko-ASR FR | 0.43 | **10 s, CPU only** | near-clean (stray filler words) | 8–13× faster than everything, 155 MB, no GPU — the efficiency anomaly of the field ; **long-form proven** : a full 99-min meeting end-to-end in 223 s on CPU (see addendum) |
+| 2 | MOSS-TD 0.9B | **0.41** | 65–104 s | clean (0 segments) | its time **includes speakers + timestamps**, so at equal deliverable it beats every GPU engine; mute on faint whispers. **Long-form caveats (addendum)** : one-pass stops silently at ~19 min, and its speaker labels collapse to quasi-mono on long real audio — short-window champion only |
 | 3 | cohere | 0.46 | 84 s | learned tics on mute zones (catalogued) | best GPU throughput, concurrent-safe — the operations default |
 | 4 | whisper large-v3 | 0.437 | 112 s | subtitle-credit hallucinations (catalogued) | only engine emitting `no_speech_prob` + word confidence — the diagnostics champion for doubtful audio |
 | 5 | Voxtral Mini 3B | 0.427 | 130 s | polite fillers ("Je ne sais pas.", catalogued) | pays +55 % time over cohere for 0.03 WER — the big loser once time counts |
