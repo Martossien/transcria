@@ -92,8 +92,10 @@ cd transcria
 ### Mode express (défaut interactif)
 
 Sans drapeau, sur un terminal, le profil `all-in-one` passe en **mode express** : le
-script détecte tout (matériel → palier LLM par placement réel, `psql` + sudo →
-PostgreSQL local avec mot de passe généré, token HF → choix des modèles), affiche **un
+script détecte tout (matériel → palier LLM par placement réel, `psql` + sudo + **serveur
+qui répond à `pg_isready`** → PostgreSQL local avec mot de passe généré — un PostgreSQL
+installé mais arrêté replie sur SQLite avec un message explicite plutôt que d'échouer en
+plein install, token HF → choix des modèles), affiche **un
 récapitulatif « voilà ce que je vais faire »**, pose **une seule confirmation**, puis
 déroule le chemin non-interactif existant. Deux décisions propres à l'express :
 

@@ -505,8 +505,20 @@ def _cmd_express(args: argparse.Namespace) -> int:
     install.sh consomme les premières via ``eval_named_shell_assignments`` et
     affiche le reste tel quel avant l'unique confirmation."""
     import shutil as _shutil
+    import subprocess as _subprocess
 
     from transcria.installer import express
+
+    def _pg_server_reachable() -> bool:
+        # pg_isready accompagne psql (postgresql-client) ; absent = install exotique,
+        # on garde alors l'ancien comportement (réputé joignable) plutôt qu'un faux refus.
+        exe = _shutil.which("pg_isready")
+        if exe is None:
+            return True
+        try:
+            return _subprocess.run([exe, "-q"], check=False, timeout=5).returncode == 0
+        except Exception:  # noqa: BLE001 — sonde best-effort, jamais bloquante
+            return False
 
     plan = express.build_express_plan(
         gpu_count=args.gpu_count,
@@ -514,6 +526,7 @@ def _cmd_express(args: argparse.Namespace) -> int:
         gpu_sizes_csv=args.gpu_sizes_csv,
         psql_available=_shutil.which("psql") is not None,
         can_admin_pg=args.is_root or args.have_sudo,
+        pg_server_reachable=_pg_server_reachable(),
         has_hf_token=args.has_hf_token,
         config_exists=Path(args.config).exists(),
         install_service=not args.no_service,

@@ -30,6 +30,8 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "db_pg": "Base de données : PostgreSQL local (rôle « transcria », mot de passe généré automatiquement)",
         "db_sqlite_no_psql": "Base de données : SQLite (psql introuvable — installez postgresql pour un usage en production)",
         "db_sqlite_no_admin": "Base de données : SQLite (ni root ni sudo : impossible de créer le rôle PostgreSQL)",
+        "db_sqlite_no_server": ("Base de données : SQLite (PostgreSQL installé mais serveur injoignable — "
+                                "démarrez le service postgresql puis relancez avec --postgres pour l'utiliser)"),
         "models_token": "Modèles : Cohere + pyannote (qualité de référence — token HF fourni)",
         "models_open": ("Modèles : whisper + Sortformer, sans token HF — la qualité de référence "
                         "(Cohere + pyannote) restera activable depuis la page Modèles"),
@@ -52,6 +54,8 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "db_pg": "Database: local PostgreSQL (role \"transcria\", auto-generated password)",
         "db_sqlite_no_psql": "Database: SQLite (psql not found — install postgresql for production use)",
         "db_sqlite_no_admin": "Database: SQLite (neither root nor sudo: cannot create the PostgreSQL role)",
+        "db_sqlite_no_server": ("Database: SQLite (PostgreSQL installed but the server is unreachable — "
+                                "start the postgresql service, then re-run with --postgres to use it)"),
         "models_token": "Models: Cohere + pyannote (reference quality — HF token provided)",
         "models_open": ("Models: whisper + Sortformer, no HF token — reference quality "
                         "(Cohere + pyannote) stays available later from the Models page"),
@@ -112,6 +116,7 @@ def build_express_plan(
     gpu_sizes_csv: str = "",
     psql_available: bool,
     can_admin_pg: bool,
+    pg_server_reachable: bool,
     has_hf_token: bool,
     config_exists: bool,
     install_service: bool,
@@ -119,7 +124,10 @@ def build_express_plan(
     locale: str | None = None,
 ) -> ExpressPlan:
     t = make_translator(EXPRESS_MESSAGES, locale=locale)
-    setup_pg = psql_available and can_admin_pg
+    # Leçon du 1er passage réel (2026-08-07, conteneur vierge) : psql présent + droits
+    # admin ne suffisent PAS — sans serveur qui répond (pg_isready), le bootstrap du rôle
+    # échoue en plein install. L'express ne choisit PG que s'il est joignable MAINTENANT.
+    setup_pg = psql_available and can_admin_pg and pg_server_reachable
     open_models = (not has_hf_token) and (not config_exists)
 
     # Backends du duo sans token, selon le matériel (jamais en dur dans install.sh) :
@@ -142,8 +150,10 @@ def build_express_plan(
         lines.append(t("db_pg"))
     elif not psql_available:
         lines.append(t("db_sqlite_no_psql"))
-    else:
+    elif not can_admin_pg:
         lines.append(t("db_sqlite_no_admin"))
+    else:
+        lines.append(t("db_sqlite_no_server"))
     if config_exists:
         lines.append(t("models_kept"))
     elif has_hf_token:

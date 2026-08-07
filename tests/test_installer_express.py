@@ -8,14 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.installer import express
 from transcria.installer.express import ExpressPlan, build_express_plan, render_shell
 
 
 def _plan(**overrides) -> ExpressPlan:
     kwargs = dict(
         gpu_count=2, total_vram_mb=48000, gpu_sizes_csv="24000,24000",
-        psql_available=True, can_admin_pg=True, has_hf_token=False,
+        psql_available=True, can_admin_pg=True, pg_server_reachable=True, has_hf_token=False,
         config_exists=False, install_service=True, service_user="alice",
         locale="fr",
     )
@@ -30,6 +29,15 @@ class TestDecisions:
     def test_sqlite_sans_psql_ou_sans_admin(self):
         assert _plan(psql_available=False).setup_pg is False
         assert _plan(can_admin_pg=False).setup_pg is False
+
+    def test_sqlite_quand_serveur_pg_injoignable(self):
+        # Leçon du 1er passage réel : psql + droits admin mais serveur arrêté → le
+        # bootstrap du rôle échouerait en plein install. L'express replie sur SQLite
+        # et le récapitulatif dit pourquoi (et comment revenir à PostgreSQL).
+        plan = _plan(pg_server_reachable=False)
+        assert plan.setup_pg is False
+        recap = "\n".join(plan.recap)
+        assert "serveur injoignable" in recap and "--postgres" in recap
 
     def test_open_models_seulement_config_fraiche_sans_token(self):
         assert _plan().open_models is True
