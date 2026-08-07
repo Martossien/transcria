@@ -70,6 +70,10 @@ L'installation devient accessible à l'utilisateur lambda — et aux cartes gami
 
 - Palier 8 Go : LFM2.5-2.6B écarté après lecture réelle des livrables (corruption
   de la correction, contresens du résumé) — remplacé par Qwen3.5-4B Q5_K_M.
+- Mode express : un PostgreSQL installé mais **arrêté** faisait échouer l'install en
+  plein bootstrap du rôle — l'express sonde désormais le serveur (`pg_isready`) et
+  replie sur SQLite avec un message explicite (trouvé au premier passage réel du
+  parcours, en distro vierge).
 
 ## [0.4.1] — 2026-08-05
 
