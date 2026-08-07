@@ -25,7 +25,7 @@ scripts/setup_docker_gpu.sh          # nvidia-container-toolkit + CDI spec + ver
 scripts/docker_quickstart.sh --bundled     # → http://localhost:7870
 ```
 
-`--bundled` pulls the image with models **baked in** (~57 GB — the size of a big video
+`--bundled` pulls the image with models **baked in** (~60 GB — the size of a big video
 game — but then: zero downloads, works offline). Without `--bundled`, the slim image is
 light but downloads models at the first job.
 

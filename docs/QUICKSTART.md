@@ -24,7 +24,7 @@ scripts/setup_docker_gpu.sh          # nvidia-container-toolkit + spec CDI + vé
 scripts/docker_quickstart.sh --bundled     # → http://localhost:7870
 ```
 
-`--bundled` tire l'image à modèles **embarqués** (~57 Go — comme un gros jeu vidéo — mais
+`--bundled` tire l'image à modèles **embarqués** (~60 Go — comme un gros jeu vidéo — mais
 ensuite : zéro téléchargement, fonctionne hors-ligne). Sans `--bundled`, l'image slim est
 légère mais télécharge les modèles au premier traitement.
 
