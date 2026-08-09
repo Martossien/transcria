@@ -442,11 +442,11 @@ msgstr "Información del seminario"
 
 #: transcria/i18n/js_catalog.py:72
 msgid "La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service."
-msgstr "Es posible que la LLM esté en bucle. Si los archivos de corrección ya se han generado, puede cancelar — el trabajo se recuperará automáticamente al reiniciar el servicio."
+msgstr "Es posible que el LLM esté en bucle. Si los archivos de corrección ya se han generado, puede cancelar — el trabajo se recuperará automáticamente al reiniciar el servicio."
 
 #: transcria/i18n/js_catalog.py:73
 msgid "Le résumé n'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer."
-msgstr "El resumen no se pudo generar (la LLM no produjo nada tras 3 intentos). La transcripción se conserva — puede reiniciar."
+msgstr "El resumen no se pudo generar (el LLM no produjo nada tras 3 intentos). La transcripción se conserva — puede volver a intentarlo."
 
 #: transcria/i18n/js_catalog.py:74
 #: transcria/web/templates/wizard/_step_lexicon.html:82
@@ -506,7 +506,7 @@ msgstr "Reiniciando el procesamiento…"
 
 #: transcria/i18n/js_catalog.py:84
 msgid "Relancer le résumé"
-msgstr "Reiniciar el resumen"
+msgstr "Volver a generar el resumen"
 
 #: transcria/i18n/js_catalog.py:85
 msgid "Renseignez d'abord la forme validée."
@@ -804,7 +804,7 @@ msgstr "No se pudo guardar."
 
 #: transcria/i18n/js_catalog.py:153
 msgid "Entrée — valider le texte et reprendre l'écoute"
-msgstr "Entrar — validar el texto y reanudar la escucha"
+msgstr "Intro — validar el texto y reanudar la escucha"
 
 #: transcria/i18n/js_catalog.py:154
 msgid "Espace — lecture/pause"
@@ -877,7 +877,7 @@ msgstr "Logotipo rechazado."
 
 #: transcria/i18n/js_catalog.py:171
 msgid "M — poser un repère · G — aller au temps"
-msgstr "M — colocar un marcador · G — ir al tiempo"
+msgstr "M — colocar un marcador · G — ir al instante"
 
 #: transcria/i18n/js_catalog.py:172
 msgid "Marquer comme traité"
@@ -1049,7 +1049,7 @@ msgstr "ritmo de habla anómalo"
 
 #: transcria/i18n/js_catalog.py:213
 msgid "probabilité de non-parole élevée"
-msgstr "probabilidad de no-habla elevada"
+msgstr "probabilidad elevada de ausencia de habla"
 
 #: transcria/i18n/js_catalog.py:214
 msgid "mots à faible confiance"
@@ -1136,7 +1136,7 @@ msgstr "guardando la versión…"
 
 #: transcria/i18n/js_catalog.py:235
 msgid "enregistrement impossible"
-msgstr "guardado fallido"
+msgstr "No se pudo guardar"
 
 #: transcria/i18n/js_catalog.py:236
 #, python-format
@@ -1167,7 +1167,7 @@ msgstr "versión v%(v)s guardada — documentos actualizados al descargar"
 
 #: transcria/i18n/js_catalog.py:243
 msgid "Vos corrections sont dans le verbatim. La synthèse (résumé, décisions) n'est pas encore à jour :"
-msgstr "Sus correcciones están en la transcripción. El resumen (resumen, decisiones) todavía no está actualizado:"
+msgstr "Sus correcciones están en la transcripción. La síntesis (resumen, decisiones) todavía no está actualizada:"
 
 #: transcria/i18n/js_catalog.py:244
 msgid "DOCX rapide (synthèse inchangée)"
@@ -1591,7 +1591,7 @@ msgstr "Fallo de transcripción"
 #: transcria/notifications/mailer.py:273
 #, python-format
 msgid "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
-msgstr "Un trabajo está <strong>a la espera de VRAM</strong>: la memoria GPU disponible es insuficiente para la fase <strong>%(phase)s</strong> (%(mb)s&nbsp;MB necesarios). El trabajo <strong>no</strong> ha fallado: se reanudará automáticamente en cuanto se libere la VRAM. Libere memoria GPU (detenga una LLM, finalice otro trabajo) para acelerar la reanudación."
+msgstr "Un trabajo está <strong>a la espera de VRAM</strong>: la memoria GPU disponible es insuficiente para la fase <strong>%(phase)s</strong> (%(mb)s&nbsp;MB necesarios). El trabajo <strong>no</strong> ha fallado: se reanudará automáticamente en cuanto se libere la VRAM. Libere memoria GPU (detenga un LLM, finalice otro trabajo) para acelerar la reanudación."
 
 #: transcria/notifications/mailer.py:279
 msgid "Voir le traitement"
@@ -1712,7 +1712,7 @@ msgstr "Voz desactivada."
 #: transcria/web/admin_routes.py:174 transcria/web/admin_routes.py:233
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
-msgstr "%(n)s error(es) de validación. Guardado cancelado."
+msgstr "Se detectaron errores de validación (%(n)s). Guardado cancelado."
 
 #: transcria/web/admin_routes.py:178
 msgid "Réglages sauvegardés."
@@ -1952,7 +1952,7 @@ msgstr "No se pudo aplicar el plan: %(err)s"
 #: transcria/web/admin_routes.py:986
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
-msgstr "Plan multiinstancia aplicado (%(n)s instancia(s)). Reinicie el servicio para aplicarlo: sudo systemctl restart transcria"
+msgstr "Plan multiinstancia aplicado (instancias: %(n)s). Reinicie el servicio para aplicarlo: sudo systemctl restart transcria"
 
 #: transcria/web/config_form.py:30
 msgid "Réunions en ligne"
@@ -1988,7 +1988,7 @@ msgstr "Elección de los motores de transcripción y diarización."
 
 #: transcria/web/config_form.py:48
 msgid "Backend STT"
-msgstr "Backend STT"
+msgstr "Backend de STT"
 
 #: transcria/web/config_form.py:50
 msgid "Moteur de transcription par défaut (cohere recommandé)."
@@ -1996,7 +1996,7 @@ msgstr "Motor de transcripción predeterminado (se recomienda cohere)."
 
 #: transcria/web/config_form.py:51
 msgid "Backend STT du résumé"
-msgstr "Backend STT del resumen"
+msgstr "Backend de STT del resumen"
 
 #: transcria/web/config_form.py:55
 msgid "Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron/voxtralrt exigent le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
@@ -2004,11 +2004,11 @@ msgstr "Motor dedicado a la transcripción rápida de la fase de resumen — vac
 
 #: transcria/web/config_form.py:58
 msgid "Backend STT live (temps réel)"
-msgstr "Backend STT en directo (tiempo real)"
+msgstr "Backend de STT en directo (tiempo real)"
 
 #: transcria/web/config_form.py:61
 msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
-msgstr "Cadena en tiempo real (baja latencia) — vacío = sin directo. Requiere un motor DISEÑADO para streaming (nemotron-streaming, voxtralrt); nunca un motor por lotes (véase docs/TEMPS_REEL_REUNIONS.md)."
+msgstr "Cadena en tiempo real (baja latencia) — vacío = sin modo en directo. Requiere un motor DISEÑADO para streaming (nemotron-streaming, voxtralrt); nunca un motor por lotes (véase docs/TEMPS_REEL_REUNIONES.md)."
 
 #: transcria/web/config_form.py:64
 msgid "Backend diarisation"
@@ -2040,7 +2040,7 @@ msgstr "LLM de arbitraje"
 
 #: transcria/web/config_form.py:82
 msgid "Résumé et correction par la LLM locale OpenAI-compatible."
-msgstr "Resumen y corrección mediante la LLM local compatible con OpenAI."
+msgstr "Resumen y corrección mediante el LLM local compatible con OpenAI."
 
 #: transcria/web/config_form.py:84
 msgid "Activer la correction LLM"
@@ -2096,7 +2096,7 @@ msgstr "Cola persistente activada"
 
 #: transcria/web/config_form.py:101
 msgid "Mise en file des traitements (recommandé)."
-msgstr "Puesta en cola de los trabajos (recomendado)."
+msgstr "Puesta en cola de los trabajos (recomendada)."
 
 #: transcria/web/config_form.py:102 transcria/web/templates/schedule.html:160
 msgid "Jobs simultanés max"
@@ -2129,7 +2129,7 @@ msgstr "Política de preempción de VRAM"
 
 #: transcria/web/config_form.py:118
 msgid "own-only (recommandé) : n'arrête que NOS process gérés inactifs (LLM d'arbitrage), jamais un process tiers. aggressive : préempte aussi les serveurs d'inférence tiers, uniquement dans la fenêtre calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."
-msgstr "own-only (recomendado): solo detiene NUESTROS procesos gestionados inactivos (LLM de arbitraje), nunca un proceso de terceros. aggressive: también expropia servidores de inferencia de terceros, únicamente dentro de la franja horaria «force_gpu» — reservar para una GPU dedicada a TranscrIA."
+msgstr "own-only (recomendado): solo detiene NUESTROS procesos gestionados inactivos (LLM de arbitraje), nunca un proceso de terceros. aggressive: también detiene temporalmente los servidores de inferencia de terceros, únicamente dentro de la franja horaria «force_gpu» — reservar para una GPU dedicada a TranscrIA."
 
 #: transcria/web/config_form.py:122
 msgid "VRAM libre minimale (Mo)"
@@ -2310,7 +2310,7 @@ msgstr "Backend de identidad"
 
 #: transcria/web/config_form.py:204
 msgid "local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. proxy : identité fournie par un proxy d'authentification frontal (Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory en direct. Renseignez les champs correspondants avant d'activer."
-msgstr "local (predeterminado): cuentas de este portal. oidc: SSO corporativo. proxy: identidad proporcionada por un proxy de autenticación frontal (Authelia, oauth2-proxy…). ldap: directorio LDAP / Active Directory en directo. Complete los campos correspondientes antes de activar."
+msgstr "local (predeterminado): cuentas de este portal. oidc: SSO corporativo. proxy: identidad proporcionada por un proxy de autenticación frontal (Authelia, oauth2-proxy…). ldap: acceso directo al directorio LDAP / Active Directory. Complete los campos correspondientes antes de activar."
 
 #: transcria/web/config_form.py:208
 msgid "Émetteur (issuer)"
@@ -2467,7 +2467,7 @@ msgstr "Reglas grupo → rol"
 
 #: transcria/web/config_form.py:268
 msgid "Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : transcria-admins = admin"
-msgstr "Una regla por línea: «grupo = rol» (roles: admin, manager, operator, viewer). Gana el primer grupo coincidente, igualdad estricta. Ej.: transcria-admins = admin"
+msgstr "Una regla por línea: «grupo = rol» (roles: admin, manager, operator, viewer). Gana el primer grupo coincidente; la coincidencia debe ser exacta. Ej.: transcria-admins = admin"
 
 #: transcria/web/config_form.py:271
 msgid "Rôle par défaut (aucun groupe reconnu)"
@@ -2681,11 +2681,11 @@ msgstr "Prompt del sistema para la pasada de revisión final (armonización del 
 
 #: transcria/web/prompt_files.py:54
 msgid "Lancement de la LLM d'arbitrage"
-msgstr "Inicio de la LLM de arbitraje"
+msgstr "Inicio del LLM de arbitraje"
 
 #: transcria/web/prompt_files.py:55
 msgid "Arrêt de la LLM d'arbitrage"
-msgstr "Detención de la LLM de arbitraje"
+msgstr "Detención del LLM de arbitraje"
 
 #: transcria/web/prompt_files.py:146
 #, python-format
@@ -2733,7 +2733,7 @@ msgstr "Contexto completado"
 
 #: transcria/web/ui_labels.py:24
 msgid "Participants renseignés"
-msgstr "Participantes completados"
+msgstr "Participantes indicados"
 
 #: transcria/web/ui_labels.py:25
 msgid "Lexique prêt"
@@ -2848,7 +2848,7 @@ msgstr "Crear un token"
 
 #: transcria/web/templates/account_tokens.html:17
 msgid "Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md). Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
-msgstr "Un token se usa en el encabezado HTTP «Authorization: Bearer tia_…» en las rutas del contrato scriptable (upload, process, status, download — véase docs/API_REFERENCE.md). Lleva sus permisos, nunca más, y deja de funcionar si su cuenta está desactivada."
+msgstr "Un token se usa en el encabezado HTTP «Authorization: Bearer ***» en las rutas del contrato scriptable (upload, process, status, download — véase docs/API_REFERENCE.md). Lleva sus permisos, nunca más, y deja de funcionar si su cuenta está desactivada."
 
 #: transcria/web/templates/account_tokens.html:21
 #: transcria/web/templates/account_tokens.html:43
@@ -2987,7 +2987,7 @@ msgstr "Ajustes"
 
 #: transcria/web/templates/admin_config.html:56
 msgid "Prompts LLM"
-msgstr "Prompts LLM"
+msgstr "Prompts de LLM"
 
 #: transcria/web/templates/admin_config.html:60
 msgid "Scripts (lecture seule)"
@@ -3009,7 +3009,7 @@ msgstr "Recargar"
 
 #: transcria/web/templates/admin_config.html:126
 msgid "Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire)."
-msgstr "Estos prompts controlan la LLM de arbitraje (resumen, corrección, revisión final). Se conserva una copia de seguridad <code>.bak</code> en cada guardado. Se rechaza un prompt vacío. El cambio se aplica a los <strong>próximos</strong> trabajos (no requiere reinicio)."
+msgstr "Estos prompts controlan el LLM de arbitraje (resumen, corrección, revisión final). Se conserva una copia de seguridad <code>.bak</code> en cada guardado. Se rechaza un prompt vacío. El cambio se aplica a los <strong>próximos</strong> trabajos (no requiere reinicio)."
 
 #: transcria/web/templates/admin_config.html:139
 msgid "Fichier absent — il sera créé à la sauvegarde."
@@ -3126,7 +3126,7 @@ msgstr "Probado"
 
 #: transcria/web/templates/admin_connectors.html:102
 msgid "Jamais exécuté en réel"
-msgstr "Nunca ejecutado en real"
+msgstr "Nunca ejecutado en condiciones reales"
 
 #: transcria/web/templates/admin_connectors.html:104
 msgid "À venir"
@@ -3166,7 +3166,7 @@ msgstr ""
 
 #: transcria/web/templates/admin_connectors.html:142
 msgid "Tous les renseignements sont fournis"
-msgstr "Toda la información está proporcionada"
+msgstr "Se ha facilitado toda la información"
 
 #: transcria/web/templates/admin_connectors.html:147
 msgid "Manque :"
@@ -3237,11 +3237,11 @@ msgstr "%(n)s usuario(s) cubierto(s) — todas sus reuniones se ingieren, sin ne
 
 #: transcria/web/templates/admin_connectors.html:261
 msgid "voir les personnes"
-msgstr "ver las personas"
+msgstr "ver a las personas"
 
 #: transcria/web/templates/admin_connectors.html:268
 msgid "Aucun utilisateur couvert — vérifier que des comptes du portail portent une adresse du domaine Meet (c'est elle qui déclenche l'abonnement)."
-msgstr "Ningún usuario cubierto — compruebe que las cuentas del portal tengan una dirección del dominio Meet (es ella la que activa la suscripción)."
+msgstr "Ningún usuario cubierto — compruebe que las cuentas del portal tengan una dirección del dominio de Meet (esa dirección es la que activa la suscripción)."
 
 #: transcria/web/templates/admin_connectors.html:275
 #, python-format
@@ -3320,7 +3320,7 @@ msgstr "Recomendaciones de hardware"
 
 #: transcria/web/templates/admin_hardware.html:6
 msgid "Le matériel détecté est comparé à la configuration courante — utile après un changement de carte graphique. Rien n'est modifié sans votre clic."
-msgstr "El hardware detectado se compara con la configuración actual — útil tras un cambio de tarjeta gráfica. Nada se modifica sin su clic."
+msgstr "El hardware detectado se compara con la configuración actual — útil tras un cambio de tarjeta gráfica. Nada se modifica sin que usted haga clic."
 
 #: transcria/web/templates/admin_hardware.html:9
 msgid "Aucun GPU détecté (nvidia-smi indisponible) — préconisations impossibles sur cette machine."
@@ -3336,7 +3336,7 @@ msgstr "Instancias STT servidas (transcripción en paralelo)"
 
 #: transcria/web/templates/admin_hardware.html:25
 msgid "Palier de la LLM d'arbitrage"
-msgstr "Nivel de la LLM de arbitraje"
+msgstr "Nivel del LLM de arbitraje"
 
 #: transcria/web/templates/admin_hardware.html:26
 msgid "Concurrence de transcription"
@@ -3391,7 +3391,7 @@ msgstr "actualizado"
 
 #: transcria/web/templates/admin_maintenance.html:23
 msgid "Compare la version installée à la dernière publication GitHub. Aucun appel réseau sans votre action : le bouton interroge l'API à la demande ; la clé <code>maintenance.update_check.enabled</code> (config) active en plus une vérification automatique (au plus une par jour, lors de la visite de cette page)."
-msgstr "Compara la versión instalada con la última publicación de GitHub. Ninguna llamada de red sin su acción: el botón consulta la API a petición; la clave <code>maintenance.update_check.enabled</code> (configuración) activa además una verificación automática (como máximo una vez al día, al visitar esta página)."
+msgstr "Compara la versión instalada con la última publicación de GitHub. No se realiza ninguna llamada de red sin que usted la solicite: el botón consulta la API bajo demanda; la clave <code>maintenance.update_check.enabled</code> (configuración) activa además una verificación automática (como máximo una vez al día, al visitar esta página)."
 
 #: transcria/web/templates/admin_maintenance.html:24
 msgid "Vérification automatique : désactivée."
@@ -3453,7 +3453,7 @@ msgstr "La última actualización falló: %(e)s"
 
 #: transcria/web/templates/admin_maintenance.html:88
 msgid "Rollback : restaurez la sauvegarde créée juste avant (liste ci-dessous)."
-msgstr "Rollback: restaure la copia de seguridad creada justo antes (lista abajo)."
+msgstr "Rollback: restaure la copia de seguridad creada justo antes (consulte la lista siguiente)."
 
 #: transcria/web/templates/admin_maintenance.html:91
 #, python-format
@@ -3496,7 +3496,7 @@ msgstr "inactiva"
 #: transcria/web/templates/admin_maintenance.html:137
 #, python-format
 msgid "Installe un <strong>timer systemd</strong> qui lance une sauvegarde selon la cadence configurée. Cadence : <code>%(cal)s</code> (syntaxe <code>OnCalendar</code>), rotation <strong>%(keep)s</strong> archives, %(audio)s. Modifiable dans <code>maintenance.schedule</code> (config)."
-msgstr "Instala un <strong>timer systemd</strong> que lanza una copia de seguridad según la cadencia configurada. Cadencia: <code>%(cal)s</code> (sintaxis <code>OnCalendar</code>), rotación <strong>%(keep)s</strong> archivos, %(audio)s. Configurable en <code>maintenance.schedule</code> (configuración)."
+msgstr "Instala un <strong>timer systemd</strong> que lanza una copia de seguridad según la cadencia configurada. Cadencia: <code>%(cal)s</code> (sintaxis <code>OnCalendar</code>), rotación de <strong>%(keep)s</strong> archivos, %(audio)s. Configurable en <code>maintenance.schedule</code> (configuración)."
 
 #: transcria/web/templates/admin_maintenance.html:137
 msgid "sans les audios"
@@ -3638,7 +3638,7 @@ msgstr "Acción"
 #: transcria/web/templates/admin_models.html:46
 #: transcria/web/templates/admin_models.html:90
 msgid "token HF"
-msgstr "token HF"
+msgstr "token de HF"
 
 #: transcria/web/templates/admin_models.html:50
 msgid "présent"
@@ -3675,7 +3675,7 @@ msgstr "Activar (servir)"
 
 #: transcria/web/templates/admin_models.html:96
 msgid "token HF configuré utilisé"
-msgstr "token HF configurado en uso"
+msgstr "token de HF configurado en uso"
 
 #: transcria/web/templates/admin_models.html:111
 msgid "LLM d'arbitrage (Ollama) — changer de modèle"
@@ -3868,7 +3868,7 @@ msgstr "Nueva versión <strong>%(tag)s</strong> disponible."
 
 #: transcria/web/templates/base.html:150
 msgid "Voir la page Maintenance"
-msgstr "Ver la página Mantenimiento"
+msgstr "Ver la página de Mantenimiento"
 
 #: transcria/web/templates/base.html:159
 #, python-format
@@ -3879,7 +3879,7 @@ msgstr[1] "<strong>%(count)s</strong> trabajos en espera de VRAM."
 
 #: transcria/web/templates/base.html:160
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
-msgstr "La memoria GPU es insuficiente; estos trabajos se reanudarán automáticamente en cuanto quede liberada. Libere VRAM (detener una LLM, finalizar otro trabajo) para acelerar la reanudación."
+msgstr "La memoria GPU es insuficiente; estos trabajos se reanudarán automáticamente en cuanto quede liberada. Libere VRAM (detener un LLM, finalizar otro trabajo) para acelerar la reanudación."
 
 #: transcria/web/templates/central_lexicon_detail.html:2
 #: transcria/web/templates/central_lexicon_detail.html:6
@@ -4461,7 +4461,7 @@ msgstr "Informe Word (.docx)"
 
 #: transcria/web/templates/job_result.html:69
 msgid "Document Word généré à la demande depuis la transcription (sans synthèse — ce profil ne fait pas tourner la LLM)"
-msgstr "Documento Word generado bajo demanda a partir de la transcripción (sin resumen — este perfil no ejecuta la LLM)"
+msgstr "Documento Word generado bajo demanda a partir de la transcripción (sin resumen — este perfil no ejecuta el LLM)"
 
 #: transcria/web/templates/job_result.html:70
 msgid "Word verbatim (.docx)"
@@ -4580,7 +4580,7 @@ msgstr "El trabajo ha fallado."
 
 #: transcria/web/templates/job_wizard.html:66
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
-msgstr "Sus datos introducidos (contexto, participantes, léxico) se conservan — puede reiniciar el trabajo."
+msgstr "Los datos que ha introducido (contexto, participantes, léxico) se conservan — puede volver a ejecutar el trabajo."
 
 #: transcria/web/templates/job_wizard.html:69
 msgid "Relancer le traitement"
@@ -4869,7 +4869,7 @@ msgstr "En pausa manual"
 
 #: transcria/web/templates/queue.html:66
 msgid "Scheduler"
-msgstr "Scheduler"
+msgstr "Planificador"
 
 #: transcria/web/templates/queue.html:69
 #: transcria/web/templates/schedule.html:96
@@ -5084,7 +5084,7 @@ msgstr "fin de la franja en curso"
 #: transcria/web/templates/schedule.html:96
 #, python-format
 msgid "Scheduler : %(state)s"
-msgstr "Scheduler: %(state)s"
+msgstr "Planificador: %(state)s"
 
 #: transcria/web/templates/schedule.html:96
 msgid "opérationnel"
@@ -5283,7 +5283,7 @@ msgstr "Zoom"
 
 #: transcria/web/templates/srt_editor.html:90
 msgid "Zoom arrière (molette)"
-msgstr "Alejar zoom (rueda)"
+msgstr "Reducir el zoom (rueda)"
 
 #: transcria/web/templates/srt_editor.html:91
 msgid "Voir toute la réunion"
@@ -5295,7 +5295,7 @@ msgstr "Ajustar"
 
 #: transcria/web/templates/srt_editor.html:92
 msgid "Zoom avant (molette)"
-msgstr "Acercar zoom (rueda)"
+msgstr "Aumentar el zoom (rueda)"
 
 #: transcria/web/templates/srt_editor.html:97
 msgid "Fresque : clic = aller à cet instant · le cadre = la fenêtre zoomée"
@@ -5566,7 +5566,7 @@ msgstr "a vigilar"
 #: transcria/web/templates/wizard/_step_analysis.html:31
 #, python-format
 msgid "sur %(n)s fenêtre(s) de 5 s."
-msgstr "de %(n)s ventana(s) de 5 s."
+msgstr "en %(n)s ventana(s) de 5 s."
 
 #: transcria/web/templates/wizard/_step_analysis.html:35
 msgid "son exploitable"
@@ -5608,7 +5608,7 @@ msgstr "Silencio:"
 #: transcria/web/templates/wizard/_step_analysis.html:83
 #, python-format
 msgid "Bande 95%% :"
-msgstr "Ancho de banda 95%% :"
+msgstr "Ancho de banda 95%%:"
 
 #: transcria/web/templates/wizard/_step_analysis.html:89
 msgid "Durée"
@@ -5652,7 +5652,7 @@ msgstr "(procesamiento automático %(range)s + validación ~%(human)s min)"
 
 #: transcria/web/templates/wizard/_step_analysis.html:106
 msgid "Estimation apprise de vos traitements précédents sur cette machine"
-msgstr "Estimación aprendida de sus trabajos anteriores en esta máquina"
+msgstr "Estimación basada en sus trabajos anteriores en esta máquina"
 
 #: transcria/web/templates/wizard/_step_analysis.html:106
 #, python-format
@@ -5726,7 +5726,7 @@ msgstr "Idioma"
 
 #: transcria/web/templates/wizard/_step_context.html:57
 msgid "Langue de la réunion ET des livrables générés (compte-rendu, corrections). Anglais = bêta."
-msgstr "Idioma de la reunión Y de los documentos resultantes generados (acta, correcciones). Inglés = beta."
+msgstr "Idioma de la reunión Y de los documentos generados (acta, correcciones). Inglés = beta."
 
 #: transcria/web/templates/wizard/_step_context.html:62
 msgid "Type de réunion"
@@ -5922,7 +5922,7 @@ msgstr "Seleccione un perfil…"
 #: transcria/web/templates/wizard/_step_file.html:106
 #: transcria/web/templates/wizard/_step_launch.html:13
 msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
-msgstr "Ningún perfil se puede iniciar con la configuración actual (LLM de arbitraje no configurada o modo calidad desactivado). Consulte la configuración."
+msgstr "Ningún perfil se puede iniciar con la configuración actual (el LLM de arbitraje no está configurado o el modo calidad está desactivado). Consulte la configuración."
 
 #: transcria/web/templates/wizard/_step_launch.html:6
 #: transcria/web/templates/wizard/_step_launch.html:20
@@ -5940,7 +5940,7 @@ msgstr "Léxico de la sesión"
 
 #: transcria/web/templates/wizard/_step_lexicon.html:8
 msgid "Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible."
-msgstr "Valide las formas dudosas propuestas por la LLM. Cuando una línea contiene variantes, la forma validada sirve de objetivo de corrección en contexto; una línea sin variante solo sirve para preservar o comprobar una forma sensible."
+msgstr "Valide las formas dudosas propuestas por el LLM. Cuando una línea contiene variantes, la forma validada sirve de objetivo de corrección en contexto; una línea sin variante solo sirve para preservar o comprobar una forma sensible."
 
 #: transcria/web/templates/wizard/_step_lexicon.html:12
 msgid "Lexiques utilisés pour ce job"
@@ -5971,7 +5971,7 @@ msgstr "TranscrIA prepara %(n)s término(s) centralizado(s) con las sugerencias 
 
 #: transcria/web/templates/wizard/_step_lexicon.html:48
 msgid "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
-msgstr "La LLM ha señalado términos por verificar, pero el formato no se pudo leer automáticamente. Puede añadir los términos importantes manualmente."
+msgstr "El LLM ha señalado términos por verificar, pero el formato no se pudo leer automáticamente. Puede añadir los términos importantes manualmente."
 
 #: transcria/web/templates/wizard/_step_lexicon.html:52
 msgid "Aucun terme douteux détecté automatiquement."
@@ -6065,7 +6065,7 @@ msgstr "Micrófono compartido «%(room)s»: %(n)s voces distintas detectadas (%(
 #: transcria/web/templates/wizard/_step_participants.html:81
 #, python-format
 msgid "Piste de réunion sans nom (participant « %(room)s ») : cette personne n'avait pas défini son nom dans la plateforme — %(n)s voix détectée(s) (%(speakers)s), nommez-les ci-dessous."
-msgstr "Pista de reunión sin nombre (participante «%(room)s»): esta persona no había definido su nombre en la plataforma — %(n)s voz(voces) detectada(s) (%(speakers)s), asígneles un nombre a continuación."
+msgstr "Pista de reunión sin nombre (participante «%(room)s»): esta persona no había definido su nombre en la plataforma — voces detectadas: %(n)s (%(speakers)s); asígneles un nombre a continuación."
 
 #: transcria/web/templates/wizard/_step_participants.html:87
 msgid "Si ces voix sont en réalité une seule personne : un seul nom, appliqué à toutes."
@@ -6281,7 +6281,7 @@ msgstr "Invitación de la reunión"
 
 #: transcria/web/templates/wizard/_step_summary.html:66
 msgid "Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé."
-msgstr "Copie y pegue la invitación (asunto, cuerpo, orden del día, destinatarios). Ayuda a la LLM a escribir correctamente los nombres y a estructurar el resumen."
+msgstr "Copie y pegue la invitación (asunto, cuerpo, orden del día, destinatarios). Ayuda al LLM a escribir correctamente los nombres y a estructurar el resumen."
 
 #: transcria/web/templates/wizard/_step_summary.html:68
 msgid "Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées."
@@ -6310,7 +6310,7 @@ msgstr "Adjunte los materiales mostrados en la reunión (PDF, Word .docx, PowerP
 
 #: transcria/web/templates/wizard/_step_summary.html:75
 msgid "<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local."
-msgstr "<strong>Por ahora las imágenes se ignoran</strong> — el análisis visual por la LLM llegará más adelante. Los .doc/.ppt antiguos no son compatibles (conviértalos). El contenido permanece en local."
+msgstr "<strong>Por ahora las imágenes se ignoran</strong> — el análisis visual por el LLM llegará más adelante. Los .doc/.ppt antiguos no son compatibles (conviértalos). El contenido permanece en local."
 
 #: transcria/web/templates/wizard/_step_summary.html:79
 msgid "Joindre un document"
@@ -6318,7 +6318,7 @@ msgstr "Adjuntar un documento"
 
 #: transcria/web/templates/wizard/_step_summary.html:97
 msgid "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
-msgstr "El último resumen no se pudo generar: la LLM de arbitraje no produjo ningún texto tras 3 intentos (causa frecuente: transcripción demasiado larga, modelo o prompt). Se conserva la transcripción rápida — vuelva a generar el resumen a continuación. Diagnóstico de administrador: <code>transcria doctor --llm-smoke</code>."
+msgstr "El último resumen no se pudo generar: el LLM de arbitraje no produjo ningún texto tras 3 intentos (causa frecuente: transcripción demasiado larga, modelo o prompt). Se conserva la transcripción rápida — vuelva a generar el resumen a continuación. Diagnóstico de administrador: <code>transcria doctor --llm-smoke</code>."
 
 #: transcria/web/templates/wizard/_step_summary.html:101
 msgid "Générer le résumé"
