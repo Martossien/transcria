@@ -915,7 +915,9 @@ _DEFAULT_CONFIG = {
     # code ici (aucun autre changement de code requis).
     "i18n": {
         "default_locale": "fr",
-        "available_locales": ["fr", "en"],
+        # de/es/it = locales BÊTA (traduction machine relue, pas encore validée par un
+        # natif) — badgées « bêta » dans le sélecteur tant qu'elles sont dans BETA_LOCALES.
+        "available_locales": ["fr", "en", "de", "es", "it"],
     },
 }
 

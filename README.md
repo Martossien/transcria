@@ -334,7 +334,7 @@ We keep this list honest and current.
 | Meeting length | Tested to about 4h30 (~3,000 segments) | Editor and pipeline stay responsive; beyond that is not guaranteed |
 | Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
 | Speakers (Sortformer diarization) | Up to 4 | Use pyannote (gated) for more |
-| Interface language | French / English | Bilingual (UI, deliverables, installer, doctor); more languages need no rewrite (French fallback) |
+| Interface language | French / English + German / Spanish / Italian (beta) | UI, deliverables and prompts localized; de/es/it are machine-translated with enforced glossaries, flagged **beta** until a native speaker reviews them — [native reviews welcome](https://github.com/Martossien/transcria/discussions) |
 | Below 8 GB VRAM | No summary/correction LLM | Falls back to raw transcription (8-11 GB cards get the 4B tier automatically) |
 | Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
 | Retention | Jobs 365 days, audit 1095 days (configurable) | Automatic purge plus a `maintenance.cli purge` command |

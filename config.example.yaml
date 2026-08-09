@@ -920,6 +920,9 @@ i18n:
   available_locales:             # allowlist du sélecteur + de la négociation Accept-Language
     - "fr"
     - "en"
+    - "de"                       # bêta : traduction relue mécaniquement, pas encore validée par un natif
+    - "es"                       # bêta
+    - "it"                       # bêta
 
 notifications:
   email:

@@ -49,7 +49,9 @@ CASES = [
     ("i18n", "bad", "i18n: doit être un objet YAML"),
     ("i18n.available_locales", "fr", "i18n.available_locales: doit être une liste"),
     ("i18n.default_locale", 42, "i18n.default_locale: doit être une chaîne"),
-    ("i18n.default_locale", "de", "absent de i18n.available_locales"),
+    # « pt » : locale CONNUE du validateur mais hors available_locales par défaut
+    # (« de »/« es »/« it » sont proposées depuis les locales bêta).
+    ("i18n.default_locale", "pt", "absent de i18n.available_locales"),
     # maintenance
     ("maintenance", "bad", "maintenance: doit être un objet YAML"),
     ("maintenance.schedule", "bad", "maintenance.schedule: doit être un objet YAML"),

@@ -135,7 +135,9 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
   Des jetons d'API personnels permettent d'automatiser sans partager de mot de passe.
   Chaque connexion est auditée ; un accès local de secours reste toujours disponible. Les
   utilisateurs se connectent avec leurs identifiants habituels, la DSI garde la main.
-- **Bilingue** — interface et livrables en français ou en anglais, au choix de chacun.
+- **Multilingue** — interface et livrables en français ou en anglais, au choix de chacun ;
+  l'allemand, l'espagnol et l'italien arrivent en **bêta** (signalés comme tels dans
+  l'application tant qu'un locuteur natif n'a pas validé la traduction).
 
 ## Ce que TranscrIA n'est pas
 

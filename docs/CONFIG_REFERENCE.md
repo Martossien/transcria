@@ -1474,7 +1474,7 @@ Envoie un email à l'utilisateur propriétaire du job à la fin du traitement (s
 | Clé | Type | Défaut | Description |
 |---|---|---|---|
 | `i18n.default_locale` | str | `"fr"` | Langue par défaut de l'instance (si aucune préférence utilisateur ni négociation `Accept-Language`). Écrite par `install.sh` selon le choix de langue. Surchargée par l'env `TRANSCRIA_DEFAULT_LOCALE`. |
-| `i18n.available_locales` | liste | `["fr", "en"]` | Allowlist des langues proposées (sélecteur navbar + négociation). Une valeur hors liste retombe sur le défaut. |
+| `i18n.available_locales` | liste | `["fr", "en", "de", "es", "it"]` | Allowlist des langues proposées (sélecteur navbar + négociation). Une valeur hors liste retombe sur le défaut. `de`/`es`/`it` sont des locales **bêta** (badgées dans le sélecteur) tant qu'un locuteur natif n'a pas validé le catalogue ; retirez-les de la liste pour ne pas les proposer. |
 
 Distinct de la **langue des livrables** (compte-rendu, corrections), qui est un réglage **par job**
 (étape Contexte, pré-rempli par la langue détectée de l'audio). Ajouter une langue : cf.

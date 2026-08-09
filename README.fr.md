@@ -349,7 +349,7 @@ Nous gardons cette liste honnête et à jour.
 | Durée d'une réunion | Testé jusqu'à ~4 h 30 (≈ 3 000 segments) | L'éditeur et le pipeline restent fluides ; au-delà, non garanti |
 | Taille d'un fichier | `security.max_upload_size_mb` (1 Go par défaut) | Message « fichier trop volumineux » (413), jamais d'erreur brute |
 | Locuteurs (diarisation Sortformer) | ≤ 4 | Utiliser pyannote (sous conditions) au-delà |
-| Langue de l'interface | Français / anglais | Bilingue (interface, livrables, installateur, doctor) ; autres langues sans refonte (repli français) |
+| Langue de l'interface | Français / anglais + allemand / espagnol / italien (bêta) | Interface, livrables et prompts localisés ; de/es/it sont traduits machine avec glossaires imposés, badgés **bêta** tant qu'un locuteur natif n'a pas relu — [relectures natives bienvenues](https://github.com/Martossien/transcria/discussions) |
 | VRAM < 8 Go | Pas de LLM de synthèse/correction | Repli sur la transcription brute (les cartes 8-11 Go reçoivent automatiquement le palier 4B) |
 | Espace disque | Surveillé par `doctor` (< 10 Go = alerte, < 2 Go = échec) | Un disque plein fait échouer un job proprement et apparaît au diagnostic |
 | Rétention | Traitements 365 j, audit 1095 j (configurable) | Purge automatique + commande `maintenance.cli purge` |
