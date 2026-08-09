@@ -2008,7 +2008,7 @@ msgstr "Backend de STT en directo (tiempo real)"
 
 #: transcria/web/config_form.py:61
 msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
-msgstr "Cadena en tiempo real (baja latencia) — vacío = sin modo en directo. Requiere un motor DISEÑADO para streaming (nemotron-streaming, voxtralrt); nunca un motor por lotes (véase docs/TEMPS_REEL_REUNIONES.md)."
+msgstr "Cadena en tiempo real (baja latencia) — vacío = sin modo en directo. Requiere un motor DISEÑADO para streaming (nemotron-streaming, voxtralrt); nunca un motor por lotes (véase docs/TEMPS_REEL_REUNIONS.md)."
 
 #: transcria/web/config_form.py:64
 msgid "Backend diarisation"
@@ -2129,7 +2129,7 @@ msgstr "Política de preempción de VRAM"
 
 #: transcria/web/config_form.py:118
 msgid "own-only (recommandé) : n'arrête que NOS process gérés inactifs (LLM d'arbitrage), jamais un process tiers. aggressive : préempte aussi les serveurs d'inférence tiers, uniquement dans la fenêtre calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."
-msgstr "own-only (recomendado): solo detiene NUESTROS procesos gestionados inactivos (LLM de arbitraje), nunca un proceso de terceros. aggressive: también detiene temporalmente los servidores de inferencia de terceros, únicamente dentro de la franja horaria «force_gpu» — reservar para una GPU dedicada a TranscrIA."
+msgstr "own-only (recomendado): solo detiene NUESTROS procesos gestionados inactivos (LLM de arbitraje), nunca un proceso de terceros. aggressive: también detiene los servidores de inferencia de terceros, únicamente dentro de la franja horaria «force_gpu» — reservar para una GPU dedicada a TranscrIA."
 
 #: transcria/web/config_form.py:122
 msgid "VRAM libre minimale (Mo)"
@@ -2848,7 +2848,7 @@ msgstr "Crear un token"
 
 #: transcria/web/templates/account_tokens.html:17
 msgid "Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md). Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
-msgstr "Un token se usa en el encabezado HTTP «Authorization: Bearer ***» en las rutas del contrato scriptable (upload, process, status, download — véase docs/API_REFERENCE.md). Lleva sus permisos, nunca más, y deja de funcionar si su cuenta está desactivada."
+msgstr "Un token se usa en el encabezado HTTP «Authorization: Bearer tia_…» en las rutas del contrato scriptable (upload, process, status, download — véase docs/API_REFERENCE.md). Lleva sus permisos, nunca más, y deja de funcionar si su cuenta está desactivada."
 
 #: transcria/web/templates/account_tokens.html:21
 #: transcria/web/templates/account_tokens.html:43
