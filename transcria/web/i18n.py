@@ -17,6 +17,7 @@ from transcria.i18n.locale import (  # noqa: F401 — shim de dépréciation (va
     available_locales,
     capture_lang_override,
     default_locale,
+    is_beta_locale,
     select_locale,
 )
 
@@ -45,6 +46,7 @@ def init_app(app: Flask) -> None:
     # `get_locale` disponible dans les templates (ex. <html lang="{{ get_locale() }}">).
     app.jinja_env.globals["get_locale"] = get_locale
     app.jinja_env.globals["available_locales"] = available_locales
+    app.jinja_env.globals["is_beta_locale"] = is_beta_locale
 
     @app.before_request
     def _capture_lang() -> None:

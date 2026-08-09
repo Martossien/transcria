@@ -28,6 +28,32 @@ def test_default_locale_valid_and_coerced():
     assert web_i18n.default_locale({"i18n": {"default_locale": "de", "available_locales": ["fr", "en"]}}) == "fr"
 
 
+# --- Locales bêta (non validées par un natif) ---------------------------------------------
+
+def test_beta_locales_flagged():
+    from transcria.i18n import BETA_LOCALES, is_beta_locale
+    assert is_beta_locale("de") and is_beta_locale("es") and is_beta_locale("it")
+    assert not is_beta_locale("fr") and not is_beta_locale("en")
+    # Les locales bêta doivent être connues du validateur de config (sinon warning trompeur).
+    from transcria.config.checks.platform import _KNOWN_LOCALES
+    assert BETA_LOCALES <= _KNOWN_LOCALES
+
+
+def test_beta_badge_rendered_in_selector(app, admin_client):
+    # Une instance qui propose une locale bêta l'affiche badgée dans le sélecteur (navbar,
+    # donc utilisateur connecté) ; les locales validées (fr/en) restent sans badge. On
+    # substitue le global Jinja (bindé à init_app) plutôt que le singleton de config —
+    # cf. incident de pollution config par test.
+    original = app.jinja_env.globals["available_locales"]
+    app.jinja_env.globals["available_locales"] = lambda: ["fr", "en", "de"]
+    try:
+        page = admin_client.get("/").get_data(as_text=True)
+        assert '?lang=de' in page and "text-bg-warning" in page
+        assert 'href="?lang=fr">FR</a>' in page  # pas de badge sur une locale validée
+    finally:
+        app.jinja_env.globals["available_locales"] = original
+
+
 # --- Validation de schéma -----------------------------------------------------------------
 
 def test_schema_accepts_valid_i18n():

@@ -7,10 +7,12 @@ Flask-Babel de l'app (``init_app``) reste côté web (``transcria/web/i18n.py``)
 """
 from transcria.i18n.js_catalog import JS_MESSAGES, N_, build_js_catalog
 from transcria.i18n.locale import (
+    BETA_LOCALES,
     SESSION_LOCALE_KEY,
     available_locales,
     capture_lang_override,
     default_locale,
+    is_beta_locale,
     select_locale,
 )
 
@@ -20,7 +22,9 @@ __all__ = [
     "SESSION_LOCALE_KEY",
     "available_locales",
     "build_js_catalog",
+    "BETA_LOCALES",
     "capture_lang_override",
     "default_locale",
+    "is_beta_locale",
     "select_locale",
 ]

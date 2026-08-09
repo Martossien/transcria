@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-07 01:01+0200\n"
+"POT-Creation-Date: 2026-08-09 11:28+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -3835,6 +3835,10 @@ msgstr "Scheduling"
 #: transcria/web/templates/base.html:92
 msgid "Langue de l'interface"
 msgstr "Interface language"
+
+#: transcria/web/templates/base.html:98
+msgid "bêta"
+msgstr "beta"
 
 #: transcria/web/templates/base.html:109
 msgid "Rôle :"

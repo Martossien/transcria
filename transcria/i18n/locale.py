@@ -22,6 +22,16 @@ logger = logging.getLogger(__name__)
 # Clé de session où l'on mémorise un override explicite (?lang=xx).
 SESSION_LOCALE_KEY = "ui_locale"
 
+# Locales proposées mais pas encore relues par un locuteur natif : le sélecteur les
+# affiche avec la mention « bêta ». Retirer un code d'ici quand une relecture native
+# a validé le catalogue (et le dire dans le CHANGELOG).
+BETA_LOCALES: frozenset[str] = frozenset({"de", "es", "it"})
+
+
+def is_beta_locale(code: str) -> bool:
+    """Vrai si la locale est proposée en bêta (traduction non validée par un natif)."""
+    return code in BETA_LOCALES
+
 
 def available_locales(cfg: dict | None = None) -> list[str]:
     """Allowlist des locales proposées (config ``i18n.available_locales``)."""

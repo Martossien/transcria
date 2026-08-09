@@ -95,7 +95,7 @@
             <ul class="dropdown-menu dropdown-menu-end">
               {% for code in available_locales() %}
               <li><a class="dropdown-item {% if get_locale() | string == code %}active{% endif %}"
-                     href="?lang={{ code }}">{{ code | upper }}</a></li>
+                     href="?lang={{ code }}">{{ code | upper }}{% if is_beta_locale(code) %} <span class="badge text-bg-warning">{{ _('bêta') }}</span>{% endif %}</a></li>
               {% endfor %}
             </ul>
           </li>
