@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 # Messages utilisateur du chat d'affinage (Axe B) — dans la langue des livrables du job.
 # Repli français pour toute langue non couverte.
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
 _REFINE_MESSAGES: dict[str, dict[str, str]] = {
     "fr": {
+        "no_review_point": "(aucun point signalé)",
         "busy": "L'assistant est occupé (la LLM sert un autre traitement). Réessayez dans quelques minutes.",
         "vram": "VRAM insuffisante pour charger l'assistant (un traitement occupe les GPU). Réessayez plus tard.",
         "no_start": "L'assistant n'a pas pu démarrer (LLM d'arbitrage indisponible). Réessayez plus tard.",
@@ -41,6 +43,7 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
                           "Retéléchargez les documents — Word, SRT, paquet — pour obtenir la version à jour.)"),
     },
     "en": {
+        "no_review_point": "(no point flagged)",
         "busy": "The assistant is busy (the LLM is serving another job). Try again in a few minutes.",
         "vram": "Not enough VRAM to load the assistant (a job is using the GPUs). Try again later.",
         "no_start": "The assistant could not start (arbitration LLM unavailable). Try again later.",
@@ -230,7 +233,7 @@ def run(runner, job: Job, config: dict) -> dict:
         review_file = workspace.write_input(
             "review_points.md",
             "\n".join(f"- {p}" for p in review_points)
-            or ("(no point flagged)" if output_language == "en" else "(aucun point signalé)"),
+            or rmsg["no_review_point"],
         )
 
         opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")

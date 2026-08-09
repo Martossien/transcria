@@ -20,6 +20,7 @@ _FOREIGN_MARKER_RE = re.compile(r"\[(?:ÉTRANGER|FOREIGN)(?::[^\]]+)?\]", re.IGN
 _SPEAKER_PREFIX_RE = re.compile(r"^([^():\n]{1,64}?)\(([^)]*)\):")
 
 # Chaînes du rapport qualité complet, par langue des livrables (Axe B ; fr = historique).
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
 _QR_STRINGS: dict[str, dict[str, str]] = {
     "fr": {
         "empty": "Segments vides : {n} — vérifier et supprimer manuellement.",
@@ -43,6 +44,33 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "Hallucinations STT supprimées : {n} segment(s) (signature du moteur + "
             "acoustique muette/musicale) — détail dans removed_hallucinations.json, "
             "ex. « {example} »."),
+        "overlaps": "Chevauchements : {n} dont {sig} ≥ {thr}s — vérifier les timestamps.",
+        "out_of_order": ("Segments hors ordre temporel : {n} — l'ordre des segments "
+                         "n'est pas croissant (vérifier la fusion/diarisation)."),
+        "missing_lexicon": "Termes du lexique normalisés absents : {terms}",
+        "inconsistent_forms": ("Formes incohérentes hors glossaire : {n} — signalées sans "
+                               "correction automatique ({detail})."),
+        "close_to": "proche de",
+        "unresolved_variants": "Variantes lexique non résolues après correction : {detail}",
+        "malformed_srt": ("SRT mal formé : {n} anomalie(s) de structure "
+                          "(numérotation/timing/ordre) — vérifier l'export."),
+        "speaker_names_expected": "attendu",
+        "speaker_names_modified": "Noms de locuteurs modifiés dans le SRT corrigé : {detail}",
+        "foreign_segments": "Segments marqués étrangers : {n} — probable hallucination ASR ou zone audio bruitée.",
+        "non_latin_segments": "Segments avec écriture non latine dans l'ASR brut : {n} — vérifier VAD/qualité audio.",
+        "suspicious_short": ("Segments courts : {n} dont {c} "
+                             "corroborés (silence/bruit/faible confiance = probables hallucinations) ; "
+                             "les autres sont des interjections brèves à confirmer."),
+        "audio_problem_zones": "Zones audio problématiques : {n} — relire {detail}.",
+        "audio_prediag": "Pré-diagnostic audio : {flags} — transcription potentiellement partielle ou incertaine.",
+        "suspect_nsp": ("Segments à haute probabilité de non-parole (np>{thr}) : "
+                        "{n} — probable hallucination sur silence ou audio dégradé."),
+        "low_word_conf": ("Segments à faible confiance de mots (>{pct}% mots < {min}) : "
+                          "{n} — transcription incertaine, vérifier le contenu audio."),
+        "segment_reliability": ("Fiabilité ASR segmentaire : {counts}"
+                                " — prioriser les segments degrade/suspect en relecture."),
+        "summary_too_short": ("Résumé anormalement court ({summary_chars} car. pour une transcription de "
+                              "{transcript_chars} car.) — vérifier la génération du résumé."),
     },
     "en": {
         "empty": "Empty segments: {n} — check and remove manually.",
@@ -66,6 +94,33 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "Removed STT hallucinations: {n} segment(s) (engine signature + "
             "silent/musical audio) — details in removed_hallucinations.json, "
             "e.g. “{example}”."),
+        "overlaps": "Overlaps: {n} incl. {sig} ≥ {thr}s — check the timestamps.",
+        "out_of_order": ("Out-of-order segments: {n} — segment order is not "
+                         "increasing (check merging/diarization)."),
+        "missing_lexicon": "Normalised glossary terms missing: {terms}",
+        "inconsistent_forms": ("Inconsistent forms outside the glossary: {n} — flagged without "
+                               "automatic correction ({detail})."),
+        "close_to": "close to",
+        "unresolved_variants": "Unresolved glossary variants after correction: {detail}",
+        "malformed_srt": ("Malformed SRT: {n} structural anomaly(ies) "
+                          "(numbering/timing/order) — check the export."),
+        "speaker_names_expected": "expected",
+        "speaker_names_modified": "Speaker names modified in the corrected SRT: {detail}",
+        "foreign_segments": "Foreign-marked segments: {n} — probable ASR hallucination or noisy audio zone.",
+        "non_latin_segments": "Segments with non-Latin script in the raw ASR: {n} — check VAD/audio quality.",
+        "suspicious_short": ("Short segments: {n} incl. {c} "
+                             "corroborated (silence/noise/low confidence = probable hallucinations); "
+                             "the others are brief interjections to confirm."),
+        "audio_problem_zones": "Problematic audio zones: {n} — re-listen {detail}.",
+        "audio_prediag": "Audio pre-diagnostics: {flags} — transcription potentially partial or uncertain.",
+        "suspect_nsp": ("Segments with high non-speech probability (np>{thr}): "
+                        "{n} — probable hallucination on silence or degraded audio."),
+        "low_word_conf": ("Segments with low word confidence (>{pct}% words < {min}): "
+                          "{n} — uncertain transcription, check the audio content."),
+        "segment_reliability": ("Segment ASR reliability: {counts}"
+                                " — prioritise degrade/suspect segments in review."),
+        "summary_too_short": ("Abnormally short summary ({summary_chars} chars for a {transcript_chars}-char "
+                              "transcription) — check the summary generation."),
     },
 }
 
@@ -283,13 +338,9 @@ class QualityReporter:
                     "significant_count": len(significant_overlaps),
                     "severity": severity,
                 })
-                review_points.append(
-                    (f"Overlaps: {len(overlaps)} incl. {len(significant_overlaps)}"
-                     f" ≥ {thresholds['significant_overlap_s']}s — check the timestamps.")
-                    if self._lang == "en" else
-                    (f"Chevauchements : {len(overlaps)} dont {len(significant_overlaps)}"
-                     f" ≥ {thresholds['significant_overlap_s']}s — vérifier les timestamps.")
-                )
+                review_points.append(self.S["overlaps"].format(
+                    n=len(overlaps), sig=len(significant_overlaps),
+                    thr=thresholds['significant_overlap_s']))
                 warnings += len(significant_overlaps)
 
         # 5bis. Segments hors ordre temporel (start non monotone croissant) : invariant
@@ -300,13 +351,7 @@ class QualityReporter:
         out_of_order = SRTChecker.find_out_of_order(segments)
         if out_of_order:
             checks.append({"type": "out_of_order_segments", "count": len(out_of_order), "severity": "warning"})
-            review_points.append(
-                (f"Out-of-order segments: {len(out_of_order)} — segment order is not "
-                 "increasing (check merging/diarization).")
-                if self._lang == "en" else
-                (f"Segments hors ordre temporel : {len(out_of_order)} — l'ordre des segments "
-                 "n'est pas croissant (vérifier la fusion/diarisation).")
-            )
+            review_points.append(self.S["out_of_order"].format(n=len(out_of_order)))
             warnings += len(out_of_order)
 
         # 6. Locuteurs non mappés
@@ -333,11 +378,7 @@ class QualityReporter:
             checks.append({"type": "missing_lexicon_terms",
                            "terms": missing_corrected,
                            "severity": "warning"})
-            review_points.append(
-                (f"Normalised glossary terms missing: {', '.join(missing_corrected[:10])}")
-                if self._lang == "en" else
-                (f"Termes du lexique normalisés absents : {', '.join(missing_corrected[:10])}")
-            )
+            review_points.append(self.S["missing_lexicon"].format(terms=", ".join(missing_corrected[:10])))
             warnings += len(missing_corrected)
 
         # 7ter. Formes incohérentes HORS glossaire — SIGNALÉES sans correction
@@ -354,13 +395,7 @@ class QualityReporter:
                 "severity": "info",
             })
             detail = ", ".join("/".join(g["forms"]) for g in inconsistent[:5])
-            review_points.append(
-                (f"Inconsistent forms outside the glossary: {len(inconsistent)} — flagged without "
-                 f"automatic correction ({detail}).")
-                if self._lang == "en" else
-                (f"Formes incohérentes hors glossaire : {len(inconsistent)} — signalées sans "
-                 f"correction automatique ({detail}).")
-            )
+            review_points.append(self.S["inconsistent_forms"].format(n=len(inconsistent), detail=detail))
 
         # 7bis. Variantes lexique non résolues après correction
         total_checks += 1
@@ -381,15 +416,12 @@ class QualityReporter:
                     for item in unresolved["exact_variants"][:5]
                 )
             if unresolved["close_forms"]:
-                _cl = "close to" if self._lang == "en" else "proche de"
+                _cl = self.S["close_to"]
                 details.extend(
                     f"{item['form']} {_cl} {item['term']}"
                     for item in unresolved["close_forms"][:5]
                 )
-            review_points.append(
-                ("Unresolved glossary variants after correction: " if self._lang == "en"
-                 else "Variantes lexique non résolues après correction : ") + ", ".join(details)
-            )
+            review_points.append(self.S["unresolved_variants"].format(detail=", ".join(details)))
             warnings += unresolved_count
 
         # 7ter-0. SRT rendu structurellement bien formé (numérotation/timing/ordre) : valide
@@ -398,13 +430,7 @@ class QualityReporter:
         malformed = SRTChecker.validate_srt(corrected_srt)
         if malformed:
             checks.append({"type": "malformed_srt", "count": len(malformed), "severity": "warning"})
-            review_points.append(
-                (f"Malformed SRT: {len(malformed)} structural anomaly(ies) "
-                 "(numbering/timing/order) — check the export.")
-                if self._lang == "en" else
-                (f"SRT mal formé : {len(malformed)} anomalie(s) de structure "
-                 "(numérotation/timing/ordre) — vérifier l'export.")
-            )
+            review_points.append(self.S["malformed_srt"].format(n=len(malformed)))
             warnings += len(malformed)
 
         # 7ter. Garde-fous déterministes sur le SRT corrigé
@@ -420,12 +446,10 @@ class QualityReporter:
                 "count": len(speaker_violations),
                 "severity": "error",
             })
-            _exp = "expected" if self._lang == "en" else "attendu"
-            review_points.append(
-                ("Speaker names modified in the corrected SRT: " if self._lang == "en"
-                 else "Noms de locuteurs modifiés dans le SRT corrigé : ")
-                + ", ".join(f"{v['speaker_id']}({v['found']}) {_exp} {v['expected']}" for v in speaker_violations[:5])
-            )
+            _exp = self.S["speaker_names_expected"]
+            review_points.append(self.S["speaker_names_modified"].format(
+                detail=", ".join(f"{v['speaker_id']}({v['found']}) {_exp} {v['expected']}"
+                                 for v in speaker_violations[:5])))
             warnings += min(len(speaker_violations), 10)
 
         foreign_segments = len(_FOREIGN_MARKER_RE.findall(corrected_srt))
@@ -437,11 +461,7 @@ class QualityReporter:
                 "count": foreign_segments,
                 "severity": severity,
             })
-            review_points.append(
-                (f"Foreign-marked segments: {foreign_segments} — probable ASR hallucination or noisy audio zone.")
-                if self._lang == "en" else
-                (f"Segments marqués étrangers : {foreign_segments} — probable hallucination ASR ou zone audio bruitée.")
-            )
+            review_points.append(self.S["foreign_segments"].format(n=foreign_segments))
             if severity == "warning":
                 warnings += min(foreign_segments, 10)
 
@@ -464,11 +484,7 @@ class QualityReporter:
                 ],
                 "severity": "warning",
             })
-            review_points.append(
-                (f"Segments with non-Latin script in the raw ASR: {len(non_latin_segments)} — check VAD/audio quality.")
-                if self._lang == "en" else
-                (f"Segments avec écriture non latine dans l'ASR brut : {len(non_latin_segments)} — vérifier VAD/qualité audio.")
-            )
+            review_points.append(self.S["non_latin_segments"].format(n=len(non_latin_segments)))
             warnings += min(len(non_latin_segments), 10)
 
         # Zones audio problématiques (chargées tôt pour corroborer les segments courts).
@@ -505,15 +521,8 @@ class QualityReporter:
                 ],
                 "severity": "warning" if corroborated else "info",
             })
-            review_points.append(
-                (f"Short segments: {len(suspicious_short)} incl. {len(corroborated)} "
-                 "corroborated (silence/noise/low confidence = probable hallucinations); "
-                 "the others are brief interjections to confirm.")
-                if self._lang == "en" else
-                (f"Segments courts : {len(suspicious_short)} dont {len(corroborated)} "
-                 "corroborés (silence/bruit/faible confiance = probables hallucinations) ; "
-                 "les autres sont des interjections brèves à confirmer.")
-            )
+            review_points.append(self.S["suspicious_short"].format(
+                n=len(suspicious_short), c=len(corroborated)))
             warnings += min(len(corroborated), 10)
 
         # 8. Zones audio problématiques détectées avant transcription
@@ -535,11 +544,8 @@ class QualityReporter:
                 f"{item['label']} {item['start_label']}→{item['end_label']}"
                 for item in examples[:5]
             )
-            review_points.append(
-                (f"Problematic audio zones: {len(problem_segments)} — re-listen {detail}.")
-                if self._lang == "en" else
-                (f"Zones audio problématiques : {len(problem_segments)} — relire {detail}.")
-            )
+            review_points.append(self.S["audio_problem_zones"].format(
+                n=len(problem_segments), detail=detail))
             warnings += min(len(problem_segments), 10)
 
         # 8bis. Risques acoustiques pré-STT
@@ -561,12 +567,8 @@ class QualityReporter:
                 },
                 "severity": "warning" if audio_preflight.get("risk_level") == "degrade" else "info",
             })
-            review_points.append(
-                ("Audio pre-diagnostics: " if self._lang == "en" else "Pré-diagnostic audio : ")
-                + ", ".join(str(flag) for flag in preflight_flags)
-                + (" — transcription potentially partial or uncertain." if self._lang == "en"
-                   else " — transcription potentiellement partielle ou incertaine.")
-            )
+            review_points.append(self.S["audio_prediag"].format(
+                flags=", ".join(str(flag) for flag in preflight_flags)))
             if audio_preflight.get("risk_level") == "degrade":
                 warnings += 2
             else:
@@ -595,13 +597,8 @@ class QualityReporter:
                 ],
                 "severity": "warning",
             })
-            review_points.append(
-                (f"Segments with high non-speech probability (np>{nsp_threshold}): "
-                 f"{len(suspect_nsp)} — probable hallucination on silence or degraded audio.")
-                if self._lang == "en" else
-                (f"Segments à haute probabilité de non-parole (np>{nsp_threshold}) : "
-                 f"{len(suspect_nsp)} — probable hallucination sur silence ou audio dégradé.")
-            )
+            review_points.append(self.S["suspect_nsp"].format(
+                thr=nsp_threshold, n=len(suspect_nsp)))
             warnings += min(len(suspect_nsp), 5)
 
         # 10. Segments suspects : faible confiance globale sur les mots (Whisper)
@@ -633,13 +630,8 @@ class QualityReporter:
                 "examples": suspect_lwc[:10],
                 "severity": "warning",
             })
-            review_points.append(
-                (f"Segments with low word confidence (>{int(conf_ratio_threshold*100)}% words < {conf_min}): "
-                 f"{len(suspect_lwc)} — uncertain transcription, check the audio content.")
-                if self._lang == "en" else
-                (f"Segments à faible confiance de mots (>{int(conf_ratio_threshold*100)}% mots < {conf_min}) : "
-                 f"{len(suspect_lwc)} — transcription incertaine, vérifier le contenu audio.")
-            )
+            review_points.append(self.S["low_word_conf"].format(
+                pct=int(conf_ratio_threshold*100), min=conf_min, n=len(suspect_lwc)))
             warnings += min(len(suspect_lwc), 5)
 
         # 11. Fiabilité segmentaire calculée après STT
@@ -672,12 +664,8 @@ class QualityReporter:
                 "examples": degraded_examples,
                 "severity": "warning" if degraded_count else "info",
             })
-            review_points.append(
-                ("Segment ASR reliability: " if self._lang == "en" else "Fiabilité ASR segmentaire : ")
-                + ", ".join(f"{k}={v}" for k, v in sorted(reliability_counts.items()))
-                + (" — prioritise degrade/suspect segments in review." if self._lang == "en"
-                   else " — prioriser les segments degrade/suspect en relecture.")
-            )
+            review_points.append(self.S["segment_reliability"].format(
+                counts=", ".join(f"{k}={v}" for k, v in sorted(reliability_counts.items()))))
             warnings += min(degraded_count, 5)
 
         # 12. Couverture audio
@@ -717,13 +705,8 @@ class QualityReporter:
                 "transcript_chars": len(srt_content),
                 "severity": "warning",
             })
-            review_points.append(
-                (f"Abnormally short summary ({summary_len} chars for a {len(srt_content)}-char "
-                 "transcription) — check the summary generation.")
-                if self._lang == "en" else
-                (f"Résumé anormalement court ({summary_len} car. pour une transcription de "
-                 f"{len(srt_content)} car.) — vérifier la génération du résumé.")
-            )
+            review_points.append(self.S["summary_too_short"].format(
+                summary_chars=summary_len, transcript_chars=len(srt_content)))
             warnings += 1
 
         # 15. Hallucinations supprimées à la transcription (étage A, double preuve) :

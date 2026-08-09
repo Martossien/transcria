@@ -442,6 +442,30 @@ def _sync_summary_available(job) -> bool:
     return job.state in _SYNC_READY_STATES
 
 
+# Instruction sync-summary composée côté serveur, par langue des livrables (Axe B).
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
+_SYNC_SUMMARY_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "instruction": (
+            "L'utilisateur vient de corriger le verbatim dans l'éditeur SRT "
+            "({edited} segment(s) modifié(s), {new_speakers} locuteur(s) renommé(s) ou ajouté(s)). "
+            "Mets à jour le résumé et les données structurées UNIQUEMENT là où le verbatim "
+            "corrigé les contredit : noms, chiffres, attributions de parole, décisions et "
+            "actions. Ne restructure rien, ne réécris pas le style. En cas d'ambiguïté, "
+            "signale le point dans ton rapport au lieu de trancher."),
+    },
+    "en": {
+        "instruction": (
+            "The user has just corrected the transcript in the SRT editor "
+            "({edited} segment(s) edited, {new_speakers} speaker(s) renamed or added). "
+            "Update the summary and the structured data ONLY where the corrected "
+            "transcript contradicts them: names, figures, speaker attributions, "
+            "decisions and actions. Do not restructure or rewrite the style. "
+            "If a point is ambiguous, flag it in your report instead of deciding."),
+    },
+}
+
+
 def _sync_summary_message(language: str, edited: int, new_speakers: int) -> str:
     """Demande d'affinage composée côté serveur (tour utilisateur `apply`).
 
@@ -449,23 +473,8 @@ def _sync_summary_message(language: str, edited: int, new_speakers: int) -> str:
     corrigé et la synthèse dans son espace de travail) : mettre à jour UNIQUEMENT
     ce que le verbatim corrigé contredit, ne rien restructurer, signaler les
     ambiguïtés plutôt que trancher."""
-    if language == "en":
-        return (
-            f"The user has just corrected the transcript in the SRT editor "
-            f"({edited} segment(s) edited, {new_speakers} speaker(s) renamed or added). "
-            "Update the summary and the structured data ONLY where the corrected "
-            "transcript contradicts them: names, figures, speaker attributions, "
-            "decisions and actions. Do not restructure or rewrite the style. "
-            "If a point is ambiguous, flag it in your report instead of deciding."
-        )
-    return (
-        f"L'utilisateur vient de corriger le verbatim dans l'éditeur SRT "
-        f"({edited} segment(s) modifié(s), {new_speakers} locuteur(s) renommé(s) ou ajouté(s)). "
-        "Mets à jour le résumé et les données structurées UNIQUEMENT là où le verbatim "
-        "corrigé les contredit : noms, chiffres, attributions de parole, décisions et "
-        "actions. Ne restructure rien, ne réécris pas le style. En cas d'ambiguïté, "
-        "signale le point dans ton rapport au lieu de trancher."
-    )
+    strings = _SYNC_SUMMARY_STRINGS.get((language or "fr"), _SYNC_SUMMARY_STRINGS["fr"])
+    return strings["instruction"].format(edited=edited, new_speakers=new_speakers)
 
 
 @editor_bp.route("/api/jobs/<job_id>/editor/sync-summary", methods=["POST"])

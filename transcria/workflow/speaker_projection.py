@@ -119,6 +119,18 @@ def substitute_speaker_names(text: str, mapping: dict | None) -> str:
     )
 
 
+# En-têtes localisés de ``summary/summary.md``, par langue des livrables (Axe B).
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
+_SP_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {"excerpt_heading": "## Extrait de transcription"},
+    "en": {"excerpt_heading": "## Transcript excerpt"},
+}
+
+
+def _sp_strings(language: str | None) -> dict[str, str]:
+    return _SP_STRINGS.get((language or "fr"), _SP_STRINGS["fr"])
+
+
 def render_summary_markdown(summary_text: str, transcript_short: str, language: str | None) -> str:
     """Contenu de ``summary/summary.md`` : résumé LLM + extrait de transcription.
 
@@ -126,7 +138,7 @@ def render_summary_markdown(summary_text: str, transcript_short: str, language: 
     on n'ajoute que la section transcript en fin de fichier, avec l'en-tête localisé
     selon la langue des livrables (Axe B).
     """
-    excerpt_heading = "## Transcript excerpt" if language == "en" else "## Extrait de transcription"
+    excerpt_heading = _sp_strings(language)["excerpt_heading"]
     return summary_text + (
         f"\n\n---\n\n{excerpt_heading}\n\n{transcript_short}\n" if transcript_short else "\n"
     )

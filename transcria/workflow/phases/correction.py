@@ -342,6 +342,36 @@ def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:
     return header + ("\n".join(changes) if changes else "Aucune modification de ligne.")
 
 
+# Messages d'intégrité du SRT corrigé, par langue des livrables (Axe B ; fr = historique).
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
+_MSG: dict[str, dict[str, str]] = {
+    "fr": {
+        "segment_parity": (
+            "SRT corrigé non conforme : {out} segments au lieu de {src} "
+            "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
+            "relancez le traitement, seule la correction sera rejouée."),
+        "size_ratio": (
+            "SRT corrigé non conforme : ratio de taille {ratio:.2f} hors [0.90, 1.10] "
+            "(contenu tronqué, résumé ou réécrit — ex. préfixes locuteurs altérés). "
+            "Le SRT brut est conservé — relancez le traitement, seule la correction sera rejouée."),
+    },
+    "en": {
+        "segment_parity": (
+            "Corrected SRT invalid: {out} segments instead of {src} "
+            "(segments lost, merged or added by the LLM). The raw SRT is kept — "
+            "re-run the job, only the correction will be replayed."),
+        "size_ratio": (
+            "Corrected SRT invalid: size ratio {ratio:.2f} outside [0.90, 1.10] "
+            "(content truncated, summarised or rewritten — e.g. altered speaker prefixes). "
+            "The raw SRT is kept — re-run the job, only the correction will be replayed."),
+    },
+}
+
+
+def _msg(language: str | None) -> dict[str, str]:
+    return _MSG.get((language or "fr"), _MSG["fr"])
+
+
 def corrected_srt_integrity_error(source: str, corrected: str, language: str = "fr") -> str | None:
     """Garde déterministe du contrat de correction (motif « le prompt exige, le code vérifie »).
 
@@ -357,31 +387,11 @@ def corrected_srt_integrity_error(source: str, corrected: str, language: str = "
     """
     src_segments = source.count("-->")
     out_segments = corrected.count("-->")
-    en = (language == "en")
+    msg = _msg(language)
     if src_segments and out_segments != src_segments:
-        if en:
-            return (
-                f"Corrected SRT invalid: {out_segments} segments instead of {src_segments} "
-                "(segments lost, merged or added by the LLM). The raw SRT is kept — "
-                "re-run the job, only the correction will be replayed."
-            )
-        return (
-            f"SRT corrigé non conforme : {out_segments} segments au lieu de {src_segments} "
-            "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
-            "relancez le traitement, seule la correction sera rejouée."
-        )
+        return msg["segment_parity"].format(out=out_segments, src=src_segments)
     if len(source) >= 2000:
         ratio = len(corrected) / max(len(source), 1)
         if not (0.90 <= ratio <= 1.10):
-            if en:
-                return (
-                    f"Corrected SRT invalid: size ratio {ratio:.2f} outside [0.90, 1.10] "
-                    "(content truncated, summarised or rewritten — e.g. altered speaker prefixes). "
-                    "The raw SRT is kept — re-run the job, only the correction will be replayed."
-                )
-            return (
-                f"SRT corrigé non conforme : ratio de taille {ratio:.2f} hors [0.90, 1.10] "
-                "(contenu tronqué, résumé ou réécrit — ex. préfixes locuteurs altérés). "
-                "Le SRT brut est conservé — relancez le traitement, seule la correction sera rejouée."
-            )
+            return msg["size_ratio"].format(ratio=ratio)
     return None

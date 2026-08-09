@@ -1,3 +1,25 @@
+# Gabarits des ancres cliquables de l'éditeur, par langue des livrables (Axe B).
+# Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
+_RP_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "audio_zone": "Zone audio : {lbl} {a}→{b}",
+        "inconsistent_form": "Forme incohérente : {f} (à trancher)",
+        "variant_to_fix": "Variante à corriger : {v} → {t}",
+        "close_form": "Forme proche : {f} (≈ {t})",
+    },
+    "en": {
+        "audio_zone": "Audio zone: {lbl} {a}→{b}",
+        "inconsistent_form": "Inconsistent form: {f} (to resolve)",
+        "variant_to_fix": "Variant to fix: {v} → {t}",
+        "close_form": "Close form: {f} (≈ {t})",
+    },
+}
+
+
+def _rp_strings(language: str | None) -> dict[str, str]:
+    return _RP_STRINGS.get((language or "fr"), _RP_STRINGS["fr"])
+
+
 class ReviewPoints:
     @staticmethod
     def generate(quality_report: dict) -> list[str]:
@@ -73,11 +95,11 @@ class ReviewPoints:
         - ``kind="time"``   : zone datée → l'éditeur cale l'audio dessus ;
         - ``kind="search"`` : terme suspect → l'éditeur lance la recherche.
         """
-        en = (language == "en")
-        t_audio = "Audio zone: {lbl} {a}→{b}" if en else "Zone audio : {lbl} {a}→{b}"
-        t_incons = "Inconsistent form: {f} (to resolve)" if en else "Forme incohérente : {f} (à trancher)"
-        t_variant = "Variant to fix: {v} → {t}" if en else "Variante à corriger : {v} → {t}"
-        t_close = "Close form: {f} (≈ {t})" if en else "Forme proche : {f} (≈ {t})"
+        strings = _rp_strings(language)
+        t_audio = strings["audio_zone"]
+        t_incons = strings["inconsistent_form"]
+        t_variant = strings["variant_to_fix"]
+        t_close = strings["close_form"]
         anchors: list[dict] = []
         for check in quality_report.get("checks", []):
             ctype = check.get("type", "")
