@@ -134,6 +134,77 @@ class TestFinalReviewPromptContract:
         assert "SPEAKER_XX" in _read("final_review_prompt.txt")
 
 
+class TestLocalizedPromptsContract:
+    """Contrats machine des prompts LOCALISÉS (``configs/prompts/<lang>/``) : mêmes
+    invariants que le FR — noms de fichiers de sortie, littéraux parsés, placeholders —
+    plus les marqueurs de section PROPRES à la langue (``_SUMMARY_MARKERS``) et le label
+    de proposition que ``extract_proposal`` doit savoir parser. Générique : toute
+    nouvelle locale déposée dans configs/prompts/ est couverte automatiquement."""
+
+    # Label de la ligne « Proposition d'application » par langue (contrat du prompt
+    # refine_discuss ↔ regex _PROPOSAL_LABEL) et sentinelle « rien à appliquer ».
+    _PROPOSAL_LABELS = {
+        "en": ("Apply proposal:", "none"),
+        "de": ("Vorschlag zur Anwendung:", "keine"),
+        "es": ("Propuesta a aplicar:", "ninguna"),
+        "it": ("Proposta da applicare:", "nessuna"),
+    }
+
+    @staticmethod
+    def _locale_dirs():
+        return sorted(d for d in _PROMPTS.iterdir()
+                      if d.is_dir() and len(d.name) == 2 and (d / "summary_prompt.txt").is_file())
+
+    def test_au_moins_une_locale_couverte(self):
+        assert self._locale_dirs(), "aucun répertoire de prompts localisés trouvé"
+
+    def test_summary_marqueurs_de_la_langue(self):
+        from transcria.llm_tools.prompt_locator import _SUMMARY_MARKERS
+        for d in self._locale_dirs():
+            text = (d / "summary_prompt.txt").read_text(encoding="utf-8")
+            markers = _SUMMARY_MARKERS.get(d.name)
+            assert markers is not None, f"_SUMMARY_MARKERS sans entrée pour {d.name}"
+            # « keywords » exclu : marqueur d'extraction opportuniste, absent des prompts
+            # FR/EN historiques eux-mêmes (le parseur le cherche sans l'exiger).
+            for key in ("title", "type", "subject",
+                        "participants_heading", "summary_heading"):
+                assert markers[key] in text, f"{d.name}: marqueur {key} absent du prompt"
+            for key in ("{{TYPES_REUNION}}", "{{INDICES_TYPES}}", "{{CHAMPS_EXTRACTION_TYPE}}"):
+                assert key in text, f"{d.name}: placeholder {key} absent"
+            for field in ("decisions", "actions", "blocages", "votes"):
+                assert f'"{field}"' in text, f"{d.name}: champ structured_data {field} absent"
+            assert "summary.md" in text
+
+    def test_fichiers_de_sortie_et_litteraux(self):
+        for d in self._locale_dirs():
+            correction = (d / "correction_prompt.txt").read_text(encoding="utf-8")
+            assert "transcription_corrigee.srt" in correction and "correction_report.md" in correction
+            assert "SPEAKER_XX" in correction and "../" not in correction
+            assert "0.90" in correction and "1.10" in correction
+            review = (d / "final_review_prompt.txt").read_text(encoding="utf-8")
+            for name in ("summary_harmonized.md", "transcription_reviewed.srt",
+                         "structured_data_reviewed.json", "final_review_report.md"):
+                assert name in review, f"{d.name}: {name} absent de final_review"
+            apply_p = (d / "refine_apply_prompt.txt").read_text(encoding="utf-8")
+            for name in ("summary_refined.md", "transcription_refined.srt",
+                         "structured_data_refined.json", "render_options_refined.json",
+                         "refine_report.md"):
+                assert name in apply_p, f"{d.name}: {name} absent de refine_apply"
+
+    def test_label_proposition_parse_par_extracteur(self):
+        from transcria.workflow.refine_store import extract_proposal
+        for d in self._locale_dirs():
+            label, sentinel = self._PROPOSAL_LABELS[d.name]
+            discuss = (d / "refine_discuss_prompt.txt").read_text(encoding="utf-8")
+            assert label in discuss, f"{d.name}: label « {label} » absent du prompt discuss"
+            assert "refine_answer.md" not in discuss
+            # Le label imposé par le prompt doit être réellement parsé par le code.
+            text, proposal = extract_proposal(f"Réponse.\n---\n{label} faire X")
+            assert proposal == "faire X", f"{d.name}: extract_proposal ne parse pas « {label} »"
+            _, none_prop = extract_proposal(f"Réponse.\n---\n{label} {sentinel}")
+            assert none_prop is None, f"{d.name}: sentinelle « {sentinel} » non reconnue"
+
+
 class TestRefinePromptsContract:
     """Chat d'affinage : les noms de fichiers de sortie et le vocabulaire des options
     de rendu doivent rester alignés sur ``run_refine`` / ``_apply_refine``."""

@@ -15,13 +15,17 @@ LEXICON_PRIORITIES = ["critique", "importante", "normale"]
 # comparée : _PRIORITY_RANK, keep_priorities…) ; seul le libellé visible est traduit. fr =
 # identité stricte. Même principe que les profils/types de réunion.
 _LEXICON_PRIORITY_LABELS_EN = {"critique": "critical", "importante": "important", "normale": "normal"}
+# Une locale absente retombe sur la clé FR — ajouter une langue = ajouter son dict ici.
+_LEXICON_PRIORITY_LABELS: dict[str, dict[str, str]] = {
+    "en": _LEXICON_PRIORITY_LABELS_EN,
+    "de": {"critique": "kritisch", "importante": "wichtig", "normale": "normal"},
+}
 
 
 def localized_priority(key: str, language: str | None) -> str:
     """Libellé d'affichage d'une priorité de lexique (repli = clé FR inchangée)."""
-    if language == "en":
-        return _LEXICON_PRIORITY_LABELS_EN.get(key, key)
-    return key
+    table = _LEXICON_PRIORITY_LABELS.get(language or "fr")
+    return table.get(key, key) if table else key
 
 
 class LexiconManager:

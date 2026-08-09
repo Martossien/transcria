@@ -32,10 +32,13 @@ _DEFAULT_MAX_TURNS = 200
 # « --- » sur sa propre ligne (séparateur du bloc proposition, contrat du prompt discuss).
 _PROPOSAL_SEP = re.compile(r"\n-{3,}\s*\n")
 # Label littéral (apostrophe droite ou typographique, gras Markdown toléré).
-# Label de proposition, FR (« Proposition d'application : ») ou EN (« Apply proposal: »,
-# prompt refine EN Axe B).
+# Label de proposition dans la langue du prompt refine (Axe B) : FR, EN, et les locales
+# bêta DE/ES/IT — chaque configs/prompts/<lang>/refine_discuss_prompt.txt impose SON label,
+# le parseur doit les connaître tous (sinon la proposition est silencieusement perdue).
 _PROPOSAL_LABEL = re.compile(
-    r"(?is)^\*{0,2}(?:proposition\s+d[’']application|apply\s+proposal)\*{0,2}\s*:?\s*(.+)$"
+    r"(?is)^\*{0,2}(?:proposition\s+d[’']application|apply\s+proposal"
+    r"|vorschlag\s+zur\s+anwendung|propuesta\s+a\s+aplicar|proposta\s+da\s+applicare)"
+    r"\*{0,2}\s*:?\s*(.+)$"
 )
 
 
@@ -82,7 +85,8 @@ def extract_proposal(text: str) -> tuple[str, str | None]:
 
 def _clean_proposal(raw: str) -> str | None:
     proposal = raw.strip().strip("*_").strip()
-    if not proposal or re.match(r"(?i)^(aucune|none)\b", proposal):  # « aucune » (fr) / « none » (en)
+    # Sentinelle « rien à appliquer » dans la langue du prompt : fr/en/de/es/it.
+    if not proposal or re.match(r"(?i)^(aucune|none|keine|ninguna|nessuna)\b", proposal):
         return None
     return proposal
 

@@ -256,9 +256,13 @@ def test_localized_builtin_types_gallery():
     fr = {t["name"]: t for t in localized_builtin_types("fr")}
     assert "Réunion projet" in fr  # clé française conservée
     assert fr["Réunion projet"]["banner_text"] == "COMPTE-RENDU DE RÉUNION PROJET"
-    # langue non traduite ⇒ repli intégral sur le catalogue authoré
+    # allemand localisé (locales bêta 0.4.3)
     de = {t["name"]: t for t in localized_builtin_types("de")}
-    assert de["Réunion projet"]["banner_text"] == "COMPTE-RENDU DE RÉUNION PROJET"
+    assert de["Projektbesprechung"]["banner_text"] == "PROTOKOLL DER PROJEKTBESPRECHUNG"
+    assert de["Betriebsrat"]["badge"] == "BR"  # CSE adapté institutionnellement, comme l'EN
+    # langue non traduite ⇒ repli intégral sur le catalogue authoré
+    xx = {t["name"]: t for t in localized_builtin_types("xx")}
+    assert xx["Réunion projet"]["banner_text"] == "COMPTE-RENDU DE RÉUNION PROJET"
 
 
 def test_docx_quality_labels_localized():
@@ -274,12 +278,13 @@ def test_docx_quality_labels_localized():
 
 
 def test_docx_labels_by_language():
-    """Table de libellés DOCX : en localisé, fr/inconnu = français (repli)."""
+    """Table de libellés DOCX : en/de localisés, fr/inconnu = français (repli)."""
     from transcria.exports.docx_report import _docx_labels
     assert _docx_labels("en")["banner"] == "TRANSCRIPTION REPORT"
     assert _docx_labels("en")["sec_participants"] == "Participants & Speakers"
     assert _docx_labels("fr")["banner"] == "COMPTE-RENDU DE TRANSCRIPTION"
-    assert _docx_labels("de")["banner"] == "COMPTE-RENDU DE TRANSCRIPTION"  # repli fr
+    assert _docx_labels("de")["banner"] == "TRANSKRIPTIONSPROTOKOLL"  # locale bêta localisée
+    assert _docx_labels("xx")["banner"] == "COMPTE-RENDU DE TRANSCRIPTION"  # repli fr
 
 
 def test_docx_extract_synthese_en_ignores_meta_and_json():

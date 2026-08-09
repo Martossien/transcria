@@ -120,6 +120,47 @@ _SUMMARY_MARKERS: dict[str, dict[str, str]] = {
         "structured_section_re": r"Structured\s+data",
         "summary_heading": "## Summary",
     },
+    # Locales bêta (de/es/it) : mêmes contrats que `en` — chaque
+    # ``configs/prompts/<lang>/summary_prompt.txt`` DOIT produire ces marqueurs-là.
+    "de": {
+        "title": "Vorgeschlagener Titel",
+        "type": "Vorgeschlagener Typ",
+        "subject": "Hauptthema",
+        "objective": "Wahrscheinliches Ziel",
+        "notes": "Notizen / Wahrscheinliche Tagesordnung",
+        "keywords": "Schlüsselwörter",
+        "participant_count": "Anzahl der erkannten Sprecher",
+        "participants_heading": "## Wahrscheinliche Teilnehmer",
+        "terms_section_re": r"(?:Unsichere|Zweifelhafte)\s+Begriffe[^\n]*",
+        "structured_section_re": r"Strukturierte\s+Daten",
+        "summary_heading": "## Zusammenfassung",
+    },
+    "es": {
+        "title": "Título sugerido",
+        "type": "Tipo sugerido",
+        "subject": "Tema principal",
+        "objective": "Objetivo probable",
+        "notes": "Notas / Orden del día probable",
+        "keywords": "Palabras clave",
+        "participant_count": "Número de participantes detectados",
+        "participants_heading": "## Participantes probables",
+        "terms_section_re": r"Términos\s+dudosos[^\n]*",
+        "structured_section_re": r"Datos\s+estructurados",
+        "summary_heading": "## Resumen",
+    },
+    "it": {
+        "title": "Titolo suggerito",
+        "type": "Tipo suggerito",
+        "subject": "Argomento principale",
+        "objective": "Obiettivo probabile",
+        "notes": "Note / Probabile ordine del giorno",
+        "keywords": "Parole chiave",
+        "participant_count": "Numero di partecipanti rilevati",
+        "participants_heading": "## Partecipanti probabili",
+        "terms_section_re": r"Termini\s+dubbi[^\n]*",
+        "structured_section_re": r"Dati\s+strutturati",
+        "summary_heading": "## Sintesi",
+    },
 }
 
 

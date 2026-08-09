@@ -71,8 +71,55 @@ _EN: dict[str, str] = {
 }
 
 
+_DE: dict[str, str] = {
+    "SRT express": "Express-SRT",
+    "SRT avec locuteurs": "SRT mit Sprechern",
+    "SRT locuteurs une passe (MOSS)": "SRT mit Sprechern in einem Durchgang (MOSS)",
+    "Word rapide": "Schnelles Word",
+    "Word structuré": "Strukturiertes Word",
+    "Word corrigé": "Korrigiertes Word",
+    "Dossier qualité complet": "Vollständiges Qualitätspaket",
+    "Transcription brute, le plus vite possible. Aucune validation.": "Rohtranskription, so schnell wie möglich. Keine Validierung.",
+    "Transcription attribuée aux locuteurs. Validation des locuteurs.": "Den Sprechern zugeordnete Transkription. Sprechervalidierung.",
+    "Transcription ET locuteurs en une seule passe GPU (MOSS), réservée aux réunions courtes (10 min par défaut). "
+        "Aucune validation wizard : la voie la plus directe pour un SRT attribué. Omissions et troncatures du modèle "
+        "surveillées (alertes qualité).":
+        "Transkription UND Sprecher in einem einzigen GPU-Durchgang (MOSS), nur für kurze Besprechungen (standardmäßig "
+            "10 Min.). Keine Assistenten-Validierung: der direkteste Weg zu einem zugeordneten SRT. Auslassungen und "
+            "Kürzungen des Modells werden überwacht (Qualitätswarnungen).",
+    "Compte rendu Word présentable rapidement, validation minimale.":
+        "Schnell erstelltes, präsentables Word-Protokoll mit minimaler Validierung.",
+    "Word template avec participants et structure de réunion, sans correction SRT.":
+        "Word-Vorlage mit Teilnehmern und Besprechungsstruktur, ohne SRT-Korrektur.",
+    "Word + SRT corrigés (correction LLM), lexique optionnel.": "Korrigiertes Word + SRT (LLM-Korrektur), optionales Lexikon.",
+    "Workflow complet : qualité maximale, lexique validé, ZIP complet.":
+        "Vollständiger Workflow: maximale Qualität, validiertes Lexikon, vollständiges ZIP.",
+    "SRT": "SRT",
+    "SRT corrigé": "Korrigiertes SRT",
+    "Segments JSON": "JSON-Segmente",
+    "Word (template de base)": "Word (Basisvorlage)",
+    "Word enrichi": "Erweitertes Word",
+    "Word complet": "Vollständiges Word",
+    "Rapport qualité complet": "Vollständiger Qualitätsbericht",
+    "Archive ZIP complète": "Vollständiges ZIP-Archiv",
+    "Résumé de contrôle": "Kontrollzusammenfassung",
+    "Contexte de réunion": "Besprechungskontext",
+    "Participants": "Teilnehmer",
+    "Validation des locuteurs": "Sprechervalidierung",
+    "Lexique de session": "Sitzungslexikon",
+    "Lexique (optionnel)": "Lexikon (optional)",
+    "LLM d'arbitrage non configurée": "Arbitrierungs-LLM nicht konfiguriert",
+    "Backend STT 'moss' non activé dans la configuration": "STT-Backend 'moss' in der Konfiguration nicht aktiviert",
+    "Mode qualité désactivé dans la configuration": "Qualitätsmodus in der Konfiguration deaktiviert",
+    "Profil désactivé dans la configuration": "Profil in der Konfiguration deaktiviert",
+}
+
+# Tables par langue (même idiome que ``_DOCX_LABELS`` / ``_TYPE_DISPLAY_I18N``) : une
+# locale absente retombe sur le FR inchangé — ajouter une langue = ajouter son dict ici.
+_TABLES: dict[str, dict[str, str]] = {"en": _EN, "de": _DE}
+
+
 def localize_profile_text(text: str, language: str | None) -> str:
     """Traduit une chaîne d'affichage de profil vers la locale UI (repli = FR inchangé)."""
-    if language == "en":
-        return _EN.get(text, text)
-    return text
+    table = _TABLES.get(language or "fr")
+    return table.get(text, text) if table else text
