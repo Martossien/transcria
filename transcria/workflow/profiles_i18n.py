@@ -114,9 +114,95 @@ _DE: dict[str, str] = {
     "Profil désactivé dans la configuration": "Profil in der Konfiguration deaktiviert",
 }
 
+_ES: dict[str, str] = {
+    "SRT express": "SRT exprés",
+    "SRT avec locuteurs": "SRT con interlocutores",
+    "SRT locuteurs une passe (MOSS)": "SRT con interlocutores en una pasada (MOSS)",
+    "Word rapide": "Word rápido",
+    "Word structuré": "Word estructurado",
+    "Word corrigé": "Word corregido",
+    "Dossier qualité complet": "Paquete de calidad completo",
+    "Transcription brute, le plus vite possible. Aucune validation.": "Transcripción bruta, lo más rápido posible. Sin validación.",
+    "Transcription attribuée aux locuteurs. Validation des locuteurs.":
+        "Transcripción atribuida a los interlocutores. Validación de interlocutores.",
+    "Transcription ET locuteurs en une seule passe GPU (MOSS), réservée aux réunions courtes (10 min par défaut). "
+        "Aucune validation wizard : la voie la plus directe pour un SRT attribué. Omissions et troncatures du modèle "
+        "surveillées (alertes qualité).":
+        "Transcripción Y interlocutores en una sola pasada de GPU (MOSS), reservada para reuniones cortas (10 min por "
+        "defecto). Sin validación del asistente: la vía más directa hacia un SRT atribuido. Se supervisan las omisiones "
+        "y truncamientos del modelo (alertas de calidad).",
+    "Compte rendu Word présentable rapidement, validation minimale.": "Acta Word presentable con rapidez, validación mínima.",
+    "Word template avec participants et structure de réunion, sans correction SRT.":
+        "Plantilla Word con participantes y estructura de reunión, sin corrección del SRT.",
+    "Word + SRT corrigés (correction LLM), lexique optionnel.": "Word + SRT corregidos (corrección LLM), léxico opcional.",
+    "Workflow complet : qualité maximale, lexique validé, ZIP complet.":
+        "Flujo de trabajo completo: calidad máxima, léxico validado, ZIP completo.",
+    "SRT": "SRT",
+    "SRT corrigé": "SRT corregido",
+    "Segments JSON": "Segmentos JSON",
+    "Word (template de base)": "Word (plantilla básica)",
+    "Word enrichi": "Word enriquecido",
+    "Word complet": "Word completo",
+    "Rapport qualité complet": "Informe de calidad completo",
+    "Archive ZIP complète": "Archivo ZIP completo",
+    "Résumé de contrôle": "Resumen de control",
+    "Contexte de réunion": "Contexto de la reunión",
+    "Participants": "Participantes",
+    "Validation des locuteurs": "Validación de interlocutores",
+    "Lexique de session": "Léxico de la sesión",
+    "Lexique (optionnel)": "Léxico (opcional)",
+    "LLM d'arbitrage non configurée": "LLM de arbitraje no configurado",
+    "Backend STT 'moss' non activé dans la configuration": "Backend STT 'moss' no activado en la configuración",
+    "Mode qualité désactivé dans la configuration": "Modo de calidad desactivado en la configuración",
+    "Profil désactivé dans la configuration": "Perfil desactivado en la configuración",
+}
+
+_IT: dict[str, str] = {
+    "SRT express": "SRT express",
+    "SRT avec locuteurs": "SRT con parlanti",
+    "SRT locuteurs une passe (MOSS)": "SRT con parlanti in un'unica passata (MOSS)",
+    "Word rapide": "Word rapido",
+    "Word structuré": "Word strutturato",
+    "Word corrigé": "Word corretto",
+    "Dossier qualité complet": "Pacchetto qualità completo",
+    "Transcription brute, le plus vite possible. Aucune validation.":
+        "Trascrizione grezza, il più rapidamente possibile. Nessuna convalida.",
+    "Transcription attribuée aux locuteurs. Validation des locuteurs.": "Trascrizione attribuita ai parlanti. Convalida dei parlanti.",
+    "Transcription ET locuteurs en une seule passe GPU (MOSS), réservée aux réunions courtes (10 min par défaut). "
+        "Aucune validation wizard : la voie la plus directe pour un SRT attribué. Omissions et troncatures du modèle "
+        "surveillées (alertes qualité).":
+        "Trascrizione E parlanti in un'unica passata GPU (MOSS), riservata alle riunioni brevi (10 min di default). "
+        "Nessuna convalida guidata: la via più diretta per un SRT attribuito. Omissioni e troncamenti del modello "
+        "monitorati (avvisi di qualità).",
+    "Compte rendu Word présentable rapidement, validation minimale.": "Verbale Word presentabile rapidamente, convalida minima.",
+    "Word template avec participants et structure de réunion, sans correction SRT.":
+        "Modello Word con partecipanti e struttura della riunione, senza correzione SRT.",
+    "Word + SRT corrigés (correction LLM), lexique optionnel.": "Word + SRT corretti (correzione LLM), lessico opzionale.",
+    "Workflow complet : qualité maximale, lexique validé, ZIP complet.":
+        "Flusso di lavoro completo: qualità massima, lessico convalidato, ZIP completo.",
+    "SRT": "SRT",
+    "SRT corrigé": "SRT corretto",
+    "Segments JSON": "Segmenti JSON",
+    "Word (template de base)": "Word (modello base)",
+    "Word enrichi": "Word arricchito",
+    "Word complet": "Word completo",
+    "Rapport qualité complet": "Rapporto qualità completo",
+    "Archive ZIP complète": "Archivio ZIP completo",
+    "Résumé de contrôle": "Riepilogo di controllo",
+    "Contexte de réunion": "Contesto della riunione",
+    "Participants": "Partecipanti",
+    "Validation des locuteurs": "Convalida dei parlanti",
+    "Lexique de session": "Lessico di sessione",
+    "Lexique (optionnel)": "Lessico (opzionale)",
+    "LLM d'arbitrage non configurée": "LLM di arbitraggio non configurata",
+    "Backend STT 'moss' non activé dans la configuration": "Backend STT 'moss' non attivato nella configurazione",
+    "Mode qualité désactivé dans la configuration": "Modalità qualità disattivata nella configurazione",
+    "Profil désactivé dans la configuration": "Profilo disattivato nella configurazione",
+}
+
 # Tables par langue (même idiome que ``_DOCX_LABELS`` / ``_TYPE_DISPLAY_I18N``) : une
 # locale absente retombe sur le FR inchangé — ajouter une langue = ajouter son dict ici.
-_TABLES: dict[str, dict[str, str]] = {"en": _EN, "de": _DE}
+_TABLES: dict[str, dict[str, str]] = {"en": _EN, "de": _DE, "es": _ES, "it": _IT}
 
 
 def localize_profile_text(text: str, language: str | None) -> str:
