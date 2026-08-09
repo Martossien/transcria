@@ -643,13 +643,16 @@ else
     log_prerequisite_event nvidia-missing
 fi
 
+# `|| status=$?` OBLIGATOIRE : sous `set -e`, `VAR=$(cmd)` qui sort non-zéro tue le
+# script AVANT la ligne suivante — le testeur ne voit alors JAMAIS le message
+# « ffmpeg manquant » (vécu : issue #9, Ubuntu Mate 24.04 sans ffmpeg, abandon muet).
+PREREQ_BINARIES_STATUS=0
 PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
     check-binaries \
     --required ffmpeg \
     --required ffprobe \
     --optional lsof \
-    --optional curl)
-PREREQ_BINARIES_STATUS=$?
+    --optional curl) || PREREQ_BINARIES_STATUS=$?
 while IFS=$'\t' read -r status name path; do
     [[ -z "$name" ]] && continue
     case "$status" in

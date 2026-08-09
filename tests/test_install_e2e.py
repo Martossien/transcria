@@ -220,6 +220,56 @@ def _repo_status() -> set[str]:
     return watched
 
 
+def test_install_ffmpeg_manquant_message_visible(tmp_path: Path):
+    """Régression issue #9 : sans ffmpeg, install.sh doit DIRE que ffmpeg manque.
+
+    Vécu chez un testeur (Ubuntu Mate 24.04, ffmpeg absent) : sous `set -e`,
+    `VAR=$(cmd)` avec sortie non-zéro tuait le script AVANT l'affichage du message
+    « binaire requis manquant » — abandon muet juste après le check GPU. On exécute
+    install.sh avec un PATH curaté (tout /usr/bin SAUF ffmpeg/ffprobe) et on exige
+    l'échec EXPLICITE : code non-zéro ET le nom du binaire dans la sortie.
+    """
+    _require_install_prereqs()
+    sandbox = _build_sandbox(tmp_path / "sandbox")
+
+    # PATH curaté : ffmpeg/ffprobe invisibles, tout le reste des outils réels présent.
+    curated = tmp_path / "curated-bin"
+    curated.mkdir()
+    for bin_dir in ("/usr/bin", "/bin"):
+        src_dir = Path(bin_dir)
+        if not src_dir.is_dir():
+            continue
+        for entry in src_dir.iterdir():
+            if entry.name in ("ffmpeg", "ffprobe"):
+                continue
+            link = curated / entry.name
+            if not link.exists():
+                try:
+                    link.symlink_to(entry)
+                except OSError:
+                    continue
+    env = {
+        **os.environ,
+        "TRANSCRIA_CONFIG": str(sandbox / "config.yaml"),
+        "HOME": str(sandbox),
+        "PATH": str(curated),
+    }
+    result = subprocess.run(
+        ["bash", str(_INSTALL), "--install-dir", str(sandbox),
+         "--non-interactive", "--skip-deps", "--no-service"],
+        capture_output=True, text=True, timeout=180, cwd=str(sandbox), env=env,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, "install.sh aurait dû échouer sans ffmpeg"
+    # Le MESSAGE rendu, pas la sous-chaîne « ffmpeg » seule : le tmp_path de pytest
+    # contient le nom du test (…ffmpeg…) et apparaît dans la sortie — une assertion
+    # naïve matchait le nom du répertoire et laissait passer l'abandon muet.
+    assert "ffmpeg manquant" in output or "ffmpeg missing" in output, (
+        "échec MUET : le message « ffmpeg manquant » n'a jamais été affiché "
+        f"(code {result.returncode})\n--- sortie ---\n{output[-3000:]}"
+    )
+
+
 @pytest.mark.parametrize("profile", _PROFILES)
 def test_install_profile_e2e(profile: str, pg_params: PgParams, tmp_path: Path):
     """`install.sh --profile X` produit une install cohérente que doctor valide."""
