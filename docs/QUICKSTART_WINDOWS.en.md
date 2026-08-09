@@ -17,7 +17,7 @@ virtualization). This guide goes from a bare Windows 11 to the first minutes doc
 |---|---|
 | Windows | Windows 11 (or Windows 10 build 19041+), administrator rights |
 | NVIDIA card | GTX 10xx or newer; **from 8 GB of VRAM** for the full workflow |
-| Free space on `C:` | **~130 GB** for the bundled image (recommended); ~60 GB for slim |
+| Free disk space | **~130 GB** for the bundled image (recommended); ~60 GB for slim — on the drive of **your choice** (C:, D:, E:…), the guided install asks |
 | Connection | stable (the recommended image weighs ~60 GB — like a big video game) |
 
 **Which image?** On Windows we recommend the **bundled** one: models baked in, zero
@@ -25,7 +25,37 @@ configuration, works offline afterwards — the fewest moving parts for a first 
 Pick the **slim** (~22 GB) if disk or bandwidth is tight: models are then downloaded
 from the portal's **Administration → Models** page.
 
-## Step 1 — WSL2 (PowerShell as administrator)
+## Recommended path — the guided install (one script does everything)
+
+Open **PowerShell as administrator** (Start menu → type "PowerShell" → right-click →
+*Run as administrator*), then paste these two commands:
+
+```powershell
+irm https://raw.githubusercontent.com/Martossien/transcria/main/scripts/windows/Install-TranscrIA.ps1 -OutFile "$env:USERPROFILE\Downloads\Install-TranscrIA.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Install-TranscrIA.ps1"
+```
+
+The script checks your machine (Windows, NVIDIA card, RAM, free space), then asks
+**two questions**: *which drive to install on* (C:, D:, E:… — it suggests the one with
+the most free space, and everything goes there: Ubuntu AND the Docker data) and
+*which image* (bundled recommended / slim). Then it does everything: WSL2 + Ubuntu on
+the chosen drive, memory tuning, Docker Desktop, GPU test, downloading and starting
+TranscrIA — and opens the browser on the portal at the end.
+
+**Key principle: the script is re-runnable.** If Windows asks for a reboot (or Docker
+shows a window on first launch), do what is asked then **run the same command again**
+— the script detects what is already done and resumes where it left off. Nothing is
+lost, including an interrupted download. (Script messages are currently in French —
+plain and short; an English pass is planned.)
+
+> Status: the script follows exactly the manual steps below (verified against the
+> official docs); real-machine validation is in progress. If it gets stuck, the
+> manual path always works — and feedback in the
+> [Discussions](https://github.com/Martossien/transcria/discussions) helps.
+
+## Manual path — step by step
+
+### Step 1 — WSL2 (PowerShell as administrator)
 
 ```powershell
 wsl --install
@@ -40,7 +70,7 @@ wsl -l -v        # Ubuntu must show VERSION 2
 
 If the install hangs at 0%: `wsl --install --web-download -d Ubuntu`.
 
-## Step 2 — The NVIDIA driver (on Windows, and ONLY on Windows)
+### Step 2 — The NVIDIA driver (on Windows, and ONLY on Windows)
 
 Install or update the regular GeForce/RTX driver from
 [nvidia.com](https://www.nvidia.com/drivers) (any 2022+ driver works, R495 minimum).
@@ -50,14 +80,14 @@ Install or update the regular GeForce/RTX driver from
 > (`/usr/lib/wsl/lib/`); a Linux driver would overwrite it and break everything. This
 > is the #1 failure seen on forums — NVIDIA's documentation explicitly forbids it.
 
-## Step 3 — Docker Desktop
+### Step 3 — Docker Desktop
 
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL2
 backend is the default — change nothing). GPU support is **built in**: nothing else to
 install. License: free for personal use (and organisations < 250 employees and
 < $10M revenue).
 
-## Step 4 — Check that containers see the card
+### Step 4 — Check that containers see the card
 
 In an Ubuntu terminal (Start menu → Ubuntu):
 
@@ -68,7 +98,7 @@ docker run --rm --gpus all nvidia/cuda:13.3.1-base-ubuntu24.04 nvidia-smi
 You should see the `nvidia-smi` table with your card. If "NVIDIA-SMI has failed":
 re-read step 2 (a Linux driver was probably installed inside WSL).
 
-## Step 5 — Give WSL enough RAM (32 GB machines especially)
+### Step 5 — Give WSL enough RAM (32 GB machines especially)
 
 By default WSL takes 50% of the RAM — too tight on 32 GB for a full run. Create
 `C:\Users\<you>\.wslconfig`:
@@ -86,7 +116,7 @@ sparseVhd=true
 (On 64 GB, the 32 GB default is fine.) Then `wsl --shutdown` in PowerShell and reopen
 Ubuntu.
 
-## Step 6 — TranscrIA
+### Step 6 — TranscrIA
 
 Still in Ubuntu — and **inside the Linux home** (`~`), never under `/mnt/c` (the
 Windows filesystem seen from Linux is ~5-7× slower):
@@ -104,7 +134,7 @@ During the ~60 GB download: use Ethernet if you can and **disable sleep** (Setti
 System → Power) — a pull interrupted by sleep starts over from scratch, whereas simply
 re-running the command reuses the layers already completed.
 
-## Step 7 — First minutes document
+### Step 7 — First minutes document
 
 Open `http://localhost:7870` **in your Windows browser** (the port crosses WSL2 by
 itself). Log in with `admin` / `CHANGE-ME` (change it, the banner will insist), then:

@@ -18,7 +18,7 @@ compte-rendu.
 |---|---|
 | Windows | Windows 11 (ou Windows 10 build 19041+), droits administrateur |
 | Carte NVIDIA | GTX 10xx ou plus récente ; **dès 8 Go de VRAM** pour le workflow complet |
-| Disque libre sur `C:` | **~130 Go** pour l'image bundled (recommandée) ; ~60 Go pour la slim |
+| Disque libre | **~130 Go** pour l'image bundled (recommandée) ; ~60 Go pour la slim — sur le disque de **votre choix** (C:, D:, E:…), l'installation guidée le demande |
 | Connexion | stable (l'image recommandée pèse ~60 Go — comme un gros jeu vidéo) |
 
 **Quelle image ?** Pour Windows nous recommandons la **bundled** : les modèles sont
@@ -27,7 +27,36 @@ mobiles pour une première installation. Prenez la **slim** (~22 Go) si le disqu
 connexion est juste : les modèles se téléchargent alors depuis la page
 **Administration → Modèles** du portail.
 
-## Étape 1 — WSL2 (PowerShell administrateur)
+## Voie recommandée — l'installation guidée (un script fait tout)
+
+Ouvrez **PowerShell en administrateur** (menu Démarrer → tapez « PowerShell » → clic
+droit → *Exécuter en tant qu'administrateur*), puis collez ces deux commandes :
+
+```powershell
+irm https://raw.githubusercontent.com/Martossien/transcria/main/scripts/windows/Install-TranscrIA.ps1 -OutFile "$env:USERPROFILE\Downloads\Install-TranscrIA.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Install-TranscrIA.ps1"
+```
+
+Le script vérifie votre machine (Windows, carte NVIDIA, RAM, espace libre), puis pose
+**deux questions** : *sur quel disque installer* (C:, D:, E:… — il propose par défaut
+celui qui a le plus de place, et tout ira dessus : Ubuntu ET les données Docker) et
+*quelle image* (bundled recommandée / slim). Ensuite il fait tout : WSL2 + Ubuntu sur
+le disque choisi, réglage mémoire, Docker Desktop, test GPU, téléchargement et
+démarrage de TranscrIA — et ouvre le navigateur sur le portail à la fin.
+
+**Principe important : le script se relance.** Si Windows demande un redémarrage (ou
+si Docker affiche une fenêtre au premier lancement), faites ce qui est demandé puis
+**relancez la même commande** — le script détecte ce qui est déjà fait et reprend où
+il en était. Aucune étape n'est perdue, y compris un téléchargement interrompu.
+
+> Statut : ce script suit exactement les étapes manuelles ci-dessous (vérifiées sur
+> les documentations officielles) ; sa validation sur machine réelle est en cours. En
+> cas de blocage, la voie manuelle fonctionne toujours — et un retour en
+> [Discussions](https://github.com/Martossien/transcria/discussions) nous aide.
+
+## Voie manuelle — le pas-à-pas
+
+### Étape 1 — WSL2 (PowerShell administrateur)
 
 ```powershell
 wsl --install
@@ -43,7 +72,7 @@ wsl -l -v        # Ubuntu doit être en VERSION 2
 
 Si l'installation fige à 0 % : `wsl --install --web-download -d Ubuntu`.
 
-## Étape 2 — Le driver NVIDIA (côté Windows, et SEULEMENT côté Windows)
+### Étape 2 — Le driver NVIDIA (côté Windows, et SEULEMENT côté Windows)
 
 Installez ou mettez à jour le driver GeForce/RTX normal depuis
 [nvidia.com](https://www.nvidia.com/drivers) (tout driver de 2022+ convient, R495 minimum).
@@ -53,14 +82,14 @@ Installez ou mettez à jour le driver GeForce/RTX normal depuis
 > (`/usr/lib/wsl/lib/`) ; un driver Linux l'écraserait et casserait tout. C'est la panne
 > n°1 constatée sur les forums — la doc NVIDIA l'interdit explicitement.
 
-## Étape 3 — Docker Desktop
+### Étape 3 — Docker Desktop
 
 Installez [Docker Desktop](https://www.docker.com/products/docker-desktop/) (backend
 WSL2 par défaut — ne changez rien). Le support GPU est **intégré** : rien d'autre à
 installer. Licence : gratuite pour l'usage personnel (et les structures < 250 employés
 et < 10 M$ de CA).
 
-## Étape 4 — Vérifier que le conteneur voit la carte
+### Étape 4 — Vérifier que le conteneur voit la carte
 
 Dans un terminal Ubuntu (menu Démarrer → Ubuntu) :
 
@@ -71,7 +100,7 @@ docker run --rm --gpus all nvidia/cuda:13.3.1-base-ubuntu24.04 nvidia-smi
 Vous devez voir le tableau `nvidia-smi` avec votre carte. Si « NVIDIA-SMI has failed » :
 relisez l'étape 2 (un driver Linux a probablement été installé dans WSL).
 
-## Étape 5 — Donner de la RAM à WSL (machines 32 Go surtout)
+### Étape 5 — Donner de la RAM à WSL (machines 32 Go surtout)
 
 Par défaut WSL prend 50 % de la RAM — trop juste sur 32 Go pour un traitement complet.
 Créez `C:\Users\<vous>\.wslconfig` :
@@ -89,7 +118,7 @@ sparseVhd=true
 (Sur 64 Go, le défaut de 32 Go suffit.) Puis `wsl --shutdown` dans PowerShell et
 rouvrez Ubuntu.
 
-## Étape 6 — TranscrIA
+### Étape 6 — TranscrIA
 
 Toujours dans Ubuntu — et **dans le home Linux** (`~`), jamais sous `/mnt/c` (le
 système de fichiers Windows vu de Linux est ~5-7× plus lent) :
@@ -108,7 +137,7 @@ Pendant le téléchargement (~60 Go) : branchez-vous en Ethernet si possible et
 interrompu par la veille repart de zéro, alors qu'une simple relance de la commande
 réutilise les couches déjà complétées.
 
-## Étape 7 — Premier compte-rendu
+### Étape 7 — Premier compte-rendu
 
 Ouvrez `http://localhost:7870` **dans votre navigateur Windows** (le port traverse
 WSL2 tout seul). Connectez-vous avec `admin` / `CHANGE-ME` (changez-le, le bandeau
