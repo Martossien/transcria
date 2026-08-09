@@ -175,6 +175,16 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.2 → 0.4.3
+
+Aucune migration de base, aucune action requise. Un point d'attention :
+
+- **Nouvelles langues bêta (de/es/it)** : le **défaut** de `i18n.available_locales`
+  les inclut désormais, mais un `config.yaml` existant qui épingle cette liste la
+  garde telle quelle — pour proposer les nouvelles langues, ajoutez `"de"`, `"es"`,
+  `"it"` à `i18n.available_locales` (elles apparaissent badgées « bêta » dans le
+  sélecteur). Ne rien faire est aussi un choix valide : l'instance reste FR/EN.
+
 ### Notes spécifiques 0.4.1 → 0.4.2
 
 Aucune migration de base, aucune action requise. Trois changements de comportement à

@@ -19,10 +19,11 @@ It is built as a **service** for teams that process real meetings week after wee
 a thin wrapper around a transcription model. A guided, human-in-the-loop workflow, a
 production GPU queue, and role-based multi-user access are first-class, not afterthoughts.
 
-*The interface, the generated deliverables and the installer are **bilingual French / English**
-(pick the language at install time or from the navbar; default French). See also
-[README français](README.fr.md). Adding more languages needs no rewrite (French fallback
-everywhere) — see [docs/archive/I18N_MULTILANGUE.md](docs/archive/I18N_MULTILANGUE.md).*
+*The interface and the generated deliverables speak **French and English**, and since
+0.4.3 **German, Spanish and Italian in beta** (badged in the selector until a native
+speaker reviews them — [reviews welcome](https://github.com/Martossien/transcria/issues/8)).
+Pick the language from the navbar; default French, French fallback everywhere. See also
+[README français](README.fr.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
@@ -33,7 +34,7 @@ everywhere) — see [docs/archive/I18N_MULTILANGUE.md](docs/archive/I18N_MULTILA
 
 ## Project status
 
-**Current release: 0.4.2** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.4.3** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -45,6 +46,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.4.3** | **Three beta languages, and Windows 11 joins in** — full German / Spanish / Italian support (UI, LLM prompts, Word minutes, quality reports, voice-consent form) behind a **beta badge** until native speakers review the translations (enforced glossaries, formal register, contract tests on every machine-parsed marker; validated by a real-GPU E2E on German audio). And a **guided Windows 11 install**: one PowerShell script checks the machine, asks two questions (target drive C:/D:/E:, bundled or slim image) and drives WSL2 + Docker Desktop end to end, re-runnable after each reboot |
 | **0.4.2** | **Install for everyone, and 8 GB gaming cards join the party** — `install.sh` gets an **express mode** (auto-detections, one summary, one confirmation; `--expert` keeps the step-by-step), a **first-run checklist** on the home page shows what is missing with a fix link, and a one-page **QUICKSTART** goes from zero to first minutes. New **8 GB LLM tier** (Qwen3.5-4B Q5_K_M, qualified on real meetings) plus a **CPU profile** (Kroko, no GPU): the full workflow now runs on 8-11 GB cards — native, Docker slim **and bundled** (the image bakes both tiers and the entrypoint auto-downgrades under 12 GB). The Models page drives **Ollama** end-to-end (list + one-click model switch), the SRT editor gains a **reliability layer** (per-segment doubt indicators, "next doubtful" navigation, restorable removed-segments panel), summaries **start at upload by default**, and worker-based STT engines get **batched summaries** (one model load instead of one per chunk) |
 | **0.4.1** | **The portal upgrades itself, and certain STT hallucinations vanish from deliverables** — the Maintenance page can check for a newer release (strict network opt-in) and upgrade the install in two clicks (verified tag only, systemd oneshot, fallback backup, live progress). Per-engine **hallucination signature catalogue** mined from real meeting audio (whisper subtitle credits, voxtral polite fillers, cohere learned tics): confirmed hallucinations are **deleted only with double proof** (signature + acoustic corroboration), always traced and recoverable; doubtful ones are flagged to the correction LLM. Speech-free audio (noise, music, silence) now fails in seconds with a clear message instead of feeding an empty transcript to the LLM |
 | **0.4.0** | **Meetings come to you — with no inbound port** — four platforms validated for real: **Jitsi** (browser bot), **Visio (La Suite numérique)** (**native** LiveKit client, no browser), **Zoom** (**official SDK**, no scraping) and **Google Meet** (Pub/Sub **pull** — no bot in the meeting at all, from calendar to minutes). All four work **outbound only**: nothing to open on the firewall. Scheduling from the UI, platform credentials handed only to the runner that claims the session, room passcode encrypted at rest, live states on the job card, and an install kit for a remote runner. **Separate tracks** transcribe each participant apart: overlapping words survive, each under its own name. **Zoom RTMS and Teams** ship prepared but **not validated** (logic tested, network wiring unconfirmed — they are the only two requiring a public entry point) |

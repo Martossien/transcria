@@ -136,9 +136,9 @@ board meeting — the choice is one click, right when you drop the file.
   Personal API tokens allow automation without sharing a password. Every sign-in is
   audited; a break-glass local login always remains. Users sign in with their usual
   credentials, IT keeps control.
-- **Multilingual** — interface and deliverables in French or English, each user's choice;
-  German, Spanish and Italian ship in **beta** (flagged as such in the application until
-  a native speaker validates the translation).
+- **Multilingual (0.4.3)** — interface and deliverables in French or English, each
+  user's choice; German, Spanish and Italian ship in **beta** (flagged as such in the
+  application until a native speaker validates the translation).
 
 ## What TranscrIA is not
 

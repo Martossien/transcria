@@ -6,6 +6,49 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.3] — 2026-08-09
+
+Trois langues en bêta — allemand, espagnol, italien — et Windows 11 rejoint les
+plateformes d'installation, par un script guidé.
+
+### Ajouté
+
+#### Trois langues en bêta : allemand, espagnol, italien
+
+- **Interface complète** dans les trois langues (catalogues gettext de 1 462 chaînes
+  chacun, glossaires terminologiques imposés, registre de politesse Sie/usted/Lei) ;
+  le sélecteur de langue badge ces locales **« bêta »** tant qu'un locuteur natif n'a
+  pas validé la traduction — les relectures natives sont bienvenues (issue #8). Un
+  exploitant peut retirer une locale de `i18n.available_locales` pour ne pas la
+  proposer.
+- **Livrables localisés de bout en bout** : prompts LLM `configs/prompts/de/`,
+  `configs/prompts/es/` et `configs/prompts/it/` (résumé, correction, relecture
+  finale, affinage), marqueurs de section par langue, libellés du compte-rendu Word,
+  profils de traitement, types de réunion (adaptation institutionnelle : CSE →
+  Betriebsrat / Comité de empresa / Comitato aziendale), rapports qualité et légers,
+  points de relecture, messages d'affinage et formulaire de consentement vocal —
+  plus un seul « if lang == en » inline dans le code, tout vit en tables par langue
+  avec repli français. Validé par un E2E GPU réel sur audio allemand (fables de
+  Lessing, LibriVox) : résumé, correction, rapports et DOCX sortis en allemand.
+- **Garde de contrat générique** : tout répertoire `configs/prompts/<lang>/` est
+  automatiquement soumis aux contrats machine (fichiers de sortie, marqueurs parsés,
+  placeholders) — l'anglais lui-même n'était pas couvert.
+
+#### Windows 11 : installation guidée (WSL2 + Docker)
+
+- **`scripts/windows/Install-TranscrIA.ps1`** : deux commandes PowerShell à coller,
+  le script vérifie la machine (Windows, carte NVIDIA, RAM, espace par disque), pose
+  deux questions (quel disque C:/D:/E: — Ubuntu ET les données Docker iront dessus ;
+  quelle image — bundled recommandée), puis enchaîne WSL2, `.wslconfig` calculé,
+  Docker Desktop silencieux, test GPU, téléchargement et démarrage — et ouvre le
+  navigateur sur le portail. Idempotent : après un redémarrage Windows, on le
+  relance et il reprend.
+- **`docs/QUICKSTART_WINDOWS.md`** (FR/EN) : la voie guidée, le pas-à-pas manuel,
+  les 5 pannes classiques (driver dans WSL, VHDX, OOM, veille, VPN/antivirus) et la
+  réponse Windows Server (2022+/2025 possibles via docker-ce, Docker Desktop non
+  supporté). Vérifié sur les documentations officielles Microsoft/NVIDIA/Docker ;
+  la validation sur machine réelle est en cours et la page l'annonce.
+
 ## [0.4.2] — 2026-08-07
 
 L'installation devient accessible à l'utilisateur lambda — et aux cartes gaming

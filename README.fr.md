@@ -12,10 +12,10 @@
 exécute l'analyse « cet enregistrement va-t-il bien se transcrire ? » de TranscrIA
 **entièrement dans votre navigateur** (rien n'est envoyé — WebAssembly).
 
-*L'interface, les livrables générés et l'installateur sont **bilingues français / anglais**
-(choix de la langue à l'installation ou dans la barre de navigation ; défaut français).
-Ajouter d'autres langues ne demande aucune refonte (repli français partout) — voir
-[docs/archive/I18N_MULTILANGUE.md](docs/archive/I18N_MULTILANGUE.md).*
+*L'interface et les livrables générés parlent **français et anglais**, et depuis la
+0.4.3 **allemand, espagnol et italien en bêta** (badgés dans le sélecteur tant qu'un
+locuteur natif n'a pas relu — [relectures bienvenues](https://github.com/Martossien/transcria/issues/8)).
+Choix de la langue dans la barre de navigation ; défaut français, repli français partout.*
 
 **Portail de transcription de réunion auto-hébergé.** TranscrIA transforme de longs
 enregistrements de réunion en livrables exploitables, sur vos propres GPU : transcriptions
@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.4.2** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.4.3** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.4.3** | **Trois langues en bêta, et Windows 11 entre dans la danse** — allemand / espagnol / italien complets (interface, prompts LLM, compte-rendu Word, rapports qualité, formulaire de consentement) derrière un **badge bêta** en attendant la relecture par des natifs (glossaires imposés, registre de politesse, tests de contrat sur chaque marqueur parsé ; validé par un E2E GPU réel sur audio allemand). Et une **installation Windows 11 guidée** : un script PowerShell vérifie la machine, pose deux questions (disque cible C:/D:/E:, image bundled ou slim) et déroule WSL2 + Docker Desktop de bout en bout, relançable après chaque redémarrage |
 | **0.4.2** | **L'installation pour tout le monde, et les cartes gaming 8 Go entrent dans la danse** — `install.sh` gagne un **mode express** (détections automatiques, un récapitulatif, une confirmation ; `--expert` garde le pas-à-pas), une **checklist de premier démarrage** sur l'accueil montre ce qui manque avec un lien pour corriger, et un **QUICKSTART** d'une page mène de zéro au premier compte-rendu. Nouveau **palier LLM 8 Go** (Qwen3.5-4B Q5_K_M, qualifié sur réunions réelles) plus un **profil CPU** (Kroko, sans GPU) : le workflow complet tourne désormais sur les cartes 8-11 Go — natif, Docker slim **et bundled** (l'image bake les deux paliers et l'entrypoint rétrograde automatiquement sous 12 Go). La page Modèles pilote **Ollama** de bout en bout (liste + bascule de modèle en un clic), l'éditeur SRT gagne une **couche de fiabilité** (indicateurs de doute par segment, navigation « douteux suivant », panneau des segments supprimés restaurables), le résumé **démarre à l'upload par défaut**, et les moteurs STT à worker reçoivent le **résumé batché** (un chargement de modèle au lieu d'un par chunk) |
 | **0.4.1** | **Le portail se met à jour lui-même, et les hallucinations STT certaines disparaissent des livrables** — la page Maintenance sait vérifier si une version plus récente existe (opt-in réseau strict) et monter l'installation en deux clics (tag vérifié uniquement, oneshot systemd, sauvegarde de repli, progression en direct). **Catalogue de signatures d'hallucination par moteur** miné sur de l'audio de réunion réel (crédits de sous-titrage whisper, politesses voxtral, tics appris cohere) : les hallucinations confirmées sont **supprimées à double preuve seulement** (signature + corroboration acoustique), toujours tracées et récupérables ; les douteuses sont signalées à la LLM de correction. Un audio sans parole (bruit, musique, silence) échoue désormais en quelques secondes avec un message clair au lieu d'envoyer un transcript vide à la LLM |
 | **0.4.0** | **Les réunions arrivent toutes seules — sans ouvrir un port** — quatre plateformes validées en réel : **Jitsi** (bot navigateur), **Visio (La Suite numérique)** (client LiveKit **natif**, pas de navigateur), **Zoom** (**SDK officiel**, pas de scraping) et **Google Meet** (**pull** Pub/Sub — aucun bot dans la réunion, de l'agenda au compte rendu). Les quatre fonctionnent en **connexion sortante** : rien à ouvrir sur le pare-feu. Planification depuis l'interface, identités de plateforme remises au seul exécutant qui réclame la session, code de salle chiffré au repos, états relayés sur la carte du job, kit d'installation pour un exécutant distant. Les **pistes séparées** transcrivent chaque participant à part : les mots des chevauchements existent, chacun sous son nom. **Zoom RTMS et Teams** sont livrés préparés mais **non validés** (logique testée, branchement réseau à confirmer — ce sont les deux seuls qui exigent un point d'entrée public) |
