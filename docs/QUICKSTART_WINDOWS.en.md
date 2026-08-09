@@ -1,4 +1,4 @@
-# TranscrIA on Windows 11 — gaming PC, WSL2 + Docker
+# TranscrIA on Windows 11 — WSL2 + Docker
 
 *([Version française](QUICKSTART_WINDOWS.md))*
 
@@ -166,6 +166,18 @@ itself. Either a port forward
 `netsh interface portproxy add v4tov4 listenport=7870 connectport=7870 connectaddress=localhost`
 (admin PowerShell, + firewall rule), or `networkingMode=mirrored` (Windows 11 22H2+)
 in `.wslconfig`.
+
+## What about Windows Server?
+
+Possible, with three caveats. **Windows Server 2022 (updated — June 2022 KB) and
+2025** have WSL2 and `wsl --install` works as on Windows 11 (Server 2019: no — WSL 1
+only). But **Docker Desktop is not supported on Server versions** (Docker's official
+position): the path is therefore the appendix below — docker-ce **inside** the WSL2
+distro. Finally, GPU inside WSL2 on Server is **not officially covered by NVIDIA**
+(their CUDA-on-WSL doc only lists Windows 10/11): field reports have it working on
+Server 2022 in WDDM mode, but validate `nvidia-smi` inside the distro before going
+further — and note that the GeForce driver licence contractually excludes datacenter
+deployment (pro/RTX A cards are not affected). Path untested by us.
 
 ## Appendix — the advanced path without Docker Desktop
 

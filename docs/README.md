@@ -20,7 +20,7 @@ example results and the user journey.
 |---|---|
 | [TESTERS.md](TESTERS.md) | **In English** — testing TranscrIA: what to expect (disk, first startup, models, GPU floor), the 15-minute smoke test, topologies we need tested, diagnostics and the report template |
 | [QUICKSTART.md](QUICKSTART.md) · [QUICKSTART.en.md](QUICKSTART.en.md) | **From zero to your first minutes on one page** — host prerequisites, one Docker command or the express native install, first login, first job |
-| [QUICKSTART_WINDOWS.md](QUICKSTART_WINDOWS.md) · [QUICKSTART_WINDOWS.en.md](QUICKSTART_WINDOWS.en.md) | **Windows 11 gaming PC** — WSL2 + Docker Desktop path (GPU passthrough, `.wslconfig`, disk/VHDX pitfalls); verified against official docs, real-machine validation in progress |
+| [QUICKSTART_WINDOWS.md](QUICKSTART_WINDOWS.md) · [QUICKSTART_WINDOWS.en.md](QUICKSTART_WINDOWS.en.md) | **Windows 11** — guided install script + WSL2/Docker Desktop path (GPU passthrough, `.wslconfig`, disk/VHDX pitfalls); verified against official docs, real-machine validation in progress |
 | [INSTALL.md](INSTALL.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting |
 | [DOCKER.md](DOCKER.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
 | [UPGRADE.md](UPGRADE.md) | Upgrade and rollback procedure, obsolete configuration keys, database migrations |
