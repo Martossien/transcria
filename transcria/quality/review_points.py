@@ -13,6 +13,24 @@ _RP_STRINGS: dict[str, dict[str, str]] = {
         "variant_to_fix": "Variant to fix: {v} → {t}",
         "close_form": "Close form: {f} (≈ {t})",
     },
+    "de": {
+        "audio_zone": "Audiobereich: {lbl} {a}→{b}",
+        "inconsistent_form": "Inkonsistente Form: {f} (zu klären)",
+        "variant_to_fix": "Zu korrigierende Variante: {v} → {t}",
+        "close_form": "Ähnliche Form: {f} (≈ {t})",
+    },
+    "es": {
+        "audio_zone": "Zona de audio: {lbl} {a}→{b}",
+        "inconsistent_form": "Forma incoherente: {f} (por decidir)",
+        "variant_to_fix": "Variante a corregir: {v} → {t}",
+        "close_form": "Forma cercana: {f} (≈ {t})",
+    },
+    "it": {
+        "audio_zone": "Zona audio: {lbl} {a}→{b}",
+        "inconsistent_form": "Forma incoerente: {f} (da decidere)",
+        "variant_to_fix": "Variante da correggere: {v} → {t}",
+        "close_form": "Forma vicina: {f} (≈ {t})",
+    },
 }
 
 

@@ -56,6 +56,60 @@ _STRINGS: dict[str, dict[str, str]] = {
         "md_review": "## Points to review",
         "md_none": "No review point detected by the light check.",
     },
+    "de": {
+        "empty": "Leere Segmente: {n} — manuell prüfen und entfernen.",
+        "short": "Sehr kurze Segmente (< 0,5 s): {n} — Zusammenführung erwägen.",
+        "long": "Sehr lange Segmente (> 60 s): {n} — Aufteilung erwägen.",
+        "missing_srt": "SRT fehlt oder ist leer — die Transkription ist fehlgeschlagen.",
+        "gaps": (
+            "Ungewöhnliche Transkriptionslücken: {n} (max. {max_s:.0f} s bei {at}) — die Engine könnte eine Passage "
+            "ausgelassen haben, diese Bereiche erneut anhören."
+        ),
+        "tail": (
+            "Besprechungsende möglicherweise abgeschnitten: letzte Wortmeldung um {at} bei einer Audiodauer von {dur} "
+            "— die letzten Minuten prüfen."
+        ),
+        "md_title": "# Qualitätsbericht (einfache Kontrolle)",
+        "md_score": "Qualitätswert: {s}/100",
+        "md_checks": "Kontrollen: {c} · Warnungen: {w}",
+        "md_review": "## Zu prüfende Punkte",
+        "md_none": "Kein Prüfpunkt durch die einfache Kontrolle festgestellt.",
+    },
+    "es": {
+        "empty": "Segmentos vacíos: {n} — verificar y eliminar manualmente.",
+        "short": "Segmentos muy cortos (< 0,5s): {n} — considerar la fusión.",
+        "long": "Segmentos muy largos (> 60s): {n} — considerar la división.",
+        "missing_srt": "SRT ausente o vacío — la transcripción falló.",
+        "gaps": (
+            "Huecos de transcripción anómalos: {n} (máx {max_s:.0f}s hacia {at}) — es posible que el motor haya "
+            "omitido un pasaje, reescuche estas zonas."
+        ),
+        "tail": (
+            "Posible truncamiento del final de la reunión: última intervención a las {at} para un audio de {dur} — "
+            "verificar los últimos minutos."
+        ),
+        "md_title": "# Informe de calidad (control ligero)",
+        "md_score": "Puntuación de calidad: {s}/100",
+        "md_checks": "Controles: {c} · avisos: {w}",
+        "md_review": "## Puntos a verificar",
+        "md_none": "No se detectó ningún punto de verificación mediante el control ligero.",
+    },
+    "it": {
+        "empty": "Segmenti vuoti: {n} — verificare ed eliminare manualmente.",
+        "short": "Segmenti molto brevi (< 0,5s): {n} — valutare l'unione.",
+        "long": "Segmenti molto lunghi (> 60s): {n} — valutare la suddivisione.",
+        "missing_srt": "SRT assente o vuoto — la trascrizione non è riuscita.",
+        "gaps": (
+            "Vuoti di trascrizione anomali: {n} (max {max_s:.0f}s verso {at}) — il motore potrebbe aver omesso un "
+            "passaggio, riascoltare queste zone."
+        ),
+        "tail": "Fine della riunione forse troncata: ultimo intervento a {at} per un audio di {dur} — verificare gli ultimi minuti.",
+        "md_title": "# Rapporto qualità (controllo leggero)",
+        "md_score": "Punteggio qualità: {s}/100",
+        "md_checks": "Controlli: {c} · avvisi: {w}",
+        "md_review": "## Punti da verificare",
+        "md_none": "Nessun punto di verifica rilevato dal controllo leggero.",
+    },
 }
 
 

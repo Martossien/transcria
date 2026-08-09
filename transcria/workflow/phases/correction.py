@@ -365,6 +365,40 @@ _MSG: dict[str, dict[str, str]] = {
             "(content truncated, summarised or rewritten — e.g. altered speaker prefixes). "
             "The raw SRT is kept — re-run the job, only the correction will be replayed."),
     },
+    "de": {
+        "segment_parity": (
+            "Korrigiertes SRT ungültig: {out} Segmente statt {src} (Segmente von der LLM verloren, zusammengeführt "
+            "oder hinzugefügt). Das Roh-SRT wird beibehalten — starten Sie den Job erneut, es wird nur die Korrektur "
+            "wiederholt."
+        ),
+        "size_ratio": (
+            "Korrigiertes SRT ungültig: Größenverhältnis {ratio:.2f} außerhalb von [0.90, 1.10] (Inhalt gekürzt, "
+            "zusammengefasst oder umgeschrieben — z. B. veränderte Sprecherpräfixe). Das Roh-SRT wird beibehalten — "
+            "starten Sie den Job erneut, es wird nur die Korrektur wiederholt."
+        ),
+    },
+    "es": {
+        "segment_parity": (
+            "SRT corregido no conforme: {out} segmentos en lugar de {src} (segmentos perdidos, fusionados o añadidos "
+            "por la LLM). Se conserva el SRT bruto — vuelva a lanzar el trabajo, solo se repetirá la corrección."
+        ),
+        "size_ratio": (
+            "SRT corregido no conforme: relación de tamaño {ratio:.2f} fuera de [0.90, 1.10] (contenido truncado, "
+            "resumido o reescrito — ej. prefijos de interlocutor alterados). Se conserva el SRT bruto — vuelva a "
+            "lanzar el trabajo, solo se repetirá la corrección."
+        ),
+    },
+    "it": {
+        "segment_parity": (
+            "SRT corretto non conforme: {out} segmenti invece di {src} (segmenti persi, uniti o aggiunti dalla LLM). "
+            "L'SRT grezzo viene conservato — rilanciare il trattamento, verrà rieseguita solo la correzione."
+        ),
+        "size_ratio": (
+            "SRT corretto non conforme: rapporto di dimensione {ratio:.2f} fuori da [0.90, 1.10] (contenuto troncato, "
+            "riassunto o riscritto — es. prefissi dei parlanti alterati). L'SRT grezzo viene conservato — rilanciare "
+            "il trattamento, verrà rieseguita solo la correzione."
+        ),
+    },
 }
 
 

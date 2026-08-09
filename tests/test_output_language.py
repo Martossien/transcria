@@ -201,7 +201,8 @@ def test_refine_messages_by_language():
     from transcria.workflow.runner import _refine_messages
     assert _refine_messages("en")["progress_done"] == "Refinement complete"
     assert _refine_messages("fr")["progress_done"] == "Affinage terminé"
-    assert _refine_messages("de")["busy"].startswith("L'assistant")  # repli fr
+    assert _refine_messages("de")["progress_done"] == "Verfeinerung abgeschlossen"  # locale bêta localisée
+    assert _refine_messages("xx")["busy"].startswith("L'assistant")  # repli fr
     assert "{exc}" in _refine_messages("en")["fail"]
 
 

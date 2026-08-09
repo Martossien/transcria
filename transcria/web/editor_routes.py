@@ -463,6 +463,34 @@ _SYNC_SUMMARY_STRINGS: dict[str, dict[str, str]] = {
             "decisions and actions. Do not restructure or rewrite the style. "
             "If a point is ambiguous, flag it in your report instead of deciding."),
     },
+    "de": {
+        "instruction": (
+            "Der Benutzer hat gerade das Verbatim im SRT-Editor korrigiert ({edited} Segment(e) bearbeitet, "
+            "{new_speakers} Sprecher umbenannt oder hinzugefügt). Aktualisieren Sie die Zusammenfassung und die "
+            "strukturierten Daten NUR dort, wo das korrigierte Verbatim ihnen widerspricht: Namen, Zahlen, "
+            "Sprecherzuordnungen, Entscheidungen und Aufgaben. Strukturieren Sie nichts um und schreiben Sie den Stil "
+            "nicht neu. Melden Sie im Falle einer Mehrdeutigkeit den Punkt in Ihrem Bericht, anstatt selbst zu "
+            "entscheiden."
+        ),
+    },
+    "es": {
+        "instruction": (
+            "El usuario acaba de corregir el verbatim en el editor SRT ({edited} segmento(s) modificado(s), "
+            "{new_speakers} interlocutor(es) renombrado(s) o añadido(s)). Actualice el resumen y los datos "
+            "estructurados ÚNICAMENTE donde el verbatim corregido los contradiga: nombres, cifras, atribuciones de "
+            "palabra, decisiones y acciones. No reestructure nada, no reescriba el estilo. En caso de ambigüedad, "
+            "señale el punto en su informe en lugar de decidir."
+        ),
+    },
+    "it": {
+        "instruction": (
+            "L'utente ha appena corretto il verbatim nell'editor SRT ({edited} segmento/i modificato/i, "
+            "{new_speakers} parlante/i rinominato/i o aggiunto/i). Aggiorna la sintesi e i dati strutturati SOLO dove "
+            "il verbatim corretto li contraddice: nomi, cifre, attribuzioni di parola, decisioni e azioni. Non "
+            "ristrutturare nulla, non riscrivere lo stile. In caso di ambiguità, segnala il punto nel tuo rapporto "
+            "invece di decidere."
+        ),
+    },
 }
 
 

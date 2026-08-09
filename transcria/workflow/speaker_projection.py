@@ -124,6 +124,15 @@ def substitute_speaker_names(text: str, mapping: dict | None) -> str:
 _SP_STRINGS: dict[str, dict[str, str]] = {
     "fr": {"excerpt_heading": "## Extrait de transcription"},
     "en": {"excerpt_heading": "## Transcript excerpt"},
+    "de": {
+        "excerpt_heading": "## Transkriptionsauszug",
+    },
+    "es": {
+        "excerpt_heading": "## Extracto de transcripción",
+    },
+    "it": {
+        "excerpt_heading": "## Estratto di trascrizione",
+    },
 }
 
 

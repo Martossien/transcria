@@ -61,6 +61,75 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
         "version_saved": ("\n\n(version v{version} saved — can be restored from the page. "
                           "Re-download the documents — Word, SRT, package — to get the updated version.)"),
     },
+    "de": {
+        "no_review_point": "(kein Punkt gemeldet)",
+        "busy": "Der Assistent ist beschäftigt (die LLM bedient einen anderen Job). Versuchen Sie es in einigen Minuten erneut.",
+        "vram": "Nicht genügend VRAM, um den Assistenten zu laden (ein Job belegt die GPUs). Versuchen Sie es später erneut.",
+        "no_start": "Der Assistent konnte nicht gestartet werden (Arbitrage-LLM nicht verfügbar). Versuchen Sie es später erneut.",
+        "long_notice": (
+            "ℹ️ Lange Besprechung: Die Diskussion bezieht sich auf ~{pct} % der Transkription (der Zeitraum "
+            "{gap_from} → {gap_to} ist für den Assistenten nicht sichtbar)."
+        ),
+        "fail": "Verfeinerung fehlgeschlagen ({exc}) — die Ergebnisdokumente wurden nicht geändert. Versuchen Sie es erneut.",
+        "progress_working": "Verfeinerung: Der Assistent arbeitet",
+        "progress_done": "Verfeinerung abgeschlossen",
+        "invalid_structured": "Durchgesehene strukturierte Daten ungültig (kein JSON-Objekt) — unverändert beibehalten.",
+        "non_json_structured": "Durchgesehene strukturierte Daten kein JSON — unverändert beibehalten.",
+        "non_json_options": "Durchgesehene Rendering-Optionen kein JSON — unverändert beibehalten.",
+        "no_change": "Es wurde keine anwendbare Änderung erzeugt.",
+        "zip_failed": "Das ZIP-Paket konnte nicht sofort neu erstellt werden.",
+        "applied": "Änderungen angewendet.",
+        "version_saved": (
+            "\n\n(Version v{version} gespeichert — Wiederherstellung über die Seite möglich. Laden Sie die Dokumente — "
+            "Word, SRT, Paket — erneut herunter, um die aktuelle Version zu erhalten.)"
+        ),
+    },
+    "es": {
+        "no_review_point": "(ningún punto señalado)",
+        "busy": "El asistente está ocupado (la LLM atiende otro trabajo). Vuelva a intentarlo dentro de unos minutos.",
+        "vram": "VRAM insuficiente para cargar el asistente (un trabajo ocupa las GPU). Vuelva a intentarlo más tarde.",
+        "no_start": "El asistente no pudo iniciarse (LLM de arbitraje no disponible). Vuelva a intentarlo más tarde.",
+        "long_notice": (
+            "ℹ️ Reunión larga: la conversación cubre ~{pct} % de la transcripción (el período {gap_from} → {gap_to} "
+            "no es visible para el asistente)."
+        ),
+        "fail": "Fallo del ajuste ({exc}) — los documentos resultantes no se modificaron. Vuelva a intentarlo.",
+        "progress_working": "Ajuste: el asistente está trabajando",
+        "progress_done": "Ajuste completado",
+        "invalid_structured": "Datos estructurados revisados no válidos (no es un objeto JSON) — se conservan tal cual.",
+        "non_json_structured": "Datos estructurados revisados no son JSON — se conservan tal cual.",
+        "non_json_options": "Opciones de renderizado revisadas no son JSON — se conservan tal cual.",
+        "no_change": "No se produjo ninguna modificación aplicable.",
+        "zip_failed": "El paquete ZIP no pudo reconstruirse de inmediato.",
+        "applied": "Modificaciones aplicadas.",
+        "version_saved": (
+            "\n\n(versión v{version} guardada — se puede restaurar desde la página. Vuelva a descargar los documentos — "
+            "Word, SRT, paquete — para obtener la versión actualizada.)"
+        ),
+    },
+    "it": {
+        "no_review_point": "(nessun punto segnalato)",
+        "busy": "L'assistente è occupato (la LLM sta servendo un altro trattamento). Riprovare tra qualche minuto.",
+        "vram": "VRAM insufficiente per caricare l'assistente (un trattamento sta occupando le GPU). Riprovare più tardi.",
+        "no_start": "L'assistente non è riuscito ad avviarsi (LLM di arbitraggio non disponibile). Riprovare più tardi.",
+        "long_notice": (
+            "ℹ️ Riunione lunga: la discussione riguarda ~{pct} % della trascrizione (il periodo {gap_from} → {gap_to} "
+            "non è visibile all'assistente)."
+        ),
+        "fail": "Affinamento non riuscito ({exc}) — i documenti finali non sono stati modificati. Riprovare.",
+        "progress_working": "Affinamento: l'assistente sta lavorando",
+        "progress_done": "Affinamento completato",
+        "invalid_structured": "Dati strutturati rivisti non validi (non è un oggetto JSON) — conservati così come sono.",
+        "non_json_structured": "Dati strutturati rivisti non JSON — conservati così come sono.",
+        "non_json_options": "Opzioni di rendering riviste non JSON — conservate così come sono.",
+        "no_change": "Non è stata prodotta alcuna modifica applicabile.",
+        "zip_failed": "Il pacchetto ZIP non ha potuto essere ricostruito immediatamente.",
+        "applied": "Modifiche applicate.",
+        "version_saved": (
+            "\n\n(versione v{version} salvata — ripristino possibile dalla pagina. Riscaricare i documenti — Word, SRT, "
+            "pacchetto — per ottenere la versione aggiornata.)"
+        ),
+    },
 }
 
 

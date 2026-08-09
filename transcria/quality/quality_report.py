@@ -122,6 +122,192 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "summary_too_short": ("Abnormally short summary ({summary_chars} chars for a {transcript_chars}-char "
                               "transcription) — check the summary generation."),
     },
+    "de": {
+        "empty": "Leere Segmente: {n} — manuell prüfen und entfernen.",
+        "short": "Sehr kurze Segmente (< 0,5 s): {n} — Zusammenführung erwägen.",
+        "long": "Sehr lange Segmente (> 60 s): {n} — Aufteilung erwägen.",
+        "gaps": "Zeitliche Lücken (>{gap} s): {n} — Audioabdeckung prüfen.",
+        "unmapped": "Nicht zugeordnete Sprecher: {n} Segmente — Teilnehmern zuordnen.",
+        "low_coverage": "Geringe Abdeckung: {pct} — möglicher Transkriptionsverlust.",
+        "low_wps": "Geringe Wortrate: {wps} Wörter/s.",
+        "high_wps": "Hohe Wortrate: {wps} Wörter/s — möglicher Fehler.",
+        "md_title": "# Qualitätsbericht",
+        "md_score": "Qualitätswert: {s}/100",
+        "md_checks": "Durchgeführte Kontrollen: {c}",
+        "md_warnings": "Hinweise: {w}",
+        "md_review": "## Zu prüfende Punkte",
+        "md_none": "- Kein Hinweis festgestellt.",
+        "md_audio_diag": "## Audiodiagnose vor der Transkription",
+        "md_risk": "- Risiko: {v}",
+        "md_flags": "- Flags: {v}",
+        "md_rms": "- RMS: {v}",
+        "md_snr": "- Geschätzter SNR: {v}",
+        "md_bandwidth": "- 95 %-Bandbreite: {v} Hz",
+        "md_silence": "- Stille: {v}",
+        "md_details": "## Details der Kontrollen",
+        "md_all_passed": "- Alle Kontrollen wurden erfolgreich bestanden.",
+        "md_review_load": "## Umfang der Durchsicht",
+        "risk_unknown": "unbekannt",
+        "removed_hallucinations": (
+            "Entfernte STT-Halluzinationen: {n} Segment(e) (Engine-Signatur + stumme/musikalische Akustik) — Details "
+            "in removed_hallucinations.json, z. B. „{example}“."
+        ),
+        "overlaps": "Überschneidungen: {n}, davon {sig} ≥ {thr} s — Zeitstempel prüfen.",
+        "out_of_order": (
+            "Segmente in falscher zeitlicher Reihenfolge: {n} — die Segmentreihenfolge ist nicht aufsteigend "
+            "(Zusammenführung/Diarisierung prüfen)."
+        ),
+        "missing_lexicon": "Fehlende normalisierte Lexikonbegriffe: {terms}",
+        "inconsistent_forms": "Inkonsistente Formen außerhalb des Glossars: {n} — ohne automatische Korrektur gemeldet ({detail}).",
+        "close_to": "nahe bei",
+        "unresolved_variants": "Nach der Korrektur nicht aufgelöste Lexikonvarianten: {detail}",
+        "malformed_srt": "Fehlerhaft formatiertes SRT: {n} Strukturanomalie(n) (Nummerierung/Timing/Reihenfolge) — Export prüfen.",
+        "speaker_names_expected": "erwartet",
+        "speaker_names_modified": "Im korrigierten SRT geänderte Sprechernamen: {detail}",
+        "foreign_segments": "Als fremdsprachig markierte Segmente: {n} — wahrscheinliche ASR-Halluzination oder verrauschter Audiobereich.",
+        "non_latin_segments": "Segmente mit nicht-lateinischer Schrift im ASR-Rohtext: {n} — VAD/Audioqualität prüfen.",
+        "suspicious_short": (
+            "Kurze Segmente: {n}, davon {c} bestätigt (Stille/Rauschen/geringe Konfidenz = wahrscheinliche "
+            "Halluzinationen); die übrigen sind kurze, noch zu bestätigende Interjektionen."
+        ),
+        "audio_problem_zones": "Problematische Audiobereiche: {n} — erneut anhören {detail}.",
+        "audio_prediag": "Audio-Vordiagnose: {flags} — Transkription möglicherweise unvollständig oder unsicher.",
+        "suspect_nsp": (
+            "Segmente mit hoher Nicht-Sprache-Wahrscheinlichkeit (np>{thr}): {n} — wahrscheinliche Halluzination bei "
+            "Stille oder verschlechtertem Audio."
+        ),
+        "low_word_conf": "Segmente mit geringer Wortkonfidenz (>{pct}% Wörter < {min}): {n} — unsichere Transkription, Audioinhalt prüfen.",
+        "segment_reliability": "Segmentweise ASR-Zuverlässigkeit: {counts} — Segmente degrade/suspect bei der Durchsicht priorisieren.",
+        "summary_too_short": (
+            "Ungewöhnlich kurze Zusammenfassung ({summary_chars} Zeichen für eine Transkription mit "
+            "{transcript_chars} Zeichen) — Erstellung der Zusammenfassung prüfen."
+        ),
+    },
+    "es": {
+        "empty": "Segmentos vacíos: {n} — verificar y eliminar manualmente.",
+        "short": "Segmentos muy cortos (< 0.5s): {n} — considerar la fusión.",
+        "long": "Segmentos muy largos (> 60s): {n} — considerar la división.",
+        "gaps": "Huecos temporales (>{gap}s): {n} — verificar la cobertura del audio.",
+        "unmapped": "Interlocutores no asociados: {n} segmentos — asociar a los participantes.",
+        "low_coverage": "Cobertura baja: {pct} — posible pérdida de transcripción.",
+        "low_wps": "Ritmo de palabras bajo: {wps} palabras/s.",
+        "high_wps": "Ritmo de palabras alto: {wps} palabras/s — posible error.",
+        "md_title": "# Informe de calidad",
+        "md_score": "Puntuación de calidad: {s}/100",
+        "md_checks": "Controles realizados: {c}",
+        "md_warnings": "Puntos de atención: {w}",
+        "md_review": "## Puntos a verificar",
+        "md_none": "- No se detectó ningún punto de atención.",
+        "md_audio_diag": "## Diagnóstico de audio antes de la transcripción",
+        "md_risk": "- Riesgo: {v}",
+        "md_flags": "- Indicadores: {v}",
+        "md_rms": "- RMS: {v}",
+        "md_snr": "- SNR estimado: {v}",
+        "md_bandwidth": "- Ancho de banda 95%: {v} Hz",
+        "md_silence": "- Silencio: {v}",
+        "md_details": "## Detalle de los controles",
+        "md_all_passed": "- Todos los controles se superaron con éxito.",
+        "md_review_load": "## Carga de revisión",
+        "risk_unknown": "desconocido",
+        "removed_hallucinations": (
+            "Alucinaciones STT eliminadas: {n} segmento(s) (firma del motor + audio silencioso/musical) — detalle en "
+            "removed_hallucinations.json, ej. « {example} »."
+        ),
+        "overlaps": "Solapamientos: {n} de los cuales {sig} ≥ {thr}s — verificar las marcas de tiempo.",
+        "out_of_order": (
+            "Segmentos fuera de orden temporal: {n} — el orden de los segmentos no es creciente (verificar la "
+            "fusión/diarización)."
+        ),
+        "missing_lexicon": "Términos del léxico normalizados ausentes: {terms}",
+        "inconsistent_forms": "Formas incoherentes fuera del léxico: {n} — señaladas sin corrección automática ({detail}).",
+        "close_to": "cercano a",
+        "unresolved_variants": "Variantes de léxico no resueltas tras la corrección: {detail}",
+        "malformed_srt": "SRT mal formado: {n} anomalía(s) de estructura (numeración/temporización/orden) — verificar la exportación.",
+        "speaker_names_expected": "esperado",
+        "speaker_names_modified": "Nombres de interlocutores modificados en el SRT corregido: {detail}",
+        "foreign_segments": "Segmentos marcados como extranjeros: {n} — probable alucinación del ASR o zona de audio ruidosa.",
+        "non_latin_segments": "Segmentos con escritura no latina en el ASR bruto: {n} — verificar VAD/calidad del audio.",
+        "suspicious_short": (
+            "Segmentos cortos: {n} de los cuales {c} corroborados (silencio/ruido/confianza baja = probables "
+            "alucinaciones); los demás son interjecciones breves por confirmar."
+        ),
+        "audio_problem_zones": "Zonas de audio problemáticas: {n} — reescuchar {detail}.",
+        "audio_prediag": "Prediagnóstico de audio: {flags} — transcripción potencialmente parcial o incierta.",
+        "suspect_nsp": (
+            "Segmentos con alta probabilidad de no ser voz (np>{thr}): {n} — probable alucinación sobre silencio o "
+            "audio degradado."
+        ),
+        "low_word_conf": (
+            "Segmentos con baja confianza de palabras (>{pct}% palabras < {min}): {n} — transcripción incierta, "
+            "verificar el contenido del audio."
+        ),
+        "segment_reliability": "Fiabilidad ASR por segmento: {counts} — priorizar en la revisión los segmentos degrade/suspect.",
+        "summary_too_short": (
+            "Resumen anormalmente corto ({summary_chars} car. para una transcripción de {transcript_chars} car.) — "
+            "verificar la generación del resumen."
+        ),
+    },
+    "it": {
+        "empty": "Segmenti vuoti: {n} — verificare ed eliminare manualmente.",
+        "short": "Segmenti molto brevi (< 0.5s): {n} — valutare l'unione.",
+        "long": "Segmenti molto lunghi (> 60s): {n} — valutare la suddivisione.",
+        "gaps": "Vuoti temporali (>{gap}s): {n} — verificare la copertura audio.",
+        "unmapped": "Parlanti non mappati: {n} segmenti — associare ai partecipanti.",
+        "low_coverage": "Copertura bassa: {pct} — possibile perdita di trascrizione.",
+        "low_wps": "Velocità di parola bassa: {wps} parole/s.",
+        "high_wps": "Velocità di parola elevata: {wps} parole/s — possibile errore.",
+        "md_title": "# Rapporto qualità",
+        "md_score": "Punteggio qualità: {s}/100",
+        "md_checks": "Controlli effettuati: {c}",
+        "md_warnings": "Punti di attenzione: {w}",
+        "md_review": "## Punti da verificare",
+        "md_none": "- Nessun punto di attenzione rilevato.",
+        "md_audio_diag": "## Diagnostica audio prima della trascrizione",
+        "md_risk": "- Rischio: {v}",
+        "md_flags": "- Avvisi: {v}",
+        "md_rms": "- RMS: {v}",
+        "md_snr": "- SNR stimato: {v}",
+        "md_bandwidth": "- Banda passante 95%: {v} Hz",
+        "md_silence": "- Silenzio: {v}",
+        "md_details": "## Dettagli dei controlli",
+        "md_all_passed": "- Tutti i controlli sono stati superati con successo.",
+        "md_review_load": "## Carico di revisione",
+        "risk_unknown": "sconosciuto",
+        "removed_hallucinations": (
+            "Allucinazioni STT rimosse: {n} segmento/i (firma del motore + audio silenzioso/musicale) — dettagli in "
+            "removed_hallucinations.json, es. « {example} »."
+        ),
+        "overlaps": "Sovrapposizioni: {n} di cui {sig} ≥ {thr}s — verificare i timestamp.",
+        "out_of_order": "Segmenti fuori ordine temporale: {n} — l'ordine dei segmenti non è crescente (verificare unione/diarizzazione).",
+        "missing_lexicon": "Termini del lessico normalizzati assenti: {terms}",
+        "inconsistent_forms": "Forme incoerenti fuori dal lessico: {n} — segnalate senza correzione automatica ({detail}).",
+        "close_to": "vicino a",
+        "unresolved_variants": "Varianti del lessico non risolte dopo la correzione: {detail}",
+        "malformed_srt": "SRT mal formato: {n} anomalia/e di struttura (numerazione/timing/ordine) — verificare l'esportazione.",
+        "speaker_names_expected": "atteso",
+        "speaker_names_modified": "Nomi dei parlanti modificati nell'SRT corretto: {detail}",
+        "foreign_segments": "Segmenti contrassegnati come stranieri: {n} — probabile allucinazione ASR o zona audio rumorosa.",
+        "non_latin_segments": "Segmenti con scrittura non latina nell'ASR grezzo: {n} — verificare VAD/qualità audio.",
+        "suspicious_short": (
+            "Segmenti brevi: {n} di cui {c} corroborati (silenzio/rumore/bassa confidenza = probabili allucinazioni); "
+            "gli altri sono brevi interiezioni da confermare."
+        ),
+        "audio_problem_zones": "Zone audio problematiche: {n} — riascoltare {detail}.",
+        "audio_prediag": "Pre-diagnostica audio: {flags} — trascrizione potenzialmente parziale o incerta.",
+        "suspect_nsp": (
+            "Segmenti ad alta probabilità di non-parlato (np>{thr}): {n} — probabile allucinazione su silenzio o "
+            "audio degradato."
+        ),
+        "low_word_conf": (
+            "Segmenti a bassa confidenza di parole (>{pct}% parole < {min}): {n} — trascrizione incerta, verificare "
+            "il contenuto audio."
+        ),
+        "segment_reliability": "Affidabilità ASR segmentale: {counts} — dare priorità ai segmenti degrade/suspect in revisione.",
+        "summary_too_short": (
+            "Sintesi anomalmente breve ({summary_chars} car. per una trascrizione di {transcript_chars} car.) — "
+            "verificare la generazione della sintesi."
+        ),
+    },
 }
 
 
