@@ -1402,11 +1402,15 @@ else
             if [[ "$_DO_PREBUILT" = true ]]; then
                 log_llm_setup_event download-start "llama-server (ai-dock b$_AIDOCK_BUILD)" "" "" "" "install_arbitrage" "$_AIDOCK_DEST"
                 _PREBUILT_ERR=$(mktemp 2>/dev/null || echo "/tmp/transcria_prebuilt.$$")
+                # `|| true` OBLIGATOIRE (même classe que le check ffmpeg, issue #9) : le
+                # helper sort en 1 si le téléchargement échoue (réseau, SHA, artefact
+                # introuvable) — sans la garde, set -e tuerait install.sh ICI, avant le
+                # bloc d'échec ci-dessous, et le stderr capté ne serait jamais affiché.
                 _PREBUILT_OUT=$(arbitrage_helper --install-llama-prebuilt \
                     --llama-build "$_AIDOCK_BUILD" \
                     --dest "$_AIDOCK_DEST" \
                     --sha256 "$_AIDOCK_SHA256" \
-                    --cuda "$_AIDOCK_CUDA" 2>"$_PREBUILT_ERR")
+                    --cuda "$_AIDOCK_CUDA" 2>"$_PREBUILT_ERR") || true
                 eval_named_shell_assignments "$_PREBUILT_OUT" LLAMA_PREBUILT
                 _PREBUILT_BIN="${LLAMA_PREBUILT:-}"
                 if [[ -n "$_PREBUILT_BIN" && -x "$_PREBUILT_BIN" ]]; then
