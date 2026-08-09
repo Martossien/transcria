@@ -2,6 +2,9 @@
 
 *([Version française](QUICKSTART.md))*
 
+> **On Windows 11?** The WSL2 + Docker path is described step by step in
+> [QUICKSTART_WINDOWS.en.md](QUICKSTART_WINDOWS.en.md).
+
 One page, two paths — pick **one**. Common prerequisite: a Linux machine with an NVIDIA
 GPU (compute capability ≥ 7.5; **from 8 GB VRAM** — native and Docker alike, slim and
 bundled; on a card under 12 GB the 8 GB-tier LLM is picked automatically — and even
