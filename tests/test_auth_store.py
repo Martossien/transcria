@@ -128,21 +128,22 @@ class TestUserStore:
             UserStore.ensure_admin({"auth": {"first_admin_username": "x", "first_admin_password": "x"}})
             assert UserStore.get_by_username("x") is None
 
-    def test_ensure_admin_warns_when_default_password_is_used(self, app, caplog):
+    def test_ensure_admin_sentinelle_ne_cree_rien_et_annonce_setup(self, app, caplog):
         with app.app_context():
             snapshot = _snapshot_users()
             _empty_all_tables()
 
             try:
-                caplog.set_level("WARNING", logger="transcria.auth.store")
+                caplog.set_level("INFO", logger="transcria.auth.store")
                 UserStore.ensure_admin(
                     {"auth": {"first_admin_username": "admin", "first_admin_password": "admin-change-me"}}
                 )
 
-                # S1.4 : plus de « créé avec le mot de passe par défaut » — il n'y a
-                # PLUS de mot de passe par défaut. On génère, et on l'affiche une fois.
-                assert "mot de passe généré" in caplog.text
-                assert not UserStore.get_by_username("admin").check_password("admin-change-me")
+                # Issue #11 v2 : sentinelle → AUCUN compte créé (plus de secret généré
+                # à retrouver dans un journal) — le portail imposera /setup à la
+                # première visite, et le log de démarrage l'annonce.
+                assert UserStore.get_by_username("admin") is None
+                assert "/setup" in caplog.text
             finally:
                 _restore_users(snapshot)
 
@@ -204,18 +205,17 @@ class TestGroupStore:
             assert GroupStore.users_share_group(user_a.id, user_c.id) is False
 
 
-# --- Passe sécurité S1.4 : plus de mot de passe d'amorçage PUBLIÉ ------------------------
+# --- Passe sécurité S1.4 + issue #11 v2 : plus de secret d'amorçage, ni publié ni généré -
 #
-# `config.example.yaml` publiait `first_admin_password: "CHANGE-ME"`, le chargeur le
-# reprenait en défaut, et le compte était RÉELLEMENT créé avec. Le secret initial de toute
-# installation qui n'avait rien changé était donc écrit dans un dépôt public, avec un
-# identifiant connu (`admin`). L'avertissement au démarrage ne comptait pas : un
-# avertissement dans le journal d'un service qu'on ne regarde jamais n'est pas une
-# protection.
+# S1.4 : `config.example.yaml` publiait `first_admin_password: "CHANGE-ME"` et le compte
+# était RÉELLEMENT créé avec — secret public sous identifiant connu. Premier correctif :
+# générer un secret aléatoire journalisé une fois.
 #
-# Choix retenu : GÉNÉRER un secret aléatoire plutôt que refuser le démarrage. Refuser
-# aurait laissé l'exploitant dehors le jour de son installation ; générer supprime le
-# problème sans rien lui demander.
+# Issue #11 v2 : le secret généré était indécouvrable en pratique (le 1er testeur externe
+# a terminé son installation sans pouvoir se connecter — personne ne lit le journal au bon
+# moment). Choix final : sur sentinelle, ensure_admin ne crée RIEN ; le portail impose la
+# page /setup à la première visite et l'utilisateur choisit son mot de passe là où il ne
+# peut pas le rater. Un mot de passe CONFIGURÉ reste respecté (chemin automatisation).
 
 class TestAmorçageSansSecretPublie:
     @pytest.fixture()
@@ -236,37 +236,17 @@ class TestAmorçageSansSecretPublie:
         return UserStore.get_by_username("root")
 
     @pytest.mark.parametrize("sentinelle", ["CHANGE-ME", "admin-change-me", ""])
-    def test_une_sentinelle_ne_devient_JAMAIS_le_mot_de_passe(self, base_vierge, sentinelle):
-        user = self._admin(sentinelle)
-        assert user is not None
-        for interdit in DEFAULT_ADMIN_PASSWORDS:
-            assert not user.check_password(interdit)
+    def test_une_sentinelle_ne_cree_AUCUN_compte(self, base_vierge, sentinelle):
+        # v2 : encore plus fort que « jamais le mot de passe » — pas de compte du tout.
+        assert self._admin(sentinelle) is None
+        assert UserStore.count_users() == 0
 
-    def test_le_secret_genere_est_affiche_UNE_fois_et_utilisable(self, base_vierge, caplog):
-        import re
-        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
-            user = self._admin("CHANGE-ME")
-        trouve = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)
-        assert len(trouve) == 1, f"le secret doit être journalisé exactement une fois : {caplog.text}"
-        assert user.check_password(trouve[0])
-
-    def test_le_secret_genere_est_solide(self, base_vierge, caplog):
-        import re
-        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
-            self._admin("")
-        secret = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
-        assert len(secret) >= 20
-
-    def test_deux_installations_ne_partagent_pas_le_meme_secret(self, base_vierge, caplog):
-        import re
-        with caplog.at_level(logging.WARNING, logger="transcria.auth.store"):
+    def test_aucun_secret_ne_fuit_dans_le_journal(self, base_vierge, caplog):
+        with caplog.at_level(logging.INFO, logger="transcria.auth.store"):
             self._admin("CHANGE-ME")
-            premier = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
-            _empty_all_tables()
-            caplog.clear()
-            self._admin("CHANGE-ME")
-            second = re.findall(r"mot de passe généré\s*:\s*(\S+)", caplog.text)[0]
-        assert premier != second
+            self._admin("un-vrai-secret-choisi")
+        assert "mot de passe généré" not in caplog.text
+        assert "un-vrai-secret-choisi" not in caplog.text
 
     def test_un_mot_de_passe_choisi_par_lexploitant_est_RESPECTE(self, base_vierge):
         """Contre-épreuve : qui configure vraiment un secret garde la main."""

@@ -158,7 +158,7 @@ def test_render_setup_log_for_prerequisite_events():
     )
     assert render_setup_log(event="binary-ok", name="ffmpeg", path="/usr/bin/ffmpeg") == "OK:ffmpeg : /usr/bin/ffmpeg\n"
     assert render_setup_log(event="binary-required-missing", name="ffmpeg") == (
-        "ERROR:ffmpeg manquant. Installer avec: apt install ffmpeg\n"
+        "ERROR:ffmpeg manquant. Installer avec: apt install ffmpeg (Debian/Ubuntu) ou dnf install ffmpeg-free (Fedora)\n"
     )
     assert render_setup_log(event="binary-required-missing", name="psql") == "ERROR:psql manquant.\n"
     assert render_setup_log(event="binary-optional-missing", name="lsof") == (

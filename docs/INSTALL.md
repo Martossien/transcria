@@ -106,10 +106,9 @@ déroule le chemin non-interactif existant. Deux décisions propres à l'express
   tournent alors tous deux sur CPU, validé E2E). La qualité de référence Cohere +
   pyannote reste activable ensuite depuis *Administration → Modèles* avec un token.
   Une `config.yaml` existante n'est **jamais** retouchée.
-- Aucun mot de passe admin n'est demandé en express : il sera **généré au premier
-  démarrage** (base vierge) et affiché une seule fois dans le journal du service — le
-  résumé final rappelle la commande exacte
-  (`journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'`).
+- Aucun mot de passe admin n'est demandé en express : à la **première visite du
+  portail**, une page vous demandera de créer le compte administrateur (identifiant +
+  mot de passe de votre choix) — le résumé final le rappelle.
 
 `./install.sh --expert` restaure le pas-à-pas historique (une question par choix) ;
 `--non-interactive` reste le mode CI sans aucun prompt. Répondre `n` au récapitulatif

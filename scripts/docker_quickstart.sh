@@ -125,14 +125,9 @@ fi
 if [[ ! -f "config.yaml" ]]; then
     log "Génération de config.yaml depuis config.example.yaml…"
     cp config.example.yaml config.yaml
-    # Mot de passe admin GÉNÉRÉ ICI (issue #11) : l'exemple laisse la valeur vide, et le
-    # secret alors créé par ensure_admin au 1er boot n'apparaît que dans `docker logs` —
-    # personne ne l'y trouvait. Le quickstart génère déjà les autres secrets : celui-ci
-    # est écrit dans config.yaml (local, chmod 600) et AFFICHÉ dans le message final.
-    ADMIN_PASS="$(gen_secret 9)"
-    sed -i "s|^\(\s*first_admin_password:\s*\).*|\1\"$ADMIN_PASS\"|" config.yaml
-    chmod 600 config.yaml
-    ok "Mot de passe admin généré (auth.first_admin_password — affiché à la fin)."
+    # Mot de passe admin : AUCUN à générer (issue #11 v2) — la clé reste vide et le
+    # portail impose la page de création du compte administrateur à la première
+    # visite. L'utilisateur choisit son mot de passe là où il ne peut pas le rater.
     # STT + diarisation : sans token, défauts NON gated (whisper + Sortformer) → zéro friction.
     if [[ -z "${HF_TOKEN:-}" ]]; then
         warn "HF_TOKEN absent → STT 'whisper' + diarisation 'sortformer' (NON gated, sans token)."
@@ -260,18 +255,17 @@ url="http://localhost:7870/health"
 for i in $(seq 1 60); do
     if curl -fsS -o /dev/null "$url" 2>/dev/null; then
         echo
-        # Identifiants RÉELS relus de config.yaml (issue #11) : jamais renvoyer vers une
-        # valeur vide. Sentinelle (config pré-existante non renseignée) → ensure_admin a
-        # généré au 1er boot et le secret n'existe QUE dans les logs du conteneur.
+        # Première connexion (issue #11 v2) : sans mot de passe configuré, le portail
+        # impose la page de création du compte à la première visite — rien à retenir,
+        # rien à chercher dans les logs. Une valeur configurée reste respectée.
         _admin_user=$(sed -nE 's/^\s*first_admin_username:\s*"?([^"#]*[^"# ])"?.*/\1/p' config.yaml | head -1)
         _admin_pw=$(sed -nE 's/^\s*first_admin_password:\s*"?([^"#]*[^"# ])"?.*/\1/p' config.yaml | head -1)
         case "${_admin_pw:-}" in
             ""|CHANGE-ME|admin-change-me)
-                ok "TranscrIA est prêt → http://localhost:7870  (identifiant : ${_admin_user:-admin})"
-                warn "Mot de passe : GÉNÉRÉ au premier démarrage, visible UNE FOIS dans les logs :"
-                warn "  ${COMPOSE[*]} logs 2>&1 | grep -a -A 4 'PREMIER COMPTE'" ;;
+                ok "TranscrIA est prêt → http://localhost:7870"
+                ok "Première visite : le portail vous demande de CRÉER le compte administrateur." ;;
             *)
-                ok "TranscrIA est prêt → http://localhost:7870  (identifiant : ${_admin_user:-admin} / mot de passe : $_admin_pw)" ;;
+                ok "TranscrIA est prêt → http://localhost:7870  (identifiant : ${_admin_user:-admin}, mot de passe : celui de config.yaml)" ;;
         esac
         ok "Logs : ${COMPOSE[*]} logs -f   |   Arrêt : scripts/docker_quickstart.sh --down"
         if [[ "$MODE" == "gpu" ]]; then

@@ -300,7 +300,11 @@ mis à jour au plus 1×/min (éviter une écriture DB par requête de polling).
 servi sur `GET /login?local=1` (non lié depuis la page SSO), accepte les seuls
 comptes `identity_source == "local"`. Doctor (lot 1) : FAIL si un backend
 fédéré est actif et qu'aucun admin local actif n'existe ; WARN si le mot de
-passe du premier admin est resté à `first_admin_password`. Le scénario complet
+passe du premier admin est resté à `first_admin_password`. Depuis 0.4.4, une
+base vierge ne crée PLUS d'admin local automatiquement : la page `/setup` ne
+s'affiche qu'en backend `local` — pour un déploiement fédéré d'emblée, créer
+l'admin de secours via `auth.first_admin_password` (ou basculer le backend
+APRÈS le premier démarrage local, ce que le doctor vérifie). Le scénario complet
 (IdP éteint → login local → reset CLI) fait partie de la matrice §5 et se
 rejoue en session HTTP réelle avant chaque release touchant l'auth.
 

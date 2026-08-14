@@ -73,16 +73,13 @@ scripts/docker_quickstart.sh --down
 > cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
 > un crash CUDA survenir au 1ᵉ job.
 
-> **Première connexion** : ouvrir `http://localhost:7870` et se connecter avec **`admin`** et le
-> mot de passe **affiché par le quickstart dans son message final** (généré dans le `config.yaml`
-> créé, clé `auth.first_admin_password`, appliqué **au tout premier démarrage** = bootstrap de la
-> base). Compose manuel avec un `config.yaml` copié de l'exemple (clé laissée vide) : le mot de
-> passe est **généré au premier boot** et affiché UNE FOIS dans les logs du conteneur web —
-> `docker compose logs | grep -a -A 4 'PREMIER COMPTE'`. Perdu (conteneur recréé, volume base
-> conservé) : `docker compose exec <service-web> python -m transcria.maintenance.cli
-> reset-admin-password admin`. **Changer ce mot de passe à la première connexion** ; modifier
-> `config.yaml` **après** le bootstrap ne change PAS le mot de passe d'un compte déjà créé
-> (le faire alors via l'UI / la gestion des utilisateurs).
+> **Première connexion** : ouvrir `http://localhost:7870` — à la **première visite** (base
+> vierge), le portail demande de **créer le compte administrateur** (identifiant + mot de passe
+> de votre choix), quel que soit le chemin (quickstart ou compose manuel). Automatisation :
+> renseigner `auth.first_admin_password` dans `config.yaml` **avant le premier démarrage** crée
+> le compte au boot, sans page ; le modifier **après** ne change PAS le mot de passe d'un compte
+> déjà créé (le faire alors via l'UI). Mot de passe perdu plus tard :
+> `docker compose exec <service-web> python -m transcria.maintenance.cli reset-admin-password admin`.
 
 Le script est **idempotent** : il ne réécrit pas un `config.yaml`/`.env` existant, génère
 des secrets aléatoires, choisit `whisper` (non gated, sans token) si `HF_TOKEN` est absent.
@@ -281,16 +278,20 @@ docker run --rm --device nvidia.com/gpu=0 nvidia/cuda:12.4.0-base-ubuntu22.04 nv
 le runtime, le driver vient de l'hôte via CDI) — préférer le quickstart, qui gère build/pull :
 
 ```bash
-docker compose --profile gpu build       # → transcria-allinone:latest (CUDA 12.6, cu126)
+docker compose --profile gpu build       # → transcria-allinone:latest (CUDA 12.8, cu130)
 # ou directement : docker build -f Dockerfile.allinone-gpu -t transcria-allinone:latest .
 ```
 
-> Base CUDA **12.6** (driver ≥ 535, largement répandu). `torch`, `torchaudio` **et `torchcodec`**
-> sont installés depuis l'index **cu126** (et non en transitif via PyPI) : `torchcodec` est le
-> décodeur audio de pyannote.audio 4.x, couplé à l'ABI/CUDA de torch — un wheel non apparié casse
-> l'`AudioDecoder` (diarisation). C'est précisément le pin `torchcodec>=0.12` qui impose cu126/cu130
-> (cu128 ne le publie pas). L'image fournit `ffmpeg` (libs FFmpeg requises au runtime par torchcodec).
-> Le `Dockerfile` racine reste **CPU** (rôles web/scheduler/migrate).
+> Base CUDA **12.8** + index torch **cu130** depuis 0.4.4 (support **RTX 50xx / Blackwell,
+> sm_120 natif** — même couple que l'image resource-node). **CASSANT : driver NVIDIA ≥ 580
+> requis** (roues CUDA 13) — driver plus ancien : rester sur les images 0.4.3 ou mettre à
+> jour le driver. `torch`, `torchaudio` **et `torchcodec`** sont installés depuis l'index
+> cu130 (et non en transitif via PyPI) : `torchcodec` est le décodeur audio de
+> pyannote.audio 4.x, couplé à l'ABI/CUDA de torch — un wheel non apparié casse
+> l'`AudioDecoder` (diarisation) ; le pin `torchcodec>=0.12` n'est publié que sur cu126 et
+> cu130 (pas cu128), et seul cu130 porte les noyaux sm_120. L'image fournit `ffmpeg` (libs
+> FFmpeg requises au runtime par torchcodec). Le `Dockerfile` racine reste **CPU** (rôles
+> web/scheduler/migrate).
 
 ### All-in-one GPU — tester le projet COMPLET en une commande, sans token
 
@@ -325,8 +326,9 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 > fort trafic (préférer alors le split `web` gunicorn + `scheduler`, où la LLM d'arbitrage reste
 > un service externe — cf. matrice `TRANSCRIA_ARBITRAGE_LLM_HOST`).
 >
-> **Pourquoi CUDA 12.6** : le projet épingle `torchcodec>=0.12` (pyannote 4.x), publié sur les
-> index torch **cu126** et cu130 (pas cu128). cu126 a le **driver requis le plus répandu (~535+)**.
+> **Pourquoi CUDA 12.8 + cu130** : les RTX 50xx (Blackwell, sm_120) exigent des noyaux torch
+> cu128+ et un nvcc ≥ 12.8 ; le pin `torchcodec>=0.12` (pyannote 4.x) n'est publié que sur
+> cu126 et cu130 → cu130 (driver ≥ 580 requis).
 > **Pourquoi llama.cpp compilé** : llama.cpp ne publie pas de binaire CUDA Linux → on le compile
 > dans un étage builder (binaire canonique des paliers).
 
@@ -363,9 +365,11 @@ NVIDIA Open Model License » : c'est fait dans `/licenses/`).
 
 **GPU compatibles** : il faut **compute capability ≥ 7.5** **ET ≥ 8 Go** de VRAM (sur carte
 < 12 Go, le palier 8 — Qwen3.5-4B, ~6,4 Go chargé — est choisi automatiquement ; dès 12 Go
-le défaut est le 9B ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS `sm_75→sm_90` + le **PTX
-`sm_90`** (vérifié `cuobjdump`) qui JIT vers les archis plus récentes. **Driver NVIDIA ≥ 525**
-(CUDA 12.x ; **535+ recommandé** ; Blackwell exige un driver récent). torch cu126 couvre le STT/diar.
+le défaut est le 9B ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS
+`sm_75→sm_90` **+ `sm_120` (RTX 50xx natif depuis 0.4.4)** + le PTX du plus haut palier qui
+JIT vers les archis encore plus récentes. **Driver NVIDIA ≥ 580 requis** (torch cu130 /
+CUDA 13 — images 0.4.3 pour les drivers plus anciens). torch cu130 couvre le STT/diar,
+noyaux sm_120 inclus.
 
 | Génération (compute) | Statut | Cartes **≥ 8 Go** (exemples, palier 12 dès 12 Go) |
 |---|---|---|
@@ -375,10 +379,12 @@ le défaut est le 9B ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarq
 | **Ampere** (8.0 / 8.6) | ✅ natif | RTX 3060 12G, 3080 12G / 3080 Ti, 3090(Ti) 24G, A10/A40/A100, A5000/A6000 |
 | **Ada** (8.9) | ✅ natif | RTX 4070(Ti/Super) 12-16G, 4080 16G, 4090 24G, L4/L40(S), RTX 5000/6000 Ada |
 | **Hopper** (9.0) | ✅ natif | H100 80G, H200 141G |
-| **Blackwell** (≥ 10.0) | ✅ via **PTX JIT** ¹ | RTX 5070 12G, 5080 16G, 5090 32G, B100/B200 |
+| **Blackwell RTX 50xx** (12.0) | ✅ **natif depuis 0.4.4** ¹ | RTX 5070 12G, 5080 16G, 5090 32G |
+| **Blackwell datacenter** (10.x) | ✅ via **PTX JIT** ¹ | B100/B200 |
 
-> ¹ Blackwell (RTX 50xx, B100/B200) : pas de SASS dédié → JIT du PTX `sm_90` au **1er lancement**
-> (plus lent une fois, puis caché). Pour du natif Blackwell, rebâtir l'image avec CUDA 12.8+ et `sm_120`.
+> ¹ RTX 50xx : SASS `sm_120` embarqué (llama.cpp, audio.cpp, parakeet.cpp) + torch cu130 —
+> **driver ≥ 580 requis**. B100/B200 (sm_100) : JIT du PTX au 1er lancement (plus lent une
+> fois, puis caché).
 > Les **consumer 8-11 Go** (RTX 2070/2080, 3060 Ti, 3070, 4060(Ti), 5060…) sont couverts depuis
 > 0.4.2 : trop justes pour le 9B, elles reçoivent **automatiquement le palier 8** (Qwen3.5-4B,
 > ~6,4 Go chargé, baké dans la bundled). Sous 8 Go, aucune LLM ne tient (transcription seule).

@@ -20,15 +20,16 @@
 #   attribution + Trustworthy AI + guardrails intacts). Les textes/attributions sont bakés
 #   dans /licenses/ (cf. répertoire licenses/ du dépôt) — obligation NVIDIA respectée.
 #
-# CUDA 12.6 / compilation llama.cpp : voir l'en-tête de Dockerfile.allinone-gpu (mêmes raisons).
+# CUDA 12.8 + torch cu130 (RTX 50xx sm_120, driver ≥ 580) / compilation llama.cpp :
+# voir l'en-tête de Dockerfile.allinone-gpu (mêmes raisons).
 #
 # Build (lourd, ~45 Go, télécharge ~25 Go de poids NON gated au build — réseau requis, AUCUN
 # token). PUBLICATION = build LOCAL + push manuel (trop gros pour un runner CI GitHub) :
 #   docker build -f Dockerfile.allinone-bundled -t ghcr.io/<owner>/transcria-allinone:bundled .
 #   docker push  ghcr.io/<owner>/transcria-allinone:bundled
 
-ARG CUDA_IMAGE=nvidia/cuda:12.6.3-devel-ubuntu24.04
-ARG TORCH_CUDA_TAG=cu126
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+ARG TORCH_CUDA_TAG=cu130
 ARG LLAMA_CPP_REF=b9816
 
 # ── Étage builder-llama : compile llama-server (CUDA) — identique à allinone-gpu ─────────────
@@ -44,7 +45,7 @@ RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/
     && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
         -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=ON \
         -DLLAMA_BUILD_UI=OFF -DLLAMA_USE_PREBUILT_UI=OFF \
-        -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90;120" \
         -DCMAKE_EXE_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda" \
         -DCMAKE_SHARED_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda -Wl,--allow-shlib-undefined" \
     && cmake --build /tmp/llama.cpp/build --config Release --target llama-server -j "$(nproc)" \
@@ -106,7 +107,7 @@ RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
     && git -C /tmp/audiocpp checkout "${AUDIOCPP_REF}" \
     && cmake -S /tmp/audiocpp -B /tmp/audiocpp/build \
         -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DAUDIOCPP_DEPLOYMENT_BUILD=ON \
-        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90;120" \
     && cmake --build /tmp/audiocpp/build -j "$(nproc)" --target audiocpp_server \
     && mkdir -p /opt/runtimes/audiocpp/bin \
     && cp /tmp/audiocpp/build/bin/audiocpp_server /opt/runtimes/audiocpp/bin/ \
@@ -121,7 +122,7 @@ RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/lib
     && git -C /tmp/parakeetcpp submodule update --init --recursive \
     && cmake -S /tmp/parakeetcpp -B /tmp/parakeetcpp/build \
         -DCMAKE_BUILD_TYPE=Release -DPARAKEET_GGML_CUDA=ON \
-        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90;120" \
         -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,$ORIGIN/../lib' \
         -DCMAKE_SHARED_LINKER_FLAGS='-Wl,-rpath,$ORIGIN' \
     && cmake --build /tmp/parakeetcpp/build -j "$(nproc)" \

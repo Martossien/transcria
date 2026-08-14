@@ -131,6 +131,8 @@ declare -A _MSG=(
     [en:express_open_models]="Token-free models written to config.yaml"
     [fr:ask_admin_pw]="Définir le mot de passe admin maintenant ?"
     [en:ask_admin_pw]="Set the admin password now?"
+    [fr:ask_install_ffmpeg]="ffmpeg est absent — l'installer maintenant (apt-get install ffmpeg) ?"
+    [en:ask_install_ffmpeg]="ffmpeg is missing — install it now (apt-get install ffmpeg)?"
     [fr:ask_ollama]="Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"
     [en:ask_ollama]="Follow the recommendation and use Ollama? (no = llama.cpp, fine control)"
     [fr:ask_llamacpp]="Suivre la recommandation et utiliser llama.cpp ? (non = Ollama, plus simple mais modèle plus petit sur ce palier)"
@@ -417,7 +419,9 @@ print_model_detection_table() {
         --needs-llm "$PROFILE_NEEDS_LLM" \
         --qwen-ok "$QWEN_OK" \
         --qwen-gguf "${QWEN_GGUF:-}" \
-        --squim-ok "$SQUIM_OK"
+        --squim-ok "$SQUIM_OK" \
+        --stt-backend "$(yaml_get 'models.stt_backend')" \
+        --diarization-backend "$(yaml_get 'models.diarization_backend')"
 }
 
 load_install_profile_plan
@@ -646,27 +650,52 @@ fi
 # `|| status=$?` OBLIGATOIRE : sous `set -e`, `VAR=$(cmd)` qui sort non-zéro tue le
 # script AVANT la ligne suivante — le testeur ne voit alors JAMAIS le message
 # « ffmpeg manquant » (vécu : issue #9, Ubuntu Mate 24.04 sans ffmpeg, abandon muet).
-PREREQ_BINARIES_STATUS=0
-PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
-    check-binaries \
-    --required ffmpeg \
-    --required ffprobe \
-    --optional lsof \
-    --optional curl) || PREREQ_BINARIES_STATUS=$?
-while IFS=$'\t' read -r status name path; do
-    [[ -z "$name" ]] && continue
-    case "$status" in
-        OK)
-            log_prerequisite_event binary-ok "$name" "" "$path"
-            ;;
-        MISSING_REQUIRED)
-            log_prerequisite_event binary-required-missing "$name"
-            ;;
-        MISSING_OPTIONAL)
-            log_prerequisite_event binary-optional-missing "$name"
-            ;;
-    esac
-done <<< "$PREREQ_BINARIES_OUT"
+run_prereq_binaries_check() {
+    PREREQ_BINARIES_STATUS=0
+    PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
+        check-binaries \
+        --required ffmpeg \
+        --required ffprobe \
+        --optional lsof \
+        --optional curl) || PREREQ_BINARIES_STATUS=$?
+    while IFS=$'\t' read -r status name path; do
+        [[ -z "$name" ]] && continue
+        case "$status" in
+            OK)
+                log_prerequisite_event binary-ok "$name" "" "$path"
+                ;;
+            MISSING_REQUIRED)
+                log_prerequisite_event binary-required-missing "$name"
+                ;;
+            MISSING_OPTIONAL)
+                log_prerequisite_event binary-optional-missing "$name"
+                ;;
+        esac
+    done <<< "$PREREQ_BINARIES_OUT"
+}
+run_prereq_binaries_check
+# ── Offre d'installation ffmpeg (issue #9, 2e friction du 1er testeur) ────────
+# Le script SAIT ce qui manque et connaît la commande : sur apt, on propose de la
+# lancer — UNE question, consentie (la règle « jamais de mutation système
+# silencieuse » tient : refus ou non-interactif = message + arrêt, comme avant).
+# dnf n'a pas ffmpeg dans les dépôts de base (RPM Fusion / ffmpeg-free) : le
+# message d'échec donne la commande, on ne devine pas les dépôts de l'utilisateur.
+if [[ "$PREREQ_BINARIES_STATUS" -ne 0 && "$NON_INTERACTIVE" = false && -t 0 ]] \
+        && command -v apt-get >/dev/null 2>&1 \
+        && { [[ $EUID -eq 0 ]] || [[ "$HAVE_SUDO" = true ]]; }; then
+    _APT_SUDO=""
+    [[ $EUID -ne 0 ]] && _APT_SUDO="sudo"
+    if ask_yn "$(t ask_install_ffmpeg)"; then
+        # Cache apt jamais rafraîchi (machine fraîche) → l'install directe peut
+        # échouer : on retente après update plutôt que d'updater d'office.
+        if $_APT_SUDO apt-get install -y ffmpeg \
+                || { $_APT_SUDO apt-get update && $_APT_SUDO apt-get install -y ffmpeg; }; then
+            # Re-vérification COMPLÈTE (même commande que ci-dessus) : c'est elle
+            # qui fait foi, pas le code retour d'apt.
+            run_prereq_binaries_check
+        fi
+    fi
+fi
 if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]]; then
     exit 1
 fi
@@ -1116,7 +1145,11 @@ if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$ADMIN_PWD_IS_SENTINEL" = true ]]
 fi
 
 # ── Chemin du modèle Cohere ───────────────────────────────────────────────────
-if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
+# Garde backend : quand l'express (ou la config) a basculé sur whisper, proposer de
+# télécharger Cohere est du bruit anxiogène — le backend configuré ne l'utilise pas.
+CONFIGURED_STT_BACKEND=$(yaml_get 'models.stt_backend')
+if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false \
+        && ( -z "$CONFIGURED_STT_BACKEND" || "$CONFIGURED_STT_BACKEND" == "cohere" ) ]]; then
     echo ""
     log_cohere_setup_event missing
     log_cohere_setup_event current-path "$(yaml_get 'models.cohere_model_path')"

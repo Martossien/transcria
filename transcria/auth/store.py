@@ -1,5 +1,4 @@
 import logging
-import secrets
 from datetime import UTC
 from typing import Any
 
@@ -112,26 +111,48 @@ class UserStore:
         )
 
     @staticmethod
+    def create_first_admin(username: str, password: str) -> User | None:
+        """Crée le PREMIER administrateur (page /setup). ``None`` = course perdue.
+
+        L'IntegrityError (deux premiers visiteurs ou workers sur le même identifiant)
+        est absorbée ICI, avec le rollback : la route n'a pas à connaître la session
+        SQLAlchemy — le perdant reçoit ``None`` et renvoie vers la connexion.
+        """
+        try:
+            return UserStore.create_user(username=username, password=password,
+                                         display_name="Administrateur", role=Role.ADMIN)
+        except IntegrityError:
+            db.session.rollback()
+            return None
+
+    @staticmethod
     def ensure_admin(config: dict) -> None:
-        """Crée le PREMIER administrateur si la base est vierge.
+        """Crée le PREMIER administrateur si la base est vierge ET qu'un mot de passe
+        d'amorçage est CONFIGURÉ.
 
-        Sécurité S1.4 — plus aucun secret d'amorçage publié. `config.example.yaml`
-        livrait `CHANGE-ME`, le chargeur le reprenait en défaut et le compte était
-        RÉELLEMENT créé avec : le secret initial de toute installation qui n'avait rien
-        changé était donc écrit dans un dépôt public, sous un identifiant connu.
+        Sécurité S1.4 — plus aucun secret d'amorçage publié (`config.example.yaml`
+        livrait `CHANGE-ME`, réellement appliqué : secret public sous identifiant
+        connu). Issue #11 v2 — plus de secret GÉNÉRÉ non plus : un mot de passe
+        aléatoire journalisé une fois était indécouvrable en pratique (le 1er testeur
+        externe a terminé son installation sans pouvoir se connecter).
 
-        Quand la valeur configurée est une sentinelle (ou vide), on GÉNÈRE un secret
-        aléatoire et on le journalise une fois, en évidence. Refuser le démarrage aurait
-        été l'autre option : elle laisse l'exploitant dehors le jour de son installation,
-        pour un gain nul — générer supprime le problème sans rien lui demander.
+        Sans valeur configurée (sentinelle ou vide), on ne crée RIEN : le portail
+        impose la page /setup à la première visite (auth.routes) et l'utilisateur
+        choisit son mot de passe là où il ne peut pas le rater — même parcours en
+        natif, quickstart Docker et compose manuel. `auth.first_admin_password`
+        configuré = chemin automatisation/entreprise : compte créé ici, jamais
+        journalisé, pas de page setup.
         """
         if UserStore.count_users() > 0:
             return
         username = config.get("auth", {}).get("first_admin_username", "admin")
         password = str(config.get("auth", {}).get("first_admin_password") or "")
-        genere = password in DEFAULT_ADMIN_PASSWORDS
-        if genere:
-            password = secrets.token_urlsafe(18)
+        if password in DEFAULT_ADMIN_PASSWORDS:
+            logger.info(
+                "Base vierge sans mot de passe d'amorçage configuré — le portail "
+                "demandera la création du compte administrateur à la première visite (/setup)."
+            )
+            return
         try:
             UserStore.create_user(username=username, password=password, display_name="Administrateur", role=Role.ADMIN)
         except IntegrityError:
@@ -144,14 +165,3 @@ class UserStore:
             db.session.rollback()
             logger.info("ensure_admin : admin déjà créé en parallèle (course de premier "
                         "démarrage) — ignoré.")
-            return
-        if genere:
-            # Journalisé UNE fois, au démarrage, en évidence : c'est le seul moment où ce
-            # secret est lisible — il n'est stocké nulle part en clair.
-            logger.warning(
-                "\n%s\n  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
-                "  identifiant : %s\n  mot de passe généré : %s\n"
-                "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
-                "  première connexion (/account/password).\n%s",
-                "=" * 72, username, password, "=" * 72,
-            )

@@ -205,39 +205,27 @@ def test_gpu_e2e_install_matrix():
     )
 
 
-class TestGeneratedPasswordExtraction:
-    """Issue #11 : la gate teste la VRAIE première connexion — elle doit savoir lire la
-    bannière de ensure_admin comme un utilisateur le ferait dans son journal."""
+class TestPremiereConnexionParSetup:
+    """Issue #11 v2 : la gate joue la VRAIE première connexion — la page /setup.
 
-    BANNIERE = (
-        "=" * 72 + "\n"
-        "  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
-        "  identifiant : admin\n"
-        "  mot de passe généré : Xy9_abcDEF123-ghij4KLm\n"
-        "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
-        "  première connexion (/account/password).\n" + "=" * 72 + "\n"
-    )
+    Dérive gate ↔ portail : la gate poste `username`/`password`/`password_confirm`
+    sur /setup — on vérifie que la route et le formulaire attendent EXACTEMENT ces
+    champs (si le portail renomme un champ, ce test casse AVANT la gate de 35 min).
+    """
 
-    def test_extrait_le_mot_de_passe_de_la_banniere(self):
-        log = "bruit gunicorn\n" + self.BANNIERE + "autre bruit\n"
-        assert vim.extract_generated_password(log) == "Xy9_abcDEF123-ghij4KLm"
-
-    def test_sans_banniere_renvoie_none(self):
-        assert vim.extract_generated_password("boot normal, base déjà peuplée\n") is None
-
-    def test_la_banniere_reelle_du_store_reste_extractible(self):
-        # Dérive store.py ↔ gate : on rejoue le format EXACT du logger.warning de
-        # ensure_admin (mêmes %s) — si la bannière change, ce test casse AVANT la gate.
+    def test_le_formulaire_attend_les_champs_postes_par_la_gate(self):
         import inspect
 
-        from transcria.auth import store
+        from transcria.auth import routes
 
-        source = inspect.getsource(store.UserStore.ensure_admin)
-        assert "mot de passe généré : %s" in source
-        rendu = (
-            "\n" + "=" * 72 + "\n  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
-            "  identifiant : admin\n  mot de passe généré : s3cret-Genere_42\n"
-            "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
-            "  première connexion (/account/password).\n" + "=" * 72
-        )
-        assert vim.extract_generated_password(rendu) == "s3cret-Genere_42"
+        source = inspect.getsource(routes.setup)
+        for champ in ("username", "password", "password_confirm"):
+            assert f'"{champ}"' in source
+
+    def test_la_gate_ne_force_plus_de_mot_de_passe_par_defaut(self):
+        # --password doit être VIDE par défaut : toute valeur serait injectée dans la
+        # config et la page /setup ne serait alors JAMAIS exercée par la gate.
+        import inspect
+
+        source = inspect.getsource(vim.main)
+        assert 'ap.add_argument("--password", default=""' in source

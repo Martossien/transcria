@@ -119,3 +119,24 @@ def test_evaluate_bundled_accepte_8go_depuis_0_4_2():
 def test_evaluate_slim_accepte_8go_et_bundled_24go_ok():
     assert gp.evaluate([(8.6, 8_192)])[0] == gp.OK
     assert gp.evaluate([(8.9, 24_000)], bundled=True)[0] == gp.OK
+
+
+# ── Garde driver ≥ 580 (0.4.4 : torch cu130 / RTX 50xx sm_120) ────────────────
+
+
+def test_parse_driver_major():
+    assert gp.parse_driver_major("580.65.06\n") == 580
+    assert gp.parse_driver_major("\n  550.144.03  \n") == 550
+    assert gp.parse_driver_major("garbage\n581.12\n") == 581
+    assert gp.parse_driver_major("") is None
+    assert gp.parse_driver_major("N/A") is None
+
+
+def test_evaluate_driver_verdicts():
+    status, msg = gp.evaluate_driver(580)
+    assert status == gp.OK
+    status, msg = gp.evaluate_driver(550)
+    assert status == gp.FAIL
+    assert "580" in msg and "0.4.3" in msg  # message actionnable : la porte de sortie
+    status, msg = gp.evaluate_driver(None)
+    assert status == gp.WARN

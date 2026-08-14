@@ -29,7 +29,6 @@ Exemple :
 from __future__ import annotations
 
 import argparse
-import re
 import socket
 import subprocess
 import sys
@@ -228,8 +227,8 @@ def config_setup_command(
     ``dsn`` (rôles à base) remplace ``storage.database_url`` par la base de test externe.
     ``admin_password`` fixe ``auth.first_admin_password`` à une valeur connue (mode héritage,
     ``--password`` explicite). Sans lui (défaut depuis l'issue #11), la clé reste vide comme
-    chez un vrai utilisateur : ``ensure_admin`` GÉNÈRE le mot de passe au premier boot et la
-    gate le lit dans le journal du service — l'expérience réelle de première connexion.
+    chez un vrai utilisateur : le portail impose la page /setup à la première visite et la
+    gate la JOUE (POST du formulaire) — l'expérience réelle de première connexion.
     ``stt_backend``/``diarization_backend`` basculent la reconnaissance vers la voie NON gated
     (whisper + sortformer) → E2E « facile » sans token HF, cohérent avec le backend Ollama.
     """
@@ -247,18 +246,6 @@ def config_setup_command(
     if diarization_backend:
         cmd += f" && sed -i 's|diarization_backend:.*|diarization_backend: \"{diarization_backend}\"|' /app/config.yaml"
     return cmd
-
-
-# Bannière de `UserStore.ensure_admin` (transcria/auth/store.py) — le SEUL endroit où le
-# mot de passe généré est lisible. Si ce motif casse, la gate échoue : c'est voulu, un
-# utilisateur réel ne pourrait pas non plus découvrir son mot de passe (issue #11).
-_GENERATED_PW_RE = re.compile(r"mot de passe généré\s*:\s*(\S+)")
-
-
-def extract_generated_password(log_text: str) -> str | None:
-    """Extrait le mot de passe admin généré de la bannière « PREMIER COMPTE » du journal."""
-    match = _GENERATED_PW_RE.search(log_text)
-    return match.group(1) if match else None
 
 
 # ── Exécution (subprocess) ───────────────────────────────────────────────────
@@ -474,18 +461,28 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
         wait_health(topo.web_host_port, 7870, web.name)
         assert_container_gpu(topo.gpu_container)
 
-        # 5-bis) Première connexion RÉELLE (issue #11) : sans --password explicite, rien
-        # n'a été injecté dans la config — on lit le mot de passe GÉNÉRÉ par ensure_admin
-        # dans le journal du service, exactement comme l'utilisateur doit le faire. Si la
-        # bannière est absente ou inexploitable, la gate échoue : c'est le test.
+        # 5-bis) Première connexion RÉELLE (issue #11 v2) : sans --password explicite,
+        # rien n'a été injecté dans la config — le portail impose la page de création
+        # du compte administrateur à la première visite, et la gate la JOUE comme un
+        # humain : redirection vérifiée puis POST du formulaire /setup. Si la page ne
+        # s'affiche pas ou refuse, la gate échoue : c'est le test.
         if not password:
-            log_text = _docker_exec(web.name, "cat /app/service.log")
-            extracted = extract_generated_password(log_text)
-            if not extracted:
-                _fail("login", f"bannière « PREMIER COMPTE » introuvable dans le journal de {web.name} "
-                               "— un utilisateur réel ne pourrait pas découvrir son mot de passe")
-            password = extracted
-            _log("login", "mot de passe généré lu dans le journal du service (bannière PREMIER COMPTE)")
+            import requests
+
+            password = "matrix-setup-pw"
+            base_url = f"http://localhost:{topo.web_host_port}"
+            r = requests.get(f"{base_url}/login", allow_redirects=False, timeout=15)
+            if "/setup" not in (r.headers.get("Location") or ""):
+                _fail("setup", f"/login ne redirige pas vers /setup (HTTP {r.status_code}, "
+                               f"Location={r.headers.get('Location')!r}) — la page de création "
+                               "du premier compte ne s'affiche pas")
+            r = requests.post(f"{base_url}/setup",
+                              data={"username": username, "password": password,
+                                    "password_confirm": password},
+                              allow_redirects=False, timeout=15)
+            if r.status_code not in (302, 303):
+                _fail("setup", f"création du premier compte refusée (HTTP {r.status_code})")
+            _log("setup", f"premier compte administrateur créé via la page /setup ({username})")
 
         # 6) E2E son via la frontale (réutilise le pilote éprouvé).
         from verify_split_topology import run_job  # type: ignore[import-not-found]
@@ -512,8 +509,8 @@ def main() -> int:
     ap.add_argument("--username", default="admin")
     ap.add_argument("--password", default="",
                     help="mot de passe admin à injecter dans la config (mode héritage). "
-                         "VIDE (défaut) = expérience réelle : ensure_admin le génère au 1er boot "
-                         "et la gate le lit dans le journal du service (issue #11)")
+                         "VIDE (défaut) = expérience réelle : la gate joue la page /setup "
+                         "de création du premier compte (issue #11)")
     ap.add_argument("--cuda", default=None, help="forcer l'index torch CUDA (ex. cu126)")
     ap.add_argument("--llm-backend", default=None, choices=("ollama", "llamacpp"),
                     help="forcer le backend LLM (ollama = voie facile sans compilation)")

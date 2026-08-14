@@ -104,10 +104,66 @@ def _login_page(status: int = 200, *, force_break_glass: bool = False) -> Respon
     ), status
 
 
+def _setup_required() -> bool:
+    """Vrai si le portail attend la création du PREMIER compte (base vierge, backend local).
+
+    Issue #11 v2 : plus de mot de passe généré à retrouver dans un journal — la
+    première visite impose /setup. Les backends fédérés (oidc/proxy/ldap)
+    provisionnent leurs comptes au premier login SSO : jamais de page setup (leur
+    compte local de secours se configure via `auth.first_admin_password`).
+    """
+    if identity_backend_name(get_config()) != "local":
+        return False
+    return UserStore.count_users() == 0
+
+
+@auth_bp.route("/setup", methods=["GET", "POST"])
+def setup() -> ResponseReturnValue:
+    """Création du PREMIER compte administrateur — impossible à rater.
+
+    Remplace le secret généré-journalisé : même parcours en natif, quickstart
+    Docker et compose manuel. La page se verrouille dès qu'un compte existe ;
+    `auth.first_admin_password` configuré la court-circuite (compte créé au boot
+    par ensure_admin, chemin automatisation). Fenêtre « premier arrivé » assumée
+    (standard des portails auto-hébergés) : elle ne dure que jusqu'à la création
+    du compte, et un déploiement exposé peut la fermer via la config.
+    """
+    if not _setup_required():
+        return redirect(url_for("auth.login"))
+    if request.method != "POST":
+        return render_template("setup.html", username="admin")
+    username = (request.form.get("username") or "").strip() or "admin"
+    password = request.form.get("password") or ""
+    error = _password_validation_error(password, request.form.get("password_confirm"))
+    if error:
+        flash(error, "error")
+        return render_template("setup.html", username=username), 400
+    # Course entre deux premiers visiteurs (ou workers) sur le MÊME identifiant :
+    # le perdant (None) rejoint la connexion — le compte existe, la page est verrouillée.
+    # (Deux identifiants différents dans la même micro-fenêtre créeraient deux admins —
+    # scénario « une seule personne installe », pas de verrou inter-process dédié : le
+    # coût serait disproportionné pour un portail pas encore exposé.)
+    user = UserStore.create_first_admin(username=username, password=password)
+    if user is None:
+        flash(_("Un compte existe déjà — connectez-vous."), "warning")
+        return redirect(url_for("auth.login"))
+    UserStore.record_login(user)
+    session.permanent = True
+    login_user(user)
+    audit_log(AuditAction.USER_CREATE, target_type="user", target_id=str(user.id),
+              target_label=username, details={"first_admin_setup": True})
+    audit_log(AuditAction.LOGIN, details={"first_admin_setup": True})
+    flash(_("Compte administrateur créé. Bienvenue !"), "success")
+    return redirect(url_for("web.index"))
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login() -> ResponseReturnValue:
     if current_user.is_authenticated:
         return redirect(url_for("web.index"))
+    # Base vierge → la première visite est la création du compte, pas la connexion.
+    if _setup_required():
+        return redirect(url_for("auth.setup"))
     if request.method == "POST":
         return _handle_login_post()
     cfg = get_config()

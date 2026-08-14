@@ -16,7 +16,7 @@ cd transcria
 source venv/bin/activate
 python app.py
 # → http://0.0.0.0:7870
-# Admin: admin / admin-change-me
+# Premier compte : créé via la page /setup à la première visite
 ```
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
@@ -284,7 +284,7 @@ storage:
 auth:
   enabled: true
   first_admin_username: "admin"
-  first_admin_password: "admin-change-me"
+  first_admin_password: ""   # vide = création du compte via la page /setup à la 1re visite
 
 services:
   arbitrage_llm_host: "127.0.0.1"   # hôte de la LLM d'arbitrage (nœud GPU en split)
@@ -476,7 +476,7 @@ Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutilis
 `inject_user_context()` est un context processor Flask injectant `current_user`, `user_permissions` et `can_manage_groups` dans les templates.
 
 **Gestion des mots de passe :** les utilisateurs authentifiés changent leur mot de passe via `/account/password`, avec vérification du mot de passe actuel, confirmation et minimum de 8 caractères. En cas d'oubli, le chemin prévu est le reset par un admin global dans `/admin/users/<id>/edit`; il n'y a pas de reset email tant qu'aucune configuration SMTP/tokens n'est définie.
-Au premier démarrage sur base vierge, `UserStore.ensure_admin()` crée le compte admin initial ; si `auth.first_admin_password` est vide ou vaut une sentinelle (`CHANGE-ME`, `admin-change-me`), un mot de passe aléatoire est **généré** et journalisé une seule fois (bannière « PREMIER COMPTE ADMINISTRATEUR CRÉÉ » dans le journal du service).
+Au premier démarrage sur base vierge : si `auth.first_admin_password` est **configuré**, `UserStore.ensure_admin()` crée le compte admin initial (chemin automatisation, jamais journalisé) ; sinon (vide ou sentinelle `CHANGE-ME`/`admin-change-me`), **aucun compte n'est créé** et le portail impose la page `/setup` à la première visite — l'utilisateur crée le compte administrateur là (backend local uniquement ; la page se verrouille dès qu'un compte existe).
 
 **Règle d'accès aux jobs — VOIR et MODIFIER sont deux droits distincts** (durci en 0.4.0). Un job reste propriété d'un utilisateur (`jobs.owner_id`).
 

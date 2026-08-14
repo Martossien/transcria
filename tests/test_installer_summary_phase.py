@@ -83,8 +83,8 @@ def test_summary_admin_login_mot_de_passe_genere(tmp_path):
     )
     text = _render(_plan(tmp_path, admin_login=True))
     assert "Première connexion au portail" in text
-    assert "identifiant : admin" in text
-    assert "journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'" in text
+    assert "créer le compte" in text
+    assert "journalctl" not in text
 
 
 def test_summary_admin_login_mot_de_passe_defini(tmp_path):
@@ -94,12 +94,11 @@ def test_summary_admin_login_mot_de_passe_defini(tmp_path):
     text = _render(_plan(tmp_path, admin_login=True))
     assert "identifiant : chef" in text
     assert "celui défini pendant l'installation" in text
-    assert "GÉNÉRÉ au premier démarrage" not in text
     assert "un-vrai-secret" not in text  # jamais le secret en clair dans le résumé
 
 
-def test_summary_admin_login_config_illisible_presume_generation(tmp_path):
+def test_summary_admin_login_config_illisible_presume_sentinelle(tmp_path):
     plan = _plan(tmp_path, admin_login=True, config_path=tmp_path / "absent.yaml")
     text = _render(plan)
-    # Config illisible → cas sûr : on indique où lire le mot de passe généré.
-    assert "PREMIER COMPTE" in text
+    # Config illisible → cas sûr : on annonce la page de création du compte.
+    assert "créer le compte" in text

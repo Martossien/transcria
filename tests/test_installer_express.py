@@ -51,7 +51,7 @@ class TestRecap:
         recap = "\n".join(_plan().recap)
         assert "whisper + Sortformer" in recap and "page Modèles" in recap
         assert "PostgreSQL local" in recap
-        assert "admin / CHANGE-ME" in recap
+        assert "PREMIÈRE visite du portail" in recap  # issue #11 v2 : plus de mot de passe pré-annoncé
         assert "alice" in recap
 
     def test_avec_token_annonce_la_reference(self):

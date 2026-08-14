@@ -10,6 +10,10 @@ from __future__ import annotations
 # Routes mutantes publiques par conception (pas de session requise).
 _PUBLIC_MUTATING = {
     "auth.login",          # le formulaire de connexion lui-même
+    # Création du PREMIER compte (issue #11 v2) : public PAR CONSTRUCTION — il n'existe
+    # encore personne pour s'authentifier. La route se verrouille d'elle-même dès qu'un
+    # compte existe (redirection /login), condition testée dans test_setup_first_admin.
+    "auth.setup",
 }
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

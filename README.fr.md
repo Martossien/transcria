@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.4.3** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.4.4** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.4.4** | **La version des premiers retours externes** — la **première visite du portail crée le compte administrateur** (fini le mot de passe à chercher : deux vraies installations de testeurs ont trouvé deux vrais bugs, corrigés à la racine avec tests de dérive, et la gate d'installation joue désormais ce parcours réel) ; `install.sh` **propose d'installer ffmpeg** quand il manque ; **RTX 50xx (Blackwell) natif** dans les images GPU (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 requis) ; catalogue espagnol **relu par un natif** (merci @AlexMnrs, première contribution externe) |
 | **0.4.3** | **Trois langues en bêta, et Windows 11 entre dans la danse** — allemand / espagnol / italien complets (interface, prompts LLM, compte-rendu Word, rapports qualité, formulaire de consentement) derrière un **badge bêta** en attendant la relecture par des natifs (glossaires imposés, registre de politesse, tests de contrat sur chaque marqueur parsé ; validé par un E2E GPU réel sur audio allemand). Et une **installation Windows 11 guidée** : un script PowerShell vérifie la machine, pose deux questions (disque cible C:/D:/E:, image bundled ou slim) et déroule WSL2 + Docker Desktop de bout en bout, relançable après chaque redémarrage |
 | **0.4.2** | **L'installation pour tout le monde, et les cartes gaming 8 Go entrent dans la danse** — `install.sh` gagne un **mode express** (détections automatiques, un récapitulatif, une confirmation ; `--expert` garde le pas-à-pas), une **checklist de premier démarrage** sur l'accueil montre ce qui manque avec un lien pour corriger, et un **QUICKSTART** d'une page mène de zéro au premier compte-rendu. Nouveau **palier LLM 8 Go** (Qwen3.5-4B Q5_K_M, qualifié sur réunions réelles) plus un **profil CPU** (Kroko, sans GPU) : le workflow complet tourne désormais sur les cartes 8-11 Go — natif, Docker slim **et bundled** (l'image bake les deux paliers et l'entrypoint rétrograde automatiquement sous 12 Go). La page Modèles pilote **Ollama** de bout en bout (liste + bascule de modèle en un clic), l'éditeur SRT gagne une **couche de fiabilité** (indicateurs de doute par segment, navigation « douteux suivant », panneau des segments supprimés restaurables), le résumé **démarre à l'upload par défaut**, et les moteurs STT à worker reçoivent le **résumé batché** (un chargement de modèle au lieu d'un par chunk) |
 | **0.4.1** | **Le portail se met à jour lui-même, et les hallucinations STT certaines disparaissent des livrables** — la page Maintenance sait vérifier si une version plus récente existe (opt-in réseau strict) et monter l'installation en deux clics (tag vérifié uniquement, oneshot systemd, sauvegarde de repli, progression en direct). **Catalogue de signatures d'hallucination par moteur** miné sur de l'audio de réunion réel (crédits de sous-titrage whisper, politesses voxtral, tics appris cohere) : les hallucinations confirmées sont **supprimées à double preuve seulement** (signature + corroboration acoustique), toujours tracées et récupérables ; les douteuses sont signalées à la LLM de correction. Un audio sans parole (bruit, musique, silence) échoue désormais en quelques secondes avec un message clair au lieu d'envoyer un transcript vide à la LLM |
@@ -315,12 +316,10 @@ scripts/docker_quickstart.sh --bundled       # essayer : modèles inclus, sans t
 Détails de l'image, compromis slim/bundled, table de compatibilité GPU/VRAM et rollback
 dans [docs/DOCKER.md](docs/DOCKER.md).
 
-> **Première connexion :** ouvrez `http://localhost:7870` et connectez-vous avec `admin`
-> et le mot de passe que le quickstart **affiche dans son message final** (généré dans le
-> `config.yaml` créé, clé `auth.first_admin_password`). Clé laissée vide (compose manuel) :
-> un mot de passe aléatoire est généré au premier démarrage et affiché une fois dans les
-> logs du conteneur web (`docker compose logs | grep -a -A 4 'PREMIER COMPTE'`).
-> Changez-le à la première connexion.
+> **Première connexion :** ouvrez `http://localhost:7870` — à la première visite, le
+> portail vous demande de **créer le compte administrateur** (identifiant + mot de passe
+> de votre choix). Pour l'automatisation, renseignez `auth.first_admin_password` dans
+> `config.yaml` avant le premier démarrage : le compte est créé sans page.
 
 ## Topologies de déploiement
 

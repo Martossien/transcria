@@ -71,12 +71,11 @@ voice_enrollment:
 auth:
   enabled: true
   first_admin_username: "admin"
-  # LAISSER VIDE : au tout premier démarrage sur une base vierge, TranscrIA génère un
-  # mot de passe aléatoire et l'affiche UNE FOIS dans le journal de démarrage
-  # (natif : journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE' ;
-  # Docker : docker compose logs | grep -a -A 4 'PREMIER COMPTE'). Ce fichier est un
-  # exemple PUBLIC — y écrire un secret d'amorçage reviendrait à le publier. N'y mettez
-  # une valeur que si vous voulez imposer le vôtre, et retirez-la ensuite.
+  # LAISSER VIDE : sur une base vierge, le portail demande la création du compte
+  # administrateur à la PREMIÈRE visite (page /setup — identifiant + mot de passe de
+  # votre choix). Ce fichier est un exemple PUBLIC — y écrire un secret d'amorçage
+  # reviendrait à le publier. N'y mettez une valeur que pour l'automatisation
+  # (compte créé au premier démarrage, sans page), et retirez-la ensuite.
   first_admin_password: ""
   # ── SSO d'entreprise (docs/GESTION_IDENTITE.md) — décommenter pour activer ──
   # backend: oidc                    # défaut: local (comptes historiques)

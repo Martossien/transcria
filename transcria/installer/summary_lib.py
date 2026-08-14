@@ -44,27 +44,22 @@ def render_configuration_summary(*, config_path: str, remaining_changes: int, do
 ADMIN_PASSWORD_SENTINELS = frozenset({"", "CHANGE-ME", "admin-change-me"})
 
 
-def render_login_summary(*, username: str, password_is_sentinel: bool, systemd: bool,
-                         final_log_file: str, venv: str) -> str:
+def render_login_summary(*, username: str, password_is_sentinel: bool, venv: str) -> str:
     """Rend le bloc « première connexion » du résumé final.
 
-    Issue #11 : depuis S1.4 le mot de passe initial est généré au premier démarrage et
-    journalisé UNE fois — sans ce bloc, l'installation se terminait sans que l'existence
-    même d'identifiants soit mentionnée, et le premier testeur externe est resté dehors.
+    Issue #11 : l'installation se terminait sans que l'existence même d'identifiants
+    soit mentionnée (le premier testeur externe est resté dehors). v2 : sans mot de
+    passe configuré, plus rien à retrouver dans un journal — le portail impose la
+    page de création du compte à la première visite ; ce bloc l'annonce.
     """
-    lines = ["Première connexion au portail (http://<ip-machine>:7870) :",
-             f"  identifiant : {username}"]
+    lines = ["Première connexion au portail (http://<ip-machine>:7870) :"]
     if password_is_sentinel:
-        if systemd:
-            read_cmd = "journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'"
-        else:
-            read_cmd = f"grep -a -A 4 'PREMIER COMPTE' {final_log_file}"
-        lines.append("  [INFO] mot de passe : GÉNÉRÉ au premier démarrage (base vierge) et affiché")
-        lines.append("         UNE SEULE FOIS dans le journal du service. Pour le lire :")
-        lines.append(f"           {read_cmd}")
+        lines.append("  [OK] à la PREMIÈRE visite, le portail vous demandera de créer le compte")
+        lines.append("       administrateur (identifiant + mot de passe de votre choix).")
     else:
+        lines.append(f"  identifiant : {username}")
         lines.append("  [OK] mot de passe : celui défini pendant l'installation (auth.first_admin_password)")
-    lines.append("  [INFO] perdu, ou base déjà peuplée (réinstallation) ? Réinitialiser sans arrêter le service :")
+    lines.append("  [INFO] mot de passe perdu, plus tard ? Réinitialiser sans arrêter le service :")
     lines.append(f"           {venv}/bin/python -m transcria.maintenance.cli reset-admin-password {username}")
     return "\n".join(lines) + "\n"
 
@@ -104,8 +99,8 @@ def render_setup_log(*, event: str, profile: str = "", runtime_role: str = "", v
     if event == "proxy-persisted":
         return "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
     if event == "admin-default-password":
-        return ("WARN:Aucun mot de passe admin défini — sans réponse ici, il sera GÉNÉRÉ au\n"
-                "     premier démarrage et affiché une seule fois dans le journal du service\n")
+        return ("INFO:Aucun mot de passe admin défini — sans réponse ici, le portail vous\n"
+                "     demandera de créer le compte administrateur à la première visite\n")
     if event == "admin-password-set":
         return "OK:Mot de passe admin défini\n"
     if event == "admin-password-too-short":

@@ -22,10 +22,8 @@ git clone https://github.com/Martossien/transcria && cd transcria
 scripts/docker_quickstart.sh              # or --bundled (offline) / --cpu (no local inference)
 ```
 
-1. Open `http://localhost:7870`, log in as `admin` with the password shown at the end of
-   the install (the Docker quickstart prints it; the native installer's final summary
-   either confirms the one you set or gives the exact `journalctl` command to read the
-   generated one) — **change the password**.
+1. Open `http://localhost:7870` — on the first visit, the portal asks you to **create
+   the administrator account** (username + password of your choice), and signs you in.
 2. Create a job, upload a short recording (2–5 minutes is plenty), pick a profile.
 3. Walk the wizard (speaker validation, lexicon, summary review), download the package.
 

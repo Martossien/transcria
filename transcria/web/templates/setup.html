@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Premier démarrage') }} — TranscrIA{% endblock %}
+{% block head %}
+<style>
+  .login-container { max-width: 460px; margin: 80px auto 0; }
+  .login-card { padding: 32px; }
+  .login-card h2 { margin-bottom: 8px; font-weight: 700; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="login-container">
+  <div class="card login-card">
+    <h2 class="text-center"><i class="bi bi-file-earmark-text"></i> TranscrIA</h2>
+    <p class="text-muted text-center mb-4">{{ _('Portail de transcription de réunion') }}</p>
+    <div class="alert alert-info small">
+      <i class="bi bi-stars me-1"></i>{{ _("Bienvenue ! Cette instance n'a pas encore de compte : créez le compte administrateur pour commencer.") }}
+    </div>
+    <form method="POST" action="{{ url_for('auth.setup') }}">
+      <div class="mb-3">
+        <label for="username" class="form-label">{{ _("Nom d'utilisateur") }}</label>
+        <input type="text" class="form-control" id="username" name="username" value="{{ username }}" required autofocus>
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">{{ _('Mot de passe') }}</label>
+        <input type="password" class="form-control" id="password" name="password" minlength="8" required
+               autocomplete="new-password">
+        <div class="form-text">{{ _('8 caractères minimum.') }}</div>
+      </div>
+      <div class="mb-3">
+        <label for="password_confirm" class="form-label">{{ _('Confirmer le mot de passe') }}</label>
+        <input type="password" class="form-control" id="password_confirm" name="password_confirm" minlength="8" required
+               autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary w-100">{{ _('Créer le compte administrateur') }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -210,19 +210,33 @@ def render_model_detection_table(
     qwen_ok: bool,
     qwen_gguf: str,
     squim_ok: bool,
+    stt_backend: str = "",
+    diarization_backend: str = "",
 ) -> str:
-    """Rend le tableau de vérification des modèles locaux (FR/EN)."""
+    """Rend le tableau de vérification des modèles locaux (FR/EN).
 
+    ``stt_backend``/``diarization_backend`` = valeurs CONFIGURÉES : quand l'express a
+    basculé sur whisper/sortformer, afficher « Cohere : ABSENT » était un mensonge
+    anxiogène — le modèle n'est pas requis par la config réelle. On l'affiche alors
+    comme non requis, avec le backend qui le remplace.
+    """
+
+    cohere_requis = stt_backend in ("", "cohere")
+    pyannote_requis = diarization_backend in ("", "pyannote")
     rows = [
         (
             t("mdl_tbl_cohere"),
-            "OK" if cohere_ok else t("mdl_missing"),
-            _basename_or_empty(cohere_path) if cohere_ok else "hf download CohereLabs/...",
+            "OK" if cohere_ok else (t("mdl_missing") if cohere_requis else t("mdl_not_required")),
+            _basename_or_empty(cohere_path) if cohere_ok
+            else ("hf download CohereLabs/..." if cohere_requis
+                  else t("mdl_tbl_backend_info", value=stt_backend)),
         ),
         (
             t("mdl_tbl_pyannote"),
-            "OK" if pyannote_ok else t("mdl_missing"),
-            _basename_or_empty(pyannote_cache) if pyannote_ok else t("mdl_tbl_pyannote_info"),
+            "OK" if pyannote_ok else (t("mdl_missing") if pyannote_requis else t("mdl_not_required")),
+            _basename_or_empty(pyannote_cache) if pyannote_ok
+            else (t("mdl_tbl_pyannote_info") if pyannote_requis
+                  else t("mdl_tbl_backend_info", value=diarization_backend)),
         ),
     ]
     if needs_llm:
@@ -346,6 +360,22 @@ def render_pyannote_download_prompt() -> str:
     return t("pya_download_prompt")
 
 
+def _render_detection_table_from_args(args) -> str:
+    """Adapte les args CLI (chaînes) vers le renderer typé du tableau de détection."""
+    return render_model_detection_table(
+        cohere_ok=parse_bool(args.cohere_ok),
+        cohere_path=args.cohere_path,
+        pyannote_ok=parse_bool(args.pyannote_ok),
+        pyannote_cache=args.pyannote_cache,
+        needs_llm=parse_bool(args.needs_llm),
+        qwen_ok=parse_bool(args.qwen_ok),
+        qwen_gguf=args.qwen_gguf,
+        squim_ok=parse_bool(args.squim_ok),
+        stt_backend=args.stt_backend,
+        diarization_backend=args.diarization_backend,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Détection locale des modèles TranscrIA pour install.sh.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -390,6 +420,8 @@ def main(argv: list[str] | None = None) -> int:
     table_parser.add_argument("--qwen-ok", required=True)
     table_parser.add_argument("--qwen-gguf", default="")
     table_parser.add_argument("--squim-ok", required=True)
+    table_parser.add_argument("--stt-backend", default="")
+    table_parser.add_argument("--diarization-backend", default="")
 
     status_parser = subparsers.add_parser("status-log", help="rend une ligne de statut modèle")
     status_parser.add_argument("--event", required=True)
@@ -454,19 +486,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if args.command == "detection-table":
-            print(
-                render_model_detection_table(
-                    cohere_ok=parse_bool(args.cohere_ok),
-                    cohere_path=args.cohere_path,
-                    pyannote_ok=parse_bool(args.pyannote_ok),
-                    pyannote_cache=args.pyannote_cache,
-                    needs_llm=parse_bool(args.needs_llm),
-                    qwen_ok=parse_bool(args.qwen_ok),
-                    qwen_gguf=args.qwen_gguf,
-                    squim_ok=parse_bool(args.squim_ok),
-                ),
-                end="",
-            )
+            print(_render_detection_table_from_args(args), end="")
             return 0
         if args.command == "status-log":
             print(render_model_status_log(event=args.event, value=args.value, profile=args.profile), end="")

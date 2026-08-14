@@ -175,6 +175,19 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.3 → 0.4.4
+
+Aucune migration de base. Pour une installation **existante** (des comptes en base),
+rien ne change : la nouvelle page de création du premier compte (`/setup`) ne concerne
+que les bases vierges, et vos identifiants restent les vôtres. Deux points d'attention :
+
+- **Images Docker GPU (CASSANT)** : les images 0.4.4 passent en torch **cu130**
+  (CUDA 13, support natif RTX 50xx) et exigent un **driver NVIDIA ≥ 580**. Driver plus
+  ancien : rester sur les images taguées 0.4.3 le temps de mettre à jour le driver.
+- **Backend fédéré (SSO) + base vierge** : plus aucun compte local n'est créé
+  automatiquement — configurer `auth.first_admin_password` pour l'admin de secours
+  (cf. docs/GESTION_IDENTITE.md §3.9).
+
 ### Notes spécifiques 0.4.2 → 0.4.3
 
 Aucune migration de base, aucune action requise. Un point d'attention :

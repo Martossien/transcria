@@ -205,11 +205,16 @@ Le transport `file_ref` est borné de la même façon : sans `inference.allowed_
 la racine est déduite de `storage.jobs_dir`. Un chemin hors racine répond **403 avant 404** —
 répondre « introuvable » ferait du service un oracle d'existence de fichiers.
 
-### Amorçage — plus de secret publié
+### Amorçage — plus de secret publié, ni généré
 
 `config.example.yaml` livrait un mot de passe d'amorçage, et le compte était réellement créé
-avec. TranscrIA **génère** maintenant un secret aléatoire, affiché **une seule fois** dans le
-journal de démarrage et stocké nulle part en clair.
+avec (corrigé en S1.4 par un secret généré journalisé une fois — indécouvrable en pratique,
+issue #11). Depuis 0.4.4 : sur base vierge sans `auth.first_admin_password` configuré,
+**aucun compte n'est créé** — le portail impose la page `/setup` à la première visite
+(backend local uniquement, verrouillée dès qu'un compte existe). Compromis assumé, standard
+des portails auto-hébergés : entre le premier démarrage et la création du compte, le premier
+visiteur crée l'admin ; la fenêtre se ferme d'elle-même, et un déploiement exposé peut la
+supprimer en configurant `auth.first_admin_password` avant le premier démarrage.
 
 ### Scripts exécutés depuis la configuration
 

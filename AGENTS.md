@@ -902,7 +902,7 @@ Les admins globaux (`Role.ADMIN`) créent, renomment et suppriment les groupes. 
 
 ### Gestion des mots de passe
 Les utilisateurs authentifiés changent leur propre mot de passe via `/account/password`. La route vérifie le mot de passe actuel, la confirmation et une longueur minimale de 8 caractères. Le reset en cas d'oubli passe par l'admin global dans `/admin/users/<id>/edit`; ne pas ajouter de reset email sans configuration SMTP, tokens expirables et protections anti-abus documentées.
-Si `UserStore.ensure_admin()` crée le premier admin avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide, un warning doit être logué.
+`UserStore.ensure_admin()` ne crée le premier admin QUE si `auth.first_admin_password` est configuré (jamais journalisé) ; sur sentinelle (`admin-change-me`, `CHANGE-ME`, vide), AUCUN compte n'est créé — le portail impose la page `/setup` à la première visite (backend local, base vierge, verrouillée dès qu'un compte existe ; issue #11 v2).
 
 ### Identité d'entreprise — backends d'authentification enfichables (docs/GESTION_IDENTITE.md)
 `auth.backend` choisit le connecteur : `local` (défaut, comptes du portail — AUCUNE installation existante ne change de comportement), `oidc` (SSO Authorization Code + PKCE, lot 1), `proxy` (en-têtes `Remote-User` d'un proxy de confiance, lot 3), `ldap` (LDAP/Active Directory direct, lot 2). Tout vit dans `transcria/auth/identity/`. **Règles invariantes, ne jamais les contourner** :

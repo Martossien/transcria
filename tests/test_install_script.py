@@ -91,6 +91,17 @@ def test_install_script_delegates_prerequisite_setup_logs():
     assert "lsof manquant — requis par start.sh/stop.sh" not in content
 
 
+def test_install_script_offre_ffmpeg_interactive():
+    """Issue #9 (2e friction) : ffmpeg absent → le script PROPOSE l'installation sur apt
+    (consentie, jamais silencieuse) puis REFAIT la vérification complète qui fait foi."""
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "ask_install_ffmpeg" in content
+    assert "apt-get install -y ffmpeg" in content
+    # La re-vérification passe par la MÊME fonction que le premier check.
+    assert content.count("run_prereq_binaries_check") >= 3  # définition + 1er appel + retry
+
+
 def test_install_script_uses_run_indented_for_command_output_prefixing():
     content = _INSTALL.read_text(encoding="utf-8")
 

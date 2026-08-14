@@ -137,9 +137,8 @@ re-running the command reuses the layers already completed.
 ### Step 7 — First minutes document
 
 Open `http://localhost:7870` **in your Windows browser** (the port crosses WSL2 by
-itself). Log in with the **credentials printed at the end of the install** (`admin` + a
-generated password, written to `config.yaml` on the Ubuntu side under
-`auth.first_admin_password` — change it, the banner will insist), then:
+itself). On the **first visit**, the portal asks you to **create the administrator
+account** (username + password of your choice), then:
 "New job" → drop the audio → pick a profile → download the DOCX. The detailed journey
 is in the [QUICKSTART](QUICKSTART.en.md).
 

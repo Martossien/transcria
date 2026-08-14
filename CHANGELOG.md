@@ -6,6 +6,63 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.4] — 2026-08-14
+
+La version des premiers retours externes : deux installations de testeurs, deux vrais
+bugs trouvés et corrigés à la racine, une première contribution native — et le support
+natif des RTX 50xx.
+
+### Ajouté
+
+#### Première connexion impossible à rater : page de création du compte
+
+- **Page `/setup`** : sur une base vierge (backend local), la **première visite du
+  portail** demande de créer le compte administrateur (identifiant + mot de passe de
+  votre choix, connexion immédiate). Fini le secret d'amorçage à retrouver dans un
+  journal (issue #11 : le premier testeur externe a terminé son installation sans
+  pouvoir se connecter — le mot de passe généré n'était annoncé nulle part). La page
+  se verrouille dès qu'un compte existe ; `auth.first_admin_password` configuré crée
+  le compte au premier démarrage sans page (automatisation) ; les backends fédérés
+  (SSO) ne la voient jamais. Traduite dans les cinq langues.
+- **Le résumé final d'`install.sh` dit comment se connecter** (bloc « Première
+  connexion »), le quickstart Docker aussi — et la **gate d'installation joue
+  désormais le parcours réel** (redirection `/setup` vérifiée, formulaire posté,
+  connexion avec le compte créé) au lieu d'injecter un mot de passe connu : cette
+  classe de régression fera échouer la gate. Des tests de dérive verrouillent les
+  sentinelles entre `store.py`, l'installateur et les scripts shell (la classe exacte
+  du bug : S1.4 avait changé le défaut Python sans que le shell suive).
+
+#### ffmpeg : le script propose de l'installer
+
+- `install.sh` détecte ffmpeg absent et, sur apt (TTY + sudo/root), **propose de
+  l'installer** — une question, consentie, puis re-vérification complète (issue #9,
+  la seconde friction du même testeur : le script savait quoi faire et le faisait
+  taper). Refus ou mode non-interactif : message clair et arrêt, comme avant (le
+  message mentionne désormais aussi `dnf install ffmpeg-free` pour Fedora).
+
+#### RTX 50xx (Blackwell) : support natif dans les images GPU
+
+- Les images all-in-one passent en base **CUDA 12.8.1 + torch cu130** (le couple déjà
+  éprouvé de l'image resource-node) et toutes les compilations CUDA (llama.cpp,
+  audio.cpp, parakeet.cpp) embarquent le **SASS `sm_120`** : les RTX 5060 Ti/5070/5080/
+  5090 tournent nativement en Docker. **CASSANT : driver NVIDIA ≥ 580 requis** (roues
+  CUDA 13) — driver plus ancien : rester sur les images 0.4.3 ou mettre à jour. Le
+  préflight GPU du quickstart refuse tôt avec un message actionnable.
+
+### Corrigé
+
+- **`install.sh` s'arrêtait en silence sans ffmpeg** (issue #9) : sous `set -e`,
+  l'échec du check tuait le script avant l'affichage du message. Corrigé, puis audit
+  de la classe entière (28 sites `VAR=$(cmd)`) : une seconde instance vivante corrigée
+  (`--install-llama-prebuilt`).
+- **Catalogue espagnol relu par un locuteur natif** — 56 chaînes corrigées (registre,
+  genre, idiomes), merci **@AlexMnrs** pour la première contribution externe du projet
+  (#10). Le badge « bêta » de l'espagnol reste en place jusqu'à relecture native des
+  prompts et libellés de documents.
+- Le tableau de détection des modèles (et l'invite Cohere) honore le **backend
+  configuré** : quand l'express a basculé sur whisper/sortformer, Cohere et pyannote
+  s'affichent « non requis » au lieu d'un « MANQUANT » anxiogène.
+
 ## [0.4.3] — 2026-08-09
 
 Trois langues en bêta — allemand, espagnol, italien — et Windows 11 rejoint les

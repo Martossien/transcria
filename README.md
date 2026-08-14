@@ -34,7 +34,7 @@ Pick the language from the navbar; default French, French fallback everywhere. S
 
 ## Project status
 
-**Current release: 0.4.3** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.4.4** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -46,6 +46,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.4.4** | **The first-external-feedback release** — the **portal's first visit now creates the admin account** (no more password hunting: two real tester installs surfaced two real bugs, fixed at the root with drift tests, and the install gate now plays this exact journey); `install.sh` **offers to install ffmpeg** when missing; **native RTX 50xx (Blackwell)** in the GPU images (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 required); the Spanish catalog got a **native-speaker review** (thanks @AlexMnrs, first external contribution) |
 | **0.4.3** | **Three beta languages, and Windows 11 joins in** — full German / Spanish / Italian support (UI, LLM prompts, Word minutes, quality reports, voice-consent form) behind a **beta badge** until native speakers review the translations (enforced glossaries, formal register, contract tests on every machine-parsed marker; validated by a real-GPU E2E on German audio). And a **guided Windows 11 install**: one PowerShell script checks the machine, asks two questions (target drive C:/D:/E:, bundled or slim image) and drives WSL2 + Docker Desktop end to end, re-runnable after each reboot |
 | **0.4.2** | **Install for everyone, and 8 GB gaming cards join the party** — `install.sh` gets an **express mode** (auto-detections, one summary, one confirmation; `--expert` keeps the step-by-step), a **first-run checklist** on the home page shows what is missing with a fix link, and a one-page **QUICKSTART** goes from zero to first minutes. New **8 GB LLM tier** (Qwen3.5-4B Q5_K_M, qualified on real meetings) plus a **CPU profile** (Kroko, no GPU): the full workflow now runs on 8-11 GB cards — native, Docker slim **and bundled** (the image bakes both tiers and the entrypoint auto-downgrades under 12 GB). The Models page drives **Ollama** end-to-end (list + one-click model switch), the SRT editor gains a **reliability layer** (per-segment doubt indicators, "next doubtful" navigation, restorable removed-segments panel), summaries **start at upload by default**, and worker-based STT engines get **batched summaries** (one model load instead of one per chunk) |
 | **0.4.1** | **The portal upgrades itself, and certain STT hallucinations vanish from deliverables** — the Maintenance page can check for a newer release (strict network opt-in) and upgrade the install in two clicks (verified tag only, systemd oneshot, fallback backup, live progress). Per-engine **hallucination signature catalogue** mined from real meeting audio (whisper subtitle credits, voxtral polite fillers, cohere learned tics): confirmed hallucinations are **deleted only with double proof** (signature + acoustic corroboration), always traced and recoverable; doubtful ones are flagged to the correction LLM. Speech-free audio (noise, music, silence) now fails in seconds with a clear message instead of feeding an empty transcript to the LLM |
@@ -301,11 +302,10 @@ scripts/docker_quickstart.sh --bundled       # try it: models included, no token
 Image details, the slim-vs-bundled trade-off, the GPU/VRAM compatibility table, and
 rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 
-> **First login:** open `http://localhost:7870` and sign in with `admin` and the password
-> the quickstart **prints in its final message** (generated into the created `config.yaml`,
-> key `auth.first_admin_password`). If the key was left empty (manual compose), a random
-> password is generated at first boot and shown once in the web container logs
-> (`docker compose logs | grep -a -A 4 'PREMIER COMPTE'`). Change it on first login.
+> **First login:** open `http://localhost:7870` — on the first visit, the portal asks you
+> to **create the administrator account** (username + password of your choice). For
+> automation, set `auth.first_admin_password` in `config.yaml` before first boot and the
+> account is created without any page shown.
 
 ## Deployment topologies
 

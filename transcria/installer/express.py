@@ -45,7 +45,7 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "llm_raw": "LLM d'arbitrage : aucun (VRAM insuffisante) — transcription brute, sans correction ni résumé LLM",
         "service_yes": "Service systemd : installé (utilisateur {user})",
         "service_no": "Service systemd : non installé (--no-service)",
-        "admin": "Compte admin : admin / CHANGE-ME — un bandeau le rappellera dans l'interface jusqu'au changement",
+        "admin": "Compte admin : créé à la PREMIÈRE visite du portail (une page demande identifiant + mot de passe)",
     },
     "en": {
         "profile": "Profile: all-in-one (web portal + processing on this machine)",
@@ -69,7 +69,7 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "llm_raw": "Arbitration LLM: none (not enough VRAM) — raw transcription, no LLM correction/summary",
         "service_yes": "systemd service: installed (user {user})",
         "service_no": "systemd service: not installed (--no-service)",
-        "admin": "Admin account: admin / CHANGE-ME — a banner in the UI will nag until it is changed",
+        "admin": "Admin account: created on the portal's FIRST visit (a page asks for username + password)",
     },
 }
 

@@ -31,7 +31,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pre_nvidia_missing": "nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU "
                               "(transcription très lente)",
         "pre_binary_ok": "{name} : {path}",
-        "pre_binary_req_ffmpeg": "{name} manquant. Installer avec: apt install ffmpeg",
+        "pre_binary_req_ffmpeg": "{name} manquant. Installer avec: apt install ffmpeg (Debian/Ubuntu) ou dnf install ffmpeg-free (Fedora)",
         "pre_binary_req_generic": "{name} manquant.",
         "pre_binary_opt_lsof": "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof",
         "pre_binary_opt_curl": "curl manquant — requis pour télécharger opencode (LLM d'arbitrage). "
@@ -83,6 +83,8 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "oc_install_prompt": "Installer opencode dans {home}/.opencode/bin/ ?",
         # install_models — bilan, tableau de détection, statuts, setup Cohere/pyannote, prompts
         "mdl_missing": "MANQUANT",
+        "mdl_not_required": "non requis",
+        "mdl_tbl_backend_info": "backend configuré : {value}",
         "mdl_sum_title": "Modèles IA :",
         "mdl_sum_cohere_ok": "  [OK] Cohere ASR",
         "mdl_sum_cohere_missing": "  [MANQUANT] Cohere ASR — hf download CohereLabs/cohere-transcribe-03-2026",
@@ -276,7 +278,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pre_nvidia_missing": "nvidia-smi not found or unusable — running without GPU "
                               "(very slow transcription)",
         "pre_binary_ok": "{name}: {path}",
-        "pre_binary_req_ffmpeg": "{name} missing. Install with: apt install ffmpeg",
+        "pre_binary_req_ffmpeg": "{name} missing. Install with: apt install ffmpeg (Debian/Ubuntu) or dnf install ffmpeg-free (Fedora)",
         "pre_binary_req_generic": "{name} missing.",
         "pre_binary_opt_lsof": "lsof missing — required by start.sh/stop.sh. Install: apt install lsof",
         "pre_binary_opt_curl": "curl missing — required to download opencode (arbitration LLM). "
@@ -323,6 +325,8 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "oc_profile_skipped": "Profile {profile}: opencode not required",
         "oc_install_prompt": "Install opencode in {home}/.opencode/bin/ ?",
         "mdl_missing": "MISSING",
+        "mdl_not_required": "not required",
+        "mdl_tbl_backend_info": "configured backend: {value}",
         "mdl_sum_title": "AI models:",
         "mdl_sum_cohere_ok": "  [OK] Cohere ASR",
         "mdl_sum_cohere_missing": "  [MISSING] Cohere ASR — hf download CohereLabs/cohere-transcribe-03-2026",

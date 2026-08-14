@@ -113,8 +113,8 @@ def test_render_setup_log_for_env_and_profile_events():
     assert render_setup_log(event="proxy-present") == "OK:Proxy déjà présent dans .env\n"
     assert render_setup_log(event="proxy-persisted") == "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
     assert render_setup_log(event="admin-default-password") == (
-        "WARN:Aucun mot de passe admin défini — sans réponse ici, il sera GÉNÉRÉ au\n"
-        "     premier démarrage et affiché une seule fois dans le journal du service\n"
+        "INFO:Aucun mot de passe admin défini — sans réponse ici, le portail vous\n"
+        "     demandera de créer le compte administrateur à la première visite\n"
     )
     assert render_setup_log(event="admin-password-set") == "OK:Mot de passe admin défini\n"
     assert render_setup_log(event="admin-password-too-short") == "WARN:Trop court — inchangé. Éditez config.yaml manuellement.\n"
@@ -143,28 +143,20 @@ def test_install_summary_cli_prints_setup_log(capsys):
 # ── Bloc « première connexion » (issue #11) ───────────────────────────────────
 
 
-def test_login_summary_mot_de_passe_genere_systemd():
-    out = render_login_summary(username="admin", password_is_sentinel=True, systemd=True,
-                               final_log_file="/var/log/transcrIA.log", venv="/app/venv")
-    assert "identifiant : admin" in out
-    assert "GÉNÉRÉ au premier démarrage" in out
-    assert "journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'" in out
+def test_login_summary_sentinelle_annonce_la_page_setup():
+    # v2 : plus rien à retrouver dans un journal — le portail impose la création du
+    # compte à la première visite, et le résumé l'annonce.
+    out = render_login_summary(username="admin", password_is_sentinel=True, venv="/app/venv")
+    assert "PREMIÈRE visite" in out
+    assert "créer le compte" in out
+    assert "journalctl" not in out
     assert "/app/venv/bin/python -m transcria.maintenance.cli reset-admin-password admin" in out
 
 
-def test_login_summary_mot_de_passe_genere_legacy_pointe_le_fichier_log():
-    out = render_login_summary(username="admin", password_is_sentinel=True, systemd=False,
-                               final_log_file="/srv/transcria/logs/transcrIA.log", venv="/srv/venv")
-    assert "grep -a -A 4 'PREMIER COMPTE' /srv/transcria/logs/transcrIA.log" in out
-    assert "journalctl" not in out
-
-
 def test_login_summary_mot_de_passe_defini():
-    out = render_login_summary(username="operateur", password_is_sentinel=False, systemd=True,
-                               final_log_file="/var/log/transcrIA.log", venv="/app/venv")
+    out = render_login_summary(username="operateur", password_is_sentinel=False, venv="/app/venv")
     assert "identifiant : operateur" in out
     assert "celui défini pendant l'installation" in out
-    assert "GÉNÉRÉ" not in out
     assert "reset-admin-password operateur" in out
 
 

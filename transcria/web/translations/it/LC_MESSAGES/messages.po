@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-09 11:28+0200\n"
+"POT-Creation-Date: 2026-08-14 16:57+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -66,143 +66,151 @@ msgstr "Errore interno"
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "Si è verificato un errore imprevisto. Riprovi o contatti un amministratore."
 
-#: transcria/auth/routes.py:74
+#: transcria/auth/routes.py:76
 #, python-format
 msgid "Le mot de passe doit contenir au moins %(n)s caractères."
 msgstr "La password deve contenere almeno %(n)s caratteri."
 
-#: transcria/auth/routes.py:76
+#: transcria/auth/routes.py:78
 msgid "La confirmation du mot de passe ne correspond pas."
 msgstr "La conferma della password non corrisponde."
 
-#: transcria/auth/routes.py:142 transcria/auth/routes.py:213
+#: transcria/auth/routes.py:153
+msgid "Un compte existe déjà — connectez-vous."
+msgstr "Esiste già un account — acceda."
+
+#: transcria/auth/routes.py:161
+msgid "Compte administrateur créé. Bienvenue !"
+msgstr "Account amministratore creato. Benvenuto!"
+
+#: transcria/auth/routes.py:203 transcria/auth/routes.py:274
 msgid "Trop de tentatives. Réessayez dans quelques minutes."
 msgstr "Troppi tentativi. Riprovi tra qualche minuto."
 
-#: transcria/auth/routes.py:154
+#: transcria/auth/routes.py:215
 msgid "Annuaire d'entreprise indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Directory aziendale non disponibile. Riprovi più tardi o utilizzi l'account locale di emergenza."
 
-#: transcria/auth/routes.py:178 transcria/auth/routes.py:284
-#: transcria/auth/routes.py:327
+#: transcria/auth/routes.py:239 transcria/auth/routes.py:345
+#: transcria/auth/routes.py:388
 msgid "Accès non attribué : contactez votre administrateur."
 msgstr "Accesso non attribuito: contatti il Suo amministratore."
 
-#: transcria/auth/routes.py:215
+#: transcria/auth/routes.py:276
 msgid "Identifiant ou mot de passe incorrect."
 msgstr "Identificativo o password non corretti."
 
-#: transcria/auth/routes.py:244 transcria/auth/routes.py:268
+#: transcria/auth/routes.py:305 transcria/auth/routes.py:329
 msgid "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
 msgstr "Provider di identità non disponibile. Riprovi più tardi o utilizzi l'account locale di emergenza."
 
-#: transcria/auth/routes.py:273
+#: transcria/auth/routes.py:334
 msgid "Connexion refusée."
 msgstr "Accesso rifiutato."
 
-#: transcria/auth/routes.py:318
+#: transcria/auth/routes.py:379
 msgid "Aucune identité transmise par le proxy d'authentification. Utilisez le compte local de secours."
 msgstr "Nessuna identità trasmessa dal proxy di autenticazione. Utilizzi l'account locale di emergenza."
 
-#: transcria/auth/routes.py:362
+#: transcria/auth/routes.py:423
 msgid "Session du portail fermée. La session du proxy d'authentification reste active : déconnectez-vous aussi du proxy pour changer d'identité."
 msgstr "Sessione del portale chiusa. La sessione del proxy di autenticazione resta attiva: si disconnetta anche dal proxy per cambiare identità."
 
-#: transcria/auth/routes.py:365
+#: transcria/auth/routes.py:426
 msgid "Vous avez été déconnecté."
 msgstr "È stato disconnesso."
 
-#: transcria/auth/routes.py:378
+#: transcria/auth/routes.py:439
 msgid "Mot de passe actuel incorrect."
 msgstr "Password attuale errata."
 
-#: transcria/auth/routes.py:388
+#: transcria/auth/routes.py:449
 msgid "Mot de passe mis à jour."
 msgstr "Password aggiornata."
 
-#: transcria/auth/routes.py:415
+#: transcria/auth/routes.py:476
 msgid "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
 msgstr "Durata di validità non valida (da 1 a 3650 giorni, oppure vuoto = senza scadenza)."
 
-#: transcria/auth/routes.py:422
+#: transcria/auth/routes.py:483
 msgid "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
 msgstr "Token creato — lo copi ora: non verrà mai più mostrato."
 
-#: transcria/auth/routes.py:437
+#: transcria/auth/routes.py:498
 msgid "Jeton introuvable."
 msgstr "Token non trovato."
 
-#: transcria/auth/routes.py:442
+#: transcria/auth/routes.py:503
 msgid "Jeton révoqué."
 msgstr "Token revocato."
 
-#: transcria/auth/routes.py:467
+#: transcria/auth/routes.py:528
 msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
 msgstr "Il nome utente e la password sono obbligatori."
 
-#: transcria/auth/routes.py:471
+#: transcria/auth/routes.py:532
 msgid "Ce nom d'utilisateur existe déjà."
 msgstr "Questo nome utente esiste già."
 
-#: transcria/auth/routes.py:489
+#: transcria/auth/routes.py:550
 #, python-format
 msgid "Utilisateur %(u)s créé."
 msgstr "Utente %(u)s creato."
 
-#: transcria/auth/routes.py:501
+#: transcria/auth/routes.py:562
 msgid "Utilisateur introuvable."
 msgstr "Utente non trovato."
 
-#: transcria/auth/routes.py:523
+#: transcria/auth/routes.py:584
 msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 msgstr "Azione rifiutata: questo account è l'ultimo amministratore attivo. Promuova prima un altro amministratore."
 
-#: transcria/auth/routes.py:555
+#: transcria/auth/routes.py:616
 msgid "Utilisateur mis à jour."
 msgstr "Utente aggiornato."
 
-#: transcria/auth/routes.py:579 transcria/auth/routes.py:611
+#: transcria/auth/routes.py:640 transcria/auth/routes.py:672
 msgid "Le nom du groupe est obligatoire."
 msgstr "Il nome del gruppo è obbligatorio."
 
-#: transcria/auth/routes.py:582 transcria/auth/routes.py:613
+#: transcria/auth/routes.py:643 transcria/auth/routes.py:674
 msgid "Ce groupe existe déjà."
 msgstr "Questo gruppo esiste già."
 
-#: transcria/auth/routes.py:589
+#: transcria/auth/routes.py:650
 #, python-format
 msgid "Groupe %(g)s créé."
 msgstr "Gruppo %(g)s creato."
 
-#: transcria/auth/routes.py:599
+#: transcria/auth/routes.py:660
 msgid "Groupe introuvable."
 msgstr "Gruppo non trovato."
 
-#: transcria/auth/routes.py:620
+#: transcria/auth/routes.py:681
 msgid "Groupe mis à jour."
 msgstr "Gruppo aggiornato."
 
-#: transcria/auth/routes.py:639 transcria/auth/routes.py:661
+#: transcria/auth/routes.py:700 transcria/auth/routes.py:722
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "Il gruppo deve conservare almeno un amministratore di gruppo."
 
-#: transcria/auth/routes.py:641
+#: transcria/auth/routes.py:702
 msgid "Utilisateur introuvable ou inactif."
 msgstr "Utente non trovato o inattivo."
 
-#: transcria/auth/routes.py:647
+#: transcria/auth/routes.py:708
 msgid "Membre ajouté au groupe."
 msgstr "Membro aggiunto al gruppo."
 
-#: transcria/auth/routes.py:654
+#: transcria/auth/routes.py:715
 msgid "Un admin de groupe ne peut pas se retirer lui-même."
 msgstr "Un amministratore di gruppo non può rimuovere se stesso."
 
-#: transcria/auth/routes.py:668
+#: transcria/auth/routes.py:729
 msgid "Membre retiré du groupe."
 msgstr "Membro rimosso dal gruppo."
 
-#: transcria/auth/routes.py:677
+#: transcria/auth/routes.py:738
 msgid "Groupe supprimé."
 msgstr "Gruppo eliminato."
 
@@ -3849,6 +3857,7 @@ msgid "Rôle :"
 msgstr "Ruolo:"
 
 #: transcria/web/templates/base.html:112 transcria/web/templates/login.html:41
+#: transcria/web/templates/setup.html:24
 #: transcria/web/templates/user_form.html:32
 msgid "Mot de passe"
 msgstr "Password"
@@ -4618,7 +4627,7 @@ msgstr "Es.: Vocabolario caseificio"
 msgid "Connexion"
 msgstr "Accesso"
 
-#: transcria/web/templates/login.html:14
+#: transcria/web/templates/login.html:14 transcria/web/templates/setup.html:14
 msgid "Portail de transcription de réunion"
 msgstr "Portale di trascrizione delle riunioni"
 
@@ -4638,7 +4647,7 @@ msgstr "modulo locale"
 msgid "Connectez-vous avec vos identifiants d'entreprise."
 msgstr "Effettui l'accesso con le sue credenziali aziendali."
 
-#: transcria/web/templates/login.html:37
+#: transcria/web/templates/login.html:37 transcria/web/templates/setup.html:20
 #: transcria/web/templates/user_form.html:10
 msgid "Nom d'utilisateur"
 msgstr "Nome utente"
@@ -5168,6 +5177,26 @@ msgstr "Disattivato"
 #: transcria/web/templates/schedule.html:229
 msgid "Aucun créneau configuré"
 msgstr "Nessuna fascia oraria configurata"
+
+#: transcria/web/templates/setup.html:2
+msgid "Premier démarrage"
+msgstr "Primo avvio"
+
+#: transcria/web/templates/setup.html:16
+msgid "Bienvenue ! Cette instance n'a pas encore de compte : créez le compte administrateur pour commencer."
+msgstr "Benvenuto! Questa istanza non ha ancora alcun account: crei l'account amministratore per iniziare."
+
+#: transcria/web/templates/setup.html:27
+msgid "8 caractères minimum."
+msgstr "Minimo 8 caratteri."
+
+#: transcria/web/templates/setup.html:30
+msgid "Confirmer le mot de passe"
+msgstr "Conferma la password"
+
+#: transcria/web/templates/setup.html:34
+msgid "Créer le compte administrateur"
+msgstr "Crea l'account amministratore"
 
 #: transcria/web/templates/srt_editor.html:13
 msgid "Progression de la relecture (segments visités)"

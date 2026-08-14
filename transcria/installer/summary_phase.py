@@ -64,7 +64,7 @@ def _read_admin_login(config_path: Path) -> tuple[str, bool]:
     Lu au moment du résumé (donc APRÈS la question interactive de la section 8) :
     l'état reflète la réponse réelle de l'utilisateur, y compris sur une config
     pré-existante conservée. Best-effort : en cas de config illisible, on présume
-    la génération au premier démarrage (le cas sûr — l'utilisateur sait où lire).
+    la sentinelle (le cas sûr — le portail demandera la création du compte).
     """
     try:
         auth = load_yaml_file(config_path).get("auth") or {}
@@ -113,16 +113,13 @@ def apply_summary(plan: SummaryPlan, *, console: _ConsoleLike) -> None:
         render_profile_next_steps_text(install_plan, context),
     ]
     # Issue #11 : le résumé DOIT dire comment se connecter — avant, une installation se
-    # terminait sans jamais mentionner l'existence d'identifiants (mot de passe généré
-    # au 1er démarrage, journalisé une fois, découvert par personne). Dernier bloc :
+    # terminait sans jamais mentionner l'existence d'identifiants. Dernier bloc :
     # c'est la première chose que l'utilisateur fera après le démarrage.
     if plan.admin_login:
         username, is_sentinel = _read_admin_login(plan.config_path)
         blocks.append(render_login_summary(
             username=username,
             password_is_sentinel=is_sentinel,
-            systemd=plan.systemd,
-            final_log_file=plan.final_log_file,
             venv=str(plan.venv),
         ))
     # Durée totale = la métrique « time-to-first-job » de référence pour juger

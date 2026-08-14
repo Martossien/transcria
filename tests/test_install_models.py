@@ -496,3 +496,42 @@ def test_install_models_cli_download_pyannote_prints_status(capsys, monkeypatch)
 
     assert calls == [("hf_secret", "custom/model")]
     assert capsys.readouterr().out == "pyannote téléchargé\n"
+
+
+def test_render_model_detection_table_backends_non_cohere():
+    """Express basculé sur whisper/sortformer : Cohere et pyannote ne sont pas requis —
+    les afficher MANQUANT était un mensonge anxiogène (reste conscient du chantier UX)."""
+    rendered = render_model_detection_table(
+        cohere_ok=False,
+        cohere_path="",
+        pyannote_ok=False,
+        pyannote_cache="",
+        needs_llm=False,
+        qwen_ok=False,
+        qwen_gguf="",
+        squim_ok=True,
+        stt_backend="whisper",
+        diarization_backend="sortformer",
+    )
+
+    assert "Cohere ASR (STT ~6 Go): non requis — backend configuré : whisper" in rendered
+    assert "pyannote diarization (~2 Go): non requis — backend configuré : sortformer" in rendered
+    assert "MANQUANT" not in rendered.split("SQUIM")[0]
+
+
+def test_render_model_detection_table_backend_cohere_reste_requis():
+    rendered = render_model_detection_table(
+        cohere_ok=False,
+        cohere_path="",
+        pyannote_ok=False,
+        pyannote_cache="",
+        needs_llm=False,
+        qwen_ok=False,
+        qwen_gguf="",
+        squim_ok=True,
+        stt_backend="cohere",
+        diarization_backend="pyannote",
+    )
+
+    assert "Cohere ASR (STT ~6 Go): MANQUANT" in rendered
+    assert "pyannote diarization (~2 Go): MANQUANT" in rendered

@@ -47,6 +47,7 @@
 | `/auth/proxy/login` | GET | — | Chantier identité lot 3 : connexion par en-têtes de proxy de confiance. | `transcria.auth.routes` |
 | `/login` | GET,POST | — | _(docstring manquante)_ | `transcria.auth.routes` |
 | `/logout` | POST | connexion requise | _(docstring manquante)_ | `transcria.auth.routes` |
+| `/setup` | GET,POST | — | Création du PREMIER compte administrateur — impossible à rater. | `transcria.auth.routes` |
 
 ### Blueprint `central_lexicon`
 
@@ -220,7 +221,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 154 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 155 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 
