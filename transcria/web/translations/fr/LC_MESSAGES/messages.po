@@ -5177,9 +5177,8 @@ msgid "Aucun créneau configuré"
 msgstr "Aucun créneau configuré"
 
 #: transcria/web/templates/setup.html:2
-#, fuzzy
 msgid "Premier démarrage"
-msgstr "démarrage…"
+msgstr "Premier démarrage"
 
 #: transcria/web/templates/setup.html:16
 msgid "Bienvenue ! Cette instance n'a pas encore de compte : créez le compte administrateur pour commencer."
@@ -5190,14 +5189,12 @@ msgid "8 caractères minimum."
 msgstr "8 caractères minimum."
 
 #: transcria/web/templates/setup.html:30
-#, fuzzy
 msgid "Confirmer le mot de passe"
-msgstr "Confirmation du mot de passe"
+msgstr "Confirmer le mot de passe"
 
 #: transcria/web/templates/setup.html:34
-#, fuzzy
 msgid "Créer le compte administrateur"
-msgstr "Serveur & compte admin"
+msgstr "Créer le compte administrateur"
 
 #: transcria/web/templates/srt_editor.html:13
 msgid "Progression de la relecture (segments visités)"

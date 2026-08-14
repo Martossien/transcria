@@ -105,10 +105,13 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
 - **Capitalisation d'équipe** — lexiques partagés, modèles de compte-rendu par type de
   réunion, groupes avec leurs propres administrateurs : la deuxième réunion coûte moins
   d'effort que la première, et l'outil s'améliore avec l'usage de l'équipe.
-- **S'installe sans expertise, tourne sur une carte gaming (0.4.2)** — l'installation
-  tient en une commande et une confirmation : les détections (GPU, base de données,
-  modèles accessibles) font le reste, et une checklist au premier démarrage montre ce
-  qui manque, avec un lien pour corriger chaque point. Le workflow complet — résumé et
+- **S'installe sans expertise, tourne sur une carte gaming (0.4.2, affiné en 0.4.4)** —
+  l'installation tient en une commande et une confirmation : les détections (GPU, base
+  de données, modèles accessibles) font le reste, ffmpeg est proposé s'il manque, et une
+  checklist au premier démarrage montre ce qui manque, avec un lien pour corriger chaque
+  point. À la **première visite du portail, une page vous fait créer le compte
+  administrateur** — rien à retenir, aucun mot de passe à chercher (0.4.4) ; les
+  **RTX 50xx** sont supportées nativement dans les images Docker. Le workflow complet — résumé et
   correction compris — tourne désormais **dès 8 Go de mémoire vidéo**, la carte des PC
   de jeu ordinaires, en natif comme en Docker ; sans aucune carte compatible, la
   transcription reste possible sur processeur. À la relecture, l'éditeur met en avant
