@@ -21,7 +21,14 @@ class TorchInstallPlan:
 
 
 def select_torch_cuda_tag(cuda_version: str | None = None, *, forced_tag: str | None = None) -> tuple[str, str | None]:
-    """Sélectionne le tag wheel PyTorch (`cpu`, `cu121`, `cu124`, `cu126`).
+    """Sélectionne le tag wheel PyTorch (`cpu`, `cu121`, `cu124`, `cu126`, `cu130`).
+
+    Driver CUDA ≥ 13 → **cu130** : seul index (avec cu126, le pin torchcodec exclut
+    cu128) dont les roues embarquent les noyaux **sm_120** — sans lui, une RTX 50xx en
+    installation NATIVE échouait au premier appel torch (le cas du 1er testeur externe,
+    driver 580/CUDA 13.0). Zone grise 12.8–12.9 (driver r570, Blackwell de lancement) :
+    cu126 reste servi (les cartes ≤ Ada y tournent) avec un avertissement actionnable —
+    cu130 y serait PIRE (les roues CUDA 13 exigent un driver ≥ 580, échec assuré).
 
     Returns:
         `(tag, warning)` ; `warning` vaut `None` quand aucune dégradation n'est nécessaire.
@@ -37,7 +44,15 @@ def select_torch_cuda_tag(cuda_version: str | None = None, *, forced_tag: str | 
 
     major = int(match.group("major"))
     minor = int(match.group("minor") or 0)
-    if major > 12 or (major == 12 and minor >= 6):
+    if major >= 13:
+        return "cu130", None
+    if major == 12 and minor >= 8:
+        return "cu126", (
+            f"CUDA {cuda_version} — cu126 installé ; carte RTX 50xx (Blackwell) ? "
+            "torch cu126 n'a pas ses noyaux (sm_120) : mettre à jour le driver NVIDIA "
+            "≥ 580 (CUDA 13) puis relancer — cu130 sera choisi automatiquement"
+        )
+    if major == 12 and minor >= 6:
         return "cu126", None
     if major == 12 and minor >= 4:
         return "cu124", None

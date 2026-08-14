@@ -15,7 +15,7 @@
 #   --no-torch         Sauter l'installation de PyTorch (déjà installé)
 #   --skip-deps        Ne pas créer le venv ni installer les dépendances pip
 #                      (venv déjà fourni : couche build Docker, ou environnement existant)
-#   --cuda VERSION     Forcer la version CUDA (ex: cu126, cu124, cu121)
+#   --cuda VERSION     Forcer la version CUDA (ex: cu130, cu126, cu124, cu121)
 #   --llm-backend B    Forcer le backend LLM d'arbitrage : ollama | llamacpp
 #                      (all-in-one ; utile en non-interactif/CI. Défaut interactif : demandé)
 #   --user USER        Utilisateur pour le service systemd (défaut: $USER)

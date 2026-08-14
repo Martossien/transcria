@@ -30,7 +30,20 @@ def test_select_torch_cuda_tag_thresholds():
     assert select_torch_cuda_tag("12.3")[0] == "cu121"
     assert select_torch_cuda_tag("12.4")[0] == "cu124"
     assert select_torch_cuda_tag("12.6")[0] == "cu126"
-    assert select_torch_cuda_tag("13.0")[0] == "cu126"
+    # Driver CUDA ≥ 13 → cu130, le seul index avec les noyaux sm_120 (RTX 50xx en
+    # natif — le cas du 1er testeur externe, driver 580/CUDA 13.0).
+    assert select_torch_cuda_tag("13.0") == ("cu130", None)
+    assert select_torch_cuda_tag("13.1") == ("cu130", None)
+
+
+def test_select_torch_cuda_tag_zone_grise_12_8_avertit_pour_blackwell():
+    # r570 (CUDA 12.8/12.9, drivers de lancement RTX 50xx) : cu126 servi (les cartes
+    # ≤ Ada y tournent), mais cu130 exigerait un driver ≥ 580 — on avertit, on ne casse pas.
+    tag, warning = select_torch_cuda_tag("12.8")
+    assert tag == "cu126"
+    assert warning is not None and "580" in warning and "cu130" in warning
+    tag, warning = select_torch_cuda_tag("12.9")
+    assert tag == "cu126" and warning is not None
 
 
 def test_select_torch_cuda_tag_old_or_invalid_cuda_warns_and_falls_back_to_cu121():

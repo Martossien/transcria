@@ -120,7 +120,7 @@ sort proprement **avant toute mutation**.
 |---|---|
 | Prérequis | Vérifie Python 3.11+, module venv (`ensurepip`), nvidia-smi, ffmpeg/ffprobe, curl, lsof |
 | Venv | Crée ou réutilise `venv/`, met pip à jour |
-| PyTorch | Détecte la version CUDA (`nvidia-smi`) et installe le wheel correspondant (`cu121`/`cu124`/`cu126`) |
+| PyTorch | Détecte la version CUDA (`nvidia-smi`) et installe le wheel correspondant (`cu121`/`cu124`/`cu126`, `cu130` dès un driver CUDA 13 — requis pour les RTX 50xx) |
 | Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
 | Répertoires | Crée `jobs/`, `models/`, `instance/` |
 | Config | Génère `config.yaml` via `scripts/bootstrap_config.py` (auto-détection des binaires et chemins) |
@@ -146,7 +146,7 @@ sort proprement **avant toute mutation**.
 ./install.sh --no-service          # Sauter l'installation systemd
 ./install.sh --no-torch            # PyTorch déjà installé (évite la réinstallation)
 ./install.sh --skip-deps           # Venv/dépendances déjà fournis (couche build Docker, venv existant) : ne touche pas à pip (implique --no-torch)
-./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126)
+./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126 / cu130)
 ./install.sh --user monuser        # Utilisateur pour le service systemd (défaut: $USER)
 ./install.sh --install-dir /opt/x  # Répertoire d'installation (défaut : répertoire courant)
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
@@ -1665,7 +1665,7 @@ source venv/bin/activate
 python -c "import torch; print(torch.__version__)"
 ```
 
-Si absent, installer avec CUDA (adapter cu124/cu126 à votre version) :
+Si absent, installer avec CUDA (adapter cu124/cu126/cu130 à votre version — cu130 pour les RTX 50xx, driver ≥ 580) :
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
