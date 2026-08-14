@@ -688,8 +688,11 @@ if [[ "$PREREQ_BINARIES_STATUS" -ne 0 && "$NON_INTERACTIVE" = false && -t 0 ]] \
     if ask_yn "$(t ask_install_ffmpeg)"; then
         # Cache apt jamais rafraîchi (machine fraîche) → l'install directe peut
         # échouer : on retente après update plutôt que d'updater d'office.
-        if $_APT_SUDO apt-get install -y ffmpeg \
-                || { $_APT_SUDO apt-get update && $_APT_SUDO apt-get install -y ffmpeg; }; then
+        # `< /dev/null` OBLIGATOIRE : dpkg/debconf lit stdin et AVALE la réponse de la
+        # question SUIVANTE (vécu au rejeu express 0.4.4 : le récapitulatif attendait
+        # une réponse déjà consommée par apt).
+        if $_APT_SUDO apt-get install -y ffmpeg </dev/null \
+                || { $_APT_SUDO apt-get update </dev/null && $_APT_SUDO apt-get install -y ffmpeg </dev/null; }; then
             # Re-vérification COMPLÈTE (même commande que ci-dessus) : c'est elle
             # qui fait foi, pas le code retour d'apt.
             run_prereq_binaries_check
