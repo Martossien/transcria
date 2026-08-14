@@ -203,3 +203,41 @@ def test_gpu_e2e_install_matrix():
         cuda=os.environ.get("TRANSCRIA_GPU_E2E_CUDA"),
         keep_up=False,
     )
+
+
+class TestGeneratedPasswordExtraction:
+    """Issue #11 : la gate teste la VRAIE première connexion — elle doit savoir lire la
+    bannière de ensure_admin comme un utilisateur le ferait dans son journal."""
+
+    BANNIERE = (
+        "=" * 72 + "\n"
+        "  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
+        "  identifiant : admin\n"
+        "  mot de passe généré : Xy9_abcDEF123-ghij4KLm\n"
+        "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
+        "  première connexion (/account/password).\n" + "=" * 72 + "\n"
+    )
+
+    def test_extrait_le_mot_de_passe_de_la_banniere(self):
+        log = "bruit gunicorn\n" + self.BANNIERE + "autre bruit\n"
+        assert vim.extract_generated_password(log) == "Xy9_abcDEF123-ghij4KLm"
+
+    def test_sans_banniere_renvoie_none(self):
+        assert vim.extract_generated_password("boot normal, base déjà peuplée\n") is None
+
+    def test_la_banniere_reelle_du_store_reste_extractible(self):
+        # Dérive store.py ↔ gate : on rejoue le format EXACT du logger.warning de
+        # ensure_admin (mêmes %s) — si la bannière change, ce test casse AVANT la gate.
+        import inspect
+
+        from transcria.auth import store
+
+        source = inspect.getsource(store.UserStore.ensure_admin)
+        assert "mot de passe généré : %s" in source
+        rendu = (
+            "\n" + "=" * 72 + "\n  PREMIER COMPTE ADMINISTRATEUR CRÉÉ\n"
+            "  identifiant : admin\n  mot de passe généré : s3cret-Genere_42\n"
+            "  Notez-le maintenant : il n'est affiché QU'UNE FOIS. Changez-le à la\n"
+            "  première connexion (/account/password).\n" + "=" * 72
+        )
+        assert vim.extract_generated_password(rendu) == "s3cret-Genere_42"

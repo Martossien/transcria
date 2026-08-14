@@ -32,8 +32,11 @@ scripts/docker_quickstart.sh --bundled     # → http://localhost:7870
 game — but then: zero downloads, works offline). Without `--bundled`, the slim image is
 light but downloads models at the first job.
 
-**Step 2 — first login.** Open `http://localhost:7870`, sign in with
-**`admin` / `CHANGE-ME`** — a permanent banner reminds you to change it; do it.
+**Step 2 — first login.** Open `http://localhost:7870`. The quickstart **prints the
+credentials in its final message** (`admin` + a generated password, written to
+`config.yaml` under `auth.first_admin_password`). Change it on first login — a banner
+will insist. Missed the message? Re-run the quickstart (idempotent): it prints the
+credentials again.
 
 **Step 3 — first minutes.** "New processing" → drop the meeting audio (or record from
 the mic) → pick a **profile** (e.g. *Corrected Word report*) → let it run → download

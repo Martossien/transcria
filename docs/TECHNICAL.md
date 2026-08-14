@@ -476,7 +476,7 @@ Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutilis
 `inject_user_context()` est un context processor Flask injectant `current_user`, `user_permissions` et `can_manage_groups` dans les templates.
 
 **Gestion des mots de passe :** les utilisateurs authentifiés changent leur mot de passe via `/account/password`, avec vérification du mot de passe actuel, confirmation et minimum de 8 caractères. En cas d'oubli, le chemin prévu est le reset par un admin global dans `/admin/users/<id>/edit`; il n'y a pas de reset email tant qu'aucune configuration SMTP/tokens n'est définie.
-Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte admin initial est créé avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide.
+Au premier démarrage sur base vierge, `UserStore.ensure_admin()` crée le compte admin initial ; si `auth.first_admin_password` est vide ou vaut une sentinelle (`CHANGE-ME`, `admin-change-me`), un mot de passe aléatoire est **généré** et journalisé une seule fois (bannière « PREMIER COMPTE ADMINISTRATEUR CRÉÉ » dans le journal du service).
 
 **Règle d'accès aux jobs — VOIR et MODIFIER sont deux droits distincts** (durci en 0.4.0). Un job reste propriété d'un utilisateur (`jobs.owner_id`).
 

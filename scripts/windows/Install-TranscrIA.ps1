@@ -230,7 +230,7 @@ if ($LASTEXITCODE -ne 0) {
 # -- 7. C'est pret ------------------------------------------------------------
 Etape "Termine"
 Ok "TranscrIA tourne : $PortalUrl"
-Info "Identifiants de premier login : admin / CHANGE-ME  (changez le mot de passe, le bandeau insistera)."
+Info "Identifiants de premier login : lignes [OK] ci-dessus (utilisateur admin, mot de passe genere - cle auth.first_admin_password de config.yaml cote Ubuntu). Changez-le a la premiere connexion."
 Info "Arreter : dans Ubuntu, ~/transcria/scripts/docker_quickstart.sh --down  (ou via Docker Desktop)."
 Info "Redemarrer apres un reboot du PC : lancez Docker Desktop, puis relancez simplement ce script."
 Start-Process $PortalUrl

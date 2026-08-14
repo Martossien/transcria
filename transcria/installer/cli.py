@@ -224,6 +224,8 @@ def _add_summary_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--opencode-bin", default="")
     p.add_argument("--elapsed-seconds", type=int, default=0,
                    help="durée totale de l'installation (métrique time-to-first-job)")
+    p.add_argument("--admin-login", action="store_true",
+                   help="affiche le bloc « première connexion » (profils avec portail web)")
 
 
 def _make_confirm(interactive: bool) -> Callable[[str], bool]:
@@ -333,6 +335,7 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         opencode_bin=args.opencode_bin,
         systemd=not args.no_systemd,
         elapsed_seconds=max(0, args.elapsed_seconds),
+        admin_login=args.admin_login,
     )
     summary_phase.apply_summary(plan, console=console)
     return 0

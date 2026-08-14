@@ -73,11 +73,16 @@ scripts/docker_quickstart.sh --down
 > cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
 > un crash CUDA survenir au 1ᵉ job.
 
-> **Connexion par défaut** : ouvrir `http://localhost:7870` et se connecter avec **`admin`** /
-> **`CHANGE-ME`** (identifiants initiaux du `config.yaml` généré, clé `auth.first_admin_password`,
-> appliqués **au tout premier démarrage** = bootstrap de la base). **Changer ce mot de passe avant
-> tout usage réel** ; le modifier dans `config.yaml` **après** le bootstrap ne change PAS le mot de
-> passe d'un compte déjà créé (le faire alors via l'UI / la gestion des utilisateurs).
+> **Première connexion** : ouvrir `http://localhost:7870` et se connecter avec **`admin`** et le
+> mot de passe **affiché par le quickstart dans son message final** (généré dans le `config.yaml`
+> créé, clé `auth.first_admin_password`, appliqué **au tout premier démarrage** = bootstrap de la
+> base). Compose manuel avec un `config.yaml` copié de l'exemple (clé laissée vide) : le mot de
+> passe est **généré au premier boot** et affiché UNE FOIS dans les logs du conteneur web —
+> `docker compose logs | grep -a -A 4 'PREMIER COMPTE'`. Perdu (conteneur recréé, volume base
+> conservé) : `docker compose exec <service-web> python -m transcria.maintenance.cli
+> reset-admin-password admin`. **Changer ce mot de passe à la première connexion** ; modifier
+> `config.yaml` **après** le bootstrap ne change PAS le mot de passe d'un compte déjà créé
+> (le faire alors via l'UI / la gestion des utilisateurs).
 
 Le script est **idempotent** : il ne réécrit pas un `config.yaml`/`.env` existant, génère
 des secrets aléatoires, choisit `whisper` (non gated, sans token) si `HF_TOKEN` est absent.

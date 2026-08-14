@@ -316,9 +316,11 @@ Détails de l'image, compromis slim/bundled, table de compatibilité GPU/VRAM et
 dans [docs/DOCKER.md](docs/DOCKER.md).
 
 > **Première connexion :** ouvrez `http://localhost:7870` et connectez-vous avec `admin`
-> et le mot de passe initial du `config.yaml` généré (`auth.first_admin_password`).
-> Changez-le avant tout usage réel — c'est un placeholder, et un avertissement est journalisé
-> tant qu'il reste à sa valeur par défaut.
+> et le mot de passe que le quickstart **affiche dans son message final** (généré dans le
+> `config.yaml` créé, clé `auth.first_admin_password`). Clé laissée vide (compose manuel) :
+> un mot de passe aléatoire est généré au premier démarrage et affiché une fois dans les
+> logs du conteneur web (`docker compose logs | grep -a -A 4 'PREMIER COMPTE'`).
+> Changez-le à la première connexion.
 
 ## Topologies de déploiement
 

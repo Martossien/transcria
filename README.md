@@ -301,10 +301,11 @@ scripts/docker_quickstart.sh --bundled       # try it: models included, no token
 Image details, the slim-vs-bundled trade-off, the GPU/VRAM compatibility table, and
 rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 
-> **First login:** open `http://localhost:7870` and sign in with `admin` and the initial
-> password from the generated `config.yaml` (`auth.first_admin_password`). Change it
-> before any real use — it is a placeholder, and a warning is logged while it stays at its
-> default.
+> **First login:** open `http://localhost:7870` and sign in with `admin` and the password
+> the quickstart **prints in its final message** (generated into the created `config.yaml`,
+> key `auth.first_admin_password`). If the key was left empty (manual compose), a random
+> password is generated at first boot and shown once in the web container logs
+> (`docker compose logs | grep -a -A 4 'PREMIER COMPTE'`). Change it on first login.
 
 ## Deployment topologies
 

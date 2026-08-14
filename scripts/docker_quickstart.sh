@@ -125,6 +125,14 @@ fi
 if [[ ! -f "config.yaml" ]]; then
     log "Génération de config.yaml depuis config.example.yaml…"
     cp config.example.yaml config.yaml
+    # Mot de passe admin GÉNÉRÉ ICI (issue #11) : l'exemple laisse la valeur vide, et le
+    # secret alors créé par ensure_admin au 1er boot n'apparaît que dans `docker logs` —
+    # personne ne l'y trouvait. Le quickstart génère déjà les autres secrets : celui-ci
+    # est écrit dans config.yaml (local, chmod 600) et AFFICHÉ dans le message final.
+    ADMIN_PASS="$(gen_secret 9)"
+    sed -i "s|^\(\s*first_admin_password:\s*\).*|\1\"$ADMIN_PASS\"|" config.yaml
+    chmod 600 config.yaml
+    ok "Mot de passe admin généré (auth.first_admin_password — affiché à la fin)."
     # STT + diarisation : sans token, défauts NON gated (whisper + Sortformer) → zéro friction.
     if [[ -z "${HF_TOKEN:-}" ]]; then
         warn "HF_TOKEN absent → STT 'whisper' + diarisation 'sortformer' (NON gated, sans token)."
@@ -252,7 +260,19 @@ url="http://localhost:7870/health"
 for i in $(seq 1 60); do
     if curl -fsS -o /dev/null "$url" 2>/dev/null; then
         echo
-        ok "TranscrIA est prêt → http://localhost:7870  (login : admin / mot de passe défini dans config.yaml)"
+        # Identifiants RÉELS relus de config.yaml (issue #11) : jamais renvoyer vers une
+        # valeur vide. Sentinelle (config pré-existante non renseignée) → ensure_admin a
+        # généré au 1er boot et le secret n'existe QUE dans les logs du conteneur.
+        _admin_user=$(sed -nE 's/^\s*first_admin_username:\s*"?([^"#]*[^"# ])"?.*/\1/p' config.yaml | head -1)
+        _admin_pw=$(sed -nE 's/^\s*first_admin_password:\s*"?([^"#]*[^"# ])"?.*/\1/p' config.yaml | head -1)
+        case "${_admin_pw:-}" in
+            ""|CHANGE-ME|admin-change-me)
+                ok "TranscrIA est prêt → http://localhost:7870  (identifiant : ${_admin_user:-admin})"
+                warn "Mot de passe : GÉNÉRÉ au premier démarrage, visible UNE FOIS dans les logs :"
+                warn "  ${COMPOSE[*]} logs 2>&1 | grep -a -A 4 'PREMIER COMPTE'" ;;
+            *)
+                ok "TranscrIA est prêt → http://localhost:7870  (identifiant : ${_admin_user:-admin} / mot de passe : $_admin_pw)" ;;
+        esac
         ok "Logs : ${COMPOSE[*]} logs -f   |   Arrêt : scripts/docker_quickstart.sh --down"
         if [[ "$MODE" == "gpu" ]]; then
             ok "Tout-en-un : STT + diarisation + LLM d'arbitrage (résumé/correction/relecture) tournent"

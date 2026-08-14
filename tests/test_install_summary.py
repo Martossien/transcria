@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import pytest
 
+from pathlib import Path
+
 from transcria.installer.summary_lib import (
+    ADMIN_PASSWORD_SENTINELS,
     main,
     parse_non_negative_int,
     render_configuration_summary,
     render_database_summary,
+    render_login_summary,
     render_setup_log,
 )
+
+_REPO = Path(__file__).resolve().parents[1]
 
 
 def test_parse_non_negative_int_accepts_zero_and_positive():
@@ -106,7 +112,10 @@ def test_render_setup_log_for_env_and_profile_events():
     assert render_setup_log(event="inference-key-created") == "OK:TRANSCRIA_INFERENCE_API_KEY généré dans .env (chmod 600)\n"
     assert render_setup_log(event="proxy-present") == "OK:Proxy déjà présent dans .env\n"
     assert render_setup_log(event="proxy-persisted") == "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
-    assert render_setup_log(event="admin-default-password") == "WARN:Mot de passe admin : valeur par défaut 'CHANGE-ME'\n"
+    assert render_setup_log(event="admin-default-password") == (
+        "WARN:Aucun mot de passe admin défini — sans réponse ici, il sera GÉNÉRÉ au\n"
+        "     premier démarrage et affiché une seule fois dans le journal du service\n"
+    )
     assert render_setup_log(event="admin-password-set") == "OK:Mot de passe admin défini\n"
     assert render_setup_log(event="admin-password-too-short") == "WARN:Trop court — inchangé. Éditez config.yaml manuellement.\n"
     assert render_setup_log(event="config-updated") == "OK:config.yaml mis à jour\n"
@@ -129,3 +138,53 @@ def test_install_summary_cli_prints_setup_log(capsys):
     assert main(["setup-log", "--event", "profile-runtime", "--profile", "web", "--runtime-role", "web"]) == 0
 
     assert capsys.readouterr().out == "OK:Profil d'installation : web (TRANSCRIA_ROLE=web)\n"
+
+
+# ── Bloc « première connexion » (issue #11) ───────────────────────────────────
+
+
+def test_login_summary_mot_de_passe_genere_systemd():
+    out = render_login_summary(username="admin", password_is_sentinel=True, systemd=True,
+                               final_log_file="/var/log/transcrIA.log", venv="/app/venv")
+    assert "identifiant : admin" in out
+    assert "GÉNÉRÉ au premier démarrage" in out
+    assert "journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'" in out
+    assert "/app/venv/bin/python -m transcria.maintenance.cli reset-admin-password admin" in out
+
+
+def test_login_summary_mot_de_passe_genere_legacy_pointe_le_fichier_log():
+    out = render_login_summary(username="admin", password_is_sentinel=True, systemd=False,
+                               final_log_file="/srv/transcria/logs/transcrIA.log", venv="/srv/venv")
+    assert "grep -a -A 4 'PREMIER COMPTE' /srv/transcria/logs/transcrIA.log" in out
+    assert "journalctl" not in out
+
+
+def test_login_summary_mot_de_passe_defini():
+    out = render_login_summary(username="operateur", password_is_sentinel=False, systemd=True,
+                               final_log_file="/var/log/transcrIA.log", venv="/app/venv")
+    assert "identifiant : operateur" in out
+    assert "celui défini pendant l'installation" in out
+    assert "GÉNÉRÉ" not in out
+    assert "reset-admin-password operateur" in out
+
+
+# ── Tests de DÉRIVE des sentinelles (la classe exacte de l'issue #11) ─────────
+# Le bug d'origine : S1.4 a changé le défaut Python ("CHANGE-ME" → vide) sans que
+# install.sh suive — sa question interactive est devenue du code mort. On verrouille
+# les trois copies (store.py / summary_lib / scripts shell) les unes aux autres.
+
+
+def test_sentinelles_summary_alignees_sur_le_store():
+    from transcria.auth.store import DEFAULT_ADMIN_PASSWORDS
+
+    assert ADMIN_PASSWORD_SENTINELS == frozenset(DEFAULT_ADMIN_PASSWORDS)
+
+
+def test_sentinelles_couvertes_par_les_scripts_shell():
+    # Si l'ensemble Python évolue, cette égalité échoue et rappelle de propager aux
+    # motifs `case` shell ci-dessous (qui ne peuvent pas importer la constante).
+    assert ADMIN_PASSWORD_SENTINELS == {"", "CHANGE-ME", "admin-change-me"}
+    install_sh = (_REPO / "install.sh").read_text(encoding="utf-8")
+    assert '""|"CHANGE-ME"|"admin-change-me"' in install_sh
+    quickstart = (_REPO / "scripts" / "docker_quickstart.sh").read_text(encoding="utf-8")
+    assert '""|CHANGE-ME|admin-change-me' in quickstart

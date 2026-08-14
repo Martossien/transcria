@@ -68,3 +68,38 @@ def test_model_summary_reflects_llm_flags(tmp_path):
     text = _render(_plan(tmp_path, profile="all-in-one", needs_llm=True, qwen_ok=True, opencode_bin="/usr/bin/opencode"))
     assert "/usr/bin/opencode" in text
     assert "LLM d'arbitrage" in text
+
+
+# ── Bloc « première connexion » (issue #11) ───────────────────────────────────
+
+
+def test_summary_admin_login_absent_par_defaut(tmp_path):
+    assert "Première connexion" not in _render(_plan(tmp_path))
+
+
+def test_summary_admin_login_mot_de_passe_genere(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        'auth:\n  first_admin_username: "admin"\n  first_admin_password: ""\n', encoding="utf-8"
+    )
+    text = _render(_plan(tmp_path, admin_login=True))
+    assert "Première connexion au portail" in text
+    assert "identifiant : admin" in text
+    assert "journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE'" in text
+
+
+def test_summary_admin_login_mot_de_passe_defini(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        'auth:\n  first_admin_username: "chef"\n  first_admin_password: "un-vrai-secret"\n', encoding="utf-8"
+    )
+    text = _render(_plan(tmp_path, admin_login=True))
+    assert "identifiant : chef" in text
+    assert "celui défini pendant l'installation" in text
+    assert "GÉNÉRÉ au premier démarrage" not in text
+    assert "un-vrai-secret" not in text  # jamais le secret en clair dans le résumé
+
+
+def test_summary_admin_login_config_illisible_presume_generation(tmp_path):
+    plan = _plan(tmp_path, admin_login=True, config_path=tmp_path / "absent.yaml")
+    text = _render(plan)
+    # Config illisible → cas sûr : on indique où lire le mot de passe généré.
+    assert "PREMIER COMPTE" in text

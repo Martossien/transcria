@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from transcria.config.yaml_file import count_text_occurrences
+from transcria.config.yaml_file import count_text_occurrences, load_yaml_file
 from transcria.installer.messages import t
 from transcria.installer.models import render_model_summary
 from transcria.installer.profiles import (
@@ -24,7 +24,12 @@ from transcria.installer.profiles import (
     render_profile_summary_text,
     resolve_install_plan,
 )
-from transcria.installer.summary_lib import render_configuration_summary, render_database_summary
+from transcria.installer.summary_lib import (
+    ADMIN_PASSWORD_SENTINELS,
+    render_configuration_summary,
+    render_database_summary,
+    render_login_summary,
+)
 
 
 class _ConsoleLike(Protocol):
@@ -50,6 +55,24 @@ class SummaryPlan:
     opencode_bin: str = ""
     systemd: bool = True
     elapsed_seconds: int = 0
+    admin_login: bool = False
+
+
+def _read_admin_login(config_path: Path) -> tuple[str, bool]:
+    """Lit (identifiant, mot-de-passe-est-une-sentinelle) depuis config.yaml.
+
+    Lu au moment du résumé (donc APRÈS la question interactive de la section 8) :
+    l'état reflète la réponse réelle de l'utilisateur, y compris sur une config
+    pré-existante conservée. Best-effort : en cas de config illisible, on présume
+    la génération au premier démarrage (le cas sûr — l'utilisateur sait où lire).
+    """
+    try:
+        auth = load_yaml_file(config_path).get("auth") or {}
+    except Exception:
+        auth = {}
+    username = str(auth.get("first_admin_username") or "admin")
+    password = str(auth.get("first_admin_password") or "")
+    return username, password in ADMIN_PASSWORD_SENTINELS
 
 
 def _count_change_me(config_path: Path) -> int:
@@ -89,6 +112,19 @@ def apply_summary(plan: SummaryPlan, *, console: _ConsoleLike) -> None:
         ),
         render_profile_next_steps_text(install_plan, context),
     ]
+    # Issue #11 : le résumé DOIT dire comment se connecter — avant, une installation se
+    # terminait sans jamais mentionner l'existence d'identifiants (mot de passe généré
+    # au 1er démarrage, journalisé une fois, découvert par personne). Dernier bloc :
+    # c'est la première chose que l'utilisateur fera après le démarrage.
+    if plan.admin_login:
+        username, is_sentinel = _read_admin_login(plan.config_path)
+        blocks.append(render_login_summary(
+            username=username,
+            password_is_sentinel=is_sentinel,
+            systemd=plan.systemd,
+            final_log_file=plan.final_log_file,
+            venv=str(plan.venv),
+        ))
     # Durée totale = la métrique « time-to-first-job » de référence pour juger
     # toute optimisation d'installation (PISTES_AMELIORATION §6.6).
     if plan.elapsed_seconds > 0:

@@ -31,8 +31,11 @@ scripts/docker_quickstart.sh --bundled     # → http://localhost:7870
 ensuite : zéro téléchargement, fonctionne hors-ligne). Sans `--bundled`, l'image slim est
 légère mais télécharge les modèles au premier traitement.
 
-**Étape 2 — premier login.** Ouvrir `http://localhost:7870`, se connecter avec
-**`admin` / `CHANGE-ME`** — un bandeau permanent vous rappelle de le changer, faites-le.
+**Étape 2 — premier login.** Ouvrir `http://localhost:7870`. Le quickstart **affiche
+l'identifiant et le mot de passe dans son message final** (`admin` + mot de passe généré,
+écrit dans `config.yaml`, clé `auth.first_admin_password`). Changez-le à la première
+connexion — un bandeau vous le rappellera. Message raté ? relancez le quickstart
+(idempotent) : il réaffiche les identifiants.
 
 **Étape 3 — premier compte-rendu.** « Nouveau traitement » → déposer l'audio de la
 réunion (ou enregistrer au micro) → choisir un **profil** (ex. *Word corrigé*) → laisser

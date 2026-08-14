@@ -73,9 +73,10 @@ auth:
   first_admin_username: "admin"
   # LAISSER VIDE : au tout premier démarrage sur une base vierge, TranscrIA génère un
   # mot de passe aléatoire et l'affiche UNE FOIS dans le journal de démarrage
-  # (journalctl -u transcria). Ce fichier est un exemple PUBLIC — y écrire un secret
-  # d'amorçage reviendrait à le publier. N'y mettez une valeur que si vous voulez
-  # imposer le vôtre, et retirez-la ensuite.
+  # (natif : journalctl -u transcria.service | grep -a -A 4 'PREMIER COMPTE' ;
+  # Docker : docker compose logs | grep -a -A 4 'PREMIER COMPTE'). Ce fichier est un
+  # exemple PUBLIC — y écrire un secret d'amorçage reviendrait à le publier. N'y mettez
+  # une valeur que si vous voulez imposer le vôtre, et retirez-la ensuite.
   first_admin_password: ""
   # ── SSO d'entreprise (docs/GESTION_IDENTITE.md) — décommenter pour activer ──
   # backend: oidc                    # défaut: local (comptes historiques)

@@ -1091,8 +1091,15 @@ log_section "$(t sec_interactive)"
 CHANGED_CONFIG=false
 
 # ── Mot de passe admin ────────────────────────────────────────────────────────
+# Sentinelles = MIROIR de DEFAULT_ADMIN_PASSWORDS (transcria/auth/store.py), verrouillé
+# par test de dérive. Depuis S1.4 le défaut généré est VIDE (plus de "CHANGE-ME" publié) :
+# ne tester que "CHANGE-ME" avait TUÉ cette question (issue #11) — plus personne ne se
+# voyait proposer de mot de passe, et celui généré au 1er démarrage n'était annoncé
+# nulle part.
 CURRENT_PWD=$(yaml_get "auth.first_admin_password")
-if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$CURRENT_PWD" = "CHANGE-ME" ]]; then
+ADMIN_PWD_IS_SENTINEL=false
+case "$CURRENT_PWD" in ""|"CHANGE-ME"|"admin-change-me") ADMIN_PWD_IS_SENTINEL=true ;; esac
+if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$ADMIN_PWD_IS_SENTINEL" = true ]]; then
     echo ""
     log_config_setup_event admin-default-password
     if ask_yn "$(t ask_admin_pw)"; then
@@ -1620,4 +1627,7 @@ SUMMARY_CLI_ARGS=(
 [[ "$COHERE_OK" = true ]]                  && SUMMARY_CLI_ARGS+=(--cohere-ok)
 [[ "$PYANNOTE_OK" = true ]]                && SUMMARY_CLI_ARGS+=(--pyannote-ok)
 [[ "$QWEN_OK" = true ]]                    && SUMMARY_CLI_ARGS+=(--qwen-ok)
+# Bloc « première connexion » (issue #11) — l'état sentinelle/défini est relu de la
+# config par le résumé lui-même (reflète la réponse donnée à la section 8).
+[[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true ]] && SUMMARY_CLI_ARGS+=(--admin-login)
 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${SUMMARY_CLI_ARGS[@]}"

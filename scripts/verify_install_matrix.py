@@ -29,6 +29,7 @@ Exemple :
 from __future__ import annotations
 
 import argparse
+import re
 import socket
 import subprocess
 import sys
@@ -225,8 +226,10 @@ def config_setup_command(
     ``NODE_IP`` (placeholder des configs frontale) → nom du conteneur nœud (DNS interne du
     réseau Docker). Pour l'all-in-one (config locale sans NODE_IP), le sed est un no-op.
     ``dsn`` (rôles à base) remplace ``storage.database_url`` par la base de test externe.
-    ``admin_password`` fixe ``auth.first_admin_password`` à une valeur connue → l'admin seedé
-    par install.sh/ensure_admin est déterministe (sinon il reste « CHANGE-ME » de l'exemple).
+    ``admin_password`` fixe ``auth.first_admin_password`` à une valeur connue (mode héritage,
+    ``--password`` explicite). Sans lui (défaut depuis l'issue #11), la clé reste vide comme
+    chez un vrai utilisateur : ``ensure_admin`` GÉNÈRE le mot de passe au premier boot et la
+    gate le lit dans le journal du service — l'expérience réelle de première connexion.
     ``stt_backend``/``diarization_backend`` basculent la reconnaissance vers la voie NON gated
     (whisper + sortformer) → E2E « facile » sans token HF, cohérent avec le backend Ollama.
     """
@@ -244,6 +247,18 @@ def config_setup_command(
     if diarization_backend:
         cmd += f" && sed -i 's|diarization_backend:.*|diarization_backend: \"{diarization_backend}\"|' /app/config.yaml"
     return cmd
+
+
+# Bannière de `UserStore.ensure_admin` (transcria/auth/store.py) — le SEUL endroit où le
+# mot de passe généré est lisible. Si ce motif casse, la gate échoue : c'est voulu, un
+# utilisateur réel ne pourrait pas non plus découvrir son mot de passe (issue #11).
+_GENERATED_PW_RE = re.compile(r"mot de passe généré\s*:\s*(\S+)")
+
+
+def extract_generated_password(log_text: str) -> str | None:
+    """Extrait le mot de passe admin généré de la bannière « PREMIER COMPTE » du journal."""
+    match = _GENERATED_PW_RE.search(log_text)
+    return match.group(1) if match else None
 
 
 # ── Exécution (subprocess) ───────────────────────────────────────────────────
@@ -459,6 +474,19 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
         wait_health(topo.web_host_port, 7870, web.name)
         assert_container_gpu(topo.gpu_container)
 
+        # 5-bis) Première connexion RÉELLE (issue #11) : sans --password explicite, rien
+        # n'a été injecté dans la config — on lit le mot de passe GÉNÉRÉ par ensure_admin
+        # dans le journal du service, exactement comme l'utilisateur doit le faire. Si la
+        # bannière est absente ou inexploitable, la gate échoue : c'est le test.
+        if not password:
+            log_text = _docker_exec(web.name, "cat /app/service.log")
+            extracted = extract_generated_password(log_text)
+            if not extracted:
+                _fail("login", f"bannière « PREMIER COMPTE » introuvable dans le journal de {web.name} "
+                               "— un utilisateur réel ne pourrait pas découvrir son mot de passe")
+            password = extracted
+            _log("login", "mot de passe généré lu dans le journal du service (bannière PREMIER COMPTE)")
+
         # 6) E2E son via la frontale (réutilise le pilote éprouvé).
         from verify_split_topology import run_job  # type: ignore[import-not-found]
 
@@ -482,8 +510,10 @@ def main() -> int:
     ap.add_argument("--audio", type=Path, default=_REPO / "tests" / "test2.mp3")
     ap.add_argument("--profile", default=None, help="profil de traitement (ex. word_corrige)")
     ap.add_argument("--username", default="admin")
-    ap.add_argument("--password", default="matrix-admin-pw",
-                    help="mot de passe admin injecté dans la config + utilisé pour l'E2E")
+    ap.add_argument("--password", default="",
+                    help="mot de passe admin à injecter dans la config (mode héritage). "
+                         "VIDE (défaut) = expérience réelle : ensure_admin le génère au 1er boot "
+                         "et la gate le lit dans le journal du service (issue #11)")
     ap.add_argument("--cuda", default=None, help="forcer l'index torch CUDA (ex. cu126)")
     ap.add_argument("--llm-backend", default=None, choices=("ollama", "llamacpp"),
                     help="forcer le backend LLM (ollama = voie facile sans compilation)")

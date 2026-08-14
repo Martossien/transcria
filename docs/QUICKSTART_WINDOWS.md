@@ -140,8 +140,10 @@ réutilise les couches déjà complétées.
 ### Étape 7 — Premier compte-rendu
 
 Ouvrez `http://localhost:7870` **dans votre navigateur Windows** (le port traverse
-WSL2 tout seul). Connectez-vous avec `admin` / `CHANGE-ME` (changez-le, le bandeau
-insistera), puis : « Nouveau traitement » → déposer l'audio → choisir un profil →
+WSL2 tout seul). Connectez-vous avec les **identifiants affichés à la fin de
+l'installation** (`admin` + mot de passe généré, écrit dans `config.yaml` côté Ubuntu,
+clé `auth.first_admin_password` — changez-le, le bandeau insistera), puis :
+« Nouveau traitement » → déposer l'audio → choisir un profil →
 télécharger le DOCX. Le parcours détaillé est dans le [QUICKSTART](QUICKSTART.md).
 
 ## Dépannage — les 5 pannes classiques
