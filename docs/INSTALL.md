@@ -1,5 +1,8 @@
 # Guide d'installation et de configuration de TranscrIA
 
+> 🇬🇧 English readers: a condensed English guide covers the paths people actually take —
+> [INSTALL.en.md](INSTALL.en.md). This French document remains the exhaustive reference.
+
 Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusqu'au premier transcodage.
 
 ---
@@ -43,10 +46,15 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 |---|---|---|
 | CPU | 8 cœurs | 16+ cœurs |
 | RAM | 32 Go | 64 Go |
-| GPU | 1× NVIDIA 16 Go VRAM | 2× NVIDIA 24+ Go VRAM (ex: RTX 3090/4090/5090) |
+| GPU | 1× NVIDIA **8 Go** VRAM (compute ≥ 7.5) | 1-2× NVIDIA 24+ Go (ex: RTX 3090/4090/5090) |
 | Disque | 100 Go SSD | 500+ Go NVMe |
 
-> **Note GPU** : Le cycle complet (Cohere + pyannote + LLM locale d'arbitrage) nécessite une VRAM importante, selon le modèle et le backend. Avec 2× GPU 24 Go, les modèles sont chargés séquentiellement. Avec un seul GPU, seul le pipeline ASR+diarisation peut être réaliste sans résumé/correction LLM locale.
+> **Note GPU** : depuis la 0.4.2, le **workflow complet** (STT + diarisation + résumé/
+> correction LLM) tourne dès **8 Go de VRAM** sur un seul GPU : l'autonomie VRAM
+> charge/décharge les modèles séquentiellement et le palier LLM est choisi selon la
+> carte (8/12/16/24/32/48/64 Go). Plus de VRAM = paliers LLM plus grands et moins de
+> rechargements. Sans GPU compatible, le profil CPU (Kroko) assure la transcription.
+> RTX 50xx (Blackwell) : driver ≥ 580 requis.
 
 ### Logiciels système
 

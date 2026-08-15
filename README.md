@@ -286,7 +286,7 @@ venv/bin/python scripts/doctor.py --strict   # warnings become failures (for dep
 ```
 
 Options, model prerequisites, and distributed roles are documented in
-[docs/INSTALL.md](docs/INSTALL.md).
+[docs/INSTALL.en.md](docs/INSTALL.en.md) (exhaustive French reference: [docs/INSTALL.md](docs/INSTALL.md)).
 
 ### Just evaluating — one Docker command
 
@@ -300,7 +300,7 @@ scripts/docker_quickstart.sh --bundled       # try it: models included, no token
 ```
 
 Image details, the slim-vs-bundled trade-off, the GPU/VRAM compatibility table, and
-rollback are in [docs/DOCKER.md](docs/DOCKER.md).
+rollback are in [docs/DOCKER.en.md](docs/DOCKER.en.md) (French: [docs/DOCKER.md](docs/DOCKER.md)).
 
 > **First login:** open `http://localhost:7870` — on the first visit, the portal asks you
 > to **create the administrator account** (username + password of your choice). For
@@ -326,7 +326,7 @@ codebase and configuration schema serve all of them.
   [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md).
 
 The same roles exist as container entrypoints for Docker deployments
-([docs/DOCKER.md](docs/DOCKER.md)).
+([docs/DOCKER.en.md](docs/DOCKER.en.md)).
 
 ## Known limitations
 
@@ -368,8 +368,8 @@ We keep this list honest and current.
 Full documentation lives in [`docs/`](docs/README.md) (French). A few entry points:
 
 - [docs/TESTERS.md](docs/TESTERS.md) — **testing TranscrIA**: what to expect, the 15-minute smoke test, what to report
-- [docs/INSTALL.md](docs/INSTALL.md) — installation, models, `systemd`, distributed roles
-- [docs/DOCKER.md](docs/DOCKER.md) — containerized deployment
+- [docs/INSTALL.en.md](docs/INSTALL.en.md) — installation, models, `systemd`, distributed roles (condensed; exhaustive French: [docs/INSTALL.md](docs/INSTALL.md))
+- [docs/DOCKER.en.md](docs/DOCKER.en.md) — containerized deployment (French: [docs/DOCKER.md](docs/DOCKER.md))
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, database
 - [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) — complete `config.yaml` reference
 - [docs/EXTERNAL_STT_RUNTIMES.md](docs/EXTERNAL_STT_RUNTIMES.md) — plugging external C++ STT servers (audio.cpp, parakeet.cpp), configuration only

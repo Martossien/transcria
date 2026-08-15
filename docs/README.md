@@ -9,7 +9,8 @@ this index is the English entry point (English summaries below).
 
 New here? The single-page walkthrough **[QUICKSTART.en.md](QUICKSTART.en.md)** (français :
 [QUICKSTART.md](QUICKSTART.md)) takes you from zero to your first meeting minutes; then
-[INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) for the full reference.
+[INSTALL.en.md](INSTALL.en.md) or [DOCKER.en.md](DOCKER.en.md) — the exhaustive French
+references being [INSTALL.md](INSTALL.md) and [DOCKER.md](DOCKER.md).
 Non-technical readers (business owners, project managers, decision makers) have a
 dedicated overview: [PRESENTATION.md](PRESENTATION.md) (French) · [PRESENTATION.en.md](PRESENTATION.en.md) (English) — use cases, benefits,
 example results and the user journey.
@@ -21,8 +22,8 @@ example results and the user journey.
 | [TESTERS.md](TESTERS.md) | **In English** — testing TranscrIA: what to expect (disk, first startup, models, GPU floor), the 15-minute smoke test, topologies we need tested, diagnostics and the report template |
 | [QUICKSTART.md](QUICKSTART.md) · [QUICKSTART.en.md](QUICKSTART.en.md) | **From zero to your first minutes on one page** — host prerequisites, one Docker command or the express native install, first login, first job |
 | [QUICKSTART_WINDOWS.md](QUICKSTART_WINDOWS.md) · [QUICKSTART_WINDOWS.en.md](QUICKSTART_WINDOWS.en.md) | **Windows 11** — guided install script + WSL2/Docker Desktop path (GPU passthrough, `.wslconfig`, disk/VHDX pitfalls); verified against official docs, real-machine validation in progress |
-| [INSTALL.md](INSTALL.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting |
-| [DOCKER.md](DOCKER.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
+| [INSTALL.md](INSTALL.md) · [INSTALL.en.md](INSTALL.en.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting — English version condensed, French exhaustive |
+| [DOCKER.md](DOCKER.md) · [DOCKER.en.md](DOCKER.en.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
 | [UPGRADE.md](UPGRADE.md) | Upgrade and rollback procedure, obsolete configuration keys, database migrations |
 | [RELEASE.md](RELEASE.md) | **Maintainers** — how a version gets published: gates, real E2E, clean-distro install gate, Docker rule, documentation review, tag, images, release notes, and the incidents each step exists for |
 | [SERVICE_RESSOURCES_GPU.md](SERVICE_RESSOURCES_GPU.md) | Split topology (web frontend + GPU resource node): remote inference, VRAM autonomy, admission and degraded modes |

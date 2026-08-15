@@ -1,12 +1,15 @@
 # Déploiement Docker (P5)
 
+> 🇬🇧 English version: [DOCKER.en.md](DOCKER.en.md) (full translation — this French
+> version remains canonical).
+
 > Référence du déploiement conteneurisé de TranscrIA (invariants d'origine :
 > `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`, archivé). Trois familles d'images
 > applicatives :
 >
 > - **Rôles CPU distribués** (`web`, `scheduler`, `migrate`) : une seule image légère construite
 >   par le `Dockerfile` racine (torch CPU) et orchestrée par `docker-compose.yml` (profil `split`).
-> - **All-in-one GPU** (`all`) : image **dédiée** `Dockerfile.allinone-gpu` (base CUDA 12.6,
+> - **All-in-one GPU** (`all`) : image **dédiée** `Dockerfile.allinone-gpu` (base CUDA 12.8 — sm_120/RTX 50xx natif,
 >   **llama.cpp compilé** = LLM d'arbitrage embarquée, **NeMo/Sortformer** pour la diarisation
 >   non gated), profil `gpu`. Elle livre le **workflow complet GPU en une commande, sans token**
 >   — voir « All-in-one GPU » ci-dessous. **Aucun poids de modèle embarqué** (téléchargés au
@@ -274,7 +277,7 @@ docker run --rm --device nvidia.com/gpu=0 nvidia/cuda:12.4.0-base-ubuntu22.04 nv
 > `--gpus all` échoue (« failed to discover GPU vendor from CDI / AMD CDI spec not found ») ;
 > la forme `--device nvidia.com/gpu=…` est fiable. En compose : `devices: ["nvidia.com/gpu=all"]`.
 
-**Image GPU all-in-one** (`Dockerfile.allinone-gpu`, CUDA 12.6 ; les wheels torch CUDA embarquent
+**Image GPU all-in-one** (`Dockerfile.allinone-gpu`, CUDA 12.8 + torch cu130 ; les wheels torch CUDA embarquent
 le runtime, le driver vient de l'hôte via CDI) — préférer le quickstart, qui gère build/pull :
 
 ```bash
@@ -302,7 +305,7 @@ d'arbitrage embarquée**) + base. Image dédiée `Dockerfile.allinone-gpu`.
 scripts/docker_quickstart.sh               # build/pull + modèles + up + /health (recommandé)
 # … ou manuellement :
 export POSTGRES_PASSWORD=…
-docker compose --profile gpu build         # construit transcria-allinone (CUDA 12.6, llama.cpp)
+docker compose --profile gpu build         # construit transcria-allinone (CUDA 12.8, llama.cpp)
 docker compose --profile gpu run --rm --no-deps all-in-one --provision-only   # tire le GGUF (~6 Go)
 docker compose --profile gpu up -d         # db → migrate-gpu → all-in-one
 curl -fsS http://localhost:7870/health     # → 200
@@ -425,7 +428,8 @@ Côté testeur, pointer le quickstart sur l'image publiée fait un **`pull`** (p
 TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX.Y.Z scripts/docker_quickstart.sh
 ```
 
-> **Driver minimum** : CUDA 12.6 → driver NVIDIA **≥ 535** (Linux). Si le driver est plus ancien,
+> **Driver minimum** : torch cu130 (CUDA 13) → driver NVIDIA **≥ 580** (Linux, depuis 0.4.4 ;
+> images 0.4.3 pour les drivers 535-579). Si le driver est plus ancien,
 > le quickstart retombe sur un **build local**. L'image est volumineuse (**~19 Go** : base CUDA
 > devel + torch + NeMo) ; le build CI est lourd, le workflow
 > libère l'espace disque du runner ; sinon builder/pousser depuis une machine GPU locale.

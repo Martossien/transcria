@@ -1115,8 +1115,8 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 
 | Fichier | Contenu |
 |---|---|
-| `docs/INSTALL.md` | Guide d'installation complet (install.sh, venv, modèles, service systemd, dépannage) |
-| `docs/DOCKER.md` | Déploiement conteneurisé : quickstart turnkey, image, compose, GPU (CDI), variables, rollback |
+| `docs/INSTALL.md` | Guide d'installation complet (install.sh, venv, modèles, service systemd, dépannage) — version anglaise CONDENSÉE : `docs/INSTALL.en.md` (le français reste la référence exhaustive) |
+| `docs/DOCKER.md` | Déploiement conteneurisé : quickstart turnkey, image, compose, GPU (CDI), variables, rollback — traduction anglaise 1:1 : `docs/DOCKER.en.md` (à maintenir en MIROIR à chaque édition du français) |
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
