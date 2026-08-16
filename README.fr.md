@@ -10,7 +10,9 @@
 
 **Essayez tout de suite, sans installation :** la [démo de pré-vol audio](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
 exécute l'analyse « cet enregistrement va-t-il bien se transcrire ? » de TranscrIA
-**entièrement dans votre navigateur** (rien n'est envoyé — WebAssembly).
+**entièrement dans votre navigateur** (rien n'est envoyé — WebAssembly), puis **transcrit
+l'extrait sur place** avec le même modèle Kroko 100 % CPU que le portail embarque
+(français/anglais, ~7× temps réel sur un cœur).
 
 *L'interface et les livrables générés parlent **français et anglais**, et depuis la
 0.4.3 **allemand, espagnol et italien en bêta** (badgés dans le sélecteur tant qu'un

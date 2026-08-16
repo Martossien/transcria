@@ -8,7 +8,8 @@
 
 **Try it right now, no install:** the [audio preflight demo](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
 runs TranscrIA's "will this recording transcribe well?" analysis **entirely in your browser**
-(nothing is uploaded — WebAssembly).
+(nothing is uploaded — WebAssembly), then **transcribes it right there** with the same
+CPU-only Kroko model the portal ships (English/French, ~7× real time on one core).
 
 **Self-hosted meeting transcription portal.** TranscrIA turns long meeting recordings into
 usable deliverables on your own GPUs: corrected, speaker-attributed transcripts (SRT),
