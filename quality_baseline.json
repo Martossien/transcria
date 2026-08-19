@@ -110,7 +110,7 @@
   "transcria.ingestion.session_store": 5,
   "transcria.ingestion.store": 2,
   "transcria.installer.arbitrage": 9,
-  "transcria.installer.cli": 26,
+  "transcria.installer.cli": 28,
   "transcria.installer.config_phase": 3,
   "transcria.installer.express": 3,
   "transcria.installer.messages": 1,

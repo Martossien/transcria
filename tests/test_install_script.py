@@ -92,12 +92,16 @@ def test_install_script_delegates_prerequisite_setup_logs():
 
 
 def test_install_script_offre_ffmpeg_interactive():
-    """Issue #9 (2e friction) : ffmpeg absent → le script PROPOSE l'installation sur apt
-    (consentie, jamais silencieuse) puis REFAIT la vérification complète qui fait foi."""
+    """Issue #9 (2e friction) : ffmpeg absent → le script PROPOSE l'installation
+    (consentie, jamais silencieuse) puis REFAIT la vérification complète qui fait foi.
+
+    Depuis issue #14, l'offre passe par le socle `packages.py` : elle couvre donc aussi
+    dnf (`ffmpeg-free`), là où elle était réservée à apt."""
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "ask_install_ffmpeg" in content
-    assert "apt-get install -y ffmpeg" in content
+    assert "offer_package_install ffmpeg ffmpeg" in content
+    assert "apt-get" not in content.split("offer_package_install() {", 1)[1].split("\n}", 1)[0]
     # La re-vérification passe par la MÊME fonction que le premier check.
     assert content.count("run_prereq_binaries_check") >= 3  # définition + 1er appel + retry
 
@@ -994,3 +998,45 @@ def test_start_script_trouve_le_venv_sans_variable(tmp_path: Path):
     assert f"Alembic : {tmp_path}/venv/bin/alembic" in result.stdout
     assert "échec des migrations Alembic" in result.stdout
     assert "/bin/alembic" not in result.stdout.replace(f"{tmp_path}/venv/bin/alembic", "")
+
+
+def test_install_script_propose_postgres_sans_jamais_l_installer_en_douce():
+    """Issue #14 : le repli SQLite était subi — on propose, avec consentement explicite."""
+    content = _INSTALL.read_text(encoding="utf-8")
+    offre = content.split("offer_postgres_server() {", 1)[1].split("\n}", 1)[0]
+
+    # Jamais sans terminal ni en non-interactif : pas d'installation silencieuse.
+    assert '[[ "$NON_INTERACTIVE" = true || ! -t 0 ]] && return 1' in offre
+    # Consentement (même helper que l'offre ffmpeg de 0.4.4), question distincte selon
+    # qu'il faut INSTALLER ou seulement DÉMARRER le serveur.
+    assert 'ask_yn "$(t ask_install_pg)"' in offre
+    assert 'ask_yn "$(t ask_start_pg)"' in offre
+    # La logique (paquets, initdb, re-sonde) vit dans le module Python testé.
+    assert "postgres-server --probe" in offre and "postgres-server --ensure" in offre
+    for cle in ("ask_install_pg", "ask_start_pg"):
+        assert f"[fr:{cle}]" in content and f"[en:{cle}]" in content
+
+
+def test_install_script_offre_postgres_avant_le_recapitulatif_express():
+    """Le récapitulatif que l'utilisateur signe doit refléter la base RÉELLE."""
+    content = _INSTALL.read_text(encoding="utf-8")
+    bloc_express = content.split('"$INSTALL_PROFILE" == "all-in-one" ]]; then', 1)[1]
+    avant_recap = bloc_express.split("-m transcria.installer.cli express", 1)[0]
+
+    assert "offer_postgres_server" in avant_recap
+
+
+def test_install_script_ne_s_arrete_plus_net_quand_psql_manque():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    # L'arrêt historique reste, mais APRÈS une offre refusée ou échouée.
+    assert 'elif [[ "$PSQL_AVAILABLE" != true ]] && ! offer_postgres_server; then' in content
+
+
+def test_offre_de_paquet_ne_pose_pas_de_question_non_traduite():
+    """Garde-fou : `t()` rend la clé brute si le message manque — on n'affiche pas
+    « ask_install_xxx [o/N] » à l'utilisateur, on s'abstient."""
+    content = _INSTALL.read_text(encoding="utf-8")
+    offre = content.split("offer_package_install() {", 1)[1].split("\n}", 1)[0]
+
+    assert '[[ "$question" == "ask_install_$package" ]] && return 1' in offre

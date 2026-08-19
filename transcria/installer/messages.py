@@ -221,6 +221,18 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pg_migprompt_opt2": "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)",
         "pg_migprompt_choice": "  Votre choix [1/2] : ",
         "pg_db_sqlite_kept": "Base SQLite conservée (storage.database_url de config.yaml)",
+        # Offres d'installation de paquets (installer/packages.py)
+        "pkg_install_start": "Installation : {cmd}…",
+        "pkg_step_failed": "Échec de : {cmd}",
+        "pkg_installed": "{name} installé",
+        "pkg_missing": "{name} toujours absent après l'installation",
+        # Offre « serveur PostgreSQL » (installer/postgres_server.py)
+        "pgs_install_start": "Installation du serveur PostgreSQL…",
+        "pgs_start_start": "Démarrage du serveur PostgreSQL…",
+        "pgs_step_failed": "Échec de : {cmd}",
+        "pgs_ready": "PostgreSQL disponible (serveur joignable) — l'installation l'utilisera",
+        "pgs_still_unavailable": ("PostgreSQL toujours indisponible après l'opération — "
+                                  "l'installation continue sur SQLite"),
         "pg_db_sqlite_schema_ok": "Schéma SQLite créé/à jour (alembic upgrade head)",
         "pg_db_sqlite_schema_failed": ("Échec d'alembic upgrade head sur SQLite — le portail créera le schéma "
                                        "au démarrage, mais doctor signalera une base en retard."),
@@ -461,6 +473,16 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pg_migprompt_opt2": "  2. Skip (start with an empty PostgreSQL database, leave SQLite intact)",
         "pg_migprompt_choice": "  Your choice [1/2]: ",
         "pg_db_sqlite_kept": "SQLite database kept (storage.database_url from config.yaml)",
+        "pkg_install_start": "Installing: {cmd}…",
+        "pkg_step_failed": "Failed: {cmd}",
+        "pkg_installed": "{name} installed",
+        "pkg_missing": "{name} still missing after the installation",
+        "pgs_install_start": "Installing the PostgreSQL server…",
+        "pgs_start_start": "Starting the PostgreSQL server…",
+        "pgs_step_failed": "Failed: {cmd}",
+        "pgs_ready": "PostgreSQL available (server reachable) — the installation will use it",
+        "pgs_still_unavailable": ("PostgreSQL still unavailable after the operation — "
+                                  "the installation continues on SQLite"),
         "pg_db_sqlite_schema_ok": "SQLite schema created/up to date (alembic upgrade head)",
         "pg_db_sqlite_schema_failed": ("alembic upgrade head failed on SQLite — the portal will create the schema "
                                        "at startup, but doctor will report a database behind the models."),

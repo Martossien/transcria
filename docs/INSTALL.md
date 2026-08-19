@@ -65,7 +65,7 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | Module venv (`ensurepip`) | — | `apt install python3-venv` — **requis** pour créer le venv ; sur Debian/Ubuntu c'est un paquet séparé de `python3`, sans lui `python -m venv` échoue |
 | CUDA Toolkit | 12.x | Voir [docs.nvidia.com/cuda](https://docs.nvidia.com/cuda) |
 | NVIDIA Driver | 535+ | `apt install nvidia-driver-535` |
-| ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` |
+| ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` / `dnf install ffmpeg-free` — **l'installateur propose de le faire** s'il manque |
 | curl | — | `apt install curl` — utilisé pour télécharger opencode (LLM d'arbitrage) ; sinon repli vers une commande manuelle |
 | lsof | — | `apt install lsof` — utilisé par `start.sh` / `stop.sh` |
 | PostgreSQL *(principal hors dev)* | 13+ | `apt install postgresql` — requis en production/split/Docker ; SQLite seulement dev local ou demande explicite |
@@ -101,11 +101,20 @@ cd transcria
 
 Sans drapeau, sur un terminal, le profil `all-in-one` passe en **mode express** : le
 script détecte tout (matériel → palier LLM par placement réel, `psql` + sudo + **serveur
-qui répond à `pg_isready`** → PostgreSQL local avec mot de passe généré — un PostgreSQL
-installé mais arrêté replie sur SQLite avec un message explicite plutôt que d'échouer en
-plein install, token HF → choix des modèles), affiche **un
-récapitulatif « voilà ce que je vais faire »**, pose **une seule confirmation**, puis
-déroule le chemin non-interactif existant. Deux décisions propres à l'express :
+qui répond à `pg_isready`** → PostgreSQL local avec mot de passe généré, token HF →
+choix des modèles), affiche **un récapitulatif « voilà ce que je vais faire »**, pose
+**une seule confirmation**, puis déroule le chemin non-interactif existant. Trois
+décisions propres à l'express :
+
+- **Si PostgreSQL manque, l'installateur le propose** — avant le récapitulatif, pour que
+  celui-ci dise la vérité sur la base réellement utilisée. Deux situations, deux
+  questions : *aucun `psql`* → proposer de l'installer (`apt-get install postgresql` ou
+  `dnf install postgresql-server postgresql` + `postgresql-setup --initdb`, selon la
+  famille déclarée par `/etc/os-release`) ; *serveur installé mais muet* → proposer
+  seulement de le démarrer. Rien n'est installé sans un « o » explicite ; refus, absence
+  de droits (ni root ni sudo) ou non-interactif ⇒ SQLite, comme avant. Après l'opération,
+  c'est la **sonde rejouée** (`psql` + `pg_isready`) qui tranche, jamais le code retour
+  du gestionnaire de paquets.
 
 - **Sans token HF, sur une config fraîche**, les backends passent au duo non-gated
   choisi selon le matériel : **whisper + Sortformer** avec un GPU ≥ 12 Go (même choix
@@ -132,6 +141,7 @@ sort proprement **avant toute mutation**.
 | Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
 | Répertoires | Crée `jobs/`, `models/`, `instance/` |
 | Config | Génère `config.yaml` via `scripts/bootstrap_config.py` (auto-détection des binaires et chemins) |
+| Base de données | PostgreSQL si `psql` + droits + serveur qui répond ; **sinon l'installateur propose de l'installer ou de le démarrer** (une question, jamais en douce) ; refus ⇒ SQLite, dont le schéma est créé sur place (`alembic upgrade head`) |
 | Modèles IA | Vérifie Cohere ASR (répertoire local **ou cache HF** par repo id), cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
 | opencode | Détecte dans PATH / `~/.opencode/bin/` ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** + génère `opencode.json` |

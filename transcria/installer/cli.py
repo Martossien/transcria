@@ -15,7 +15,8 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
-from transcria.installer import hardware, imports_check, models, paths, postgres_lib, prerequisites, profiles, summary_lib
+from transcria.installer import hardware, imports_check, models, packages, paths, postgres_lib, prerequisites, profiles, summary_lib
+from transcria.installer import postgres_server as pgs
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -184,6 +185,55 @@ def _add_postgres_bootstrap_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--admin-python", default="", help="Préfixe python privilégié -m (ex. 'sudo -u postgres env PYTHONPATH=… python -m')")
     p.add_argument("--have-systemctl", action="store_true")
     p.add_argument("--have-service", action="store_true")
+
+
+def _add_install_package_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "install-package",
+        help="Installe un paquet système (offre consentie par install.sh) et vérifie son binaire.",
+    )
+    p.add_argument("--package", required=True, choices=sorted(packages.PACKAGES), help="paquet logique")
+    p.add_argument("--binary", required=True, help="binaire qui prouve l'installation (sonde qui fait foi)")
+    p.add_argument("--probe", action="store_true", help="rend l'offre possible + la commande (lignes shell)")
+
+
+def _cmd_install_package(args: argparse.Namespace) -> int:
+    import shutil as _shutil
+
+    manager = packages.detect_package_manager()
+    if args.probe:
+        # Rien à proposer si le binaire est DÉJÀ là : le préflight peut échouer pour un
+        # autre outil (lsof, curl) — on ne demande pas d'installer ce qui est installé.
+        possible = _shutil.which(args.binary) is None and packages.can_offer(
+            args.package, manager=manager,
+            prefix=packages.privilege_prefix(), is_root=packages.running_as_root(),
+        )
+        print(f"PKG_OFFER={'true' if possible else 'false'}")
+        # Guillemets obligatoires : la commande contient des espaces, et le filtre shell
+        # d'install.sh n'accepte une valeur libre que citée.
+        print(f'PKG_COMMAND="{packages.describe_command(args.package, manager=manager)}"')
+        return 0
+    # Le consentement a déjà été demandé par install.sh (jamais d'installation en douce).
+    return 0 if packages.ensure_package(args.package, binary=args.binary, console=Console()) else 1
+
+
+def _add_postgres_server_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "postgres-server",
+        help="Sonde le serveur PostgreSQL et, sur consentement, l'installe ou le démarre (SECTION 1-bis / 6.5).",
+    )
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--probe", action="store_true", help="rend l'état + l'action à proposer (lignes shell)")
+    mode.add_argument("--ensure", action="store_true", help="réalise l'action puis re-sonde (code 0 = utilisable)")
+
+
+def _cmd_postgres_server(args: argparse.Namespace) -> int:
+    state = pgs.probe_server()
+    if args.probe:
+        print(pgs.render_probe_shell(state, pgs.decide_action(state)))
+        return 0
+    # `--ensure` : le consentement a déjà été demandé par install.sh (jamais silencieux).
+    return 0 if pgs.ensure_server(console=Console(), state=state) else 1
 
 
 def _add_sqlite_schema_parser(sub: argparse._SubParsersAction) -> None:
@@ -762,6 +812,8 @@ def main(argv: list[str] | None = None) -> int:
     _add_postgres_parser(sub)
     _add_postgres_bootstrap_parser(sub)
     _add_sqlite_schema_parser(sub)
+    _add_postgres_server_parser(sub)
+    _add_install_package_parser(sub)
     _add_systemd_parser(sub)
     _add_summary_parser(sub)
     _add_recommend_llm_parser(sub)
@@ -787,6 +839,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_postgres(args)
     if args.command == "postgres-bootstrap":
         return _cmd_postgres_bootstrap(args)
+    if args.command == "install-package":
+        return _cmd_install_package(args)
+    if args.command == "postgres-server":
+        return _cmd_postgres_server(args)
     if args.command == "sqlite-schema":
         return _cmd_sqlite_schema(args)
     if args.command == "systemd":

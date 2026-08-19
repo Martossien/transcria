@@ -50,7 +50,9 @@ git clone https://github.com/Martossien/transcria.git && cd transcria
 ```
 
 Le mode express détecte tout (GPU → palier LLM, psql → PostgreSQL, token HF → modèles)
-et affiche « voilà ce que je vais faire » avant d'agir ; `./install.sh --expert` redonne
+et affiche « voilà ce que je vais faire » avant d'agir. Si PostgreSQL manque, il propose
+de l'installer (ou de le démarrer s'il est juste arrêté) — une question, jamais en douce ;
+refuser laisse SQLite, parfait en mono-utilisateur ; `./install.sh --expert` redonne
 le pas-à-pas question par question. Sans token HF, l'install choisit **whisper +
 Sortformer** (aucun compte requis) — la qualité de référence (Cohere + pyannote) s'active
 plus tard depuis **Administration → Modèles** avec un token.

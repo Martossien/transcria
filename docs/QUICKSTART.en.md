@@ -51,7 +51,9 @@ git clone https://github.com/Martossien/transcria.git && cd transcria
 ```
 
 Express mode detects everything (GPU → LLM tier, psql → PostgreSQL, HF token → models)
-and shows "here is what I am going to do" before acting; `./install.sh --expert` brings
+and shows "here is what I am going to do" before acting. If PostgreSQL is missing, it
+offers to install it (or to start it when it is merely stopped) — one question, never
+silently; declining keeps SQLite, which is fine for single-user use; `./install.sh --expert` brings
 back the step-by-step questions. Without an HF token, the install picks **whisper +
 Sortformer** (no account required) — reference quality (Cohere + pyannote) can be
 enabled later from **Administration → Models** with a token.

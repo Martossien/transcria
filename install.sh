@@ -101,6 +101,8 @@ declare -A _MSG=(
     [en:sec_config]="Configuration"
     [fr:sec_db]="Base de données"
     [en:sec_db]="Database"
+    [fr:sec_pg_offer]="PostgreSQL (recommandé hors usage mono-utilisateur)"
+    [en:sec_pg_offer]="PostgreSQL (recommended beyond single-user use)"
     [fr:sec_models]="Vérification des modèles IA"
     [en:sec_models]="Checking AI models"
     [fr:sec_interactive]="Configuration interactive"
@@ -131,8 +133,12 @@ declare -A _MSG=(
     [en:express_open_models]="Token-free models written to config.yaml"
     [fr:ask_admin_pw]="Définir le mot de passe admin maintenant ?"
     [en:ask_admin_pw]="Set the admin password now?"
-    [fr:ask_install_ffmpeg]="ffmpeg est absent — l'installer maintenant (apt-get install ffmpeg) ?"
-    [en:ask_install_ffmpeg]="ffmpeg is missing — install it now (apt-get install ffmpeg)?"
+    [fr:ask_install_ffmpeg]="ffmpeg est absent — l'installer maintenant (%s) ?"
+    [en:ask_install_ffmpeg]="ffmpeg is missing — install it now (%s)?"
+    [fr:ask_install_pg]="PostgreSQL n'est pas installé — l'installer maintenant ? (non = SQLite, suffisant en usage mono-utilisateur)"
+    [en:ask_install_pg]="PostgreSQL is not installed — install it now? (no = SQLite, fine for single-user use)"
+    [fr:ask_start_pg]="PostgreSQL est installé mais son serveur ne répond pas — le démarrer maintenant ? (non = SQLite)"
+    [en:ask_start_pg]="PostgreSQL is installed but its server is not responding — start it now? (no = SQLite)"
     [fr:ask_ollama]="Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"
     [en:ask_ollama]="Follow the recommendation and use Ollama? (no = llama.cpp, fine control)"
     [fr:ask_llamacpp]="Suivre la recommandation et utiliser llama.cpp ? (non = Ollama, plus simple mais modèle plus petit sur ce palier)"
@@ -377,6 +383,49 @@ eval_named_shell_assignments() {
 python_module() { PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"; }
 
 postgres_helper() { python_module transcria.installer.cli postgres-tools "$@"; }
+
+# Offre « serveur PostgreSQL » (issue #14) — même forme que l'offre ffmpeg : on PROPOSE,
+# on n'installe jamais en douce, et c'est la sonde REJOUÉE qui tranche, pas le code
+# retour d'apt/dnf. Retour 0 = PostgreSQL utilisable à l'arrivée.
+# Deux cas distincts : client absent (installer) vs serveur muet (démarrer) — démarrer
+# un service déjà installé est bien moins invasif, la question le dit.
+offer_postgres_server() {
+    [[ "$NON_INTERACTIVE" = true || ! -t 0 ]] && return 1
+    local probe
+    probe=$(python_module transcria.installer.cli postgres-server --probe 2>/dev/null) || return 1
+    PG_SERVER_ACTION=""
+    eval_named_shell_assignments "$probe" \
+        PG_SERVER_ACTION PG_SERVER_PSQL PG_SERVER_REACHABLE PG_SERVER_MANAGER
+    # L'en-tête n'apparaît que si l'on a vraiment quelque chose à proposer : sur une
+    # machine où PostgreSQL tourne déjà, l'offre est invisible.
+    case "$PG_SERVER_ACTION" in
+        none)    return 0 ;;
+        install) log_section "$(t sec_pg_offer)"; ask_yn "$(t ask_install_pg)" || return 1 ;;
+        start)   log_section "$(t sec_pg_offer)"; ask_yn "$(t ask_start_pg)" || return 1 ;;
+        *)       return 1 ;;
+    esac
+    python_module transcria.installer.cli postgres-server --ensure
+}
+
+# Offre générique « installer un paquet système » : sonde (famille de distro + droits),
+# UNE question portant la commande réelle, exécution, puis vérification par le binaire.
+# Retour 0 = quelque chose a été tenté et le binaire est là.
+offer_package_install() {
+    local package="$1" binary="$2" probe question
+    [[ "$NON_INTERACTIVE" = true || ! -t 0 ]] && return 1
+    probe=$(python_module transcria.installer.cli install-package \
+        --package "$package" --binary "$binary" --probe 2>/dev/null) || return 1
+    PKG_OFFER=false
+    PKG_COMMAND=""
+    eval_named_shell_assignments "$probe" PKG_OFFER PKG_COMMAND
+    [[ "$PKG_OFFER" = true ]] || return 1
+    question="$(t "ask_install_$package")"
+    # Pas de question traduite pour ce paquet ⇒ on ne pose rien (t() rend la clé brute).
+    [[ "$question" == "ask_install_$package" ]] && return 1
+    printf -v question "$question" "$PKG_COMMAND"
+    ask_yn "$question" || return 1
+    python_module transcria.installer.cli install-package --package "$package" --binary "$binary"
+}
 
 arbitrage_helper() { python_module transcria.installer.cli arbitrage "$@"; }
 
@@ -675,29 +724,15 @@ run_prereq_binaries_check() {
 }
 run_prereq_binaries_check
 # ── Offre d'installation ffmpeg (issue #9, 2e friction du 1er testeur) ────────
-# Le script SAIT ce qui manque et connaît la commande : sur apt, on propose de la
-# lancer — UNE question, consentie (la règle « jamais de mutation système
-# silencieuse » tient : refus ou non-interactif = message + arrêt, comme avant).
-# dnf n'a pas ffmpeg dans les dépôts de base (RPM Fusion / ffmpeg-free) : le
-# message d'échec donne la commande, on ne devine pas les dépôts de l'utilisateur.
-if [[ "$PREREQ_BINARIES_STATUS" -ne 0 && "$NON_INTERACTIVE" = false && -t 0 ]] \
-        && command -v apt-get >/dev/null 2>&1 \
-        && { [[ $EUID -eq 0 ]] || [[ "$HAVE_SUDO" = true ]]; }; then
-    _APT_SUDO=""
-    [[ $EUID -ne 0 ]] && _APT_SUDO="sudo"
-    if ask_yn "$(t ask_install_ffmpeg)"; then
-        # Cache apt jamais rafraîchi (machine fraîche) → l'install directe peut
-        # échouer : on retente après update plutôt que d'updater d'office.
-        # `< /dev/null` OBLIGATOIRE : dpkg/debconf lit stdin et AVALE la réponse de la
-        # question SUIVANTE (vécu au rejeu express 0.4.4 : le récapitulatif attendait
-        # une réponse déjà consommée par apt).
-        if $_APT_SUDO apt-get install -y ffmpeg </dev/null \
-                || { $_APT_SUDO apt-get update </dev/null && $_APT_SUDO apt-get install -y ffmpeg </dev/null; }; then
-            # Re-vérification COMPLÈTE (même commande que ci-dessus) : c'est elle
-            # qui fait foi, pas le code retour d'apt.
-            run_prereq_binaries_check
-        fi
-    fi
+# Le script SAIT ce qui manque et connaît la commande : on propose de la lancer — UNE
+# question, consentie (la règle « jamais de mutation système silencieuse » tient : refus
+# ou non-interactif = message + arrêt, comme avant). Le nom du paquet et la famille de
+# distribution viennent de transcria.installer.packages (apt : ffmpeg ; dnf : ffmpeg-free,
+# dépôt de BASE — on ne devine aucun dépôt tiers).
+if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]] && offer_package_install ffmpeg ffmpeg; then
+    # Re-vérification COMPLÈTE (même fonction qu'au premier check) : c'est elle qui fait
+    # foi, pas le code retour du gestionnaire de paquets.
+    run_prereq_binaries_check
 fi
 if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]]; then
     exit 1
@@ -718,6 +753,10 @@ EXPRESS_OPEN_MODELS=false
 EXPRESS_STT_BACKEND=""
 EXPRESS_DIAR_BACKEND=""
 if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_PROFILE" == "all-in-one" ]]; then
+    # Offre AVANT le récapitulatif : sinon l'express annonce « SQLite » puis propose
+    # PostgreSQL, et le récapitulatif signé par l'utilisateur devient faux. Sautée si
+    # un drapeau a déjà tranché (--postgres/--sqlite-dev).
+    [[ -z "$SETUP_PG" ]] && { offer_postgres_server || true; }
     EXPRESS_CLI_ARGS=(
         -m transcria.installer.cli express
         --gpu-count "${GPU_COUNT:-0}"
@@ -1005,13 +1044,22 @@ if [[ "$SETUP_PG" != true ]]; then
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" run_indented "$VENV/bin/python" \
         -m transcria.installer.cli sqlite-schema \
         --install-dir "$INSTALL_DIR" --venv-python "$VENV/bin/python"
-elif [[ "$PSQL_AVAILABLE" != true ]]; then
+elif [[ "$PSQL_AVAILABLE" != true ]] && ! offer_postgres_server; then
+    # PostgreSQL demandé mais absent : proposer de l'installer plutôt que de s'arrêter
+    # net (issue #14). L'offre re-sonde ; refus ou échec ⇒ l'arrêt historique, avec les
+    # commandes à jouer à la main.
     log_database_setup_event psql-missing
     exit 1
 elif [[ "$PG_EXISTING" != true ]] && is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
     log_database_setup_event sudo-missing
     exit 1
 else
+    # Serveur local installé mais muet : proposer de le démarrer AVANT le bootstrap,
+    # qui échouerait sinon en plein milieu (« Échec de la création du rôle »).
+    # No-op si le serveur répond déjà ou en non-interactif.
+    if [[ "$PG_EXISTING" != true ]] && is_local_pg_host "$PG_HOST"; then
+        offer_postgres_server || true
+    fi
     ask PG_HOST "Hôte PostgreSQL" "$PG_HOST"
     ask PG_PORT "Port" "$PG_PORT"
     ask PG_DB   "Base" "$PG_DB"

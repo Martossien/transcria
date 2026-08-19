@@ -39,13 +39,22 @@ cd transcria
 
 On an interactive terminal, the default **express mode** detects everything — hardware →
 LLM tier by real placement, `psql` + sudo + a server answering `pg_isready` → local
-PostgreSQL with a generated password (a stopped PostgreSQL falls back to SQLite with an
-explicit message instead of failing mid-install), HF token → model choice — then shows
-**one "here is what I am going to do" summary**, asks **one confirmation**, and runs the
-whole thing. Missing `ffmpeg` on apt systems? It offers to install it (one consented
-question). Answering `n` at the summary exits cleanly **before any mutation**.
+PostgreSQL with a generated password, HF token → model choice — then shows **one "here is
+what I am going to do" summary**, asks **one confirmation**, and runs the whole thing.
+Missing `ffmpeg`? It offers to install it — one consented question, on Debian/Ubuntu
+(`ffmpeg`) as well as Fedora/RHEL (`ffmpeg-free`, from the base repositories).
+Answering `n` at the summary exits cleanly **before any mutation**.
 
-Two express-specific decisions:
+Three express-specific decisions:
+
+- **If PostgreSQL is missing, the installer offers it** — before the summary, so that the
+  summary tells the truth about the database you will actually get. Two situations, two
+  questions: *no `psql`* → offer to install the server (`apt-get install postgresql`, or
+  `dnf install postgresql-server postgresql` + `postgresql-setup --initdb`, based on the
+  family declared in `/etc/os-release`); *server installed but silent* → offer to start
+  it only. Nothing is installed without an explicit yes; declining, missing privileges
+  (neither root nor sudo) or non-interactive mode all keep SQLite. The verdict then comes
+  from **re-probing** (`psql` + `pg_isready`), never from the package manager's exit code.
 
 - **Without an HF token on a fresh config**, the backends switch to the non-gated duo
   picked for your hardware: **whisper + Sortformer** with a ≥ 12 GB GPU; **Kroko (CPU
