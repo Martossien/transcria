@@ -19,6 +19,7 @@ from transcria.gpu.llm_placement import (
     plan_for_tier,
     recommend,
 )
+from transcria.installer.hardware import detect_nvidia_vram
 from transcria.installer.messages import t
 from transcria.installer.prerequisites import first_available
 
@@ -108,6 +109,30 @@ def emit_placement_warnings(placement: PlacementRecommendation | Placement) -> N
         print(f"  ⚠ {warning}", file=sys.stderr)
 
 
+_WRAPPER_GPU_LINE = re.compile(r'^export ARBITRAGE_GPU="\$\{ARBITRAGE_GPU:-[^}"]*\}"$', re.MULTILINE)
+
+
+def retarget_wrapper_gpu(wrapper_path: Path, gpu_indices: list[int]) -> bool:
+    """Aligne l'``ARBITRAGE_GPU`` du wrapper généré sur le placement RÉEL de la machine.
+
+    Le wrapper est écrit depuis le palier (indices de banc, carte 0) ; la calibration,
+    elle, connaît la topologie de la machine. Quand la plus grosse carte n'est pas
+    l'index 0, garder la valeur du palier lance la LLM sur la mauvaise carte — un OOM
+    au premier job, alors que la config annonce l'autre carte (issue #14).
+
+    Retourne True si le fichier a été modifié.
+    """
+    if not gpu_indices or not wrapper_path.is_file():
+        return False
+    content = wrapper_path.read_text(encoding="utf-8")
+    target = ",".join(str(i) for i in gpu_indices)
+    updated = _WRAPPER_GPU_LINE.sub(f'export ARBITRAGE_GPU="${{ARBITRAGE_GPU:-{target}}}"', content)
+    if updated == content:
+        return False
+    wrapper_path.write_text(updated, encoding="utf-8")
+    return True
+
+
 def apply_placement_calibration(*, gpu_sizes_csv: str, tier: str, config_path: Path) -> Placement:
     sizes = parse_gpu_sizes_csv(gpu_sizes_csv)
     if not sizes:
@@ -121,6 +146,12 @@ def apply_placement_calibration(*, gpu_sizes_csv: str, tier: str, config_path: P
         gpu_indices=placement.gpu_indices,
         vram_mb_per_gpu=placement.vram_mb_per_gpu,
     )
+    # La config et le lanceur doivent désigner LA MÊME carte : calibrer l'une sans
+    # l'autre laissait le modèle sur la carte 0 par défaut.
+    script = get_yaml_value(load_yaml_file(config_path), "services.arbitrage_script") or ""
+    if script and retarget_wrapper_gpu(Path(script), placement.gpu_indices):
+        gpus = ",".join(str(i) for i in placement.gpu_indices)
+        print(f"  → {t('arb_wrapper_retargeted', path=script, gpus=gpus)}", file=sys.stderr)
     return placement
 
 
@@ -392,6 +423,27 @@ def write_wrapper(path: Path, content: str) -> None:
     path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _machine_gpu_indices(tier: str, gpu_sizes_csv: str | None = None) -> list[int]:
+    """Cartes à cibler pour ce palier SUR CETTE MACHINE (repli : indices du palier).
+
+    Les paliers sont écrits pour un banc où la carte utile est l'index 0. Sur une
+    machine où la plus grosse carte est ailleurs (ex. 8 Go en slot 0, 16 Go en slot 1),
+    prendre l'index du palier lance le modèle sur la petite carte (issue #14). On
+    interroge donc la topologie réelle ; nvidia-smi absent ⇒ comportement d'avant.
+    """
+    static = TIER_GPU_INDICES[tier]
+    sizes_csv = gpu_sizes_csv if gpu_sizes_csv is not None else detect_nvidia_vram()[2]
+    sizes = parse_gpu_sizes_csv(sizes_csv)
+    if not sizes:
+        return static
+    placement = plan_for_tier(
+        int(tier[:-2] if tier.endswith("gb") else tier),
+        sizes,
+        safety_margin_mb=DEFAULT_SAFETY_MARGIN_MB,
+    )
+    return placement.gpu_indices if placement.feasible else static
+
+
 def apply_profile(
     *,
     repo_root: Path,
@@ -400,13 +452,14 @@ def apply_profile(
     models_dir: str | None = None,
     llama_server: str | None = None,
     output_path: Path | None = None,
+    gpu_sizes_csv: str | None = None,
 ) -> Path:
     if tier not in TIER_VRAM_MB:
         raise ValueError(f"palier inconnu: {tier}")
     repo_root = repo_root.resolve()
     config_path = config_path.resolve()
     profile_path = find_profile(repo_root, tier).resolve()
-    gpu_indices = TIER_GPU_INDICES[tier]
+    gpu_indices = _machine_gpu_indices(tier, gpu_sizes_csv)
     output_path = output_path or repo_root / "scripts" / "generated" / "launch_arbitrage.local.sh"
     output_path = output_path.resolve()
 

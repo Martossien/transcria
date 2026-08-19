@@ -712,7 +712,6 @@ workflow:
   scheduling:
     enabled: false
     timezone: "Europe/Paris"
-    poll_interval_s: 300
     kill_patterns:
       - "vllm"
       - "llama-server"

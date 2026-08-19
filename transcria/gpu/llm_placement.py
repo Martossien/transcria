@@ -132,8 +132,8 @@ def plan_for_tier(
             )
         if idx != 0:
             warnings.append(
-                f"la plus grande carte est l'index {idx} (pas 0) : posez "
-                f"ARBITRAGE_GPU={idx} dans le profil, sinon le modèle ciblera la carte 0."
+                f"la plus grande carte est l'index {idx} (pas 0) : le lanceur doit "
+                f"cibler cette carte (ARBITRAGE_GPU={idx}), sinon le modèle ciblera la carte 0."
             )
         if len(sizes) > 1:
             warnings.append(f"{len(sizes) - 1} carte(s) inutilisée(s) par ce palier mono-GPU.")

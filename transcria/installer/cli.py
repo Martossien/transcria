@@ -43,6 +43,7 @@ from transcria.installer.postgres_phase import (
     PostgresPlan,
     apply_postgres,
     apply_postgres_bootstrap,
+    apply_sqlite_schema,
 )
 from transcria.installer.python_env import PythonEnvError, PythonEnvPlan, apply_python_env
 from transcria.installer.systemd_phase import SystemdPlan, apply_systemd
@@ -183,6 +184,15 @@ def _add_postgres_bootstrap_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--admin-python", default="", help="Préfixe python privilégié -m (ex. 'sudo -u postgres env PYTHONPATH=… python -m')")
     p.add_argument("--have-systemctl", action="store_true")
     p.add_argument("--have-service", action="store_true")
+
+
+def _add_sqlite_schema_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "sqlite-schema",
+        help="Crée/met à jour le schéma d'une base SQLite (alembic upgrade head, SECTION 6.5).",
+    )
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--venv-python", required=True)
 
 
 def _add_systemd_parser(sub: argparse._SubParsersAction) -> None:
@@ -363,6 +373,16 @@ def _cmd_postgres_bootstrap(args: argparse.Namespace) -> int:
         apply_postgres_bootstrap(plan, console=console)
     except PostgresPhaseError:
         return 1
+    return 0
+
+
+def _cmd_sqlite_schema(args: argparse.Namespace) -> int:
+    # Échec non bloquant : le portail sait encore créer son schéma au démarrage.
+    apply_sqlite_schema(
+        venv_python=Path(args.venv_python),
+        install_dir=Path(args.install_dir),
+        console=Console(),
+    )
     return 0
 
 
@@ -741,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_ollama_parser(sub)
     _add_postgres_parser(sub)
     _add_postgres_bootstrap_parser(sub)
+    _add_sqlite_schema_parser(sub)
     _add_systemd_parser(sub)
     _add_summary_parser(sub)
     _add_recommend_llm_parser(sub)
@@ -766,6 +787,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_postgres(args)
     if args.command == "postgres-bootstrap":
         return _cmd_postgres_bootstrap(args)
+    if args.command == "sqlite-schema":
+        return _cmd_sqlite_schema(args)
     if args.command == "systemd":
         return _cmd_systemd(args)
     if args.command == "summary":

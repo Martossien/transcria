@@ -5,6 +5,7 @@ import json
 import shlex
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from transcria.installer.messages import t
@@ -250,11 +251,18 @@ def render_profile_next_steps_text(plan: InstallPlan, context: SummaryRenderCont
             "  sudo systemctl start transcria-migrate",
         ],
     }
+    # `export VENV` n'est rappelé que pour un venv HORS de l'arborescence : start.sh
+    # trouve seul le `./venv` posé à côté de lui (issue #14 — la ligne était sautée,
+    # et le démarrage manuel cherchait alors alembic dans /bin).
+    venv_lines = (
+        [] if Path(context.venv) == Path(context.install_dir) / "venv"
+        else [f"  export VENV=\"{context.venv}\""]
+    )
     lines = lines_by_profile.get(
         plan.profile,
         [
             t("prof_next_default"),
-            f"  export VENV=\"{context.venv}\"",
+            *venv_lines,
             f"  {context.install_dir}/start.sh --port 7870",
             t("prof_next_default_comment"),
             "",

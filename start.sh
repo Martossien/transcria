@@ -17,7 +17,12 @@ HOST="${HOST:-0.0.0.0}"
 DEBUG="${DEBUG:-false}"
 LOG_FILE="${LOG_FILE:-/var/log/transcrIA.log}"
 PID_FILE="${PID_FILE:-/run/transcrIA.pid}"
+# Le service systemd pose VENV ; un lancement manuel (`./start.sh`) ne le pose pas.
+# Sans repli, alembic/python se résolvaient sur "/bin/alembic" — absent (issue #14).
 VENV="${VENV:-}"
+if [ -z "$VENV" ] && [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
+    VENV="$SCRIPT_DIR/venv"
+fi
 
 # ── Arguments CLI ──────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -74,7 +79,12 @@ unset PYENV_VERSION  # neutralise aussi
 # Met la base au niveau attendu avant de démarrer. En cas d'échec on n'amorce
 # pas le serveur (un schéma périmé corromprait les données).
 # Le alembic du venv doit être utilisé (pas celui du système) pour trouver les modules Python.
-echo "Alembic : $(which alembic)"
+if [ ! -x "$VENV_ALEMBIC" ]; then
+    echo "Erreur : alembic introuvable dans le venv ($VENV_ALEMBIC)."
+    echo "  → relancez ./install.sh, ou posez VENV=/chemin/vers/venv avant ./start.sh"
+    exit 1
+fi
+echo "Alembic : $VENV_ALEMBIC"
 echo "Application des migrations de base (alembic upgrade head)…"
 if ! "$VENV_ALEMBIC" upgrade head; then
     echo "Erreur : échec des migrations Alembic. Démarrage annulé."

@@ -149,6 +149,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "arb_opencode_install_later": "Installez opencode puis relancez, ou utilisez "
                                       "scripts/switch_arbitrage_llm.sh plus tard.",
         "arb_vram_status": "VRAM : total {value} Mio sur {gpu_count} GPU (plus grande carte {max_mb} Mio)",
+        "arb_wrapper_retargeted": "lanceur aligné sur le placement réel : ARBITRAGE_GPU={gpus} ({path})",
         "arb_planner_fallback": "Planner de placement indisponible — recommandation par VRAM totale "
                                 "(moins fiable).",
         "arb_no_tier": "Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée.",
@@ -220,6 +221,9 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pg_migprompt_opt2": "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)",
         "pg_migprompt_choice": "  Votre choix [1/2] : ",
         "pg_db_sqlite_kept": "Base SQLite conservée (storage.database_url de config.yaml)",
+        "pg_db_sqlite_schema_ok": "Schéma SQLite créé/à jour (alembic upgrade head)",
+        "pg_db_sqlite_schema_failed": ("Échec d'alembic upgrade head sur SQLite — le portail créera le schéma "
+                                       "au démarrage, mais doctor signalera une base en retard."),
         "pg_db_psql_missing1": "psql introuvable — PostgreSQL n'est pas installé.",
         "pg_db_stop_not_sqlite": "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
         "pg_db_sudo_missing1": "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres).",
@@ -386,6 +390,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "arb_opencode_install_later": "Install opencode then rerun, or use "
                                       "scripts/switch_arbitrage_llm.sh later.",
         "arb_vram_status": "VRAM: total {value} MiB across {gpu_count} GPU (largest card {max_mb} MiB)",
+        "arb_wrapper_retargeted": "launcher aligned with the real placement: ARBITRAGE_GPU={gpus} ({path})",
         "arb_planner_fallback": "Placement planner unavailable — recommendation by total VRAM "
                                 "(less reliable).",
         "arb_no_tier": "No LLM tier fits this topology — raw transcription advised.",
@@ -456,6 +461,9 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pg_migprompt_opt2": "  2. Skip (start with an empty PostgreSQL database, leave SQLite intact)",
         "pg_migprompt_choice": "  Your choice [1/2]: ",
         "pg_db_sqlite_kept": "SQLite database kept (storage.database_url from config.yaml)",
+        "pg_db_sqlite_schema_ok": "SQLite schema created/up to date (alembic upgrade head)",
+        "pg_db_sqlite_schema_failed": ("alembic upgrade head failed on SQLite — the portal will create the schema "
+                                       "at startup, but doctor will report a database behind the models."),
         "pg_db_psql_missing1": "psql not found — PostgreSQL is not installed.",
         "pg_db_stop_not_sqlite": "PostgreSQL requested: aborting instead of silently continuing with SQLite.",
         "pg_db_sudo_missing1": "sudo required to create the PostgreSQL role/database (postgres account).",

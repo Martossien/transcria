@@ -1404,10 +1404,7 @@ python app.py --debug
 ### Mode production avec start.sh
 
 ```bash
-# Configurer le virtualenv du projet
-export VENV="$(pwd)/venv"
-
-# Lancer
+# Lancer (le venv ./venv du dossier d'installation est trouvé tout seul)
 ./start.sh --port 7870
 
 # Statut
@@ -1417,7 +1414,7 @@ export VENV="$(pwd)/venv"
 ./stop.sh
 ```
 
-> **Note** : `start.sh` cherche un fichier `$VENV/bin/activate` et l'active si `VENV` est défini. Par défaut `VENV` est vide, l'application utilise alors le Python du PATH. Définissez toujours `VENV` pour pointer vers le venv du projet.
+> **Note** : `start.sh` utilise le venv `./venv` posé à côté de lui (celui de l'installateur), et l'unité systemd lui passe le sien. Ne définissez `VENV` que si votre venv est **ailleurs** dans l'arborescence.
 
 ### Variables d'environnement pour start.sh
 
@@ -1427,7 +1424,7 @@ export HOST=0.0.0.0
 export DEBUG=false
 export LOG_FILE=/var/log/transcrIA.log
 export PID_FILE=/run/transcrIA.pid
-export VENV=/chemin/absolu/vers/transcria/venv
+export VENV=/chemin/absolu/vers/transcria/venv   # optionnel : venv hors du dossier d'installation
 ```
 
 > **Chargement de `.env`.** `start.sh` charge automatiquement le fichier `.env` du répertoire
@@ -2120,7 +2117,6 @@ venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite l
 # 8. Lancer
 python app.py
 # ou en production :
-export VENV="$(pwd)/venv"
 ./start.sh --port 7870
 ```
 

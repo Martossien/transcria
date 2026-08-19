@@ -591,6 +591,13 @@ def test_render_database_setup_log_for_sqlite_and_postgres_events():
         "VALUE:PostgreSQL (transcria@127.0.0.1:5432)\n"
     )
     assert render_database_setup_log(event="config-failed") == "ERROR:PostgreSQL demandé mais la configuration a échoué.\n"
+    # Issue #14 : la branche SQLite joue Alembic elle aussi (sinon doctor termine en ÉCHEC).
+    assert render_database_setup_log(event="sqlite-schema-ok") == (
+        "OK:Schéma SQLite créé/à jour (alembic upgrade head)\n"
+    )
+    assert render_database_setup_log(event="sqlite-schema-failed").startswith(
+        "WARN:Échec d'alembic upgrade head sur SQLite"
+    )
 
 
 def test_render_database_setup_log_for_missing_requirements():

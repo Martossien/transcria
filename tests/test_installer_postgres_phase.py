@@ -23,6 +23,7 @@ from transcria.installer.postgres_phase import (
     PostgresPlan,
     apply_postgres,
     apply_postgres_bootstrap,
+    apply_sqlite_schema,
 )
 
 
@@ -468,3 +469,32 @@ def test_bootstrap_integration_creates_role_and_db_on_real_cluster(postgresql_pr
     finally:
         admin_psql(["-c", f'DROP DATABASE IF EXISTS "{db}"'])
         admin_psql(["-c", f'DROP ROLE IF EXISTS "{role}"'])
+
+
+def test_apply_sqlite_schema_joue_alembic_et_rend_le_resultat(tmp_path):
+    """Issue #14 : une install SQLite doit sortir avec un schéma, pas un doctor en ÉCHEC."""
+    stream = io.StringIO()
+    console = Console(stream, color=False)
+
+    assert apply_sqlite_schema(
+        venv_python=tmp_path / "venv" / "bin" / "python",
+        install_dir=tmp_path,
+        console=console,
+        alembic_upgrade=lambda: 0,
+    ) is True
+    assert "Schéma SQLite créé/à jour" in stream.getvalue()
+
+
+def test_apply_sqlite_schema_echec_non_bloquant(tmp_path):
+    """Alembic en échec : on prévient, on ne casse pas l'installation (le portail sait créer)."""
+    stream = io.StringIO()
+    console = Console(stream, color=False)
+
+    assert apply_sqlite_schema(
+        venv_python=tmp_path / "venv" / "bin" / "python",
+        install_dir=tmp_path,
+        console=console,
+        alembic_upgrade=lambda: 3,
+    ) is False
+    out = stream.getvalue()
+    assert "Échec d'alembic upgrade head sur SQLite" in out

@@ -39,6 +39,7 @@ from transcria.installer.postgres_lib import (
     parse_non_negative_int,
     render_alembic_log,
     render_connection_failure,
+    render_database_setup_log,
     render_database_sql,
     render_encoding_warnings,
     render_pg_hba_rewrite_result,
@@ -512,3 +513,36 @@ def apply_postgres_bootstrap(
     _emit_text(console, render_setup_log(event="local-ready", db=plan.db, user=plan.user, host=plan.host))
     result.record("local-ready")
     return result
+
+
+def apply_sqlite_schema(
+    *,
+    venv_python: Path,
+    install_dir: Path,
+    console: _ConsoleLike,
+    alembic_upgrade: Callable[[], int] | None = None,
+) -> bool:
+    """Crée/met à jour le schéma d'une base SQLite (`alembic upgrade head`).
+
+    Le chemin PostgreSQL joue Alembic ; la branche SQLite ne le faisait pas — une
+    install neuve se terminait donc sur un doctor en ÉCHEC (toutes les tables
+    absentes), et le premier démarrage créait les tables via `create_all`, sans
+    version Alembic donc non migrable ensuite (issue #14).
+
+    L'URL n'est pas imposée : Alembic la résout comme l'application (env sinon
+    `storage.database_url`). Échec NON bloquant — l'installation continue.
+    """
+    def _default() -> int:
+        alembic_bin = venv_python.parent / "alembic"
+        return subprocess.run(
+            [str(alembic_bin), "upgrade", "head"], cwd=str(install_dir), check=False
+        ).returncode
+
+    runner = alembic_upgrade or _default
+    try:
+        code = runner()
+    except OSError:
+        code = 1
+    event = "sqlite-schema-ok" if code == 0 else "sqlite-schema-failed"
+    _emit_text(console, render_database_setup_log(event=event))
+    return code == 0

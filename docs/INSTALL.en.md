@@ -100,7 +100,7 @@ documented in [INSTALL.md](INSTALL.md) § 13 (French) and, for containers,
 ```bash
 sudo systemctl start transcria        # if the systemd service was installed
 # or, without systemd:
-export VENV="$(pwd)/venv" && ./start.sh --port 7870
+./start.sh --port 7870                # picks up the ./venv next to it
 ```
 
 Open `http://<machine>:7870` — on the **first visit** (empty database) the portal asks

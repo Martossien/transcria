@@ -998,6 +998,13 @@ log_database_setup_event() {
 
 if [[ "$SETUP_PG" != true ]]; then
     log_database_setup_event sqlite-kept
+    # Le schéma n'existe qu'une fois Alembic joué (le chemin PostgreSQL le fait déjà).
+    # Sans ça, une install SQLite neuve se termine sur un doctor en ÉCHEC (toutes les
+    # tables absentes) et le premier démarrage crée les tables via create_all, sans
+    # version Alembic — donc non migrable ensuite. Issue #14.
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" run_indented "$VENV/bin/python" \
+        -m transcria.installer.cli sqlite-schema \
+        --install-dir "$INSTALL_DIR" --venv-python "$VENV/bin/python"
 elif [[ "$PSQL_AVAILABLE" != true ]]; then
     log_database_setup_event psql-missing
     exit 1

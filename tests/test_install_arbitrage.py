@@ -25,6 +25,7 @@ from transcria.installer.arbitrage import (
     render_setup_log,
     render_tier_metadata_shell,
     render_wrapper,
+    retarget_wrapper_gpu,
     run_llama_detector,
     select_download_client,
     select_llama_fallback,
@@ -81,6 +82,7 @@ def test_apply_profile_generates_wrapper_and_updates_config(tmp_path):
         tier="48gb",
         models_dir="/srv/models",
         llama_server="/opt/llama/bin/llama-server",
+        gpu_sizes_csv="",  # topologie inconnue → indices du palier (test hermétique)
     )
 
     assert output == (repo / "scripts" / "generated" / "launch_arbitrage.local.sh").resolve()
@@ -263,6 +265,60 @@ def test_apply_placement_calibration_writes_topology_plan(tmp_path: Path):
     assert cfg["gpu"]["llm_vram_mb"] == 29200
     assert cfg["gpu"]["llm_gpu_indices"] == [0, 1]
     assert cfg["gpu"]["llm_vram_mb_per_gpu"] == [14600, 14600]
+
+
+def test_apply_profile_cible_la_plus_grosse_carte_de_la_machine(tmp_path: Path):
+    """Issue #14 : le palier est écrit pour un banc (carte 0) ; la machine peut différer.
+
+    Vaut aussi pour la bascule manuelle `scripts/switch_arbitrage_llm.sh`, qui ne passe
+    pas par la calibration de install.sh.
+    """
+    repo, config = _make_repo(tmp_path)
+    profile = repo / "scripts" / "arbitrage_profiles" / "16gb_test.sh"
+    profile.write_text("#!/usr/bin/env bash\nexec llama-server \"$@\"\n", encoding="utf-8")
+    profile.chmod(0o755)
+
+    output = apply_profile(
+        repo_root=repo,
+        config_path=config,
+        tier="16gb",
+        gpu_sizes_csv="8192,16311",  # RTX 2070 en slot 0, 5060 Ti 16 Go en slot 1
+    )
+
+    assert 'export ARBITRAGE_GPU="${ARBITRAGE_GPU:-1}"' in output.read_text(encoding="utf-8")
+    cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert cfg["gpu"]["llm_gpu_indices"] == [1]
+
+
+def test_apply_placement_calibration_retargets_wrapper_on_biggest_card(tmp_path: Path):
+    """Issue #14 : machine dont la plus grosse carte est l'index 1 (RTX 2070 + 5060 Ti).
+
+    Le wrapper est écrit depuis le palier (carte 0) ; la calibration doit le réaligner,
+    sinon la LLM part sur la petite carte alors que la config réserve l'autre.
+    """
+    config = tmp_path / "config.yaml"
+    wrapper = tmp_path / "launch_arbitrage.local.sh"
+    wrapper.write_text(render_wrapper(profile_path=Path("/opt/profile.sh"), gpu_indices=[0]), encoding="utf-8")
+    config.write_text(
+        f"gpu:\n  llm_vram_mb: 1\nservices:\n  arbitrage_script: {wrapper}\n", encoding="utf-8"
+    )
+
+    placement = apply_placement_calibration(gpu_sizes_csv="8192,16311", tier="16", config_path=config)
+
+    cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert placement.gpu_indices == [1]
+    assert cfg["gpu"]["llm_gpu_indices"] == [1]
+    assert 'export ARBITRAGE_GPU="${ARBITRAGE_GPU:-1}"' in wrapper.read_text(encoding="utf-8")
+
+
+def test_retarget_wrapper_gpu_est_idempotent_et_sans_effet_hors_cible(tmp_path: Path):
+    wrapper = tmp_path / "launch.sh"
+    wrapper.write_text(render_wrapper(profile_path=Path("/opt/profile.sh"), gpu_indices=[1]), encoding="utf-8")
+
+    assert retarget_wrapper_gpu(wrapper, [1]) is False  # déjà aligné : pas de réécriture
+    assert retarget_wrapper_gpu(tmp_path / "absent.sh", [1]) is False
+    assert retarget_wrapper_gpu(wrapper, [0, 1]) is True
+    assert 'export ARBITRAGE_GPU="${ARBITRAGE_GPU:-0,1}"' in wrapper.read_text(encoding="utf-8")
 
 
 def test_get_tier_metadata_for_download_plan():

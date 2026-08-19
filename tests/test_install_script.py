@@ -941,3 +941,56 @@ import transcria.installer.cli  # noqa: F401
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_install_script_cree_le_schema_sqlite():
+    """Issue #14 : sans Alembic, une install SQLite finit sur un doctor en ÉCHEC.
+
+    Le chemin PostgreSQL migre déjà ; la branche SQLite doit le faire aussi, sinon le
+    premier démarrage crée les tables via create_all — base sans version Alembic.
+    """
+    content = _INSTALL.read_text(encoding="utf-8")
+    sqlite_branch = content.split('if [[ "$SETUP_PG" != true ]]; then', 1)[1].split("elif", 1)[0]
+
+    # Le shell délègue à la phase Python (testée) — il ne rejoue pas alembic lui-même.
+    assert "transcria.installer.cli sqlite-schema" in sqlite_branch
+
+
+def test_start_script_trouve_le_venv_sans_variable(tmp_path: Path):
+    """Issue #14 : `./start.sh` lancé à la main (sans VENV) résolvait `/bin/alembic`.
+
+    Le venv posé par l'installateur est à côté du script : start.sh doit le prendre.
+    Alembic est ici un bouchon en échec — on vérifie la RÉSOLUTION, pas la migration.
+    """
+    import socket
+
+    (tmp_path / "venv" / "bin").mkdir(parents=True)
+    for name in ("python", "alembic"):
+        stub = tmp_path / "venv" / "bin" / name
+        stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        stub.chmod(0o755)
+    start = tmp_path / "start.sh"
+    start.write_text((_ROOT / "start.sh").read_text(encoding="utf-8"), encoding="utf-8")
+    start.chmod(0o755)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        free_port = probe.getsockname()[1]
+
+    result = subprocess.run(
+        [str(start)],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PORT": str(free_port),
+            "LOG_FILE": str(tmp_path / "app.log"),
+            "PID_FILE": str(tmp_path / "app.pid"),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert f"Alembic : {tmp_path}/venv/bin/alembic" in result.stdout
+    assert "échec des migrations Alembic" in result.stdout
+    assert "/bin/alembic" not in result.stdout.replace(f"{tmp_path}/venv/bin/alembic", "")

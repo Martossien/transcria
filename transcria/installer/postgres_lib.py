@@ -317,6 +317,10 @@ def render_database_setup_log(*, event: str, user: str = "", db: str = "", host:
 
     if event == "sqlite-kept":
         return f"OK:{t('pg_db_sqlite_kept')}\n"
+    if event == "sqlite-schema-ok":
+        return f"OK:{t('pg_db_sqlite_schema_ok')}\n"
+    if event == "sqlite-schema-failed":
+        return f"WARN:{t('pg_db_sqlite_schema_failed')}\n"
     if event == "psql-missing":
         return "\n".join([
             f"ERROR:{t('pg_db_psql_missing1')}",

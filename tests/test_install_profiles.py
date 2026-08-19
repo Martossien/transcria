@@ -207,8 +207,9 @@ def test_render_profile_next_steps_text_for_all_in_one():
         ),
     )
 
+    # Pas de `export VENV` pour un venv posé dans l'arborescence : start.sh le trouve
+    # seul (issue #14 — la ligne sautée envoyait alembic dans /bin).
     assert rendered == """Lancer TranscrIA :
-  export VENV="/opt/transcria/venv"
   /opt/transcria/start.sh --port 7870
   # ou : sudo systemctl start transcria
 
@@ -309,3 +310,20 @@ def test_install_profiles_cli_fails_on_invalid_postgres_combo(capsys):
 
     assert exc.value.code == 1
     assert "nécessite PostgreSQL" in capsys.readouterr().err
+
+
+def test_next_steps_rappelle_venv_hors_arborescence():
+    """Un venv AILLEURS que <install_dir>/venv : start.sh ne peut pas le deviner."""
+    plan = resolve_install_plan(profile="all-in-one")
+
+    rendered = render_profile_next_steps_text(
+        plan,
+        SummaryRenderContext(
+            install_dir="/opt/transcria",
+            venv="/srv/venvs/transcria",
+            inference_log_dir="/opt/transcria/logs",
+            final_log_file="/opt/transcria/logs/transcrIA.log",
+        ),
+    )
+
+    assert '  export VENV="/srv/venvs/transcria"' in rendered
