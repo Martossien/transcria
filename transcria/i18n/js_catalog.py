@@ -32,6 +32,7 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('(créé)'),
     N_('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs'),
     N_('Animateur'),
+    N_('Animateur retenu'),
     N_('Annuler'),
     N_('Annuler le traitement'),
     N_('Au lexique central'),

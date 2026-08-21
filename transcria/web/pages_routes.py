@@ -47,6 +47,7 @@ from transcria.web.lexicon_views import (
 from transcria.web.meetings_views import meeting_creation_context, sessions_for_jobs
 from transcria.web.request_helpers import clean_job_title
 from transcria.workflow.agent_workspace import resolve_agent_work_root
+from transcria.workflow.animator_hint import suggest_animator
 from transcria.workflow.profile_availability import compute_profiles_view, compute_wizard_layout
 from transcria.workflow.profiles import get_profile, is_profile, profile_for_job
 from transcria.workflow.runner import WorkflowRunner
@@ -430,6 +431,31 @@ def _apply_manifest_suggestions(fs, manifest_raw: dict, speakers_data: dict,
             for label, spk in result.rooms.items()}
 
 
+def _apply_animator_suggestion(fs, speakers_data: dict, speaker_turns: dict,
+                               role_hints: dict, participants: list[dict]) -> None:
+    """Propose UN animateur à l'étape 5 — proposé, jamais coché d'office.
+
+    Silence total dès qu'un animateur a déjà été validé : le choix humain ne se
+    re-discute pas à chaque rechargement de page. Best-effort intégral, comme les
+    suggestions du manifeste : au moindre doute, aucune proposition (cf.
+    ``workflow/animator_hint`` pour les seuils et leur raison d'être)."""
+    speakers = speakers_data.get("speakers") if isinstance(speakers_data, dict) else None
+    if not speakers or any(p.get("is_animator") for p in participants):
+        return
+    turns = speaker_turns.get("turns") if isinstance(speaker_turns, dict) else None
+    hint = suggest_animator(turns or [], role_hints)
+    if hint is None:
+        return
+    for s in speakers:
+        if str(s.get("speaker_id")) == hint.speaker_id:
+            s["animator_suggested"] = True
+            s["animator_reason"] = hint.reason
+    try:  # audit rejouable (scores + seuils) — une écriture, jamais bloquante
+        fs.save_json("metadata/animator_hint.json", hint.to_audit_dict())
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _fill_missing_speaker_genders(
     speakers_data: dict,
     mapping_data: dict,
@@ -648,6 +674,8 @@ def job_wizard(job_id: str):
     manifest_raw = fs.load_json("metadata/participants_manifest.json")
     if manifest_raw and speakers_data.get("speakers"):
         manifest_rooms = _apply_manifest_suggestions(fs, manifest_raw, speakers_data, speaker_turns)
+
+    _apply_animator_suggestion(fs, speakers_data, speaker_turns, speaker_role_hints, participants)
 
     if _fill_missing_speaker_genders(speakers_data, mapping_data, audio_scene, speaker_turns):
         fs.save_json("speakers/speaker_stats.json", speakers_data)

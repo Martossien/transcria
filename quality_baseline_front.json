@@ -18,7 +18,7 @@
   "transcria/web/static/js/srt_time.js": 49,
   "transcria/web/static/js/ui_actions.js": 84,
   "transcria/web/static/js/wizard-api.js": 59,
-  "transcria/web/static/js/wizard.js": 1337
+  "transcria/web/static/js/wizard.js": 1348
  },
  "template_lines": {
   "transcria/web/templates/_central_lexicon_entry_fields.html": 31,
@@ -58,7 +58,7 @@
   "transcria/web/templates/wizard/_step_file.html": 110,
   "transcria/web/templates/wizard/_step_launch.html": 24,
   "transcria/web/templates/wizard/_step_lexicon.html": 159,
-  "transcria/web/templates/wizard/_step_participants.html": 207,
+  "transcria/web/templates/wizard/_step_participants.html": 217,
   "transcria/web/templates/wizard/_step_quality.html": 61,
   "transcria/web/templates/wizard/_step_summary.html": 111
  }

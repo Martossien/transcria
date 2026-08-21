@@ -520,6 +520,17 @@ var TranscrIA = window.TranscrIA || {};
         button.textContent = t('Voix retenue');
     };
 
+    W.applyAnimatorSuggestion = function (button) {
+        var speakerId = button && button.dataset ? button.dataset.speaker : '';
+        var row = speakerId ? document.getElementById('spk-' + speakerId) : null;
+        if (!row) return;
+        var box = row.querySelector('.speaker-animator');
+        if (box) box.checked = true;
+        button.classList.remove('btn-outline-warning');
+        button.classList.add('btn-warning');
+        button.textContent = '★ ' + t('Animateur retenu');
+    };
+
     W.formatLexiconVariants = function (variants) {
         if (Array.isArray(variants)) return variants.join(', ');
         return variants || '';

@@ -137,6 +137,16 @@
             <input class="form-check-input speaker-animator" type="checkbox" id="anim-{{ s.speaker_id }}"{% if s.get('mapped_is_animator') %} checked{% endif %}>
             <label class="form-check-label small" for="anim-{{ s.speaker_id }}">★ {{ _('Animateur') }}</label>
           </div>
+          {# Suggestion : proposée, jamais cochée d'office — l'animateur est traité par les
+             prompts comme un fait VALIDÉ, il ne peut donc pas naître d'une déduction. #}
+          {% if s.get('animator_suggested') and not s.get('mapped_is_animator') %}
+          <button type="button" class="btn btn-sm btn-outline-warning animator-suggestion"
+                  data-speaker="{{ s.speaker_id }}"
+                  title="{% if s.get('animator_reason') == 'role' %}{{ _('Rôle annoncé pendant la réunion') }}{% else %}{{ _('Intervient souvent et brièvement, et passe la parole à la plupart des autres') }}{% endif %}"
+                  data-action="TranscrIA.applyAnimatorSuggestion" data-action-el>
+            ★ {{ _('Animateur probable') }}
+          </button>
+          {% endif %}
           {% if voice_hint.item %}
           <button type="button"
                   class="btn btn-sm btn-outline-success voice-suggestion"
