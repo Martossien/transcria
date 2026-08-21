@@ -617,6 +617,7 @@ class OpenCodeRunner:
         lexicon_path: str,
         invite_path: str | None = None,
         output_language: str = "fr",
+        summary_path: str | None = None,
     ) -> dict:
         """Corrige le SRT via opencode : speakers + lexique + orthographe.
 
@@ -626,8 +627,15 @@ class OpenCodeRunner:
 
         ``output_language`` : langue des livrables (Axe B) — prompt localisé + consigne.
 
+        ``summary_path`` (facultatif) : la synthèse à RÉANCRER sur le SRT corrigé. La
+        synthèse livrée est aujourd'hui rédigée sur la transcription RAPIDE, d'avant
+        correction ; l'agent relit déjà l'intégralité du SRT ici, le réancrage ne coûte
+        donc que la génération. Tâche BORNÉE et best-effort : pas de fichier rendu ⇒ la
+        synthèse existante est conservée telle quelle.
+
         Returns:
-            {"success": bool, "corrected_srt": str, "report": str, "error": str}
+            {"success": bool, "corrected_srt": str, "report": str,
+             "rewritten_summary": str, "error": str}
         """
         prompt_file = resolve_prompt_file(self._config, "correction_prompt.txt", output_language)
 
@@ -658,6 +666,16 @@ class OpenCodeRunner:
             "(2) correction_report.md — rapport Markdown uniquement, "
             "aucune ligne SRT dans ce fichier."
         )
+        if summary_path and os.path.isfile(summary_path):
+            # ORDRE, pas parallèle : le SRT est l'artefact critique (gardes de parité et
+            # de ratio côté code). Le réancrage se fait APRÈS, depuis le fichier corrigé.
+            instruction += (
+                f" ENSUITE SEULEMENT, une fois transcription_corrigee.srt terminé : lis la "
+                f"synthèse {summary_path} et réancre-la sur le SRT corrigé selon le § 8 du "
+                "prompt système, puis écris un 3e fichier summary_reancree.md. Si tu ne peux "
+                "pas le faire dans ces contraintes, n'écris pas ce fichier — le système "
+                "conservera la synthèse existante."
+            )
 
         timeout = self._get_correction_timeout()
         result = self.run(instruction, prompt_file, timeout=timeout)
@@ -666,10 +684,14 @@ class OpenCodeRunner:
 
         corrected_file = self.work_dir / "transcription_corrigee.srt"
         report_file = self.work_dir / "correction_report.md"
+        summary_file = self.work_dir / "summary_reancree.md"
+        rewritten_summary = ""
         if corrected_file.is_file():
             corrected_srt = corrected_file.read_text(encoding="utf-8").strip()
         if report_file.is_file():
             report = report_file.read_text(encoding="utf-8").strip()
+        if summary_file.is_file():
+            rewritten_summary = summary_file.read_text(encoding="utf-8").strip()
 
         # Recovery : si transcription_corrigee.srt est présent et non-vide, la correction
         # est faite quelle que soit la raison de sortie d'opencode — timeout, SIGTERM (-15),
@@ -686,6 +708,7 @@ class OpenCodeRunner:
             "success": result["success"],
             "corrected_srt": corrected_srt,
             "report": report,
+            "rewritten_summary": rewritten_summary,
             "error": result.get("error", ""),
             "warning": result.get("warning", ""),
         }

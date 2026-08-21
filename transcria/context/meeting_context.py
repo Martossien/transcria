@@ -12,6 +12,19 @@ MEETING_TYPES = meeting_type_names()
 
 
 
+def synthese_section(raw_md: str, headings: list[str]) -> str:
+    """La seule section « Synthèse » d'un summary.md brut, sinon le markdown entier.
+
+    PURE : les marqueurs de section (langue-dépendants) sont fournis par l'appelant —
+    c'est ce qui permet à la phase de correction comme au wizard de partager l'extraction
+    sans que ce module ait à connaître le catalogue de marqueurs.
+    """
+    for heading in headings:
+        if heading and heading in raw_md:
+            return raw_md.split(heading, 1)[1].split("\n##", 1)[0].strip()
+    return raw_md.strip()
+
+
 class MeetingContextManager:
     @staticmethod
     def get(job: Job, jobs_dir: str) -> dict:

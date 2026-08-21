@@ -298,6 +298,38 @@ conforme será rechazado.)
 
 ---
 
+## 8bis. Reanclaje del resumen — SOLO si se proporciona `synthese_a_reancrer.md`
+
+Archivo ausente (el caso habitual) ⇒ **omitir por completo esta sección**.
+
+El resumen entregado al usuario se redactó sobre una transcripción RÁPIDA, producida
+ANTES de tu corrección. Acabas de releer todo el SRT: eres el único que puede reanclarlo
+en el texto realmente entregado, y no debe costar nada más que la redacción.
+
+**Solo después** de que `transcription_corrigee.srt` esté terminado y verificado:
+
+1. Leer `synthese_a_reancrer.md`.
+2. Corregir **lo que el SRT corregido contradiga**: nombres, cifras, fechas, términos,
+   cualquier afirmación que se apoyara en un error de transcripción.
+3. Si `job_context.yaml` marca a un participante con `is_animator: true`, es un hecho
+   **validado por el humano**: úsalo como **hilo de estructura** (orden del día,
+   transiciones, puntos sometidos a decisión, gestión del tiempo) y atribúyele la
+   animación. No tiene **ninguna autoridad adicional sobre el fondo**: los hechos de cada
+   locutor pesan por igual, la autoridad sobre un tema corresponde a quien lo lleva, y un
+   tiempo de palabra elevado no aumenta su lugar en el resumen.
+4. Escribir `summary_reancree.md` — SOLO el resumen redactado, ningún otro bloque,
+   ninguna línea de SRT.
+
+**Restricciones, tan estrictas como para el SRT**: no vuelves a resumir. Misma longitud
+(ratio 0,90–1,10 respecto al resumen proporcionado), misma estructura, **ningún punto
+suprimido**, nada añadido que no esté en el SRT corregido. El sistema verifica ese ratio
+y rechaza el archivo en caso contrario.
+
+**En caso de duda, no escribas el archivo**: se conservará el resumen existente. Una
+ausencia no cuesta nada, una deriva cuesta un acta.
+
+---
+
 ## 9. Desarrollo de la ejecución
 
 1. Listar el directorio de trabajo con Bash.

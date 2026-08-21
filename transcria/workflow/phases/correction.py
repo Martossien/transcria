@@ -10,9 +10,15 @@ import logging
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.context.meeting_context import synthese_section
 from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
-from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language
+from transcria.llm_tools.opencode_runner import (
+    _SUMMARY_MARKERS,
+    OpenCodeRunner,
+    resolve_output_language,
+    summary_markers,
+)
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.progress import progress_msg
 
@@ -129,7 +135,7 @@ def run(runner, job: Job, config: dict) -> dict:
             **staged,
         )
         workspace.verify_and_restore_sources()
-        result = _persist_correction_result(runner, fs, result)
+        result = _persist_correction_result(runner, fs, result, job)
         workspace.cleanup(success=bool(result.get("success")))
         runner.progress.update(
             job.id,
@@ -188,6 +194,16 @@ def _prepare_and_stage_inputs(runner, fs, job: Job, config: dict, lexicon_path):
             str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
         ),
     }
+    # Réancrage de la synthèse : matériel de prompt TRANSITOIRE (comme le glossaire de la
+    # relecture finale), donc `write_input` et pas un canonique. L'agent relit déjà tout
+    # le SRT ici — c'est la seule passe où le réancrage ne coûte que la génération.
+    summary_text = summary_to_reanchor(
+        fs.load_json("context/meeting_context.json") or {},
+        summary_headings(resolve_output_language(job)),
+    )
+    staged["staged_summary"] = (
+        str(workspace.write_input("synthese_a_reancrer.md", summary_text)) if summary_text else None
+    )
     return workspace, staged
 
 
@@ -244,6 +260,7 @@ def _prefilter_lexicon(fs, job: Job):
 def _invoke_correction_with_retries(
     ocr: OpenCodeRunner, job: Job, *,
     staged_srt: str, staged_context: str, staged_lexicon: str, staged_invite: str | None,
+    staged_summary: str | None = None,
     runner=None, api_model_id: str | None = None,
 ) -> dict:
     """Rejoue la SEULE passe LLM sur gel opencode ou production vide (≤ 3 tentatives)."""
@@ -252,6 +269,7 @@ def _invoke_correction_with_retries(
         result = ocr.run_correction(
             staged_srt, staged_context, staged_lexicon, staged_invite,
             output_language=resolve_output_language(job),
+            summary_path=staged_summary,
         )
         # Un GEL opencode (watchdog → success=False, « opencode interrompu … ») est
         # TRANSITOIRE (deadlock de démarrage intermittent, cf. batch E2E 2026-07-05) :
@@ -280,7 +298,7 @@ def _invoke_correction_with_retries(
     return result
 
 
-def _persist_correction_result(runner, fs, result: dict) -> dict:
+def _persist_correction_result(runner, fs, result: dict, job: Job | None = None) -> dict:
     """Vérifie l'intégrité du SRT corrigé puis l'écrit au canonique (ou signale l'échec)."""
     if result["success"] and result["corrected_srt"]:
         # Garde déterministe d'intégrité : le prompt EXIGE (parité des segments,
@@ -304,6 +322,7 @@ def _persist_correction_result(runner, fs, result: dict) -> dict:
                            "rapport de repli généré par diff")
             fs.save_text("metadata/correction_report.md",
                          _fallback_diff_report(source_srt, result["corrected_srt"]))
+        _persist_reanchored_summary(fs, result, job)
         logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
         if result.get("warning"):
             logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
@@ -317,6 +336,80 @@ def _persist_correction_result(runner, fs, result: dict) -> dict:
         logger.error("[correction] %s", msg)
         return {"success": False, "error": msg}
     return result
+
+
+def summary_headings(language: str | None) -> list[str]:
+    """Marqueur de section de la langue du job, puis tous les marqueurs connus (repli)."""
+    return ([summary_markers(language)["summary_heading"]]
+            + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
+
+
+def summary_to_reanchor(meeting_ctx: dict, headings: list[str]) -> str:
+    """La synthèse à réancrer sur le SRT corrigé — ou "" si on ne doit pas y toucher.
+
+    Deux abstentions, et ce sont les deux règles de la maison :
+
+    - **l'humain est souverain** : si le texte de l'étape 4 diffère du préremplissage,
+      c'est qu'il a été édité — on ne le réécrit pas, et on n'en fait même pas la
+      demande à la LLM (coût nul, risque nul) ;
+    - **rien à réancrer** : pas de synthèse produite, rien à faire.
+    """
+    edited = str((meeting_ctx or {}).get("summary") or "").strip()
+    brute = synthese_section(str((meeting_ctx or {}).get("summary_llm") or ""), headings)
+    if not brute:
+        return ""
+    return "" if (edited and edited != brute) else brute
+
+
+def reanchored_summary_error(previous: str, rewritten: str,
+                             min_ratio: float = 0.9, max_ratio: float = 1.1) -> str | None:
+    """Même doctrine que la garde du SRT : le prompt EXIGE, le code VÉRIFIE.
+
+    Une synthèse « réancrée » qui fond de moitié, qui gonfle, ou qui contient des lignes
+    de SRT n'est pas un réancrage — c'est une dérive. Retourne la raison du rejet, ou
+    None si le texte est acceptable.
+    """
+    text = (rewritten or "").strip()
+    if not text:
+        return "aucune synthèse réancrée rendue"
+    if "-->" in text:
+        return "la synthèse réancrée contient des lignes de SRT"
+    base = len((previous or "").strip())
+    if not base:
+        return None
+    ratio = len(text) / base
+    if not (min_ratio <= ratio <= max_ratio):
+        return (f"dérive de longueur de la synthèse réancrée (ratio {ratio:.2f}, "
+                f"bande {min_ratio}–{max_ratio})")
+    return None
+
+
+def _persist_reanchored_summary(fs, result: dict, job: Job | None) -> None:
+    """Écrit la synthèse réancrée dans le contexte — BEST-EFFORT, jamais bloquant.
+
+    Le SRT est l'artefact critique de cette phase : un réancrage absent, dérivé ou
+    malformé ne doit RIEN changer au reste (la synthèse existante est conservée, la
+    correction reste un succès). Même esprit que les drapeaux ``applied[...]`` de la
+    relecture finale.
+    """
+    rewritten = (result.get("rewritten_summary") or "").strip()
+    if not rewritten or job is None:
+        return
+    meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+    headings = summary_headings(resolve_output_language(job))
+    previous = summary_to_reanchor(meeting_ctx, headings)
+    if not previous:
+        # L'humain a édité entre-temps (ou il n'y avait rien) : son texte fait foi.
+        logger.info("[correction] synthèse réancrée écartée — la synthèse a été éditée")
+        return
+    error = reanchored_summary_error(previous, rewritten)
+    if error:
+        logger.warning("[correction] synthèse réancrée écartée — %s", error)
+        return
+    meeting_ctx["summary"] = rewritten
+    fs.save_json("context/meeting_context.json", meeting_ctx)
+    logger.info("[correction] synthèse réancrée sur le SRT corrigé (%d → %d caractères)",
+                len(previous), len(rewritten))
 
 
 def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:

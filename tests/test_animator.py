@@ -22,6 +22,7 @@ from transcria.context.participants import ParticipantsManager
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.web.pages_routes import _apply_animator_suggestion
+from transcria.workflow.phases.correction import reanchored_summary_error, summary_to_reanchor
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -181,3 +182,70 @@ class TestBranchementEtape5:
         assert "s.get('animator_suggested')" in template
         assert "{% if s.get('animator_suggested') %} checked" not in template
         assert "W.applyAnimatorSuggestion" in js
+
+
+class TestReancrageSynthese:
+    """Lot 1bis — la synthèse est réancrée sur le SRT corrigé PAR LA PASSE QUI LE RELIT.
+
+    Constat qui motive le lot : la synthèse livrée est rédigée sur `quick_transcript.txt`,
+    la transcription RAPIDE d'avant correction — jamais sur le SRT qu'on livre à côté. La
+    passe de correction est la seule qui relit tout le SRT ET reçoit déjà le contexte
+    validé (animateur compris) : le réancrage n'y coûte que la génération, contre une
+    passe complète (≈ 1× la durée de l'audio) pour un ré-résumé autonome.
+    """
+
+    _HEADINGS = ["## Synthèse", "## Summary"]
+
+    def test_la_synthese_non_editee_part_au_reancrage(self):
+        ctx = {"summary_llm": "# Résumé\n\n## Synthèse\nDeux points discutés.\n\n## Termes\n(aucun)",
+               "summary": "Deux points discutés."}
+
+        assert summary_to_reanchor(ctx, self._HEADINGS) == "Deux points discutés."
+
+    def test_une_synthese_EDITEE_par_l_humain_n_est_jamais_reecrite(self):
+        """Et on ne la demande même pas à la LLM : coût nul, risque nul."""
+        ctx = {"summary_llm": "## Synthèse\nDeux points discutés.",
+               "summary": "Deux points discutés, dont le budget que j'ai ajouté."}
+
+        assert summary_to_reanchor(ctx, self._HEADINGS) == ""
+
+    def test_sans_synthese_il_n_y_a_rien_a_reancrer(self):
+        assert summary_to_reanchor({}, self._HEADINGS) == ""
+        assert summary_to_reanchor({"summary_llm": ""}, self._HEADINGS) == ""
+
+    def test_la_garde_rejette_une_synthese_qui_fond(self):
+        """Même doctrine que le SRT : le prompt EXIGE, le code VÉRIFIE. C'est la dérive
+        observée quand on laisse un modèle « réécrire » librement."""
+        precedente = "x" * 1000
+
+        assert reanchored_summary_error(precedente, "x" * 400) is not None
+        assert reanchored_summary_error(precedente, "x" * 1500) is not None
+        assert reanchored_summary_error(precedente, "x" * 950) is None
+
+    def test_la_garde_rejette_un_fichier_qui_n_est_pas_une_synthese(self):
+        """Vécu ailleurs : l'agent recrache des lignes de SRT dans le mauvais fichier."""
+        srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour."
+
+        assert "SRT" in (reanchored_summary_error("x" * 60, srt) or "")
+        assert reanchored_summary_error("x" * 60, "   ") is not None
+
+    def test_la_regle_est_repliquee_dans_les_cinq_prompts(self):
+        """Une consigne ajoutée au FR et oubliée ailleurs = une fonctionnalité qui
+        n'existe que pour les livrables français."""
+        fr = (ROOT / "configs/prompts/correction_prompt.txt").read_text(encoding="utf-8")
+        assert "synthese_a_reancrer.md" in fr and "summary_reancree.md" in fr
+        for loc in ("en", "de", "es", "it"):
+            texte = (ROOT / f"configs/prompts/{loc}/correction_prompt.txt").read_text(encoding="utf-8")
+            assert "synthese_a_reancrer.md" in texte, f"{loc} : entrée absente"
+            assert "summary_reancree.md" in texte, f"{loc} : sortie absente"
+            assert "is_animator" in texte, f"{loc} : règle animateur absente"
+
+    def test_le_reancrage_est_demande_APRES_le_srt(self):
+        """Le SRT est l'artefact critique : la re-synthèse est une étape finale, jamais un
+        second objectif mené de front (un agent à qui on demande deux choses fait moins
+        bien les deux)."""
+        source = (ROOT / "transcria/llm_tools/opencode_runner.py").read_text(encoding="utf-8")
+        bloc = source.split("def run_correction(", 1)[1].split("def ", 1)[0]
+
+        assert "ENSUITE SEULEMENT" in bloc
+        assert bloc.index("transcription_corrigee.srt") < bloc.index("summary_reancree.md")

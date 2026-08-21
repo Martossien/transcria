@@ -22,7 +22,7 @@ from transcria.config import get_config
 from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
-from transcria.context.meeting_context import MeetingContextManager
+from transcria.context.meeting_context import MeetingContextManager, synthese_section
 from transcria.context.meeting_type_catalog import localized_type_display, meeting_type_names, type_specific_fields
 from transcria.context.meeting_type_store import MeetingTypeStore
 from transcria.context.participants import PLATFORM_SOURCE, ParticipantsManager
@@ -510,6 +510,13 @@ def _fill_missing_speaker_genders(
     return changed
 
 
+def _summary_headings(language: str | None) -> list[str]:
+    """Marqueur de la langue du job, puis TOUS les marqueurs connus (repli robuste :
+    un job dont la langue n'a pas été persistée affichait sinon le markdown brut)."""
+    return ([summary_markers(language)["summary_heading"]]
+            + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
+
+
 def _wizard_synthese_prefill(meeting: dict) -> str:
     """Valeur initiale du champ « Résumé » de l'étape 4 : l'édition manuelle si elle existe,
     sinon UNIQUEMENT la section synthèse du résumé LLM — jamais tout le markdown brut (méta,
@@ -527,12 +534,7 @@ def _wizard_synthese_prefill(meeting: dict) -> str:
     if not llm.strip():
         return ""
 
-    headings = [summary_markers(meeting.get("language"))["summary_heading"]]
-    headings += [m["summary_heading"] for m in _SUMMARY_MARKERS.values()]
-    for heading in headings:
-        if heading in llm:
-            return llm.split(heading, 1)[1].split("\n##", 1)[0].strip()
-    return llm.strip()
+    return synthese_section(llm, _summary_headings(meeting.get("language")))
 
 
 @web_bp.route("/")

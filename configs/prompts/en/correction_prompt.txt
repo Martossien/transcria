@@ -268,6 +268,37 @@ segment count and this ratio: a non-conforming file will be rejected.)
 
 ---
 
+## 8bis. Re-anchoring the summary — ONLY if `synthese_a_reancrer.md` is provided
+
+File absent (the common case) ⇒ **skip this section entirely**.
+
+The summary delivered to the user was written on a FAST transcription produced BEFORE
+your correction. You have just re-read the whole SRT: you are the only one who can
+re-anchor it on the text actually delivered, and it must cost nothing beyond the writing.
+
+**Only after** `transcription_corrigee.srt` is finished and verified:
+
+1. Read `synthese_a_reancrer.md`.
+2. Fix **whatever the corrected SRT contradicts**: names, figures, dates, terms, any
+   statement that rested on a transcription error.
+3. If `job_context.yaml` marks a participant with `is_animator: true`, this is a fact
+   **validated by a human**: use it as a **structural thread** (agenda, transitions,
+   items put to a decision, time management) and attribute the facilitation correctly.
+   It carries **no additional authority over content**: every speaker's facts weigh
+   equally, authority on a topic belongs to whoever carries it, and a high speaking time
+   does not inflate their place in the summary.
+4. Write `summary_reancree.md` — the written summary ONLY, no other block, no SRT lines.
+
+**Constraints, as strict as for the SRT**: you do not re-summarise. Same length (ratio
+0.90–1.10 against the provided summary), same structure, **no item removed**, nothing
+added that is not in the corrected SRT. The system checks that ratio and rejects the
+file otherwise.
+
+**When in doubt, do not write the file**: the existing summary will be kept. An absence
+costs nothing, a drift costs a report.
+
+---
+
 ## 9. Execution flow
 
 1. List the working directory with Bash.

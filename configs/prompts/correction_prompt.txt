@@ -287,6 +287,39 @@ sera rejeté.)
 
 ---
 
+## 8bis. Réancrage de la synthèse — SEULEMENT si `synthese_a_reancrer.md` est fourni
+
+Fichier absent (cas fréquent) ⇒ **ignorer entièrement cette section**.
+
+La synthèse livrée à l'utilisateur a été rédigée sur une transcription RAPIDE, produite
+AVANT ta correction. Tu viens de relire l'intégralité du SRT : tu es le seul à pouvoir la
+réancrer sur le texte réellement livré, et cela ne doit rien coûter d'autre que la
+rédaction.
+
+**Uniquement après** que `transcription_corrigee.srt` est terminé et vérifié :
+
+1. Lire `synthese_a_reancrer.md`.
+2. Corriger **ce que le SRT corrigé contredit** : noms, chiffres, dates, termes, une
+   affirmation qui reposait sur une erreur de transcription.
+3. Si `job_context.yaml` marque un participant `is_animator: true`, c'est un **fait
+   validé par l'humain** : sers-t'en comme **fil de structure** (ordre du jour,
+   transitions, points mis en décision, gestion du temps) et attribue-lui l'animation.
+   Il n'a **aucune autorité de contenu supplémentaire** : les faits de chaque locuteur
+   pèsent à égalité, l'autorité sur un sujet revient à celui qui le porte, et un temps de
+   parole élevé ne gonfle pas sa place dans la synthèse.
+4. Écrire `summary_reancree.md` — la synthèse rédigée SEULE, aucun autre bloc, aucune
+   ligne de SRT.
+
+**Contraintes, aussi strictes que pour le SRT** : tu ne re-résumes pas. Même longueur
+(ratio 0.90–1.10 avec la synthèse fournie), même structure, **aucun point supprimé**,
+rien d'ajouté qui ne soit dans le SRT corrigé. Le système vérifie ce ratio et rejette le
+fichier sinon.
+
+**En cas de doute, n'écris pas le fichier** : la synthèse existante sera conservée. Une
+absence ne coûte rien, une dérive coûte un compte rendu.
+
+---
+
 ## 9. Déroulé d'exécution
 
 1. Lister le répertoire de travail avec Bash.

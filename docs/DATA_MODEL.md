@@ -771,6 +771,8 @@ Assemblé par `JobContextBuilder.build()` à partir de `meeting_context.json`, `
 
 Chaque participant y porte `is_animator: true` **seulement** si la case « ★ Animateur » a été cochée à l'étape 5 (clé absente sinon : une réunion sans animateur laisse le contexte strictement identique). C'est la seule information du contexte qui soit un choix humain explicite plutôt qu'une déduction ; le prompt de résumé s'en sert comme fil de structure, jamais comme autorité de contenu.
 
+La phase de correction s'en sert aussi pour **réancrer la synthèse** : elle relit déjà l'intégralité du SRT, elle reçoit déjà le contexte validé (dont l'animateur), et la synthèse livrée avait été rédigée sur la transcription RAPIDE d'avant correction. Le texte réancré remplace `meeting_context["summary"]` **seulement** s'il est resté identique au préremplissage de l'étape 4 (l'édition humaine est souveraine) et s'il tient dans la bande de longueur 0,90–1,10 — sinon la synthèse existante est conservée.
+
 Ce fichier est construit après le mapping des locuteurs puis reconstruit après la sauvegarde du lexique afin d'inclure `session_lexicon.json`. Il n'existe pas encore au moment du résumé ; le résumé LLM reçoit donc un fichier dédié `summary/diarization_context.md` pour les données pyannote disponibles à cette étape.
 
 ### audio_scene.json

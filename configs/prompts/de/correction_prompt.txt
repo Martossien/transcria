@@ -292,6 +292,40 @@ zurückgewiesen.)
 
 ---
 
+## 8bis. Neuverankerung der Zusammenfassung — NUR wenn `synthese_a_reancrer.md` vorliegt
+
+Datei nicht vorhanden (der Normalfall) ⇒ **diesen Abschnitt vollständig überspringen**.
+
+Die an die Nutzenden gelieferte Zusammenfassung wurde auf einer SCHNELLEN Transkription
+verfasst, die VOR deiner Korrektur entstand. Du hast soeben das gesamte SRT erneut
+gelesen: nur du kannst sie auf den tatsächlich gelieferten Text neu verankern, und das
+darf nichts kosten außer dem Schreiben.
+
+**Erst nachdem** `transcription_corrigee.srt` fertig und geprüft ist:
+
+1. `synthese_a_reancrer.md` lesen.
+2. Korrigiere, **was das korrigierte SRT widerlegt**: Namen, Zahlen, Daten, Begriffe,
+   jede Aussage, die auf einem Transkriptionsfehler beruhte.
+3. Markiert `job_context.yaml` eine Person mit `is_animator: true`, ist das eine
+   **vom Menschen bestätigte** Tatsache: nutze sie als **roten Faden der Struktur**
+   (Tagesordnung, Übergänge, zur Entscheidung gestellte Punkte, Zeitmanagement) und
+   schreibe ihr die Moderation korrekt zu. Sie hat **keine zusätzliche inhaltliche
+   Autorität**: die Fakten aller Sprechenden wiegen gleich, die Autorität zu einem Thema
+   liegt bei der Person, die es vertritt, und eine hohe Redezeit vergrößert ihren Platz
+   in der Zusammenfassung nicht.
+4. `summary_reancree.md` schreiben — NUR die verfasste Zusammenfassung, kein weiterer
+   Block, keine SRT-Zeilen.
+
+**Auflagen, so streng wie beim SRT**: Du fasst nicht neu zusammen. Gleiche Länge
+(Verhältnis 0,90–1,10 zur gelieferten Zusammenfassung), gleiche Struktur, **kein Punkt
+entfernt**, nichts hinzugefügt, was nicht im korrigierten SRT steht. Das System prüft
+dieses Verhältnis und weist die Datei andernfalls zurück.
+
+**Im Zweifel die Datei nicht schreiben**: die bestehende Zusammenfassung bleibt erhalten.
+Ein Fehlen kostet nichts, eine Abweichung kostet ein Protokoll.
+
+---
+
 ## 9. Ausführungsablauf
 
 1. Das Arbeitsverzeichnis mit Bash auflisten.

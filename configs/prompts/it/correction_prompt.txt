@@ -290,6 +290,39 @@ file non conforme sarà respinto.)
 
 ---
 
+## 8bis. Riancoraggio della sintesi — SOLO se `synthese_a_reancrer.md` è fornito
+
+File assente (il caso abituale) ⇒ **ignorare del tutto questa sezione**.
+
+La sintesi consegnata all'utente è stata redatta su una trascrizione RAPIDA, prodotta
+PRIMA della tua correzione. Hai appena riletto l'intero SRT: sei l'unico a poterla
+riancorare al testo effettivamente consegnato, e non deve costare nulla oltre la
+redazione.
+
+**Solo dopo** che `transcription_corrigee.srt` è terminato e verificato:
+
+1. Leggere `synthese_a_reancrer.md`.
+2. Correggere **ciò che l'SRT corretto contraddice**: nomi, cifre, date, termini, ogni
+   affermazione che poggiava su un errore di trascrizione.
+3. Se `job_context.yaml` contrassegna un partecipante con `is_animator: true`, è un fatto
+   **convalidato dall'essere umano**: usalo come **filo della struttura** (ordine del
+   giorno, transizioni, punti messi in decisione, gestione del tempo) e attribuiscigli
+   correttamente l'animazione. Non ha **alcuna autorità aggiuntiva sul merito**: i fatti
+   di ogni locutore pesano allo stesso modo, l'autorità su un argomento spetta a chi lo
+   porta, e un tempo di parola elevato non gonfia il suo posto nella sintesi.
+4. Scrivere `summary_reancree.md` — SOLO la sintesi redatta, nessun altro blocco, nessuna
+   riga di SRT.
+
+**Vincoli, severi quanto per l'SRT**: non riassumi di nuovo. Stessa lunghezza (rapporto
+0,90–1,10 rispetto alla sintesi fornita), stessa struttura, **nessun punto soppresso**,
+nulla di aggiunto che non sia nell'SRT corretto. Il sistema verifica tale rapporto e
+altrimenti rifiuta il file.
+
+**Nel dubbio, non scrivere il file**: la sintesi esistente sarà conservata. Un'assenza
+non costa nulla, una deriva costa un verbale.
+
+---
+
 ## 9. Svolgimento dell'esecuzione
 
 1. Elencare la directory di lavoro con Bash.
