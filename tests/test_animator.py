@@ -127,6 +127,35 @@ class TestSuggestion:
             hint = animator_from_roles({"SPEAKER_01": {"label": "X", "role": role}})
             assert hint is not None and hint.speaker_id == "SPEAKER_01"
 
+    def test_le_libelle_prime_sur_la_description(self):
+        """Vécu au 4ᵉ parcours réel : un locuteur PORTE le mot dans son identité
+        (« Animateur / Secrétaire de séance »), l'autre l'a seulement dans ce qu'il fait
+        (« anime la discussion »). Compter les deux à égalité faisait abstenir l'outil
+        alors que la réponse était nette."""
+        hint = suggest_animator({
+            "SPEAKER_00": {"label": "Présentateur / Membre du CSE",
+                           "role": "présente les aménagements, anime la discussion"},
+            "SPEAKER_01": {"label": "Animateur / Secrétaire de séance",
+                           "role": "ouvre la séance, ferme la porte"},
+        })
+
+        assert hint is not None and hint.speaker_id == "SPEAKER_01"
+
+    def test_deux_libelles_d_animateur_ne_departagent_rien(self):
+        """L'ambiguïté au niveau le plus fort ne se rattrape pas au niveau du dessous."""
+        assert animator_from_roles({
+            "SPEAKER_00": {"label": "Animateur", "role": "ouvre la séance"},
+            "SPEAKER_01": {"label": "Animatrice", "role": "distribue la parole"},
+        }) is None
+
+    def test_la_description_sert_de_repli_quand_aucun_libelle_ne_tranche(self):
+        hint = suggest_animator({
+            "SPEAKER_00": {"label": "Marie Dupont", "role": "anime la séance"},
+            "SPEAKER_01": {"label": "Jean Martin", "role": "pose des questions"},
+        })
+
+        assert hint is not None and hint.speaker_id == "SPEAKER_00"
+
     def test_deux_animateurs_annonces_ne_departagent_rien(self):
         hints = {"SPEAKER_00": {"role": "animateur"}, "SPEAKER_01": {"role": "animatrice"}}
 

@@ -77,33 +77,47 @@ def _fold(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
-def matched_animation_word(info: object) -> str:
-    """Le mot du vocabulaire qui décrit l'animation dans ce rôle annoncé, sinon "".
-
-    Lit le label ET le rôle : la LLM écrit aussi bien « Maire / Animateur » (label) que
-    « anime la séance » (rôle) — vu l'un et l'autre sur le corpus réel.
-    """
+def _fields(info: object) -> tuple[str, str]:
+    """(libellé, rôle) d'un indice de rôle, quel que soit son format historique."""
     if isinstance(info, dict):
-        text = f"{info.get('label', '')} {info.get('role', '')}"
-    else:
-        text = str(info or "")
-    folded = _fold(text)
+        return str(info.get("label", "") or ""), str(info.get("role", "") or "")
+    return "", str(info or "")
+
+
+def matched_animation_word(info: object, *, label_only: bool = False) -> str:
+    """Le mot du vocabulaire qui décrit l'animation, sinon "".
+
+    Lit le libellé ET le rôle : la LLM écrit aussi bien « Maire / Animateur » (libellé)
+    que « anime la séance » (rôle) — vu l'un et l'autre sur le corpus réel.
+    """
+    label, role = _fields(info)
+    folded = _fold(label if label_only else f"{label} {role}")
     return next((word for word in ANIMATION_WORDS if word in folded), "")
 
 
 def animator_from_roles(role_hints: dict | None) -> AnimatorHint | None:
-    """Le locuteur dont le rôle annoncé décrit l'animation — s'il est le SEUL.
+    """Le locuteur que le rôle annoncé désigne comme animateur — s'il est le SEUL.
 
-    Deux « animateurs » annoncés, c'est une réunion à deux voix ou une hésitation de la
-    LLM : dans les deux cas, choisir à sa place serait une invention.
+    **Le libellé prime sur la description.** Le libellé est une IDENTITÉ (« Animateur /
+    Secrétaire de séance ») ; la description raconte ce que la personne fait, et le verbe
+    « anime » y apparaît pour quelqu'un qui « anime la discussion » sans présider quoi que
+    ce soit. Vécu au 4ᵉ parcours réel : deux correspondances, donc aucune suggestion, alors
+    qu'un seul des deux locuteurs portait le mot dans son libellé. On ne retombe sur les
+    descriptions que si aucun libellé ne tranche.
+
+    Deux animateurs désignés au même niveau, c'est une réunion à deux voix ou une
+    hésitation de la LLM : dans les deux cas, choisir à sa place serait une invention.
     """
-    matches = [(str(sid), matched_animation_word(info))
-               for sid, info in (role_hints or {}).items()]
-    matches = [(sid, word) for sid, word in matches if word]
-    if len(matches) != 1:
-        return None
-    speaker_id, word = matches[0]
-    return AnimatorHint(speaker_id=speaker_id, matched=word)
+    hints = (role_hints or {}).items()
+    for label_only in (True, False):
+        matches = [(str(sid), word) for sid, info in hints
+                   if (word := matched_animation_word(info, label_only=label_only))]
+        if len(matches) == 1:
+            speaker_id, word = matches[0]
+            return AnimatorHint(speaker_id=speaker_id, matched=word)
+        if matches:
+            return None      # ambiguïté au niveau le plus fort : on n'arbitre pas
+    return None
 
 
 def suggest_animator(role_hints: dict | None = None) -> AnimatorHint | None:
