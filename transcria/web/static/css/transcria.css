@@ -78,8 +78,14 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
   .lexicon-grid { grid-template-columns: 1fr; padding-right: 0; }
   .lexicon-card .lex-remove { position: static; margin-top: 8px; }
 }
-.speaker-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
+/* Les champs ne se COMPRIMENT plus : la ligne passe à la ligne. Sans ça, chaque contrôle
+   ajouté rabotait tous les autres — l'ajout de la case « ★ Animateur » réduisait le champ
+   Nom de 150 à 112 px, « Conseillère municipale » s'affichant « Conseill » (vu au rejeu
+   navigateur, invisible aux tests). */
+.speaker-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
 .speaker-item select { min-width: 200px; }
+.speaker-item input, .speaker-item select, .speaker-item button { flex-shrink: 0; }
+.speaker-item .form-check { white-space: nowrap; }
 .quality-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
 .quality-warning { background: var(--warning-bg); color: #92400e; }
 .quality-error { background: var(--danger-bg); color: #991b1b; }
