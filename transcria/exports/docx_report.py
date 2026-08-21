@@ -197,7 +197,10 @@ class DocxReport:
             time_s = float(spk.get("speaking_time_seconds", 0))
             pct = round(100 * time_s / max(total_time, 0.001))
             result.append({
-                "name": self._readable(p.get("name") or spk.get("mapped_name") or "—"),
+                # Sans nom validé, on retombe sur l'identifiant du locuteur — que
+                # `_readable` présente en « Locuteur N » plutôt qu'en tiret muet.
+                "name": self._readable(
+                    p.get("name") or spk.get("mapped_name") or spk.get("speaker_id") or "—"),
                 "function": p.get("function", ""),
                 "service": p.get("service", ""),
                 "role": p.get("role", ""),

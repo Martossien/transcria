@@ -308,3 +308,24 @@ class TestLisibiliteDuCompteRendu:
                          ("es", "VALIDADOS"), ("it", "CONVALIDATI")):
             texte = (ROOT / f"configs/prompts/{loc}/correction_prompt.txt").read_text(encoding="utf-8")
             assert mot in texte, f"{loc} : règle anti-hésitation absente"
+
+    def test_un_nom_de_role_nu_ne_designe_personne_non_plus(self):
+        """Vu au 3ᵉ parcours réel : la LLM a proposé « Animateur » tout court comme nom,
+        et ce mot se retrouvait devant 14 répliques. La colonne « Rôle » dit déjà ce que
+        la personne fait — le nom, lui, doit désigner QUELQU'UN."""
+        for role_nu in ("Animateur", "Président", "Chairperson", "Moderatorin",
+                        "Secrétaire", "Presentatore"):
+            assert is_generic_label(role_nu), role_nu
+
+    def test_un_libelle_compose_reste_informatif(self):
+        for compose in ("Présentateur / Animateur secondaire", "Animateur / Secrétaire du CSE",
+                        "Maire / Animateur", "Cheffe de projet"):
+            assert not is_generic_label(compose), compose
+
+    def test_sans_nom_le_compte_rendu_ne_montre_pas_un_tiret(self):
+        """Le repli est l'identifiant du locuteur — que le rendu présente en « Locuteur N »
+        — et non un tiret muet qui perd l'information « c'est une voix distincte »."""
+        source = (ROOT / "transcria/exports/docx_report.py").read_text(encoding="utf-8")
+        bloc = source.split("def _merge_participants", 1)[1].split("def ", 1)[0]
+
+        assert 'spk.get("speaker_id")' in bloc

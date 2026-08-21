@@ -49,6 +49,21 @@ GENERIC_SPEAKER_LABELS: frozenset[str] = frozenset({
     "ponente", "invitado", "invitada", "miembro", "desconocido",  # « participante » déjà listé (fr)
     # it
     "partecipante", "relatore", "relatrice", "ospite", "membro", "sconosciuto",
+    # Noms de RÔLE nus : « Animateur » tout court n'identifie pas plus quelqu'un que
+    # « Participant » — et la colonne « Rôle » du compte rendu dit déjà ce qu'il fait.
+    # Un libellé COMPOSÉ (« Animateur / Secrétaire du CSE ») échappe à la liste : il
+    # porte une information que le lecteur n'a pas ailleurs.
+    "animateur", "animatrice", "presentateur", "presentatrice", "president", "presidente",
+    "moderateur", "moderatrice", "facilitateur", "facilitatrice", "secretaire",
+    "formateur", "formatrice", "rapporteur", "organisateur", "organisatrice",
+    "host", "chair", "chairman", "chairwoman", "chairperson", "presenter", "facilitator",
+    "moderator", "secretary", "trainer", "organiser", "organizer",
+    "moderatorin", "vorsitzender", "vorsitzende", "sekretar", "sekretarin", "referent",
+    "referentin", "veranstalter", "veranstalterin",
+    "moderador", "moderadora", "presentador", "presentadora", "secretario", "secretaria",
+    "formador", "formadora", "organizador", "organizadora",
+    "moderatore", "presentatore", "segretario",
+    "segretaria", "formatore", "organizzatore", "organizzatrice",
 })
 
 
@@ -284,7 +299,10 @@ def apply_speaker_roles(
     for speaker_id, info in speaker_roles.items():
         norm = normalize_speaker_role_info(info)
         label = norm["label"]
-        if not label:
+        # Même règle qu'au-dessus : un libellé qui ne désigne personne ne doit pas non plus
+        # se propager dans le mapping ni dans les stats — sinon il ressort en préfixe de
+        # chaque réplique du SRT, donc dans la transcription du compte rendu.
+        if not label or is_generic_label(label):
             continue
         for spk in spk_stats:
             if spk.get("speaker_id") == speaker_id:
