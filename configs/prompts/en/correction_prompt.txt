@@ -287,7 +287,12 @@ re-anchor it on the text actually delivered, and it must cost nothing beyond the
    It carries **no additional authority over content**: every speaker's facts weigh
    equally, authority on a topic belongs to whoever carries it, and a high speaking time
    does not inflate their place in the summary.
-4. Write `summary_reancree.md` — the written summary ONLY, no other block, no SRT lines.
+4. **Do not hedge on what the human validated.** `job_context.yaml` carries VALIDATED
+   facts: meeting type, title, participants, facilitator. A summary that writes "the
+   meeting **appears to be** a works council session" while the context states the type
+   must state it plainly. Caution remains full for what is genuinely uncertain IN THE
+   TRANSCRIPT — it is hedging on already-validated facts that has no place.
+5. Write `summary_reancree.md` — the written summary ONLY, no other block, no SRT lines.
 
 **Constraints, as strict as for the SRT**: you do not re-summarise. Same length (ratio
 0.90–1.10 against the provided summary), same structure, **no item removed**, nothing

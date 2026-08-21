@@ -23,7 +23,9 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.web.pages_routes import _apply_animator_suggestion
 from transcria.workflow.phases.correction import reanchored_summary_error, summary_to_reanchor
+from transcria.exports.docx_report import neutral_speaker_names
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
+from transcria.workflow.speaker_projection import is_generic_label
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -249,3 +251,60 @@ class TestReancrageSynthese:
 
         assert "ENSUITE SEULEMENT" in bloc
         assert bloc.index("transcription_corrigee.srt") < bloc.index("summary_reancree.md")
+
+
+class TestLisibiliteDuCompteRendu:
+    """Trois défauts vus en LISANT le Word produit par le parcours réel.
+
+    Aucun ne cassait quoi que ce soit — ils rendaient le document moins juste : une
+    suggestion impossible à juger sans réécouter, un mot générique qui se lit comme un
+    nom propre, et une synthèse qui hésite sur ce que l'utilisateur a déjà validé.
+    """
+
+    def test_l_info_bulle_montre_le_role_annonce(self):
+        """La suggestion s'est trompée 1 fois sur 2 au banc : l'utilisateur doit pouvoir
+        la juger d'un survol, sans réécouter l'audio."""
+        template = (ROOT / "transcria/web/templates/wizard/_step_participants.html").read_text(
+            encoding="utf-8")
+
+        assert "Rôle annoncé : %(role)s" in template
+        # Le champ Rôle fait 150 px : son contenu est toujours coupé à l'écran.
+        assert 'title="{{ s.mapped_role or \'\' }}"' in template
+
+    def test_un_mot_generique_n_est_pas_un_nom(self):
+        for generique in ("Participant", "participante", "Speaker", "Teilnehmerin",
+                          "membro", "Invité", "inconnu"):
+            assert is_generic_label(generique), generique
+
+    def test_un_libelle_informatif_est_conserve(self):
+        """« Animateur / Secrétaire du CSE » dit quelque chose : on ne l'efface pas."""
+        for utile in ("Animateur / Secrétaire du CSE", "Maire / Animateur",
+                      "Marie Dupont", "Cheffe de projet", ""):
+            assert not is_generic_label(utile), utile
+
+    def test_l_identifiant_de_diarisation_devient_lisible(self):
+        noms = neutral_speaker_names(
+            ["SPEAKER_01", "SPEAKER_00", "Marie Dupont", "", None], "Locuteur {n}")
+
+        assert noms == {"SPEAKER_00": "Locuteur 1", "SPEAKER_01": "Locuteur 2"}
+
+    def test_la_numerotation_est_stable_entre_deux_rendus(self):
+        """Un compte rendu régénéré ne doit pas renuméroter ses locuteurs."""
+        a = neutral_speaker_names(["SPEAKER_02", "SPEAKER_00"], "Locuteur {n}")
+        b = neutral_speaker_names(["SPEAKER_00", "SPEAKER_02"], "Locuteur {n}")
+
+        assert a == b
+
+    def test_les_cinq_langues_ont_leur_libellé_neutre(self):
+        from transcria.exports.docx_style import _DOCX_LABELS
+
+        for lang, labels in _DOCX_LABELS.items():
+            assert "{n}" in labels.get("speaker_n", ""), f"{lang} : libellé neutre absent"
+
+    def test_la_regle_anti_hesitation_est_dans_les_cinq_prompts(self):
+        fr = (ROOT / "configs/prompts/correction_prompt.txt").read_text(encoding="utf-8")
+        assert "faits\n   VALIDÉS" in fr or "VALIDÉS" in fr
+        for loc, mot in (("en", "VALIDATED"), ("de", "BESTÄTIGTE"),
+                         ("es", "VALIDADOS"), ("it", "CONVALIDATI")):
+            texte = (ROOT / f"configs/prompts/{loc}/correction_prompt.txt").read_text(encoding="utf-8")
+            assert mot in texte, f"{loc} : règle anti-hésitation absente"

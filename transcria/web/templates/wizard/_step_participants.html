@@ -127,7 +127,7 @@
             <i class="bi bi-camera-video"></i> {{ _('suggéré par la réunion') }}</span>
           {% endif %}
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
-          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle dans la réunion') }}" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle dans la réunion') }}" value="{{ s.mapped_role or '' }}" title="{{ s.mapped_role or '' }}" style="max-width:150px;">
           <select class="form-select form-select-sm speaker-gender" style="max-width:130px;" title="{{ _('Genre vocal (modifiable)') }}">
             <option value="" {% if not s.get('gender') %}selected{% endif %}>{{ _('Non déterminé') }}</option>
             <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>{{ _('Féminin ♀') }}</option>
@@ -142,7 +142,7 @@
           {% if s.get('animator_suggested') and not s.get('mapped_is_animator') %}
           <button type="button" class="btn btn-sm btn-outline-warning animator-suggestion"
                   data-speaker="{{ s.speaker_id }}"
-                  title="{{ _('Rôle annoncé pendant la réunion') }}"
+                  title="{% if s.mapped_role %}{{ _('Rôle annoncé : %(role)s', role=s.mapped_role) }}{% else %}{{ _('Rôle annoncé pendant la réunion') }}{% endif %}"
                   data-action="TranscrIA.applyAnimatorSuggestion" data-action-el>
             ★ {{ _('Animateur probable') }}
           </button>

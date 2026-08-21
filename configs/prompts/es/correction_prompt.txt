@@ -317,7 +317,12 @@ en el texto realmente entregado, y no debe costar nada más que la redacción.
    animación. No tiene **ninguna autoridad adicional sobre el fondo**: los hechos de cada
    locutor pesan por igual, la autoridad sobre un tema corresponde a quien lo lleva, y un
    tiempo de palabra elevado no aumenta su lugar en el resumen.
-4. Escribir `summary_reancree.md` — SOLO el resumen redactado, ningún otro bloque,
+4. **No dudar sobre lo que el humano ha validado.** `job_context.yaml` contiene hechos
+   VALIDADOS: tipo de reunión, título, participantes, animador. Un resumen que escribe «la
+   reunión **parece ser** una sesión del comité» cuando el contexto indica el tipo debe
+   afirmarlo. La prudencia sigue entera para lo que es realmente incierto EN LA
+   TRANSCRIPCIÓN — es la duda sobre los hechos ya validados la que no tiene lugar.
+5. Escribir `summary_reancree.md` — SOLO el resumen redactado, ningún otro bloque,
    ninguna línea de SRT.
 
 **Restricciones, tan estrictas como para el SRT**: no vuelves a resumir. Misma longitud

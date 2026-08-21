@@ -313,7 +313,13 @@ darf nichts kosten außer dem Schreiben.
    Autorität**: die Fakten aller Sprechenden wiegen gleich, die Autorität zu einem Thema
    liegt bei der Person, die es vertritt, und eine hohe Redezeit vergrößert ihren Platz
    in der Zusammenfassung nicht.
-4. `summary_reancree.md` schreiben — NUR die verfasste Zusammenfassung, kein weiterer
+4. **Nicht zögern bei dem, was der Mensch bestätigt hat.** `job_context.yaml` enthält
+   BESTÄTIGTE Fakten: Sitzungstyp, Titel, Teilnehmende, Moderation. Eine Zusammenfassung,
+   die schreibt „die Sitzung **scheint** eine Betriebsratssitzung zu sein“, obwohl der
+   Kontext den Typ nennt, muss ihn benennen. Die Vorsicht bleibt vollständig für das, was
+   IM TRANSKRIPT wirklich unsicher ist — nur das Zögern bei bereits bestätigten Fakten hat
+   keinen Platz.
+5. `summary_reancree.md` schreiben — NUR die verfasste Zusammenfassung, kein weiterer
    Block, keine SRT-Zeilen.
 
 **Auflagen, so streng wie beim SRT**: Du fasst nicht neu zusammen. Gleiche Länge

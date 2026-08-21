@@ -307,7 +307,12 @@ rédaction.
    Il n'a **aucune autorité de contenu supplémentaire** : les faits de chaque locuteur
    pèsent à égalité, l'autorité sur un sujet revient à celui qui le porte, et un temps de
    parole élevé ne gonfle pas sa place dans la synthèse.
-4. Écrire `summary_reancree.md` — la synthèse rédigée SEULE, aucun autre bloc, aucune
+4. **Ne pas hésiter sur ce que l'humain a validé.** `job_context.yaml` porte des faits
+   VALIDÉS : type de réunion, titre, participants, animateur. Une synthèse qui écrit « la
+   réunion **semble être** une séance du CSE » alors que le contexte donne le type doit
+   l'affirmer. La prudence reste entière sur ce qui est réellement incertain DANS LA
+   TRANSCRIPTION — c'est l'hésitation sur les faits déjà validés qui n'a pas lieu d'être.
+5. Écrire `summary_reancree.md` — la synthèse rédigée SEULE, aucun autre bloc, aucune
    ligne de SRT.
 
 **Contraintes, aussi strictes que pour le SRT** : tu ne re-résumes pas. Même longueur

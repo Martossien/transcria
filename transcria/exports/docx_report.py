@@ -18,6 +18,7 @@ from transcria.context.meeting_type_catalog import (
     localized_type_display,
     quorum_types,
 )
+from transcria.context.participants import is_label
 from transcria.exports.docx_srt import (  # noqa: F401 — façade
     _parse_srt,
     _srt_duration_seconds,
@@ -73,6 +74,17 @@ _RENDER_SECTIONS = ("participants", "transcript", "quality")
 # contexte (rendu historique, non-régression au pixel).
 _ORDERABLE_SECTIONS = ORDERABLE_SECTIONS
 _SECTION_ORDER_DEFAULT = ("contexte", "pv", "participants", "transcript", "quality")
+
+
+def neutral_speaker_names(labels, template: str) -> dict[str, str]:
+    """``SPEAKER_00`` → « Locuteur 1 » : un identifiant technique n'est pas un nom.
+
+    Le compte rendu est lu par des humains : afficher `SPEAKER_01` en colonne « Nom » et
+    devant chaque réplique est aussi mauvais qu'y afficher « Participant ». La
+    numérotation suit l'ordre des identifiants — stable d'un rendu à l'autre.
+    """
+    ordonnes = sorted({str(x) for x in labels if str(x or "").strip() and is_label(str(x))})
+    return {label: template.format(n=i) for i, label in enumerate(ordonnes, start=1)}
 
 
 def _sanitize_render_options(raw: object) -> dict:
@@ -132,6 +144,15 @@ class DocxReport:
         self.quality = quality or {}
         self.srt_entries = _parse_srt(srt_text)
         self.duration_s = _srt_duration_seconds(srt_text)
+        # Renommage lisible des étiquettes de diarisation, calculé une fois sur TOUTES les
+        # sources (participants, locuteurs, préfixes du SRT) pour que le tableau et la
+        # transcription montrent le même « Locuteur N ».
+        self._neutral = neutral_speaker_names(
+            [p.get("name") for p in self.participants]
+            + [s.get("mapped_name") or s.get("speaker_id") for s in self.speakers]
+            + [e["speaker"] for e in self.srt_entries],
+            self.L.get("speaker_n", "Locuteur {n}"),
+        )
         self.merged = self._merge_participants()
         self.structured_data: dict = structured_data if isinstance(structured_data, dict) else {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
@@ -161,6 +182,11 @@ class DocxReport:
 
     # ── Fusion participants ───────────────────────────────────────────────────
 
+    def _readable(self, name: str) -> str:
+        """Le nom validé s'il y en a un, sinon « Locuteur N » plutôt que `SPEAKER_01`."""
+        cleaned = str(name or "").strip()
+        return self._neutral.get(cleaned, cleaned)
+
     def _merge_participants(self) -> list[dict]:
         spk_map = {s["mapped_to"]: s for s in self.speakers if s.get("mapped_to")}
         total_time = sum(s.get("speaking_time_seconds", 0.0) for s in self.speakers)
@@ -171,7 +197,7 @@ class DocxReport:
             time_s = float(spk.get("speaking_time_seconds", 0))
             pct = round(100 * time_s / max(total_time, 0.001))
             result.append({
-                "name": (p.get("name") or spk.get("mapped_name") or "—").strip(),
+                "name": self._readable(p.get("name") or spk.get("mapped_name") or "—"),
                 "function": p.get("function", ""),
                 "service": p.get("service", ""),
                 "role": p.get("role", ""),
@@ -187,7 +213,7 @@ class DocxReport:
                 time_s = float(spk.get("speaking_time_seconds", 0))
                 pct = round(100 * time_s / max(total_time, 0.001))
                 result.append({
-                    "name": (spk.get("mapped_name") or spk.get("speaker_id") or "—"),
+                    "name": self._readable(spk.get("mapped_name") or spk.get("speaker_id") or "—"),
                     "function": "",
                     "service": "",
                     "role": "",
@@ -913,7 +939,7 @@ class DocxReport:
             _cell_bg(spk_cell, bg)
             _cell_margins(spk_cell, top=40, bottom=40, left=60, right=80)
             p1 = spk_cell.paragraphs[0]
-            r1 = p1.add_run(entry["speaker"])
+            r1 = p1.add_run(self._readable(entry["speaker"]))
             r1.font.size = Pt(9)
             r1.font.bold = True
             r1.font.color.rgb = self.theme.accent if entry["speaker"] else _GREY_DARK

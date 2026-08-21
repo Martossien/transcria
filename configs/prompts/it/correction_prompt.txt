@@ -310,7 +310,12 @@ redazione.
    correttamente l'animazione. Non ha **alcuna autorità aggiuntiva sul merito**: i fatti
    di ogni locutore pesano allo stesso modo, l'autorità su un argomento spetta a chi lo
    porta, e un tempo di parola elevato non gonfia il suo posto nella sintesi.
-4. Scrivere `summary_reancree.md` — SOLO la sintesi redatta, nessun altro blocco, nessuna
+4. **Non esitare su ciò che l'essere umano ha convalidato.** `job_context.yaml` contiene
+   fatti CONVALIDATI: tipo di riunione, titolo, partecipanti, animatore. Una sintesi che
+   scrive «la riunione **sembra essere** una seduta del comitato» mentre il contesto indica
+   il tipo deve affermarlo. La prudenza resta intera per ciò che è realmente incerto NELLA
+   TRASCRIZIONE — è il dubbio sui fatti già convalidati che non ha ragione d'essere.
+5. Scrivere `summary_reancree.md` — SOLO la sintesi redatta, nessun altro blocco, nessuna
    riga di SRT.
 
 **Vincoli, severi quanto per l'SRT**: non riassumi di nuovo. Stessa lunghezza (rapporto

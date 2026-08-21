@@ -12,6 +12,7 @@ Il ne connaît ni ``JobFilesystem`` ni le store — les lectures/écritures des 
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
@@ -28,6 +29,39 @@ def truncate_at_word(text: str, max_chars: int = 120) -> str:
         return text
     cut = text[:max_chars].rsplit(" ", 1)
     return (cut[0] if len(cut) > 1 else text[:max_chars]) + "…"
+
+
+#: Mots qui ne DÉSIGNENT personne. Le prompt autorise « [Nom ou fonction] » : quand la LLM
+#: ne connaît pas le nom, elle écrit parfois « Participant » — et ce mot se retrouve alors
+#: en colonne « Nom » du compte rendu et devant chaque réplique de la transcription, où il
+#: se lit comme un nom propre. Comparaison par ÉGALITÉ après normalisation : « Animateur /
+#: Secrétaire du CSE » reste un libellé informatif et n'est pas concerné.
+GENERIC_SPEAKER_LABELS: frozenset[str] = frozenset({
+    # fr
+    "participant", "participante", "locuteur", "locutrice", "intervenant", "intervenante",
+    "invite", "invitee", "membre", "personne", "orateur", "oratrice", "inconnu",
+    "non identifie", "non identifiee",
+    # en
+    "speaker", "attendee", "member", "guest", "unknown", "unidentified",
+    # de
+    "teilnehmer", "teilnehmerin", "sprecher", "sprecherin", "gast", "mitglied", "unbekannt",
+    # es
+    "ponente", "invitado", "invitada", "miembro", "desconocido",  # « participante » déjà listé (fr)
+    # it
+    "partecipante", "relatore", "relatrice", "ospite", "membro", "sconosciuto",
+})
+
+
+def is_generic_label(label: str) -> bool:
+    """Ce « nom » proposé par la LLM ne désigne-t-il personne ?
+
+    Vu en réel : un compte rendu où 35 répliques étaient attribuées à « Participant ».
+    Un tel libellé vaut moins que l'identifiant de diarisation, qui au moins ne prétend
+    pas être quelqu'un — et que le rendu sait présenter en « Locuteur 1 ».
+    """
+    folded = unicodedata.normalize("NFKD", str(label or "").strip().lower())
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return folded in GENERIC_SPEAKER_LABELS
 
 
 def normalize_speaker_role_info(info: dict) -> dict:
@@ -196,7 +230,7 @@ def apply_speaker_roles(
     for speaker_id, info in speaker_roles.items():
         normalized = normalize_speaker_role_info(info)
         role = normalized["role"]
-        label = normalized["label"]
+        label = "" if is_generic_label(normalized["label"]) else normalized["label"]
         if not role:
             continue
 

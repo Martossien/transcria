@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 21:17+0200\n"
+"POT-Creation-Date: 2026-08-21 23:49+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -2666,11 +2666,11 @@ msgstr "Die Sprache selbst ist beeinträchtigt — genauere Prüfung empfohlen (
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Bandbreite vom Telefontyp erkannt (Codec)."
 
-#: transcria/web/pages_routes.py:564
+#: transcria/web/pages_routes.py:566
 msgid "Nouveau traitement créé."
 msgstr "Neuer Job erstellt."
 
-#: transcria/web/pages_routes.py:832
+#: transcria/web/pages_routes.py:834
 msgid "Traitement supprimé."
 msgstr "Job gelöscht."
 
@@ -6162,6 +6162,11 @@ msgstr "Männlich ♂"
 #: transcria/web/templates/wizard/_step_participants.html:196
 msgid "Anime la réunion : sert de fil de structure au compte-rendu, sans peser davantage sur le fond."
 msgstr "Moderiert die Sitzung: dient als roter Faden der Struktur im Bericht, ohne inhaltlich stärker zu wiegen."
+
+#: transcria/web/templates/wizard/_step_participants.html:145
+#, python-format
+msgid "Rôle annoncé : %(role)s"
+msgstr "Genannte Rolle: %(role)s"
 
 #: transcria/web/templates/wizard/_step_participants.html:145
 msgid "Rôle annoncé pendant la réunion"
