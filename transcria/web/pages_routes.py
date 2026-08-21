@@ -622,6 +622,10 @@ def job_wizard(job_id: str):
                 if p.get("id") == s.get("mapped_to") or p.get("name") == s.get("mapped_name"):
                     s["mapped_func"] = p.get("function", "")
                     s["mapped_role"] = p.get("role", "")
+                    # Case « Animateur » de l'étape 5 : elle doit se rouvrir cochée si
+                    # l'utilisateur l'a déjà validée (le drapeau vit sur le participant,
+                    # pas sur le locuteur).
+                    s["mapped_is_animator"] = bool(p.get("is_animator", False))
                     pname = p.get("name", "")
                     if pname and not pname.upper().startswith("SPEAKER_"):
                         s["mapped_name"] = pname

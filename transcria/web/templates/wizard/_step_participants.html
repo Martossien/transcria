@@ -133,6 +133,10 @@
             <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>{{ _('Féminin ♀') }}</option>
             <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>{{ _('Masculin ♂') }}</option>
           </select>
+          <div class="form-check form-check-inline ms-1" title="{{ _('Anime la réunion : sert de fil de structure au compte-rendu, sans peser davantage sur le fond.') }}">
+            <input class="form-check-input speaker-animator" type="checkbox" id="anim-{{ s.speaker_id }}"{% if s.get('mapped_is_animator') %} checked{% endif %}>
+            <label class="form-check-label small" for="anim-{{ s.speaker_id }}">★ {{ _('Animateur') }}</label>
+          </div>
           {% if voice_hint.item %}
           <button type="button"
                   class="btn btn-sm btn-outline-success voice-suggestion"
@@ -153,7 +157,10 @@
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ p.name }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ p.function }}" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ p.role }}" style="max-width:150px;">
-          {% if p.is_animator %}<span class="badge bg-warning text-dark">{{ _('Animateur') }}</span>{% endif %}
+          <div class="form-check form-check-inline ms-1" title="{{ _('Anime la réunion : sert de fil de structure au compte-rendu, sans peser davantage sur le fond.') }}">
+            <input class="form-check-input speaker-animator" type="checkbox" id="anim-p-{{ loop.index }}"{% if p.is_animator %} checked{% endif %}>
+            <label class="form-check-label small" for="anim-p-{{ loop.index }}">★ {{ _('Animateur') }}</label>
+          </div>
           <button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>
         </div>
         {% endfor %}
@@ -176,6 +183,10 @@
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ name }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ role }}" style="max-width:150px;">
+          <div class="form-check form-check-inline ms-1" title="{{ _('Anime la réunion : sert de fil de structure au compte-rendu, sans peser davantage sur le fond.') }}">
+            <input class="form-check-input speaker-animator" type="checkbox" id="anim-d-{{ loop.index }}">
+            <label class="form-check-label small" for="anim-d-{{ loop.index }}">★ {{ _('Animateur') }}</label>
+          </div>
           <button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>
         </div>
         {% endif %}

@@ -420,6 +420,13 @@ Se nessun termine sospetto è rilevato, scrivere sotto `## Termini dubbi da vali
   fedeltà: ogni elemento è ancorato nella trascrizione — la qualità redazionale non porta
   MAI a inventare una decisione, un'azione, una cifra, un nome o una scadenza. Se nessuna
   decisione è identificabile, non crearne una.
+- **Animatore convalidato (solo se il contesto lo riporta)**: il file di contesto può
+  contrassegnare un partecipante con `is_animator: true`. È una scelta UMANA esplicita, non
+  una deduzione: non contraddirla e non designarne un altro. Serve da **filo della
+  struttura** — ordine del giorno, transizioni, punti messi in decisione, gestione del tempo
+  — e a nient'altro: pesare i fatti di ogni locutore allo stesso modo, l'autorità su un
+  argomento spetta a chi lo porta, e un tempo di parola elevato non gonfia il suo posto
+  nella sintesi. Senza tale contrassegno nel contesto, analizzare esattamente come al solito.
 
 ---
 

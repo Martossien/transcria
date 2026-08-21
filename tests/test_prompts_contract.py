@@ -45,6 +45,16 @@ class TestSummaryPromptContract:
             assert mtype in resolved, f"type absent du prompt résolu : {mtype}"
         assert '`CSE` si on entend "comité social"' in resolved   # indices du catalogue
 
+    def test_regle_animateur_valide(self):
+        """Le contexte peut porter `is_animator: true` (case cochée à l'étape 5) : le
+        prompt doit savoir quoi en faire, et surtout ce qu'il ne doit PAS en faire."""
+        text = _read("summary_prompt.txt")
+        assert "is_animator" in text
+        # La doctrine anti-biais reste écrite noir sur blanc (règle v2.7) : donner la
+        # donnée à la LLM ne lui donne pas le droit de peser davantage ce que dit
+        # l'animateur.
+        assert "autorité" in text and "à égalité" in text
+
     def test_substitution_no_op_sans_placeholder(self):
         """Un prompt personnalisé par un admin SANS placeholder reste intact."""
         from transcria.context.meeting_type_prompts import (
@@ -174,6 +184,13 @@ class TestLocalizedPromptsContract:
             for field in ("decisions", "actions", "blocages", "votes"):
                 assert f'"{field}"' in text, f"{d.name}: champ structured_data {field} absent"
             assert "summary.md" in text
+
+    def test_regle_animateur_repliquee_dans_chaque_langue(self):
+        """Une règle ajoutée au prompt FR et oubliée ailleurs = une fonctionnalité qui
+        n'existe que pour les livrables français (piège vécu au chantier i18n)."""
+        for d in self._locale_dirs():
+            text = (d / "summary_prompt.txt").read_text(encoding="utf-8")
+            assert "is_animator" in text, f"{d.name}: règle animateur absente du résumé"
 
     def test_fichiers_de_sortie_et_litteraux(self):
         for d in self._locale_dirs():

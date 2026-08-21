@@ -424,6 +424,13 @@ Si no se detecta ningún término sospechoso, escriba bajo `## Términos dudosos
   fidelidad: cada elemento está anclado en la transcripción — la calidad redaccional NUNCA
   lleva a inventar una decisión, una acción, una cifra, un nombre o un plazo. Si no se
   identifica ninguna decisión, no crear ninguna.
+- **Animador validado (solo si el contexto lo indica)**: el archivo de contexto puede marcar
+  a un participante con `is_animator: true`. Es una elección HUMANA explícita, no una
+  deducción: no la contradigas ni designes a otro. Sirve de **hilo de estructura** — orden
+  del día, transiciones, puntos sometidos a decisión, gestión del tiempo — y de nada más:
+  pesar los hechos de cada locutor por igual, la autoridad sobre un tema corresponde a quien
+  lo lleva, y un tiempo de palabra elevado no aumenta su lugar en el resumen. Sin esa marca
+  en el contexto, analizar exactamente como de costumbre.
 
 ---
 

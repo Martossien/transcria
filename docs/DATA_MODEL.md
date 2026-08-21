@@ -769,6 +769,8 @@ Le fichier ne remplace pas `session_lexicon.json` et ne doit pas être utilisé 
 
 Assemblé par `JobContextBuilder.build()` à partir de `meeting_context.json`, `participants.json`, `speaker_mapping.json`, `session_lexicon.json`. Voir `context/job_context_builder.py` pour le schéma complet.
 
+Chaque participant y porte `is_animator: true` **seulement** si la case « ★ Animateur » a été cochée à l'étape 5 (clé absente sinon : une réunion sans animateur laisse le contexte strictement identique). C'est la seule information du contexte qui soit un choix humain explicite plutôt qu'une déduction ; le prompt de résumé s'en sert comme fil de structure, jamais comme autorité de contenu.
+
 Ce fichier est construit après le mapping des locuteurs puis reconstruit après la sauvegarde du lexique afin d'inclure `session_lexicon.json`. Il n'existe pas encore au moment du résumé ; le résumé LLM reçoit donc un fichier dédié `summary/diarization_context.md` pour les données pyannote disponibles à cette étape.
 
 ### audio_scene.json

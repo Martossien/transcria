@@ -393,6 +393,13 @@ If no suspect term is detected, write under `## Doubtful terms to validate`:
   requirement: every element is anchored in the transcription — writing quality NEVER
   leads to inventing a decision, an action, a figure, a name or a deadline. If no decision
   is identifiable, do not create one.
+- **Validated facilitator (only when the context carries one)**: the context file may mark
+  a participant with `is_animator: true`. This is an explicit HUMAN choice, not an
+  inference: do not contradict it and do not designate someone else. It serves as a
+  **structural thread** — agenda, transitions, items put to a decision, time management —
+  and nothing else: weigh every speaker's facts equally, authority on a topic belongs to
+  whoever carries it, and a high speaking time does not inflate their place in the summary.
+  With no such mark in the context, analyse exactly as usual.
 
 ---
 

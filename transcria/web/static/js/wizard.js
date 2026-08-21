@@ -366,6 +366,7 @@ var TranscrIA = window.TranscrIA || {};
             '<input type="text" class="form-control form-control-sm speaker-name" placeholder="' + t('Nom') + '" style="max-width:150px;">' +
             '<input type="text" class="form-control form-control-sm speaker-func" placeholder="' + t('Fonction') + '" style="max-width:130px;">' +
             '<input type="text" class="form-control form-control-sm speaker-role" placeholder="' + t('Rôle dans la réunion') + '" style="max-width:150px;">' +
+            '<label class="form-check-label small ms-1"><input class="form-check-input speaker-animator" type="checkbox"> ★ ' + t('Animateur') + '</label>' +
             '<button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>';
         container.appendChild(row);
     };
@@ -381,15 +382,19 @@ var TranscrIA = window.TranscrIA || {};
             var funcEl = row.querySelector('.speaker-func');
             var roleEl = row.querySelector('.speaker-role');
             var genderEl = row.querySelector('.speaker-gender');
+            var animatorEl = row.querySelector('.speaker-animator');
             var name = (nameEl && nameEl.value || '').trim();
             var func = (funcEl && funcEl.value || '').trim();
             var role = (roleEl && roleEl.value || '').trim();
             var gender = (genderEl && genderEl.value || '').trim();
+            // Case « ★ Animateur » : jusqu'ici le drapeau existait dans le modèle et
+            // dans le Word, mais rien ne pouvait le poser (envoyé en dur à false).
+            var isAnimator = !!(animatorEl && animatorEl.checked);
             if (name) {
                 pi++;
                 var pid = 'p' + pi;
                 participants.push({ id: pid, name: name, function: func, role: role,
-                    is_animator: false, expected: true });
+                    is_animator: isAnimator, expected: true });
                 var spkLabel = row.querySelector('strong');
                 if (spkLabel) {
                     mapping[spkLabel.textContent] = { name: name, participant_id: pid,

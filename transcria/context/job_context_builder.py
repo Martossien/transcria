@@ -39,6 +39,13 @@ class JobContextBuilder:
                     "function": p.get("function", ""),
                     "role": p.get("role", ""),
                     "expected": p.get("expected", True),
+                    # Animateur : porté SEULEMENT quand il est vrai. C'est le seul champ
+                    # du contexte qui soit un choix HUMAIN explicite (case cochée à
+                    # l'étape 5) et non une déduction — les prompts s'appuient dessus
+                    # comme fil de STRUCTURE, jamais comme autorité de contenu.
+                    # Absent = contexte identique à avant : une réunion sans animateur
+                    # ne change rien à ce que la LLM reçoit.
+                    **({"is_animator": True} if p.get("is_animator") else {}),
                 }
                 for p in participants
             ],

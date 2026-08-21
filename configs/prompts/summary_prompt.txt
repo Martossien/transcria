@@ -1,4 +1,7 @@
-# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v3.1
+# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v3.2
+# v3.2 : §8 animateur VALIDÉ par l'humain (`is_animator` du fichier de contexte) — fil de
+#        structure, jamais autorité de contenu ; sans marquage, comportement inchangé.
+#        Règle répliquée à l'identique dans configs/prompts/{en,de,es,it}.
 # v3.1 : §6.10 recoupement avec les documents présentés (meeting_invite.md) — proposer
 #        comme termes suspects les entités nommées des documents divergentes dans le
 #        transcript, taguées `| source: document` (suggestion validée par l'humain).
@@ -424,6 +427,13 @@ Si aucun terme suspect n'est détecté, écrire sous `## Termes douteux à valid
   de fidélité : tout élément est ancré dans la transcription — la qualité
   rédactionnelle ne conduit JAMAIS à inventer une décision, une action, un chiffre,
   un nom ou une échéance. Si aucune décision n'est identifiable, ne pas en créer.
+- **Animateur validé (seulement si le contexte le porte)** : le fichier de contexte peut
+  marquer un participant `is_animator: true`. C'est un choix HUMAIN explicite, pas une
+  déduction : ne le contredis pas et n'en désigne pas un autre. Il sert de **fil de
+  structure** — ordre du jour, transitions, points mis en décision, gestion du temps — et
+  à rien d'autre : peser les faits de chaque locuteur à égalité, l'autorité sur un sujet
+  revient à celui qui le porte, et un temps de parole élevé ne gonfle pas sa place dans la
+  synthèse. Sans marquage dans le contexte, analyser exactement comme d'habitude.
 
 ---
 
