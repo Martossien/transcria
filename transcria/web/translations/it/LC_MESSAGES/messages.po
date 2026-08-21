@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 20:25+0200\n"
+"POT-Creation-Date: 2026-08-21 21:17+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -2666,11 +2666,11 @@ msgstr "Il parlato stesso è degradato — verifica approfondita consigliata (SI
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Rilevata larghezza di banda di tipo telefonico (codec)."
 
-#: transcria/web/pages_routes.py:565
+#: transcria/web/pages_routes.py:564
 msgid "Nouveau traitement créé."
 msgstr "Nuovo lavoro creato."
 
-#: transcria/web/pages_routes.py:833
+#: transcria/web/pages_routes.py:832
 msgid "Traitement supprimé."
 msgstr "Lavoro eliminato."
 
@@ -6171,10 +6171,6 @@ msgstr "Anima la riunione: serve da filo della struttura nel verbale, senza pesa
 msgid "Rôle annoncé pendant la réunion"
 msgstr "Ruolo annunciato durante la riunione"
 
-#: transcria/web/templates/wizard/_step_participants.html:145
-msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
-msgstr "Interviene spesso e brevemente, e passa la parola alla maggior parte degli altri"
-
 #: transcria/web/templates/wizard/_step_participants.html:147
 msgid "Animateur probable"
 msgstr "Moderatore probabile"
@@ -6377,4 +6373,7 @@ msgstr "Non è stato possibile generare l'ultima sintesi: la LLM di arbitraggio 
 #: transcria/web/templates/wizard/_step_summary.html:101
 msgid "Générer le résumé"
 msgstr "Genera la sintesi"
+
+#~ msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
+#~ msgstr "Interviene spesso e brevemente, e passa la parola alla maggior parte degli altri"
 

@@ -142,7 +142,7 @@
           {% if s.get('animator_suggested') and not s.get('mapped_is_animator') %}
           <button type="button" class="btn btn-sm btn-outline-warning animator-suggestion"
                   data-speaker="{{ s.speaker_id }}"
-                  title="{% if s.get('animator_reason') == 'role' %}{{ _('Rôle annoncé pendant la réunion') }}{% else %}{{ _('Intervient souvent et brièvement, et passe la parole à la plupart des autres') }}{% endif %}"
+                  title="{{ _('Rôle annoncé pendant la réunion') }}"
                   data-action="TranscrIA.applyAnimatorSuggestion" data-action-el>
             ★ {{ _('Animateur probable') }}
           </button>

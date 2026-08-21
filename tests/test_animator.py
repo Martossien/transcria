@@ -22,11 +22,7 @@ from transcria.context.participants import ParticipantsManager
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.web.pages_routes import _apply_animator_suggestion
-from transcria.workflow.animator_hint import (
-    animator_from_roles,
-    score_speakers,
-    suggest_animator,
-)
+from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,82 +93,36 @@ class TestEtape5:
 class TestSuggestion:
     """Lot 2 — la machine PROPOSE, l'humain dispose.
 
-    Les seuils sont volontairement sévères : sur ce champ, une absence de suggestion est
-    sans conséquence, alors qu'une mauvaise suggestion se fait valider par habitude et
-    entre ensuite dans le compte-rendu comme un fait validé.
+    Un seul signal, et c'est délibéré : le **rôle annoncé** par la LLM de résumé, vérifié
+    sur les réunions réelles disponibles (4 déclenchements sur 16 réunions portant des
+    rôles, tous corrects, aucun faux positif sur les dialogues à deux). Le chemin
+    « deviner à la forme des tours de parole » a été essayé puis RETIRÉ : rejoué sur le
+    corpus réel il ne se déclenchait jamais, et sur la seule vraie réunion à quatre voix
+    aucune mesure ne départage personne (cf. l'en-tête du module).
     """
 
-    @staticmethod
-    def _alternance(animateur: str, autres: list[str], tours: int = 4) -> list[dict]:
-        """Réunion animée : l'animateur relance brièvement entre chaque intervention."""
-        turns: list[dict] = []
-        t = 0.0
-        for i in range(tours):
-            for autre in autres:
-                turns.append({"start": t, "end": t + 4, "speaker": animateur})
-                turns.append({"start": t + 4, "end": t + 44, "speaker": autre})
-                t += 44
-        return turns
-
-    def test_le_noeud_de_la_conversation_est_propose(self):
-        hint = suggest_animator(self._alternance("SPEAKER_00", ["SPEAKER_01", "SPEAKER_02"]))
+    def test_le_role_annonce_designe_l_animateur(self):
+        hint = suggest_animator({
+            "SPEAKER_00": {"label": "Conseillère", "role": "pose des objections"},
+            "SPEAKER_01": {"label": "Claire", "role": "anime la séance, soumet au vote"},
+        })
 
         assert hint is not None
-        assert hint.speaker_id == "SPEAKER_00"
-        assert hint.reason == "turns"
+        assert (hint.speaker_id, hint.reason, hint.matched) == ("SPEAKER_01", "role", "anime")
 
-    def test_un_tour_de_table_ne_propose_personne(self):
-        """A→B→C→A→B→C : personne ne distribue la parole, tout le monde se ressemble."""
-        turns = [{"start": i * 30.0, "end": i * 30.0 + 30, "speaker": f"SPEAKER_0{i % 3}"}
-                 for i in range(12)]
+    def test_le_role_peut_etre_dans_le_libelle(self):
+        """Vu tel quel sur le corpus réel : la LLM écrit « Maire / Animateur » en libellé
+        et décrit tout autre chose dans le champ rôle."""
+        hint = suggest_animator({"SPEAKER_01": {"label": "Maire / Animateur",
+                                                "role": "expose les délibérations"}})
 
-        assert suggest_animator(turns) is None
-
-    def test_le_bavard_nerveux_n_est_pas_un_animateur(self):
-        """Le cas que la seule statistique de rythme raterait : SPEAKER_00 intervient
-        sans arrêt et brièvement (meilleur rythme, score et écart au-dessus des seuils)
-        mais rend TOUJOURS la main à la même personne. Il n'anime rien : c'est la
-        diversité, vérifiée seule, qui le recale."""
-        turns = []
-        t = 0.0
-        for i in range(6):
-            turns.append({"start": t, "end": t + 5, "speaker": "SPEAKER_00"})
-            turns.append({"start": t + 5, "end": t + 25, "speaker": "SPEAKER_01"})
-            t += 25
-            if i % 3 == 2:  # un troisième locuteur, à qui SPEAKER_00 ne passe jamais la main
-                turns.append({"start": t, "end": t + 20, "speaker": "SPEAKER_02"})
-                turns.append({"start": t + 20, "end": t + 40, "speaker": "SPEAKER_01"})
-                t += 40
-
-        scores = score_speakers(turns)
-        assert scores["SPEAKER_00"] == max(scores.values())   # il gagne au score…
-        assert suggest_animator(turns) is None                # … et n'est pourtant pas proposé
-
-    def test_deux_voix_ne_donnent_pas_lieu_a_suggestion(self):
-        turns = [{"start": i * 20.0, "end": i * 20.0 + 20, "speaker": f"SPEAKER_0{i % 2}"}
-                 for i in range(20)]
-
-        assert suggest_animator(turns) is None
-
-    def test_trop_peu_de_tours_pour_lire_une_forme(self):
-        turns = self._alternance("SPEAKER_00", ["SPEAKER_01", "SPEAKER_02"], tours=1)
-
-        assert len(turns) < 8
-        assert suggest_animator(turns) is None
-
-    def test_le_role_annonce_prime_sur_la_statistique(self):
-        """La LLM a LU la réunion ; la forme des tours n'est qu'une régularité."""
-        turns = self._alternance("SPEAKER_00", ["SPEAKER_01", "SPEAKER_02"])
-
-        hint = suggest_animator(turns, {"SPEAKER_02": {"label": "Claire", "role": "anime la séance"}})
-
-        assert hint is not None
-        assert (hint.speaker_id, hint.reason) == ("SPEAKER_02", "role")
+        assert hint is not None and hint.speaker_id == "SPEAKER_01"
 
     def test_role_annonce_dans_les_cinq_langues(self):
         for role in ("Animatrice de la réunion", "facilitator", "Moderation der Sitzung",
                      "moderadora", "moderatrice"):
-            assert animator_from_roles({"SPEAKER_01": {"label": "X", "role": role}}) == "SPEAKER_01"
+            hint = animator_from_roles({"SPEAKER_01": {"label": "X", "role": role}})
+            assert hint is not None and hint.speaker_id == "SPEAKER_01"
 
     def test_deux_animateurs_annonces_ne_departagent_rien(self):
         hints = {"SPEAKER_00": {"role": "animateur"}, "SPEAKER_01": {"role": "animatrice"}}
@@ -181,23 +131,17 @@ class TestSuggestion:
 
     def test_un_role_ordinaire_ne_declenche_rien(self):
         """Vocabulaire FERMÉ : « présidente » (de l'entreprise) ou « formateur » décrivent
-        autre chose que l'animation d'une séance."""
-        for role in ("Présidente", "formateur", "organisateur", "chef de projet"):
+        autre chose que l'animation d'une séance. Vérifié sur le corpus réel : les
+        dialogues vendeur/client et podcast ne déclenchent rien."""
+        for role in ("Présidente", "formateur", "organisateur", "chef de projet",
+                     "sert le client, propose des dégustations", "pose des questions"):
             assert animator_from_roles({"SPEAKER_01": {"role": role}}) is None
 
     def test_donnees_absentes_ou_cassees_ne_levent_pas(self):
-        assert suggest_animator([]) is None
-        assert suggest_animator([{"start": "x", "end": None, "speaker": "S"}]) is None
-        assert suggest_animator([{"speaker": "S"}], None) is None
-
-    def test_audit_rejouable(self):
-        """Les seuils et les scores sont écrits : une suggestion doit pouvoir s'expliquer."""
-        hint = suggest_animator(self._alternance("SPEAKER_00", ["SPEAKER_01", "SPEAKER_02"]))
-
-        audit = hint.to_audit_dict()
-        assert audit["speaker_id"] == "SPEAKER_00"
-        assert audit["scores"]["SPEAKER_00"] > audit["scores"]["SPEAKER_01"]
-        assert audit["thresholds"]["min_diversity"] == 0.60
+        assert suggest_animator() is None
+        assert suggest_animator({}) is None
+        assert suggest_animator({"SPEAKER_00": None}) is None
+        assert suggest_animator({"SPEAKER_00": "animateur"}) is not None  # ancien format
 
 
 class TestBranchementEtape5:
@@ -208,8 +152,7 @@ class TestBranchementEtape5:
         speakers = {"speakers": [{"speaker_id": "SPEAKER_00"}, {"speaker_id": "SPEAKER_01"}]}
 
         _apply_animator_suggestion(
-            fs, speakers, {"turns": []},
-            {"SPEAKER_01": {"label": "Claire", "role": "anime la séance"}}, [])
+            fs, speakers, {"SPEAKER_01": {"label": "Claire", "role": "anime la séance"}}, [])
 
         assert speakers["speakers"][1]["animator_suggested"] is True
         assert speakers["speakers"][1]["animator_reason"] == "role"
@@ -223,8 +166,7 @@ class TestBranchementEtape5:
         speakers = {"speakers": [{"speaker_id": "SPEAKER_00"}]}
 
         _apply_animator_suggestion(
-            fs, speakers, {"turns": []},
-            {"SPEAKER_00": {"role": "animateur"}},
+            fs, speakers, {"SPEAKER_00": {"role": "animateur"}},
             [{"name": "Claire", "is_animator": True}])
 
         assert "animator_suggested" not in speakers["speakers"][0]

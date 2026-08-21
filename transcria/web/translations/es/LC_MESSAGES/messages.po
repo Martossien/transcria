@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 20:25+0200\n"
+"POT-Creation-Date: 2026-08-21 21:17+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -2666,11 +2666,11 @@ msgstr "El habla en sí está degradada — se recomienda una revisión reforzad
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Se detectó un ancho de banda de tipo telefónico (códec)."
 
-#: transcria/web/pages_routes.py:565
+#: transcria/web/pages_routes.py:564
 msgid "Nouveau traitement créé."
 msgstr "Nuevo trabajo creado."
 
-#: transcria/web/pages_routes.py:833
+#: transcria/web/pages_routes.py:832
 msgid "Traitement supprimé."
 msgstr "Trabajo eliminado."
 
@@ -6171,10 +6171,6 @@ msgstr "Anima la reunión: sirve de hilo de estructura en el acta, sin pesar má
 msgid "Rôle annoncé pendant la réunion"
 msgstr "Rol anunciado durante la reunión"
 
-#: transcria/web/templates/wizard/_step_participants.html:145
-msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
-msgstr "Interviene a menudo y brevemente, y cede la palabra a la mayoría de los demás"
-
 #: transcria/web/templates/wizard/_step_participants.html:147
 msgid "Animateur probable"
 msgstr "Moderador probable"
@@ -6377,4 +6373,7 @@ msgstr "El último resumen no se pudo generar: el LLM de arbitraje no produjo ni
 #: transcria/web/templates/wizard/_step_summary.html:101
 msgid "Générer le résumé"
 msgstr "Generar el resumen"
+
+#~ msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
+#~ msgstr "Interviene a menudo y brevemente, y cede la palabra a la mayoría de los demás"
 

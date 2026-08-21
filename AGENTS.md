@@ -250,7 +250,7 @@ transcria/
       profile_availability.py # disponibilité des profils pour l'UI (Phase 6)
       speaker_projection.py # B1 : projection locuteurs — service PUR
       speaker_manifest.py   # projection manifeste participants × diarisation → suggestions étape 5 (rooms « micro partagé »)
-      animator_hint.py      # suggestion d'animateur (rôle annoncé, sinon forme des tours) → bouton étape 5 ; PUR, proposé jamais coché
+      animator_hint.py      # suggestion d'animateur d'après le RÔLE ANNONCÉ (vocabulaire fermé ×5 langues) → bouton étape 5 ; PUR, proposé jamais coché ; le chemin statistique « forme des tours » a été essayé puis retiré (corpus réel : ne se déclenche jamais)
       track_fusion.py       # vague 5 lot B : fenêtres→intervalles STT (levier de coût), fusion par tri, chevauchements protégés du multi-STT
       gpu_phase.py          # B1 : réservation/session GPU d'une phase (GPUSession, _should_use_remote_stt)
       agent_workspace.py    # scratch HORS dépôt des agents opencode (stage/write_input/verify_and_restore_sources)

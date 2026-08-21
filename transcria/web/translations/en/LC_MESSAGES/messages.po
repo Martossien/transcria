@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 20:25+0200\n"
+"POT-Creation-Date: 2026-08-21 21:17+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -2666,11 +2666,11 @@ msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(ba
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Telephone-type bandwidth detected (codec)."
 
-#: transcria/web/pages_routes.py:565
+#: transcria/web/pages_routes.py:564
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:833
+#: transcria/web/pages_routes.py:832
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -6167,10 +6167,6 @@ msgstr "Facilitates the meeting: used as a structural thread in the report, with
 msgid "Rôle annoncé pendant la réunion"
 msgstr "Role announced during the meeting"
 
-#: transcria/web/templates/wizard/_step_participants.html:145
-msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
-msgstr "Speaks often and briefly, and hands over to most of the others"
-
 #: transcria/web/templates/wizard/_step_participants.html:147
 msgid "Animateur probable"
 msgstr "Likely facilitator"
@@ -6412,4 +6408,7 @@ msgstr "Generate summary"
 
 #~ msgid "Aucune réunion surveillée — aucun enregistrement ne sera importé."
 #~ msgstr "No meeting is being watched — no recording will be imported."
+
+#~ msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
+#~ msgstr "Speaks often and briefly, and hands over to most of the others"
 

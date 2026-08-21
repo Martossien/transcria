@@ -431,19 +431,18 @@ def _apply_manifest_suggestions(fs, manifest_raw: dict, speakers_data: dict,
             for label, spk in result.rooms.items()}
 
 
-def _apply_animator_suggestion(fs, speakers_data: dict, speaker_turns: dict,
-                               role_hints: dict, participants: list[dict]) -> None:
+def _apply_animator_suggestion(fs, speakers_data: dict, role_hints: dict,
+                               participants: list[dict]) -> None:
     """Propose UN animateur à l'étape 5 — proposé, jamais coché d'office.
 
     Silence total dès qu'un animateur a déjà été validé : le choix humain ne se
     re-discute pas à chaque rechargement de page. Best-effort intégral, comme les
     suggestions du manifeste : au moindre doute, aucune proposition (cf.
-    ``workflow/animator_hint`` pour les seuils et leur raison d'être)."""
+    ``workflow/animator_hint``, qui documente ce que le corpus réel a validé)."""
     speakers = speakers_data.get("speakers") if isinstance(speakers_data, dict) else None
     if not speakers or any(p.get("is_animator") for p in participants):
         return
-    turns = speaker_turns.get("turns") if isinstance(speaker_turns, dict) else None
-    hint = suggest_animator(turns or [], role_hints)
+    hint = suggest_animator(role_hints)
     if hint is None:
         return
     for s in speakers:
@@ -675,7 +674,7 @@ def job_wizard(job_id: str):
     if manifest_raw and speakers_data.get("speakers"):
         manifest_rooms = _apply_manifest_suggestions(fs, manifest_raw, speakers_data, speaker_turns)
 
-    _apply_animator_suggestion(fs, speakers_data, speaker_turns, speaker_role_hints, participants)
+    _apply_animator_suggestion(fs, speakers_data, speaker_role_hints, participants)
 
     if _fill_missing_speaker_genders(speakers_data, mapping_data, audio_scene, speaker_turns):
         fs.save_json("speakers/speaker_stats.json", speakers_data)
