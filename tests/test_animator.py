@@ -329,3 +329,13 @@ class TestLisibiliteDuCompteRendu:
         bloc = source.split("def _merge_participants", 1)[1].split("def ", 1)[0]
 
         assert 'spk.get("speaker_id")' in bloc
+
+    def test_le_prefill_de_l_etape_5_filtre_aussi_les_libelles_generiques(self):
+        """Trouvé au 4ᵉ parcours réel : la projection refusait « Animateur » comme nom,
+        mais le chemin d'AFFICHAGE le pré-remplissait quand même dans le champ « Nom » —
+        l'utilisateur validait le mot et il repartait en base. Deux portes, une seule
+        était fermée."""
+        source = (ROOT / "transcria/web/pages_routes.py").read_text(encoding="utf-8")
+        bloc = source.split("elif speaker_role_hints:", 1)[1].split("# Vague 2", 1)[0]
+
+        assert "is_generic_label" in bloc

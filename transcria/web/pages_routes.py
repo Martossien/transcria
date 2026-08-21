@@ -52,6 +52,7 @@ from transcria.workflow.profile_availability import compute_profiles_view, compu
 from transcria.workflow.profiles import get_profile, is_profile, profile_for_job
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.speaker_manifest import project_speakers
+from transcria.workflow.speaker_projection import is_generic_label
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.timing_service import estimate_total_with_human
 
@@ -663,7 +664,12 @@ def job_wizard(job_id: str):
             if not hint:
                 continue
             normalized = WorkflowRunner._normalize_speaker_role_info(hint)
-            if normalized["label"]:
+            # Même règle que la projection : un libellé qui ne désigne personne
+            # (« Animateur », « Participant ») ne PRÉ-REMPLIT pas le champ « Nom ».
+            # Sans cette garde, l'utilisateur validait le mot tel quel et il repartait
+            # en base — le chemin d'affichage rouvrait la porte fermée côté projection
+            # (trouvé au 4ᵉ parcours réel, invisible aux tests).
+            if normalized["label"] and not is_generic_label(normalized["label"]):
                 s["mapped_name"] = normalized["label"]
             if normalized["role"]:
                 s["mapped_role"] = normalized["role"]
