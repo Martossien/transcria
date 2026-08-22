@@ -20,9 +20,14 @@ import pytest
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.participants import ParticipantsManager
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.llm_tools.llm_parsing import parse_summary_term_line, strip_variant_comment
 from transcria.jobs.models import Job, JobState
 from transcria.web.pages_routes import _apply_animator_suggestion
-from transcria.workflow.phases.correction import reanchored_summary_error, summary_to_reanchor
+from transcria.workflow.phases.correction import (
+    _persist_reanchored_summary,
+    reanchored_summary_error,
+    summary_to_reanchor,
+)
 from transcria.exports.docx_report import neutral_speaker_names
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.speaker_projection import is_generic_label
@@ -405,3 +410,52 @@ class TestBancDesRoles:
                      "conduce la reunión", "guida la riunione"):
             hint = suggest_animator({"SPEAKER_00": {"label": "Manager", "role": role}})
             assert hint is not None, role
+
+
+class TestTermesDouteuxMalformes:
+    """Défauts de FORMAT vus sur une vraie réunion métier (1 h 52, 26 termes proposés).
+
+    Ce ne sont pas des hallucinations : la LLM ajoute un groupe en trop ou un commentaire
+    là où le gabarit attend une donnée, et le parseur — qui n'admettait qu'une seule
+    lecture — encaissait le débordement DANS la forme validée. Or cette forme part dans le
+    lexique, donc potentiellement dans le SRT corrigé.
+    """
+
+    def test_le_gras_ne_fuit_plus_dans_la_forme_validee(self):
+        ligne = ("- **Nexthink** [application] (sigle) (critique) | variantes_suspectes: "
+                 "next sync ; Nexthink | commentaire: outil supprimé fin 2026")
+
+        terme = parse_summary_term_line(ligne)
+
+        assert terme["term"] == "Nexthink"
+        assert terme["category"] == "application"
+        assert terme["priority"] == "critique"
+
+    def test_un_terme_a_le_droit_d_avoir_des_parentheses(self):
+        """On ne coupe que sur la preuve de fuite (le `**` au milieu) : sans elle, un
+        terme parenthésé reste intact."""
+        terme = parse_summary_term_line("- **Gestion (nationale)** [application] (importante)")
+
+        assert terme["term"] == "Gestion (nationale)"
+
+    def test_une_variante_est_une_forme_entendue_pas_un_commentaire(self):
+        assert strip_variant_comment("génie (erreur STT probable)") == "génie"
+        assert strip_variant_comment("Tessy (T2SI)") == "Tessy (T2SI)"
+        assert strip_variant_comment("Aloha") == "Aloha"
+
+    def test_un_reancrage_demande_mais_non_rendu_est_JOURNALISE(self, tmp_dir, caplog):
+        """Vécu sur une réunion de 1 h 52 : l'agent termine le SRT — sa tâche critique —
+        et s'arrête avant le réancrage. C'est le comportement prévu (best-effort), mais il
+        disparaissait EN SILENCE : rien dans le journal ne disait que la synthèse était
+        restée celle de la transcription rapide."""
+        import logging
+        fs = JobFilesystem(tmp_dir, "j-reancrage-muet")
+        fs.save_json("context/meeting_context.json",
+                     {"summary_llm": "## Synthèse\nDeux points discutés.", "summary": ""})
+        fs.save_text("metadata/transcription_corrigee.srt", "1\n00:00:01,000 --> 00:00:02,000\nBonjour.")
+        job = _job("j-reancrage-muet")
+
+        with caplog.at_level(logging.WARNING):
+            _persist_reanchored_summary(fs, {"rewritten_summary": ""}, job)
+
+        assert any("réancrage demandé mais non rendu" in r.message for r in caplog.records)

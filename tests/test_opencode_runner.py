@@ -158,13 +158,25 @@ class TestOpenCodeRunnerRun:
         assert result["success"] is False
         assert "interrompu" in result["error"].lower() or "gel" in result["error"].lower()
 
+    def test_le_repli_idle_pur_ne_tue_PAS_une_llm_qui_produit(self):
+        """Banc sur réunion réelle de 1 h 52 (2026-08-22) : ce plafond a tué DEUX FOIS la
+        relecture finale pendant qu'un subagent travaillait en silence sur un SRT de
+        254 000 caractères — 24 min perdues, 0/4 fichiers. C'est un REPLI : il ne
+        s'applique pas quand la sonde voit la LLM produire."""
+        from transcria.llm_tools.opencode_runner import stop_on_pure_idle
+
+        assert stop_on_pure_idle(700, 600, llm_busy=True) is False    # elle travaille
+        assert stop_on_pure_idle(700, 600, llm_busy=False) is True    # gel réel
+        assert stop_on_pure_idle(700, 600, llm_busy=None) is True     # sonde muette
+        assert stop_on_pure_idle(300, 600, llm_busy=False) is False   # sous le plafond
+
     def test_watchdog_repli_idle_pur_quand_etat_llm_inconnu(self, tmp_path, monkeypatch):
         # /slots indisponible (None) : le repli idle pur (0.2 s) tue quand même le gel
         result = self._run_hung(tmp_path, monkeypatch, llm_processing=None)
         assert result["success"] is False
         assert "idle pur" in result["error"].lower() or "interrompu" in result["error"].lower()
 
-    def _run_hung_cfg(self, tmp_path, monkeypatch, llm_processing, cfg):
+    def _run_hung_cfg(self, tmp_path, monkeypatch, llm_processing, cfg, timeout=600):
         import shutil
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
@@ -174,7 +186,7 @@ class TestOpenCodeRunnerRun:
         runner = _make_runner(tmp_path, config=cfg)
         monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
         monkeypatch.setattr(runner, "_llm_is_processing", lambda: llm_processing)
-        return runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
+        return runner.run("test instruction", "/tmp/prompt.txt", timeout=timeout)
 
     def test_watchdog_gel_demarrage_detecte_vite(self, tmp_path, monkeypatch):
         # Chasse aux bugs (batch E2E 2026-07-05) : opencode deadlocke par intermittence
@@ -199,10 +211,16 @@ class TestOpenCodeRunnerRun:
             "opencode_idle_grace_s": 100,
             "opencode_pure_idle_cap_s": 0.2,
         }}}
-        result = self._run_hung_cfg(tmp_path, monkeypatch, llm_processing=True, cfg=cfg)
+        # CORRIGÉ 2026-08-22 : ce test attendait « idle pur » ALORS QUE LA LLM TRAVAILLE —
+        # il gravait le défaut trouvé au banc sur une réunion de 1 h 52 (relecture finale
+        # tuée deux fois pendant qu'un subagent produisait). Le plafond de silence est un
+        # repli : LLM occupée ⇒ seul le timeout ABSOLU borne le run.
+        result = self._run_hung_cfg(tmp_path, monkeypatch, llm_processing=True, cfg=cfg,
+                                    timeout=2)
         assert result["success"] is False
         assert "démarrage" not in result["error"].lower()
-        assert "idle pur" in result["error"].lower()
+        assert "idle pur" not in result["error"].lower()
+        assert "timeout absolu" in result["error"].lower()
 
     def test_preflight_blocks_launch_when_endpoint_refused(self, tmp_path, monkeypatch):
         # CAUSE RACINE (2026-07-06) : opencode DEADLOCKE au boot si le provider LLM refuse la

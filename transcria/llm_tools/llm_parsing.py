@@ -20,6 +20,19 @@ _STRUCTURED_DATA_EMPTY: dict = {
 }
 
 
+def strip_variant_comment(variant: str) -> str:
+    """Retire le commentaire qu'une variante traîne parfois : ``génie (erreur STT probable)``.
+
+    Une variante est une FORME ENTENDUE, pas une explication : gardée telle quelle, elle ne
+    correspondrait à rien dans le SRT. On ne coupe que si la parenthèse finale contient
+    plusieurs mots — ``Tessy (T2SI)`` reste intact.
+    """
+    match = re.search(r"\s*\(([^)]*)\)\s*$", variant)
+    if match and len(match.group(1).split()) > 1:
+        return variant[: match.start()].strip()
+    return variant
+
+
 def normalize_summary_variants(value, term: str = "") -> list[str]:
     if isinstance(value, list):
         candidates = value
@@ -33,7 +46,7 @@ def normalize_summary_variants(value, term: str = "") -> list[str]:
     term_key = term.strip().casefold()
     empty_markers = {"aucun", "aucune", "(aucun)", "(aucune)", "néant", "neant", "n/a", "na", "-"}
     for candidate in candidates:
-        text = str(candidate).strip()
+        text = strip_variant_comment(str(candidate).strip())
         key = text.casefold()
         if not text or key in empty_markers:
             continue
@@ -176,6 +189,33 @@ def extract_summary_field(text: str, names: tuple[str, ...]) -> str:
     return ""
 
 
+def split_leaked_annotations(term: str) -> tuple[str, str, str]:
+    """Récupère le terme quand le gras du gabarit a fui dedans.
+
+    Vu sur une vraie réunion métier : la LLM a écrit ``**Nexthink** [application] (sigle)
+    (critique)`` — un groupe entre parenthèses de TROP par rapport au gabarit. La grammaire
+    n'en admettant qu'un, la seule lecture possible faisait du terme
+    ``Nexthink** [application] (sigle)``… qui partait ensuite comme forme validée dans le
+    lexique, donc potentiellement dans le SRT corrigé.
+
+    Le ``**`` restant AU MILIEU du terme est la preuve de la fuite : on coupe là, et ce qui
+    suit rend sa catégorie et sa priorité. Sans ``**``, on ne touche à rien — un terme a le
+    droit de contenir des parenthèses.
+    """
+    if "**" not in term:
+        return term, "", ""
+    tete, _, reste = term.partition("**")
+    categorie = ""
+    priorite = ""
+    for match in re.finditer(r"\[([^\]]*)\]|\(([^)]*)\)", reste):
+        crochet, parenthese = match.group(1), match.group(2)
+        if crochet and not categorie:
+            categorie = crochet.strip()
+        elif parenthese and not priorite:
+            priorite = parenthese.strip()
+    return tete.strip().strip("*").strip(), categorie, priorite
+
+
 def parse_summary_term_line(line: str, table_headers: list[str] | None = None) -> dict | None:
     text = line.strip()
     if not text:
@@ -228,9 +268,10 @@ def parse_summary_term_line(line: str, table_headers: list[str] | None = None) -
 
     raw_term = clean_summary_cell(term_match.group("term"))
     raw_term = re.sub(r"\s*\|\s*$", "", raw_term).strip()
+    raw_term, leaked_category, leaked_priority = split_leaked_annotations(raw_term)
     suffix = (term_match.group("suffix") or "").strip()
-    category = clean_summary_cell(term_match.group("category") or "")
-    priority = clean_summary_cell(term_match.group("priority") or "")
+    category = clean_summary_cell(term_match.group("category") or "") or leaked_category
+    priority = clean_summary_cell(term_match.group("priority") or "") or leaked_priority
 
     if not raw_term:
         return None

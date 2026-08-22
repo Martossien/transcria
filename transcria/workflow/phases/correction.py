@@ -392,12 +392,23 @@ def _persist_reanchored_summary(fs, result: dict, job: Job | None) -> None:
     correction reste un succès). Même esprit que les drapeaux ``applied[...]`` de la
     relecture finale.
     """
-    rewritten = (result.get("rewritten_summary") or "").strip()
-    if not rewritten or job is None:
+    if job is None:
         return
     meeting_ctx = fs.load_json("context/meeting_context.json") or {}
     headings = summary_headings(resolve_output_language(job))
     previous = summary_to_reanchor(meeting_ctx, headings)
+    rewritten = (result.get("rewritten_summary") or "").strip()
+    if not rewritten:
+        if previous:
+            # Le réancrage a été DEMANDÉ et rien n'est revenu. Sans ce journal, la
+            # fonctionnalité disparaissait en silence — vécu sur une réunion de 1 h 52,
+            # où l'agent termine le SRT (sa tâche critique) et s'arrête là. Le compte
+            # rendu reste valable, mais l'utilisateur doit pouvoir constater le manque.
+            logger.warning("[correction] réancrage demandé mais non rendu par l'agent — "
+                           "la synthèse reste celle rédigée sur la transcription rapide "
+                           "(transcript de %d caractères)", len(fs.load_text(
+                               "metadata/transcription_corrigee.srt") or ""))
+        return
     if not previous:
         # L'humain a édité entre-temps (ou il n'y avait rien) : son texte fait foi.
         logger.info("[correction] synthèse réancrée écartée — la synthèse a été éditée")

@@ -37,6 +37,22 @@ logger = logging.getLogger(__name__)
 _DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
 
 
+def stop_on_pure_idle(idle_s: float, cap_s: float, llm_busy: bool | None) -> bool:
+    """Faut-il tuer un opencode silencieux sur le seul plafond de silence ?
+
+    Ce plafond est un **repli** (cf. `_run_with_watchdog`) : il existe pour le cas où
+    l'état de la LLM est inconnu. Il s'appliquait pourtant TOUJOURS — et sur une réunion
+    réelle de 1 h 52, il a tué DEUX FOIS la relecture finale pendant qu'un subagent
+    travaillait en silence sur un SRT de 254 000 caractères (24 min perdues, 0/4 fichiers
+    produits, livrable privé de sa passe de cohérence).
+
+    Un vrai gel opencode, lui, laisse la LLM INACTIVE : la protection reste entière quand
+    la sonde répond « idle » ou ne répond pas. Et le ``timeout`` absolu demeure le
+    garde-fou de dernier recours pour un agent qui occuperait la LLM indéfiniment.
+    """
+    return idle_s >= cap_s and llm_busy is not True
+
+
 class OpenCodeRunner:
     """Lance opencode pour exécuter des tâches LLM complexes (résumé, arbitrage)."""
 
@@ -273,7 +289,7 @@ class OpenCodeRunner:
             if now - start >= timeout:
                 reason = f"timeout absolu {timeout}s"
                 break
-            if idle >= pure_idle_cap_s:
+            if stop_on_pure_idle(idle, pure_idle_cap_s, self._llm_is_processing()):
                 reason = f"aucune sortie depuis {int(idle)}s (repli idle pur)"
                 break
             # Gel au DÉMARRAGE — FILET RÉSIDUEL derrière la pré-garde `_wait_llm_endpoint_ready`.
