@@ -82,6 +82,20 @@ extensión, misma estructura; solo cambian las grafías cubiertas.
 → Escriba `summary_harmonized.md`.
 
 ## 5. Tareas C + D — Coherencia y variantes del SRT
+
+**Dos reglas aprendidas en una reunión real de 1 h 52 (2026-08-22).**
+
+1. **Forma validada ambigua: no sustituir nada.** Cuando la forma validada ofrece varias
+   grafías separadas por `/`, NO define una sustitución — incluso puede fusionar dos
+   conceptos distintos; el glosario lo señala con `⚠ forme ambiguë`. Elige la grafía que el
+   contexto impone, o **deja el texto tal cual**. Aplicada mecánicamente, una entrada así
+   sustituyó el nombre de un PROVEEDOR por el de la función que presta: la frase afirmaba
+   entonces algo falso.
+2. **Ante el volumen, delega — no escribas un script.** En un SRT largo un script de
+   sustitución resulta tentador: hicieron falta cuatro versiones para un resultado que la
+   delegación por rangos (sección 3) da directamente, y un script no puede juzgar el caso
+   anterior, que es justamente el que cuesta. Cada sustitución sigue siendo un `Edit`
+   dirigido.
 - **C**: garantice que cada nombre de participante y cada término del léxico esté
   escrito de **forma idéntica en todas partes** del SRT (no «Tickeo» aquí y «Tikeo»
   en otro lugar). No toque los prefijos `SPEAKER_XX(name)` (ya fijados por el

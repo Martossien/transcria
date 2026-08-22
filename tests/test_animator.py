@@ -24,6 +24,7 @@ from transcria.exports.docx_report import neutral_speaker_names
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.llm_parsing import parse_summary_term_line, strip_variant_comment
+from transcria.llm_tools.prompt_locator import build_harmonization_glossary
 from transcria.web.pages_routes import _apply_animator_suggestion
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.phases.correction import (
@@ -541,3 +542,62 @@ class TestSyntheseHarmoniseeQuiArriveEnfin:
         # La réinjection vient APRÈS l'écriture de summary_harmonized, pas à sa place.
         assert (source.index('meeting_ctx["summary_harmonized"]')
                 < source.index('meeting_ctx["summary"] = synthese'))
+
+    def test_une_amelioration_MACHINE_n_est_pas_une_ecriture_humaine(self):
+        """Rejeu du 2026-08-22 : la correction avait réancré la synthèse, et la relecture
+        finale a ensuite renoncé à appliquer la sienne — elle prenait l'amélioration
+        machine pour une écriture humaine. La trace de provenance tranche."""
+        ctx = {"summary_llm": "## Synthèse\nTexte d'origine.",
+               "summary": "Texte réancré sur le SRT corrigé.",
+               "summary_machine": "Texte réancré sur le SRT corrigé."}
+
+        assert summary_untouched_by_human(ctx, ["## Synthèse"]) is True
+
+    def test_une_ecriture_humaine_apres_une_passe_machine_reste_souveraine(self):
+        ctx = {"summary_llm": "## Synthèse\nTexte d'origine.",
+               "summary": "Texte réancré, PLUS ma phrase à moi.",
+               "summary_machine": "Texte réancré sur le SRT corrigé."}
+
+        assert summary_untouched_by_human(ctx, ["## Synthèse"]) is False
+
+
+class TestFormeValideeAmbigue:
+    """« Parapheur électronique / Tessi / T2SI » n'est pas une graphie, c'est une hésitation.
+
+    Mesuré sur le corpus : **28 formes validées sur 192 contiennent un « / »**, et certaines
+    fusionnent des concepts DISTINCTS (deux outils, deux rôles, deux années). Appliquée
+    mécaniquement lors d'un rejeu réel, l'une d'elles a remplacé un nom de FOURNISSEUR par le
+    nom de la fonction qu'il rend — la phrase affirmait ensuite quelque chose de faux.
+    """
+
+    def test_le_glossaire_signale_la_forme_ambigue(self):
+        glossaire = build_harmonization_glossary([], [
+            {"term": "Parapheur électronique / Tessi / T2SI", "variants": ["Tessi"]},
+            {"term": "ProWeb", "variants": ["pro-web"]},
+        ])
+
+        ambigue = [ligne for ligne in glossaire.splitlines() if "Parapheur" in ligne][0]
+        nette = [ligne for ligne in glossaire.splitlines() if "ProWeb" in ligne][0]
+        assert "NE PAS substituer" in ambigue
+        assert "NE PAS substituer" not in nette
+
+    def test_un_slash_sans_espaces_n_est_pas_une_alternative(self):
+        """« 24/7 », « E/S » : un slash collé fait partie du terme, pas d'ambiguïté."""
+        glossaire = build_harmonization_glossary([], [{"term": "support 24/7", "variants": []}])
+
+        assert "NE PAS substituer" not in glossaire
+
+    def test_la_regle_est_dans_les_trois_prompts_et_cinq_langues(self):
+        """Une règle écrite en français seulement ne protège que les livrables français."""
+        marqueurs = {"": ("fournisseur", "ambigu"), "en/": ("VENDOR", "mbiguous"),
+                     "de/": ("Anbieternamen", "ehrdeutig"), "es/": ("PROVEEDOR", "mbigua"),
+                     "it/": ("FORNITORE", "mbigua")}
+        for gabarit in ("correction_prompt.txt", "final_review_prompt.txt"):
+            for loc, (mot, ambig) in marqueurs.items():
+                texte = (ROOT / f"configs/prompts/{loc}{gabarit}").read_text(encoding="utf-8")
+                assert mot.lower() in texte.lower(), f"{loc}{gabarit} : « {mot} » absent"
+                assert ambig.lower() in texte.lower(), f"{loc}{gabarit} : ambiguïté non traitée"
+        # Et à la SOURCE : la forme de référence est une forme, pas une alternative.
+        for loc in marqueurs:
+            texte = (ROOT / f"configs/prompts/{loc}summary_prompt.txt").read_text(encoding="utf-8")
+            assert "192" in texte, f"{loc}summary_prompt.txt : règle « une seule forme » absente"

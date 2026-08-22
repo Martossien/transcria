@@ -70,6 +70,20 @@ spellings change.
 → Write `summary_harmonized.md`.
 
 ## 5. Tasks C + D — SRT consistency and variants
+
+**Two rules learned on a real 1 h 52 meeting (2026-08-22).**
+
+1. **Ambiguous validated form: substitute nothing.** When the validated form offers several
+   spellings separated by `/`, it does NOT define a replacement — it may even merge two
+   different concepts; the glossary flags it with `⚠ forme ambiguë`. Pick the spelling the
+   context requires, or **leave the text as it is**. Applied mechanically, such an entry
+   replaced a VENDOR name by the name of the function it provides: the sentence then
+   asserted something false.
+2. **Facing volume, delegate — do not write a script.** On a long SRT a substitution script
+   looks tempting: it took four successive versions for a result that range delegation
+   (section 3) gives directly, and a script cannot judge the case above — precisely the one
+   that costs. Every replacement stays a targeted `Edit`, decided from the surrounding
+   sentence.
 - **C**: ensure that each participant name and each glossary term is spelled **identically
   everywhere** in the SRT (not "Tickeo" here and "Tikeo" elsewhere). Do not touch the
   `SPEAKER_XX(name)` prefixes (already fixed by the system).
@@ -100,6 +114,29 @@ deferrals, agenda items, next date), check that it is **supported by the SRT**:
 - 🟢 **Little structured** — Training, Podcast / media, Other: do not fabricate any
   decision or vote if there is none.
 → Write `structured_data_reviewed.json`.
+
+## 6bis. Execution bans — NEVER a script
+
+**No script, no Python, no `sed`, no automated substitution.** Every replacement is a
+targeted `Edit`, decided from the sentence around it. This is not a style preference: on a
+real 1 h 52 meeting, an agent that wrote a substitution script produced, over four
+successive versions:
+
+- a VENDOR name replaced by the name of the function it provides — the sentence then
+  asserted something false;
+- an entry applied **backwards** (the validated form replaced by the variant);
+- a cascade of replacements between two competing entries.
+
+A script cannot judge, and judging is exactly what you are asked to do.
+
+**Ambiguous validated form**: when it offers several spellings separated by `/`, it does
+NOT define a single substitution. Pick the one the context requires, case by case, or
+**replace nothing** — text left as is always beats text made false.
+
+If the SRT is too long to handle segment by segment, split it into ranges and hand each
+range to a subagent (section 3): that is the answer to volume, not the script.
+
+---
 
 ## 7. Output: report
 Write `final_review_report.md` (Markdown only, no SRT line) with:

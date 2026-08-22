@@ -259,6 +259,14 @@ léxico de corrección humano.
 
 ### 6.4 Forma de referencia
 
+**UNA sola forma, nunca una alternativa.** No escribas nunca «A / B» como forma de
+referencia: no es una grafía, es una vacilación, y el código que la aplica no puede
+resolverla. Medido en reuniones reales: 28 entradas de 192 estaban en este caso, y algunas
+fusionaban conceptos DISTINTOS (dos herramientas, dos roles, dos años). Una de ellas hizo
+sustituir el nombre de un proveedor por el de la función que presta — la frase afirmaba
+entonces algo falso. Si dos formas coexisten legítimamente, son DOS entradas (§ 6.3). Si
+dudas entre dos grafías del MISMO concepto, elige una y di la duda en el comentario.
+
 Ayuda al humano a reconocer el concepto: una forma presente en la transcripción, o una
 corrección probable fuertemente justificada por el contexto. Si es incierta, el comentario
 debe decirlo claramente — nunca presentar una corrección probable como segura.

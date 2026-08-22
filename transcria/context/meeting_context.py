@@ -41,6 +41,12 @@ def summary_untouched_by_human(meeting_ctx: dict, headings: list[str]) -> bool:
     edite = str((meeting_ctx or {}).get("summary") or "").strip()
     if not edite:
         return True
+    # Une passe MACHINE a pu améliorer la synthèse entre-temps (réancrage sur le SRT
+    # corrigé). Sans cette trace, la passe suivante prenait cette amélioration pour une
+    # écriture humaine et s'interdisait d'y toucher — constaté au rejeu du 2026-08-22 :
+    # la relecture finale a renoncé à appliquer son harmonisation pour cette raison.
+    if edite == str((meeting_ctx or {}).get("summary_machine") or "").strip():
+        return True
     brute = synthese_section(str((meeting_ctx or {}).get("summary_llm") or ""), headings)
     return bool(brute) and edite == brute
 

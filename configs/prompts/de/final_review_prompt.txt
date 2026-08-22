@@ -77,6 +77,19 @@ erfassten Schreibweisen ändern sich.
 → Schreibe `summary_harmonized.md`.
 
 ## 5. Aufgaben C + D — Kohärenz und Varianten des SRT
+
+**Zwei Regeln, gelernt an einer realen Sitzung von 1 Std. 52 (2026-08-22).**
+
+1. **Mehrdeutige validierte Form: nichts ersetzen.** Bietet die validierte Form mehrere
+   durch `/` getrennte Schreibweisen, definiert sie KEINE Ersetzung — sie kann sogar zwei
+   verschiedene Begriffe zusammenführen; das Glossar markiert sie mit `⚠ forme ambiguë`.
+   Wähle die vom Kontext geforderte Schreibweise oder **lass den Text unverändert**.
+   Mechanisch angewandt hat ein solcher Eintrag einen Anbieternamen durch den Namen der
+   erbrachten Funktion ersetzt: der Satz behauptete danach etwas Falsches.
+2. **Beim Volumen delegieren — kein Skript schreiben.** Bei einem langen SRT wirkt ein
+   Substitutionsskript verlockend: es brauchte vier Fassungen für ein Ergebnis, das die
+   Delegation nach Bereichen (Abschnitt 3) direkt liefert, und ein Skript kann den obigen
+   Fall nicht beurteilen — genau den teuren. Jede Ersetzung bleibt ein gezieltes `Edit`.
 - **C**: Stelle sicher, dass jeder Teilnehmername und jeder Glossarbegriff **überall identisch**
   im SRT geschrieben ist (nicht „Tickeo" hier und „Tikeo" andernorts). Rühre die
   `SPEAKER_XX(name)`-Präfixe nicht an (bereits vom System fixiert).

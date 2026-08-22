@@ -8,7 +8,11 @@ classe du runner) — couture substituée par les tests d'incident.
 import json
 import logging
 
-from transcria.context.meeting_context import summary_untouched_by_human, synthese_section
+from transcria.context.meeting_context import (
+    MeetingContextManager,
+    summary_untouched_by_human,
+    synthese_section,
+)
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import (
     _SUMMARY_MARKERS,
@@ -135,7 +139,11 @@ def run(runner, job: Job, config: dict) -> dict:
     participants = fs.load_json("context/participants.json") or []
     lexicon = fs.load_json("context/session_lexicon.json") or []
     glossary = build_harmonization_glossary(participants, lexicon)
-    summary_text = (meeting_ctx.get("summary_llm") or "").strip()
+    # La synthèse EFFECTIVE (réancrée sur le SRT corrigé si la correction l'a fait),
+    # pas la brute d'avant correction : sinon la relecture harmonise un texte périmé et
+    # son résultat est à juste titre écarté.
+    summary_text = MeetingContextManager.effective_summary_markdown(
+        meeting_ctx, (meeting_ctx.get("summary_llm") or "")).strip()
     structured_data = meeting_ctx.get("structured_data") or {}
     if not glossary and not summary_text and not structured_data:
         logger.info("Relecture finale ignorée : rien à relire (job=%s)", job.id)
@@ -271,6 +279,7 @@ def apply_final_review(host, fs, result: dict) -> dict:
             synthese = synthese_section(harmonized, headings)
             if synthese:
                 meeting_ctx["summary"] = synthese
+                meeting_ctx["summary_machine"] = synthese
                 applied["summary_applied"] = True
 
     reviewed_sd = result.get("reviewed_structured_data") or ""

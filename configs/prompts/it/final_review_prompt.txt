@@ -74,6 +74,19 @@ cambiano solo le grafie coperte.
 → Scrivi `summary_harmonized.md`.
 
 ## 5. Compiti C + D — Coerenza e varianti dell'SRT
+
+**Due regole apprese su una riunione reale di 1 h 52 (2026-08-22).**
+
+1. **Forma convalidata ambigua: non sostituire nulla.** Quando la forma convalidata propone
+   più grafie separate da `/`, NON definisce una sostituzione — può perfino fondere due
+   concetti diversi; il glossario lo segnala con `⚠ forme ambiguë`. Scegli la grafia che il
+   contesto impone, oppure **lascia il testo com'è**. Applicata meccanicamente, una voce del
+   genere ha sostituito il nome di un FORNITORE con quello della funzione che svolge: la
+   frase affermava poi qualcosa di falso.
+2. **Davanti al volume, delega — non scrivere uno script.** Su un SRT lungo uno script di
+   sostituzione sembra allettante: sono servite quattro versioni per un risultato che la
+   delega per intervalli (sezione 3) dà direttamente, e uno script non può giudicare il caso
+   sopra, proprio quello che costa. Ogni sostituzione resta un `Edit` mirato.
 - **C**: garantisci che ogni nome di partecipante e ogni termine del glossario sia
   scritto **in modo identico ovunque** nell'SRT (non «Tickeo» qui e «Tikeo» altrove).
   Non toccare i prefissi `SPEAKER_XX(nome)` (già fissati dal sistema).

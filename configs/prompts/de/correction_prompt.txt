@@ -184,6 +184,14 @@ Markierungen, die im Segmenttext zu setzen sind:
 
 ## 5. Anwendung des validierten Lexikons, im Kontext
 
+**Mehrdeutige validierte Form: nichts ersetzen.** Bietet die validierte Form mehrere durch
+`/` getrennte Schreibweisen, definiert sie KEINE Ersetzung — sie kann sogar zwei
+verschiedene Begriffe zusammenführen. Wähle von Fall zu Fall die vom Kontext geforderte
+Schreibweise oder **lass den Text unverändert**. An einer realen Sitzung erlebt: mechanisch
+angewandt hat ein solcher Eintrag einen Anbieternamen durch den Namen der erbrachten
+Funktion ersetzt, und der Satz behauptete danach etwas Falsches. Unveränderter Text ist
+immer besser als falsch gemachter Text.
+
 Der Benutzer hat eine Liste zweifelhafter Begriffe aus der Zusammenfassungsphase validiert. Für
 jeden NICHT mit `_preservation_only` markierten Eintrag ist das Korrekturziel `replace_by`,
 falls angegeben, sonst `term`; die `variants` sind die im SRT wahrscheinlich vorhandenen

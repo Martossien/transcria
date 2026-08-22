@@ -189,6 +189,13 @@ Marcadores a colocar en el texto del segmento:
 
 ## 5. Aplicación del léxico validado, en contexto
 
+**Forma validada ambigua: no sustituir nada.** Cuando la forma validada ofrece varias
+grafías separadas por `/`, NO define una sustitución — incluso puede fusionar dos conceptos
+distintos. Elige caso por caso la grafía que el contexto impone, o **deja el texto tal
+cual**. Visto en una reunión real: aplicada mecánicamente, una entrada así sustituyó el
+nombre de un PROVEEDOR por el de la función que presta, y la frase afirmaba entonces algo
+falso. Un texto intacto siempre vale más que un texto hecho falso.
+
 El usuario ha validado una lista de términos dudosos procedentes de la fase de resumen.
 Para cada entrada NO marcada `_preservation_only`, el objetivo de corrección es
 `replace_by` si está indicado, si no `term`; las `variants` son las formas erróneas

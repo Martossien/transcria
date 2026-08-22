@@ -179,6 +179,14 @@ Marqueurs à poser dans le texte du segment :
 
 ## 5. Application du lexique validé, en contexte
 
+**Forme validée ambiguë : ne rien substituer.** Quand la forme validée propose plusieurs
+graphies séparées par `/` (« Parapheur électronique / Tessi / T2SI »), elle ne définit PAS
+un remplacement : elle peut même fusionner deux concepts différents. Choisis au cas par cas
+la graphie que le contexte impose, ou **laisse le texte tel quel**. Vécu sur une réunion
+réelle : appliquée mécaniquement, une entrée de ce genre a remplacé un nom de FOURNISSEUR
+par le nom de la fonction qu'il rend, et la phrase affirmait ensuite quelque chose de faux.
+Un texte laissé intact vaut toujours mieux qu'un texte rendu faux.
+
 L'utilisateur a validé une liste de termes douteux issue de la phase résumé. Pour
 chaque entrée NON marquée `_preservation_only`, la cible de correction est
 `replace_by` s'il est renseigné, sinon `term` ; les `variants` sont les formes

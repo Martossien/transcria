@@ -5,6 +5,7 @@ aucun sous-processus, aucun état. ``opencode_runner`` les ré-exporte (les
 consommateurs historiques — phases, web, exports, quality — importent chez lui).
 """
 import os
+import re
 
 _LANGUAGE_NAMES = {
     "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español",
@@ -169,6 +170,11 @@ def summary_markers(language: str | None) -> dict[str, str]:
     return _SUMMARY_MARKERS.get((language or "fr"), _SUMMARY_MARKERS["fr"])
 
 
+#: Une forme validée qui propose plusieurs graphies séparées par « / » n'est pas une
+#: substitution : c'est une hésitation que seul le contexte tranche.
+AMBIGUOUS_FORM = re.compile(r"\s/\s")
+
+
 def build_harmonization_glossary(participants: list, lexicon: list) -> str:
     """Construit le glossaire validé (Markdown) pour harmoniser la synthèse.
 
@@ -194,6 +200,15 @@ def build_harmonization_glossary(participants: list, lexicon: list) -> str:
             continue
         variants = [str(v).strip() for v in (entry.get("variants") or []) if str(v).strip()]
         line = f"- {target}" + (f" ← {', '.join(variants)}" if variants else "")
+        if AMBIGUOUS_FORM.search(target):
+            # Forme validée qui propose PLUSIEURS graphies (« Parapheur électronique /
+            # Tessi / T2SI »). Elle ne définit pas une substitution : appliquée telle
+            # quelle, elle a remplacé un nom de FOURNISSEUR par le nom de la fonction
+            # qu'il rend, rendant la phrase fausse (réunion réelle, 2026-08-22). Mesuré
+            # sur le corpus : 28 entrées sur 192 sont dans ce cas, et certaines fusionnent
+            # des concepts DISTINCTS. On ne les cache pas — elles informent le lecteur —
+            # mais on interdit la substitution automatique.
+            line += "  ⚠ forme ambiguë : NE PAS substituer automatiquement, choisir selon le contexte ou ne rien changer"
         if line not in terms:
             terms.append(line)
 

@@ -256,6 +256,14 @@ di correzione umano.
 
 ### 6.4 Forma di riferimento
 
+**UNA sola forma, mai un'alternativa.** Non scrivere mai «A / B» come forma di riferimento:
+non è una grafia, è un'esitazione, e il codice che la applica non può scioglierla. Misurato
+su riunioni reali: 28 voci su 192 erano in questo caso, e alcune fondevano concetti
+DISTINTI (due strumenti, due ruoli, due anni). Una di esse ha fatto sostituire il nome di un
+fornitore con quello della funzione che svolge — la frase affermava poi qualcosa di falso.
+Se due forme coesistono legittimamente, sono DUE voci (§ 6.3). Se esiti fra due grafie dello
+STESSO concetto, scegline una e dichiara l'esitazione nel commento.
+
 Aiuta l'essere umano a riconoscere il concetto: una forma presente nella trascrizione, o
 una correzione probabile fortemente giustificata dal contesto. Se è incerta, il commento
 deve dirlo chiaramente — mai presentare una correzione probabile come certa.

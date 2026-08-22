@@ -418,6 +418,10 @@ def _persist_reanchored_summary(fs, result: dict, job: Job | None) -> None:
         logger.warning("[correction] synthèse réancrée écartée — %s", error)
         return
     meeting_ctx["summary"] = rewritten
+    # Trace de PROVENANCE : ce texte vient d'une passe machine, pas d'un humain. La
+    # relecture finale pourra donc l'améliorer à son tour ; une édition humaine, elle,
+    # rendra les deux champs différents et sera respectée.
+    meeting_ctx["summary_machine"] = rewritten
     fs.save_json("context/meeting_context.json", meeting_ctx)
     logger.info("[correction] synthèse réancrée sur le SRT corrigé (%d → %d caractères)",
                 len(previous), len(rewritten))

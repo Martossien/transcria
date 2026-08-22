@@ -163,6 +163,13 @@ Markers to place in the segment text:
 
 ## 5. Applying the validated glossary, in context
 
+**Ambiguous validated form: substitute nothing.** When the validated form offers several
+spellings separated by `/`, it does NOT define a replacement — it may even merge two
+different concepts. Pick, case by case, the spelling the context requires, or **leave the
+text as it is**. Seen on a real meeting: applied mechanically, such an entry replaced a
+VENDOR name by the name of the function it provides, and the sentence then asserted
+something false. Text left intact always beats text made false.
+
 The user validated a list of doubtful terms from the summary phase. For each entry NOT
 marked `_preservation_only`, the correction target is `replace_by` if set, otherwise
 `term`; the `variants` are the probable erroneous forms present in the SRT.

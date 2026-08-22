@@ -182,6 +182,14 @@ Marcatori da inserire nel testo del segmento:
 
 ## 5. Applicazione del lessico convalidato, nel contesto
 
+**Forma convalidata ambigua: non sostituire nulla.** Quando la forma convalidata propone
+più grafie separate da `/`, NON definisce una sostituzione — può perfino fondere due
+concetti diversi. Scegli caso per caso la grafia che il contesto impone, oppure **lascia il
+testo com'è**. Visto su una riunione reale: applicata meccanicamente, una voce del genere ha
+sostituito il nome di un FORNITORE con quello della funzione che svolge, e la frase
+affermava poi qualcosa di falso. Un testo lasciato intatto vale sempre più di un testo reso
+falso.
+
 L'utente ha convalidato un elenco di termini dubbi proveniente dalla fase di sintesi. Per
 ogni voce NON marcata `_preservation_only`, il bersaglio di correzione è `replace_by` se
 valorizzato, altrimenti `term`; le `variants` sono le forme probabilmente errate
