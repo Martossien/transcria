@@ -192,10 +192,10 @@ def extract_summary_field(text: str, names: tuple[str, ...]) -> str:
 def split_leaked_annotations(term: str) -> tuple[str, str, str]:
     """Récupère le terme quand le gras du gabarit a fui dedans.
 
-    Vu sur une vraie réunion métier : la LLM a écrit ``**Nexthink** [application] (sigle)
+    Vu sur une vraie réunion métier : la LLM a écrit ``**Superviseur** [application] (sigle)
     (critique)`` — un groupe entre parenthèses de TROP par rapport au gabarit. La grammaire
     n'en admettant qu'un, la seule lecture possible faisait du terme
-    ``Nexthink** [application] (sigle)``… qui partait ensuite comme forme validée dans le
+    ``Superviseur** [application] (sigle)``… qui partait ensuite comme forme validée dans le
     lexique, donc potentiellement dans le SRT corrigé.
 
     Le ``**`` restant AU MILIEU du terme est la preuve de la fuite : on coupe là, et ce qui

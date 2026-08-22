@@ -1223,7 +1223,7 @@ class TestStripRoleGender:
         text = (
             "## Participants probables\n"
             "- SPEAKER_00 [Didier] : présente les tickets. Masculin ♂\n"
-            "- SPEAKER_01 [Marie] : pilote ProWeb Féminin ♀\n"
+            "- SPEAKER_01 [Marie] : pilote Passerelle Féminin ♀\n"
         )
         result = OpenCodeRunner._parse_structured_summary(text)
         assert "Masculin" not in result["participants_detectes"]
@@ -1231,7 +1231,7 @@ class TestStripRoleGender:
         assert "Féminin" not in result["participants_detectes"]
         roles = result.get("speaker_roles", {})
         assert roles["SPEAKER_00"]["role"] == "présente les tickets."
-        assert roles["SPEAKER_01"]["role"] == "pilote ProWeb"
+        assert roles["SPEAKER_01"]["role"] == "pilote Passerelle"
 
 
 class TestBuildHarmonizationGlossary:
@@ -1240,13 +1240,13 @@ class TestBuildHarmonizationGlossary:
         g = build_harmonization_glossary(
             [{"name": "Jean Dupont"}, {"name": "Marie Martin"}],
             [{"term": "ACRO", "variants": ["AKRO"]},
-             {"term": "ProWeb", "replace_by": "", "variants": ["pro-web", "ProWebs"]}],
+             {"term": "Passerelle", "replace_by": "", "variants": ["passe-relle", "Passerelles"]}],
         )
         assert "## Noms de participants (orthographe validée)" in g
         assert "- Jean Dupont" in g and "- Marie Martin" in g
         assert "## Termes métier (forme validée ← variantes connues)" in g
         assert "- ACRO ← AKRO" in g
-        assert "- ProWeb ← pro-web, ProWebs" in g
+        assert "- Passerelle ← passe-relle, Passerelles" in g
 
     def test_replace_by_takes_precedence_over_term(self):
         from transcria.llm_tools.opencode_runner import build_harmonization_glossary

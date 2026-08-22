@@ -296,7 +296,7 @@ class TestCrossFieldValidators:
         _assert_error(result, "granite.min_new_tokens: doit être inférieur ou égal à granite.max_new_tokens")
 
     def test_granite_keywords_chaine_libre_acceptee(self):
-        result = _validate_mutated(("granite.keywords", "DRITE, quorum"))
+        result = _validate_mutated(("granite.keywords", "ACRONYME, quorum"))
         assert not any("granite.keywords" in msg for msg in result.errors)
 
     def test_stt_hybrid_backends_identiques_refuses(self):

@@ -201,8 +201,8 @@ def build_harmonization_glossary(participants: list, lexicon: list) -> str:
         variants = [str(v).strip() for v in (entry.get("variants") or []) if str(v).strip()]
         line = f"- {target}" + (f" ← {', '.join(variants)}" if variants else "")
         if AMBIGUOUS_FORM.search(target):
-            # Forme validée qui propose PLUSIEURS graphies (« Parapheur électronique /
-            # Tessi / T2SI »). Elle ne définit pas une substitution : appliquée telle
+            # Forme validée qui propose PLUSIEURS graphies (« Parafeur / Éditeur /
+            # Sigle »). Elle ne définit pas une substitution : appliquée telle
             # quelle, elle a remplacé un nom de FOURNISSEUR par le nom de la fonction
             # qu'il rend, rendant la phrase fausse (réunion réelle, 2026-08-22). Mesuré
             # sur le corpus : 28 entrées sur 192 sont dans ce cas, et certaines fusionnent

@@ -782,7 +782,7 @@ class TestInjectGraniteLexiconKeywords:
         svc = _make_svc()
         cfg = self._cfg(tmp_path, backend="cohere")
         job = _job()
-        self._write_lexicon(tmp_path, job.id, [{"term": "DRITE", "priority": "critique"}])
+        self._write_lexicon(tmp_path, job.id, [{"term": "ACRONYME", "priority": "critique"}])
 
         svc._inject_granite_lexicon_keywords(cfg, job)
 
@@ -793,7 +793,7 @@ class TestInjectGraniteLexiconKeywords:
         svc = _make_svc()
         cfg = self._cfg(tmp_path, enabled=False)
         job = _job()
-        self._write_lexicon(tmp_path, job.id, [{"term": "DRITE", "priority": "critique"}])
+        self._write_lexicon(tmp_path, job.id, [{"term": "ACRONYME", "priority": "critique"}])
 
         svc._inject_granite_lexicon_keywords(cfg, job)
 
@@ -808,7 +808,7 @@ class TestInjectGraniteLexiconKeywords:
             tmp_path,
             job.id,
             [
-                {"term": "DRITE", "priority": "critique"},
+                {"term": "ACRONYME", "priority": "critique"},
                 {"term": "quorum", "replace_by": "quorum", "priority": "importante"},
                 {"term": "banal", "priority": "normale"},  # hors priorités retenues
             ],
@@ -817,7 +817,7 @@ class TestInjectGraniteLexiconKeywords:
         svc._inject_granite_lexicon_keywords(cfg, job)
 
         assert cfg["granite"]["prompt_mode"] == "keywords"
-        assert "DRITE" in cfg["granite"]["keywords"]
+        assert "ACRONYME" in cfg["granite"]["keywords"]
         assert "quorum" in cfg["granite"]["keywords"]
         assert "banal" not in cfg["granite"]["keywords"]
         stats = fs.load_json("metadata/granite_keywords.json")

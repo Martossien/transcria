@@ -425,12 +425,12 @@ class TestTermesDouteuxMalformes:
     """
 
     def test_le_gras_ne_fuit_plus_dans_la_forme_validee(self):
-        ligne = ("- **Nexthink** [application] (sigle) (critique) | variantes_suspectes: "
-                 "next sync ; Nexthink | commentaire: outil supprimé fin 2026")
+        ligne = ("- **Superviseur** [application] (sigle) (critique) | variantes_suspectes: "
+                 "super viseur ; Superviseur | commentaire: outil retiré")
 
         terme = parse_summary_term_line(ligne)
 
-        assert terme["term"] == "Nexthink"
+        assert terme["term"] == "Superviseur"
         assert terme["category"] == "application"
         assert terme["priority"] == "critique"
 
@@ -562,7 +562,7 @@ class TestSyntheseHarmoniseeQuiArriveEnfin:
 
 
 class TestFormeValideeAmbigue:
-    """« Parapheur électronique / Tessi / T2SI » n'est pas une graphie, c'est une hésitation.
+    """« Parafeur / Éditeur / Sigle » n'est pas une graphie, c'est une hésitation.
 
     Mesuré sur le corpus : **28 formes validées sur 192 contiennent un « / »**, et certaines
     fusionnent des concepts DISTINCTS (deux outils, deux rôles, deux années). Appliquée
@@ -572,12 +572,12 @@ class TestFormeValideeAmbigue:
 
     def test_le_glossaire_signale_la_forme_ambigue(self):
         glossaire = build_harmonization_glossary([], [
-            {"term": "Parapheur électronique / Tessi / T2SI", "variants": ["Tessi"]},
-            {"term": "ProWeb", "variants": ["pro-web"]},
+            {"term": "Parafeur / Éditeur / Sigle", "variants": ["Éditeur"]},
+            {"term": "Passerelle", "variants": ["passe-relle"]},
         ])
 
-        ambigue = [ligne for ligne in glossaire.splitlines() if "Parapheur" in ligne][0]
-        nette = [ligne for ligne in glossaire.splitlines() if "ProWeb" in ligne][0]
+        ambigue = [ligne for ligne in glossaire.splitlines() if "Parafeur" in ligne][0]
+        nette = [ligne for ligne in glossaire.splitlines() if "Passerelle" in ligne][0]
         assert "NE PAS substituer" in ambigue
         assert "NE PAS substituer" not in nette
 

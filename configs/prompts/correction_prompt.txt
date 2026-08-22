@@ -180,7 +180,7 @@ Marqueurs à poser dans le texte du segment :
 ## 5. Application du lexique validé, en contexte
 
 **Forme validée ambiguë : ne rien substituer.** Quand la forme validée propose plusieurs
-graphies séparées par `/` (« Parapheur électronique / Tessi / T2SI »), elle ne définit PAS
+graphies séparées par `/` (« Fonction / Éditeur / Sigle »), elle ne définit PAS
 un remplacement : elle peut même fusionner deux concepts différents. Choisis au cas par cas
 la graphie que le contexte impose, ou **laisse le texte tel quel**. Vécu sur une réunion
 réelle : appliquée mécaniquement, une entrée de ce genre a remplacé un nom de FOURNISSEUR

@@ -130,7 +130,7 @@ n'est pas une préférence de style : sur une réunion réelle de 1 h 52, un age
 Un script ne peut pas juger, et c'est exactement ce qu'on te demande de faire.
 
 **Forme validée ambiguë** : quand elle propose plusieurs graphies séparées par `/`
-(« Parapheur électronique / Tessi / T2SI »), elle ne désigne PAS une substitution unique.
+(« Fonction / Éditeur / Sigle »), elle ne désigne PAS une substitution unique.
 Choisis au cas par cas celle que le contexte impose, ou **ne remplace rien** — un texte
 laissé tel quel est toujours préférable à un texte rendu faux.
 
