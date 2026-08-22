@@ -7,6 +7,7 @@ anti-gel opencode, garde déterministe d'intégrité. Les coutures runner
 ``allocator``) restent le point de passage des tests.
 """
 import logging
+import re
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.job_context_builder import JobContextBuilder
@@ -219,6 +220,28 @@ def _srt_source_error(srt_path) -> dict | None:
     return None
 
 
+#: Une forme validée qui propose plusieurs graphies séparées par « / » n'est pas une
+#: consigne de remplacement : c'est une hésitation que seul le contexte tranche.
+_FORME_AMBIGUE = re.compile(r"\s/\s")
+
+
+def sans_formes_ambigues(lexicon: list) -> tuple[list, int]:
+    """Retire du lexique de SUBSTITUTION les entrées dont la forme validée est ambiguë.
+
+    Mesuré avant d'écrire ceci : sur une réunion métier réelle, 12 des 30 entrées
+    proposaient plusieurs graphies (« A / B / C »), et trois rejeux de la correction ont
+    produit 18, 11 puis 23 remplacements visant ces formes — dont un qui a substitué le
+    nom d'un fournisseur par le nom de la fonction qu'il rend, rendant la phrase fausse.
+
+    Deux consignes de prompt avaient été essayées avant : aucune n'a tenu. Un refus en
+    CODE, lui, ne se discute pas — et il ne coûte rien à l'information, puisque l'entrée
+    reste dans le lexique de session que l'humain relit.
+    """
+    gardees = [t for t in lexicon
+               if not (isinstance(t, dict) and _FORME_AMBIGUE.search(str(t.get("term", ""))))]
+    return gardees, len(lexicon) - len(gardees)
+
+
 def _prefilter_lexicon(fs, job: Job):
     """Préfiltre le lexique de session par présence dans le SRT (charge utile LLM réduite).
 
@@ -234,6 +257,13 @@ def _prefilter_lexicon(fs, job: Job):
         srt_text = fs.load_text("metadata/transcription.srt") or ""
         if isinstance(lexicon, list):
             filtered_lexicon, filter_stats = filter_lexicon_by_srt_presence(lexicon, srt_text)
+            filtered_lexicon, ecartees = sans_formes_ambigues(filtered_lexicon)
+            if ecartees:
+                # Ces entrées RESTENT dans le lexique de session (donc sous les yeux de
+                # l'humain, et dans les points à vérifier) : on leur retire seulement le
+                # pouvoir de déclencher un remplacement automatique.
+                logger.info("Préfiltrage lexique : %d entrée(s) à forme ambiguë écartée(s) "
+                            "de la substitution (job=%s)", ecartees, job.id)
             fs.save_json("context/session_lexicon_filtered.json", filtered_lexicon)
             lexicon_path_for_correction = filtered_lexicon_path
             logger.info(

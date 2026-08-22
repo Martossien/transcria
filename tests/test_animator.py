@@ -29,6 +29,7 @@ from transcria.web.pages_routes import _apply_animator_suggestion
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.phases.correction import (
     _persist_reanchored_summary,
+    sans_formes_ambigues,
     reanchored_summary_error,
     summary_to_reanchor,
 )
@@ -601,3 +602,46 @@ class TestFormeValideeAmbigue:
         for loc in marqueurs:
             texte = (ROOT / f"configs/prompts/{loc}summary_prompt.txt").read_text(encoding="utf-8")
             assert "192" in texte, f"{loc}summary_prompt.txt : règle « une seule forme » absente"
+
+
+class TestRefusDesFormesAmbigues:
+    """E1 du banc des règles (2026-08-22) — la seule garde qui ait tenu est mécanique.
+
+    Deux consignes de prompt avaient été essayées avant, aucune n'a tenu. Mesure sur trois
+    rejeux de la phase de correction, avant puis après ce refus en code :
+
+    | | segments modifiés | substitutions vers une forme ambiguë |
+    |---|---|---|
+    | référence | 42 · 35 · 44 | 18 · 11 · 23 |
+    | avec refus | 0 · 41 · 31 | 0 · 10 · 9 |
+
+    Les remplacements restants ne viennent PAS du lexique : l'agent normalise d'après le
+    contexte, et la lecture des segments montre que ces corrections-là sont justes.
+    """
+
+    def test_une_forme_a_plusieurs_graphies_ne_pilote_plus_de_remplacement(self):
+        lexique = [
+            {"term": "Fonction / Éditeur / Sigle", "variants": ["Éditeur"]},
+            {"term": "Passerelle", "variants": ["passe-relle"]},
+        ]
+
+        gardees, ecartees = sans_formes_ambigues(lexique)
+
+        assert [t["term"] for t in gardees] == ["Passerelle"]
+        assert ecartees == 1
+
+    def test_un_slash_colle_fait_partie_du_terme(self):
+        """« support 24/7 », « E/S » : pas d'alternative, donc pas d'écartement."""
+        gardees, ecartees = sans_formes_ambigues([{"term": "support 24/7", "variants": []}])
+
+        assert ecartees == 0 and len(gardees) == 1
+
+    def test_l_entree_ecartee_reste_dans_le_lexique_de_session(self):
+        """On lui retire le pouvoir de substituer, pas sa visibilité : l'humain doit
+        continuer à la voir dans les points à vérifier."""
+        source = (ROOT / "transcria/workflow/phases/correction.py").read_text(encoding="utf-8")
+        bloc = source.split("def _prefilter_lexicon", 1)[1].split("\ndef ", 1)[0]
+
+        # Le filtrage porte sur la copie transmise à l'agent, jamais sur le canonique.
+        assert "session_lexicon_filtered.json" in bloc
+        assert 'fs.save_json("context/session_lexicon.json"' not in bloc
