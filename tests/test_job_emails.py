@@ -46,7 +46,7 @@ class TestJobFacts:
             fs.save_json("quality/review_points.json", ["p1", "p2"])
             facts = completed_facts(cfg, SimpleNamespace(id="j1"), processing_seconds=725)
             d = dict(facts)
-            assert d["Traité en"] == "12 min" and d["Score qualité"] == "88/100"
+            assert d["Traité en"] == "12 min" and d["Fiabilité de la transcription"] == "88/100"
             assert d["Points à vérifier"] == "2"
 
     def test_summary_ready_facts_type_et_estimation(self, app, tmp_path, _clean):

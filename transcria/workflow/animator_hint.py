@@ -56,6 +56,17 @@ ANIMATION_WORDS: tuple[str, ...] = (
     "moderador", "moderadora", "modera la reunion", "anima la reunion",
     # it
     "moderatore", "moderatrice", "modera la riunione", "anima la riunione",
+    # Verbes d'animation SITUÉS (banc du 2026-08-22) : sur une réunion de projet, la LLM
+    # étiquette « Manager / Lead » — aucun mot d'animation dans l'identité — mais décrit
+    # sans ambiguïté « dirige la réunion » dans le rôle. Locutions ENTIÈRES seulement :
+    # « dirige » seul désignerait aussi bien un directeur qu'un animateur de séance.
+    "dirige la reunion", "dirige la discussion", "dirige la seance", "dirige les echanges",
+    "mene la seance", "mene la reunion", "conduit la reunion", "conduit l'ordre du jour",
+    "conduit les debats", "ouvre et clot la seance", "distribue la parole",
+    "leads the meeting", "runs the meeting", "chairs the session", "drives the agenda",
+    "leitet die sitzung", "fuhrt durch die sitzung", "leitet die besprechung",
+    "dirige la reunion", "conduce la reunion", "dirige la sesion",
+    "dirige la riunione", "conduce la riunione", "guida la riunione",
 )
 
 

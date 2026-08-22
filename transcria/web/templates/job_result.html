@@ -8,7 +8,7 @@
   <div class="col-md-4">
     <div class="card text-center">
       <div class="card-body">
-        <h5 class="text-muted">{{ _('Score qualité') }}</h5>
+        <h5 class="text-muted" title="{{ _('Fiabilité de la TRANSCRIPTION (segments sûrs, couverture audio, erreurs avérées) — ce n\'est pas une note sur la qualité du son ni sur le contenu de la réunion.') }}">{{ _('Fiabilité de la transcription') }}</h5>
         <span class="display-4 {{ 'text-success' if (quality_report.quality_score or 0) >= 80 else 'text-warning' if (quality_report.quality_score or 0) >= 50 else 'text-danger' }}">
           {{ quality_report.quality_score or '—' }}<small style="font-size:0.4em">/100</small>
         </span>

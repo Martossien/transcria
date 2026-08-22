@@ -36,7 +36,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "tail": ("Fin de réunion possiblement tronquée : dernière parole à {at} pour un "
                  "audio de {dur} — vérifier les dernières minutes."),
         "md_title": "# Rapport qualité (contrôle léger)",
-        "md_score": "Score qualité : {s}/100",
+        "md_score": "Fiabilité de la transcription : {s}/100",
         "md_checks": "Contrôles : {c} · avertissements : {w}",
         "md_review": "## Points à vérifier",
         "md_none": "Aucun point de vérification détecté par le contrôle léger.",

@@ -368,3 +368,40 @@ class TestLisibiliteDuCompteRendu:
         bloc = source.split("elif speaker_role_hints:", 1)[1].split("# Vague 2", 1)[0]
 
         assert "is_generic_label" in bloc
+
+
+class TestBancDesRoles:
+    """Ce que le banc du 2026-08-22 a mesuré sur des réunions RÉELLES (4 sources
+    distinctes, 8 passes, plus 9 passes déjà en base).
+
+    Enseignement principal : la suggestion est **stable et juste sur des réunions de
+    10-15 min** (conseil municipal, réunion de projet, séance CSE) et **instable sur des
+    extraits de 5 min**, où la structure de la séance n'est pas visible. Le signal n'est
+    donc pas mauvais — c'est la matière courte qui l'est.
+    """
+
+    def test_un_verbe_d_animation_situe_est_reconnu(self):
+        """Sur une réunion de projet, la LLM étiquette « Manager / Lead » — aucun mot
+        d'animation dans l'identité — mais décrit « dirige la réunion » dans le rôle.
+        L'outil s'abstenait ; il désigne maintenant la bonne personne, dans les 2 passes."""
+        hint = suggest_animator({
+            "SPEAKER_01": {"label": "Manager / Lead",
+                           "role": "dirige la réunion, donne des directives techniques"},
+            "SPEAKER_02": {"label": "Développeur", "role": "travaille sur le projet"},
+        })
+
+        assert hint is not None
+        assert (hint.speaker_id, hint.matched) == ("SPEAKER_01", "dirige la reunion")
+
+    def test_le_verbe_seul_ne_suffit_pas(self):
+        """« dirige » tout court désignerait un directeur d'entreprise aussi bien qu'un
+        animateur de séance : seules les locutions ENTIÈRES comptent."""
+        assert suggest_animator({
+            "SPEAKER_00": {"label": "Directeur", "role": "dirige l'entreprise depuis 2019"},
+        }) is None
+
+    def test_les_locutions_couvrent_les_cinq_langues(self):
+        for role in ("dirige la réunion", "leads the meeting", "leitet die Sitzung",
+                     "conduce la reunión", "guida la riunione"):
+            hint = suggest_animator({"SPEAKER_00": {"label": "Manager", "role": role}})
+            assert hint is not None, role

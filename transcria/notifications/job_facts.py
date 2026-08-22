@@ -70,7 +70,7 @@ def completed_facts(config: dict, job, processing_seconds: float | None = None) 
     quality = fs.load_json("quality/quality_report.json") or {}
     score = quality.get("quality_score")
     if score is not None:
-        facts.append((N_("Score qualité"), f"{score}/100"))
+        facts.append((N_("Fiabilité de la transcription"), f"{score}/100"))
     points = fs.load_json("quality/review_points.json")
     if isinstance(points, list):
         facts.append((N_("Points à vérifier"), str(len(points))))

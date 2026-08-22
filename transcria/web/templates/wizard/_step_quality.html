@@ -23,7 +23,7 @@
     {% endif %}
     {% if quality_report and quality_report.get('checks') %}
       <div class="mb-3">
-        <strong>{{ _('Score qualité :') }}</strong>
+        <strong title="{{ _('Fiabilité de la TRANSCRIPTION (segments sûrs, couverture audio, erreurs avérées) — ce n\'est pas une note sur la qualité du son ni sur le contenu de la réunion.') }}">{{ _('Fiabilité de la transcription :') }}</strong>
         <span class="quality-badge {{ 'quality-ok' if quality_report.quality_score >= 80 else 'quality-warning' if quality_report.quality_score >= 50 else 'quality-error' }}">
           {{ quality_report.quality_score }}/100
         </span>

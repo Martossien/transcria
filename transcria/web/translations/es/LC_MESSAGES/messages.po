@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 23:49+0200\n"
+"POT-Creation-Date: 2026-08-22 01:28+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -1517,8 +1517,8 @@ msgstr "Procesado en"
 
 #: transcria/notifications/job_facts.py:73
 #: transcria/web/templates/job_result.html:11
-msgid "Score qualité"
-msgstr "Puntuación de calidad"
+msgid "Fiabilité de la transcription"
+msgstr "Fiabilidad de la transcripción"
 
 #: transcria/notifications/mailer.py:184
 #, python-format
@@ -2560,117 +2560,117 @@ msgstr "Fallo de la captura"
 msgid "Captation annulée"
 msgstr "Captura cancelada"
 
-#: transcria/web/pages_routes.py:138
+#: transcria/web/pages_routes.py:139
 msgid "Son exploitable"
 msgstr "Audio utilizable"
 
-#: transcria/web/pages_routes.py:139
+#: transcria/web/pages_routes.py:140
 msgid "À surveiller"
 msgstr "A vigilar"
 
-#: transcria/web/pages_routes.py:140
+#: transcria/web/pages_routes.py:141
 msgid "Son difficile"
 msgstr "Audio difícil"
 
-#: transcria/web/pages_routes.py:148
+#: transcria/web/pages_routes.py:149
 msgid "volume très faible"
 msgstr "volumen muy bajo"
 
-#: transcria/web/pages_routes.py:149
+#: transcria/web/pages_routes.py:150
 msgid "volume faible"
 msgstr "volumen bajo"
 
-#: transcria/web/pages_routes.py:150
+#: transcria/web/pages_routes.py:151
 msgid "bruit de fond présent"
 msgstr "ruido de fondo presente"
 
-#: transcria/web/pages_routes.py:151
+#: transcria/web/pages_routes.py:152
 msgid "voix peu détaillée"
 msgstr "voz poco detallada"
 
-#: transcria/web/pages_routes.py:152
+#: transcria/web/pages_routes.py:153
 msgid "saturation détectée"
 msgstr "saturación detectada"
 
-#: transcria/web/pages_routes.py:153
+#: transcria/web/pages_routes.py:154
 msgid "vérification renforcée utile"
 msgstr "revisión reforzada útil"
 
-#: transcria/web/pages_routes.py:154
+#: transcria/web/pages_routes.py:155
 msgid "intelligibilité réduite"
 msgstr "inteligibilidad reducida"
 
-#: transcria/web/pages_routes.py:155
+#: transcria/web/pages_routes.py:156
 msgid "qualité perceptive faible"
 msgstr "calidad perceptiva baja"
 
-#: transcria/web/pages_routes.py:156
+#: transcria/web/pages_routes.py:157
 msgid "distorsion présente"
 msgstr "distorsión presente"
 
-#: transcria/web/pages_routes.py:157
+#: transcria/web/pages_routes.py:158
 msgid "qualité globale faible"
 msgstr "calidad global baja"
 
-#: transcria/web/pages_routes.py:158
+#: transcria/web/pages_routes.py:159
 msgid "réverbération marquée"
 msgstr "reverberación marcada"
 
-#: transcria/web/pages_routes.py:159
+#: transcria/web/pages_routes.py:160
 msgid "clarté faible"
 msgstr "claridad baja"
 
-#: transcria/web/pages_routes.py:160
+#: transcria/web/pages_routes.py:161
 msgid "bande téléphonique (codec)"
 msgstr "banda telefónica (códec)"
 
-#: transcria/web/pages_routes.py:161
+#: transcria/web/pages_routes.py:162
 msgid "voix superposées"
 msgstr "voces superpuestas"
 
-#: transcria/web/pages_routes.py:162
+#: transcria/web/pages_routes.py:163
 msgid "parole peu nette"
 msgstr "habla poco nítida"
 
-#: transcria/web/pages_routes.py:167
+#: transcria/web/pages_routes.py:168
 msgid "Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable."
 msgstr "El volumen es muy bajo. La transcripción probablemente no será fiable — una revisión atenta es indispensable."
 
-#: transcria/web/pages_routes.py:170
+#: transcria/web/pages_routes.py:171
 msgid "Les caractéristiques audio ne montrent pas de risque majeur."
 msgstr "Las características del audio no muestran un riesgo importante."
 
-#: transcria/web/pages_routes.py:171
+#: transcria/web/pages_routes.py:172
 msgid "La transcription reste possible, mais certains passages pourront demander une vérification."
 msgstr "La transcripción sigue siendo posible, pero algunos pasajes podrán requerir verificación."
 
-#: transcria/web/pages_routes.py:172
+#: transcria/web/pages_routes.py:173
 msgid "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages."
 msgstr "El archivo es utilizable, con un riesgo más alto en algunas palabras o pasajes."
 
-#: transcria/web/pages_routes.py:173
+#: transcria/web/pages_routes.py:174
 msgid "Diagnostic audio disponible."
 msgstr "Diagnóstico de audio disponible."
 
-#: transcria/web/pages_routes.py:224
+#: transcria/web/pages_routes.py:225
 #, python-format
 msgid "Bruit de fond dominant — un débruitage peut aider (BAK %(bak)s < SIG %(sig)s)."
 msgstr "Ruido de fondo dominante — una reducción de ruido puede ayudar (BAK %(bak)s < SIG %(sig)s)."
 
-#: transcria/web/pages_routes.py:229
+#: transcria/web/pages_routes.py:230
 #, python-format
 msgid "Parole elle-même dégradée — vérification renforcée conseillée (SIG %(sig)s < BAK %(bak)s)."
 msgstr "El habla en sí está degradada — se recomienda una revisión reforzada (SIG %(sig)s < BAK %(bak)s)."
 
-#: transcria/web/pages_routes.py:232
+#: transcria/web/pages_routes.py:233
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Se detectó un ancho de banda de tipo telefónico (códec)."
 
-#: transcria/web/pages_routes.py:566
+#: transcria/web/pages_routes.py:567
 msgid "Nouveau traitement créé."
 msgstr "Nuevo trabajo creado."
 
-#: transcria/web/pages_routes.py:834
+#: transcria/web/pages_routes.py:840
 msgid "Traitement supprimé."
 msgstr "Trabajo eliminado."
 
@@ -4462,6 +4462,11 @@ msgstr "Cree su primer trabajo para transcribir una reunión."
 msgid "Résultat"
 msgstr "Resultado"
 
+#: transcria/web/templates/job_result.html:11
+#: transcria/web/templates/wizard/_step_quality.html:26
+msgid "Fiabilité de la TRANSCRIPTION (segments sûrs, couverture audio, erreurs avérées) — ce n'est pas une note sur la qualité du son ni sur le contenu de la réunion."
+msgstr "Fiabilidad de la TRANSCRIPCIÓN (segmentos seguros, cobertura de audio, errores comprobados) — no es una nota sobre la calidad del sonido ni sobre el contenido de la reunión."
+
 #: transcria/web/templates/job_result.html:29
 msgid "Contrôles"
 msgstr "Controles"
@@ -6226,8 +6231,8 @@ msgid "Fiabilité :"
 msgstr "Fiabilidad:"
 
 #: transcria/web/templates/wizard/_step_quality.html:26
-msgid "Score qualité :"
-msgstr "Puntuación de calidad:"
+msgid "Fiabilité de la transcription :"
+msgstr "Fiabilidad de la transcripción:"
 
 #: transcria/web/templates/wizard/_step_quality.html:32
 #, python-format
@@ -6381,4 +6386,10 @@ msgstr "Generar el resumen"
 
 #~ msgid "Intervient souvent et brièvement, et passe la parole à la plupart des autres"
 #~ msgstr "Interviene a menudo y brevemente, y cede la palabra a la mayoría de los demás"
+
+#~ msgid "Score qualité"
+#~ msgstr "Puntuación de calidad"
+
+#~ msgid "Score qualité :"
+#~ msgstr "Puntuación de calidad:"
 
