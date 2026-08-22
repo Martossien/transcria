@@ -25,6 +25,26 @@ def synthese_section(raw_md: str, headings: list[str]) -> str:
     return raw_md.strip()
 
 
+def summary_untouched_by_human(meeting_ctx: dict, headings: list[str]) -> bool:
+    """La synthèse de l'étape 4 est-elle restée telle que la machine l'avait proposée ?
+
+    Le champ ``summary`` est PRIORITAIRE sur tout le reste dans les livrables : c'est
+    l'édition humaine, et elle est souveraine. Mais l'étape 4 PRÉ-REMPLIT ce champ avec la
+    synthèse de la LLM, et le formulaire le renvoie tel quel dès qu'on enregistre le
+    contexte — obligatoire pour tous les profils Word. Sans distinction, tout ce que les
+    passes suivantes améliorent (harmonisation sur le glossaire, réancrage sur le SRT
+    corrigé) n'atteint jamais le document.
+
+    La comparaison au préremplissage tranche sans ambiguïté : identique ⇒ personne n'y a
+    touché, on peut remplacer ; différent ⇒ un humain a écrit, on ne touche plus.
+    """
+    edite = str((meeting_ctx or {}).get("summary") or "").strip()
+    if not edite:
+        return True
+    brute = synthese_section(str((meeting_ctx or {}).get("summary_llm") or ""), headings)
+    return bool(brute) and edite == brute
+
+
 class MeetingContextManager:
     @staticmethod
     def get(job: Job, jobs_dir: str) -> dict:

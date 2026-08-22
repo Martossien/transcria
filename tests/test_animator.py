@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.context.meeting_context import summary_untouched_by_human
 from transcria.context.participants import ParticipantsManager
 from transcria.exports.docx_report import neutral_speaker_names
 from transcria.jobs.filesystem import JobFilesystem
@@ -504,3 +505,39 @@ class TestLongueurDeLaSynthese:
 
             assert mot in texte, f"{chemin} : le mot « {mot} » manque"
             assert "15" in texte, f"{chemin} : la tranche de 15 minutes manque"
+
+
+class TestSyntheseHarmoniseeQuiArriveEnfin:
+    """La relecture finale tournait pour rien sur la synthèse.
+
+    Sa tâche A harmonise la synthèse sur le glossaire validé — 1,69× la durée de l'audio —
+    et écrit `summary_harmonized`, qui est TROISIÈME dans l'ordre de priorité des
+    livrables, derrière `summary`. Or l'étape 4 remplit systématiquement `summary` avec le
+    préremplissage : le résultat de la passe n'atteignait jamais le document.
+    """
+
+    _HEADINGS = ["## Synthèse", "## Summary"]
+
+    def test_une_synthese_non_editee_peut_etre_remplacee(self):
+        ctx = {"summary_llm": "# R\n\n## Synthèse\nDeux points.\n\n## Termes\n(aucun)",
+               "summary": "Deux points."}
+
+        assert summary_untouched_by_human(ctx, self._HEADINGS) is True
+
+    def test_une_synthese_ECRITE_par_l_humain_est_intouchable(self):
+        ctx = {"summary_llm": "## Synthèse\nDeux points.",
+               "summary": "Deux points, plus le budget que j'ai ajouté."}
+
+        assert summary_untouched_by_human(ctx, self._HEADINGS) is False
+
+    def test_un_champ_vide_laisse_la_main_aux_passes_suivantes(self):
+        assert summary_untouched_by_human({"summary_llm": "## Synthèse\nX", "summary": ""},
+                                          self._HEADINGS) is True
+
+    def test_la_relecture_finale_reinjecte_dans_le_champ_livre(self):
+        source = (ROOT / "transcria/workflow/phases/final_review.py").read_text(encoding="utf-8")
+
+        assert "summary_untouched_by_human" in source
+        # La réinjection vient APRÈS l'écriture de summary_harmonized, pas à sa place.
+        assert (source.index('meeting_ctx["summary_harmonized"]')
+                < source.index('meeting_ctx["summary"] = synthese'))

@@ -8,11 +8,14 @@ classe du runner) — couture substituée par les tests d'incident.
 import json
 import logging
 
+from transcria.context.meeting_context import summary_untouched_by_human, synthese_section
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import (
+    _SUMMARY_MARKERS,
     OpenCodeRunner,
     build_harmonization_glossary,
     resolve_output_language,
+    summary_markers,
 )
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.progress import progress_msg
@@ -210,6 +213,12 @@ def run(runner, job: Job, config: dict) -> dict:
         runner.allocator.release_llm(job.id)
 
 
+def _summary_headings(language: str | None) -> list[str]:
+    """Marqueur de la langue du job, puis tous les marqueurs connus (repli robuste)."""
+    return ([summary_markers(language)["summary_heading"]]
+            + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
+
+
 def apply_final_review(host, fs, result: dict) -> dict:
     """Applique les sorties de la relecture finale, avec garde-fous.
 
@@ -229,6 +238,7 @@ def apply_final_review(host, fs, result: dict) -> dict:
     applied = {
         "srt_updated": False,
         "summary_harmonized": False,
+        "summary_applied": False,
         "structured_data_updated": False,
     }
     meeting_ctx = fs.load_json("context/meeting_context.json") or {}
@@ -251,6 +261,17 @@ def apply_final_review(host, fs, result: dict) -> dict:
     if harmonized:
         meeting_ctx["summary_harmonized"] = harmonized
         applied["summary_harmonized"] = True
+        # …et surtout : la faire ARRIVER dans le document. `summary_harmonized` est
+        # troisième dans l'ordre de priorité, derrière `summary` — que l'étape 4 remplit
+        # systématiquement avec le préremplissage. Résultat mesuré : la tâche A tournait
+        # (1,69× la durée de l'audio) et son résultat n'atteignait jamais le livrable.
+        # On ne remplace QUE si l'humain n'a pas touché au texte.
+        headings = _summary_headings(meeting_ctx.get("language"))
+        if summary_untouched_by_human(meeting_ctx, headings):
+            synthese = synthese_section(harmonized, headings)
+            if synthese:
+                meeting_ctx["summary"] = synthese
+                applied["summary_applied"] = True
 
     reviewed_sd = result.get("reviewed_structured_data") or ""
     if reviewed_sd:
