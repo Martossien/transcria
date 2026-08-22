@@ -515,6 +515,7 @@ class OpenCodeRunner:
         prompt_substitutions: dict[str, str] | None = None,
         extra_structured_keys: tuple[str, ...] = (),
         output_language: str = "fr",
+        audio_duration_s: float | None = None,
     ) -> dict:
         """Génère un résumé structuré via opencode.
 
@@ -556,6 +557,17 @@ class OpenCodeRunner:
                 "réunion : ordre du jour, diapositives, note de cadrage) : utilise-la "
                 "comme contexte substantiel pour cadrer et structurer le résumé, mais la "
                 "transcription reste la source de vérité sur ce qui a été effectivement dit. "
+            )
+        if audio_duration_s and audio_duration_s > 0:
+            # L'agent ne connaissait PAS la durée : il ne voyait qu'un texte. Mesuré sur le
+            # corpus réel, sa synthèse plafonnait à ~4 000 caractères aussi bien sur 15 min
+            # que sur 1 h 53 — « proportionnée à la durée » sans durée ne veut rien dire.
+            minutes = int(audio_duration_s // 60)
+            instruction += (
+                f"La réunion dure {minutes} minutes : applique le plancher de longueur de "
+                f"la synthèse du prompt système (au moins un paragraphe par tranche de "
+                f"15 minutes et par point d'ordre du jour, soit au moins "
+                f"{max(3, minutes // 15)} paragraphes ici), sans jamais broder. "
             )
         instruction += (
             "Lis la transcription, la diarization si elle est fournie, analyse-les ensemble, et produis un résumé structuré "

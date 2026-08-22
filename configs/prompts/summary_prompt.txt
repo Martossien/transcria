@@ -427,6 +427,15 @@ Si aucun terme suspect n'est détecté, écrire sous `## Termes douteux à valid
   de fidélité : tout élément est ancré dans la transcription — la qualité
   rédactionnelle ne conduit JAMAIS à inventer une décision, une action, un chiffre,
   un nom ou une échéance. Si aucune décision n'est identifiable, ne pas en créer.
+  **Longueur MINIMALE, vérifiée par le code** : au moins un paragraphe par point
+  d'ordre du jour identifié, ET au moins un paragraphe par tranche de 15 minutes de
+  réunion (2 h ⇒ au moins 8 paragraphes). Mesuré sur des réunions réelles : une
+  synthèse de six paragraphes tombe aussi bien sur une réunion de 15 minutes que sur
+  une de deux heures — c'est le défaut à ne pas reproduire. Sur une réunion longue,
+  chaque grand thème mérite son développement : ce qui a été décidé, les chiffres
+  annoncés, les positions exprimées, ce qui reste en suspens. Développer n'est PAS
+  broder : aucun paragraphe ne s'invente, et un thème réellement expédié en séance
+  reste court.
 - **Animateur validé (seulement si le contexte le porte)** : le fichier de contexte peut
   marquer un participant `is_animator: true`. C'est un choix HUMAIN explicite, pas une
   déduction : ne le contredis pas et n'en désigne pas un autre. Il sert de **fil de

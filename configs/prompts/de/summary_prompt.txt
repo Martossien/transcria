@@ -451,6 +451,14 @@ Wird kein verdächtiger Begriff erkannt, schreibe unter
   Treuepflicht: Jedes Element ist in der Transkription verankert — die redaktionelle
   Qualität führt NIEMALS dazu, eine Entscheidung, eine Aktion, eine Zahl, einen Namen
   oder eine Frist zu erfinden. Ist keine Entscheidung erkennbar, keine erschaffen.
+  **MINDESTLÄNGE, vom Code geprüft**: mindestens ein Absatz je erkanntem
+  Tagesordnungspunkt UND mindestens ein Absatz je 15 Minuten Sitzung (2 Std. ⇒ mindestens
+  8 Absätze). An realen Sitzungen gemessen: eine Zusammenfassung aus sechs Absätzen fällt
+  bei einer 15-minütigen Sitzung genauso aus wie bei einer zweistündigen — genau dieser
+  Fehler ist zu vermeiden. In einer langen Sitzung verdient jedes große Thema seine
+  Ausführung: was entschieden wurde, die genannten Zahlen, die geäußerten Positionen, was
+  offen bleibt. Ausführen ist NICHT ausschmücken: kein Absatz wird erfunden, und ein in
+  der Sitzung wirklich kurz abgehandeltes Thema bleibt kurz.
 - **Bestätigte Moderation (nur wenn der Kontext sie enthält)**: Die Kontextdatei kann eine
   teilnehmende Person mit `is_animator: true` markieren. Das ist eine ausdrückliche
   MENSCHLICHE Entscheidung, keine Ableitung: ihr nicht widersprechen und niemanden anderen

@@ -393,6 +393,13 @@ If no suspect term is detected, write under `## Doubtful terms to validate`:
   requirement: every element is anchored in the transcription — writing quality NEVER
   leads to inventing a decision, an action, a figure, a name or a deadline. If no decision
   is identifiable, do not create one.
+  **MINIMUM length, checked by the code**: at least one paragraph per identified agenda
+  item, AND at least one paragraph per 15 minutes of meeting (2 h ⇒ at least 8
+  paragraphs). Measured on real meetings: a six-paragraph summary comes out the same for
+  a 15-minute meeting and for a two-hour one — that is the flaw not to reproduce. In a
+  long meeting each major theme deserves its development: what was decided, the figures
+  announced, the positions expressed, what is left pending. Developing is NOT padding: no
+  paragraph is invented, and a theme genuinely rushed through stays short.
 - **Validated facilitator (only when the context carries one)**: the context file may mark
   a participant with `is_animator: true`. This is an explicit HUMAN choice, not an
   inference: do not contradict it and do not designate someone else. It serves as a

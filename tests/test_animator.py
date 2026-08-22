@@ -19,17 +19,18 @@ import pytest
 
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.participants import ParticipantsManager
+from transcria.exports.docx_report import neutral_speaker_names
 from transcria.jobs.filesystem import JobFilesystem
-from transcria.llm_tools.llm_parsing import parse_summary_term_line, strip_variant_comment
 from transcria.jobs.models import Job, JobState
+from transcria.llm_tools.llm_parsing import parse_summary_term_line, strip_variant_comment
 from transcria.web.pages_routes import _apply_animator_suggestion
+from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.phases.correction import (
     _persist_reanchored_summary,
     reanchored_summary_error,
     summary_to_reanchor,
 )
-from transcria.exports.docx_report import neutral_speaker_names
-from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
+from transcria.workflow.phases.summary_llm import paragraph_floor, synthese_shortfall
 from transcria.workflow.speaker_projection import is_generic_label
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -459,3 +460,47 @@ class TestTermesDouteuxMalformes:
             _persist_reanchored_summary(fs, {"rewritten_summary": ""}, job)
 
         assert any("réancrage demandé mais non rendu" in r.message for r in caplog.records)
+
+
+class TestLongueurDeLaSynthese:
+    """La synthèse n'était proportionnée à rien.
+
+    Mesuré sur le corpus local avant d'écrire la règle : 4 074 caractères de synthèse pour
+    une réunion de 15 min, **4 240 pour une réunion de 1 h 53** — soit 272 car/min d'un
+    côté et 38 de l'autre. La consigne « proportionnée à la durée » ne pouvait pas être
+    suivie : l'agent ne recevait JAMAIS la durée, il ne voyait qu'un texte.
+    """
+
+    def test_le_plancher_suit_la_duree(self):
+        assert paragraph_floor(5) == 3        # réunion courte : plancher bas
+        assert paragraph_floor(15) == 3
+        assert paragraph_floor(60) == 4
+        assert paragraph_floor(113) == 7      # la réunion du banc : 6 rendus, 7 attendus
+
+    def test_l_ordre_du_jour_releve_le_plancher(self):
+        """Cinq points à l'ordre du jour méritent au moins cinq paragraphes."""
+        assert paragraph_floor(20, agenda_items=5) == 5
+
+    def test_le_manque_est_chiffre(self):
+        rendus, plancher = synthese_shortfall("un\n\ndeux\n\ntrois\n\nquatre\n\ncinq\n\nsix",
+                                              minutes=113, agenda_items=5)
+
+        assert (rendus, plancher) == (6, 7)
+
+    def test_la_durée_est_transmise_a_l_agent(self):
+        """Sans elle, « proportionnée à la durée » est une consigne creuse."""
+        source = (ROOT / "transcria/llm_tools/opencode_runner.py").read_text(encoding="utf-8")
+        bloc = source.split("def run_summary(", 1)[1].split("\n    def ", 1)[0]
+
+        assert "audio_duration_s" in bloc
+        assert "La réunion dure" in bloc
+
+    def test_la_regle_de_longueur_est_dans_les_cinq_prompts(self):
+        mots = {"": "paragraphe", "en": "paragraph", "de": "Absatz",
+                "es": "párrafo", "it": "paragrafo"}
+        for loc, mot in mots.items():
+            chemin = f"configs/prompts/{loc + '/' if loc else ''}summary_prompt.txt"
+            texte = (ROOT / chemin).read_text(encoding="utf-8")
+
+            assert mot in texte, f"{chemin} : le mot « {mot} » manque"
+            assert "15" in texte, f"{chemin} : la tranche de 15 minutes manque"

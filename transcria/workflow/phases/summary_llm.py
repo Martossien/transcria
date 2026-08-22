@@ -114,8 +114,11 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
             config=config,
         )
         prompt_subs, extract_keys = _prompt_substitutions(fs, job)
+        duree_s = float((fs.load_json("metadata/audio_analysis.json") or {})
+                        .get("duration_seconds") or 0.0)
         parsed = _invoke_llm_with_retries(
             runner, ocr, job, sl,
+            audio_duration_s=duree_s,
             staged_transcript=str(staged_transcript),
             staged_context=str(staged_context),
             staged_diar_ctx=str(staged_diar_ctx),
@@ -128,6 +131,7 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
         workspace.verify_and_restore_sources()
         if runner._summary_usable(parsed):
             runner._apply_llm_suggestions(fs, result, parsed, sl)
+            _warn_if_summary_too_short(fs, sl, duree_s)
             workspace.cleanup(success=True)
         else:
             failure_kind = parsed.get("_failure_kind") or (
@@ -172,11 +176,48 @@ def _prompt_substitutions(fs, job: Job) -> tuple[dict[str, str], tuple[str, ...]
         return build_prompt_substitutions(None, None), ()
 
 
+def _warn_if_summary_too_short(fs, sl, duree_s: float) -> None:
+    """Le prompt EXIGE une longueur plancher, le code VÉRIFIE — et le dit.
+
+    On ne relance PAS : un second passage coûte le prix d'un résumé entier et ne garantit
+    rien. Mais une synthèse maigre sur une longue réunion ne doit plus passer inaperçue :
+    c'est le défaut trouvé au banc (six paragraphes pour 1 h 53).
+    """
+    meeting = fs.load_json("context/meeting_context.json") or {}
+    synthese = str(meeting.get("summary_llm") or "")
+    if "## Synthèse" in synthese:
+        synthese = synthese.split("## Synthèse", 1)[1].split("\n## ", 1)[0]
+    odj = len(((meeting.get("structured_data") or {}).get("points_odj")) or [])
+    rendus, plancher = synthese_shortfall(synthese, duree_s / 60, odj)
+    if rendus < plancher:
+        sl.warning("Synthèse courte : %d paragraphe(s) pour %d minutes de réunion "
+                   "(plancher %d) — le document restera mince sur les thèmes traités",
+                   rendus, int(duree_s // 60), plancher)
+
+
+def paragraph_floor(minutes: float, agenda_items: int = 0) -> int:
+    """Nombre MINIMAL de paragraphes attendus pour une synthèse.
+
+    Un paragraphe par tranche de 15 minutes et un par point d'ordre du jour, plancher à 3.
+    Mesuré sur le corpus réel avant d'écrire cette règle : la synthèse plafonnait autour de
+    4 000 caractères — 4 074 pour une réunion de 15 min, 4 240 pour une de 1 h 53. Elle
+    n'était donc proportionnée à rien.
+    """
+    return max(3, int(minutes // 15), int(agenda_items or 0))
+
+
+def synthese_shortfall(synthese: str, minutes: float, agenda_items: int = 0) -> tuple[int, int]:
+    """(paragraphes rendus, plancher attendu) — l'appelant journalise s'il y a manque."""
+    rendus = len([p for p in (synthese or "").split("\n") if p.strip()])
+    return rendus, paragraph_floor(minutes, agenda_items)
+
+
 def _invoke_llm_with_retries(
     runner, ocr: OpenCodeRunner, job: Job, sl, *,
     staged_transcript: str, staged_context: str, staged_diar_ctx: str,
     staged_invite: str | None, prompt_subs: dict[str, str],
     extract_keys: tuple[str, ...], api_model_id: str | None,
+    audio_duration_s: float | None = None,
 ) -> dict:
     """Retente la SEULE sous-étape LLM jusqu'à ``_MAX_LLM_ATTEMPTS`` fois."""
     parsed: dict = {}
@@ -189,6 +230,7 @@ def _invoke_llm_with_retries(
             prompt_substitutions=prompt_subs,
             extra_structured_keys=extract_keys,
             output_language=resolve_output_language(job),
+            audio_duration_s=audio_duration_s,
         )
         if runner._summary_usable(parsed):
             if attempt > 1:

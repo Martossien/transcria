@@ -420,6 +420,14 @@ Se nessun termine sospetto è rilevato, scrivere sotto `## Termini dubbi da vali
   fedeltà: ogni elemento è ancorato nella trascrizione — la qualità redazionale non porta
   MAI a inventare una decisione, un'azione, una cifra, un nome o una scadenza. Se nessuna
   decisione è identificabile, non crearne una.
+  **Lunghezza MINIMA, verificata dal codice**: almeno un paragrafo per ogni punto
+  dell'ordine del giorno individuato E almeno un paragrafo ogni 15 minuti di riunione
+  (2 h ⇒ almeno 8 paragrafi). Misurato su riunioni reali: una sintesi di sei paragrafi
+  esce uguale per una riunione di 15 minuti e per una di due ore — è il difetto da non
+  riprodurre. In una riunione lunga ogni grande tema merita il suo sviluppo: ciò che è
+  stato deciso, le cifre annunciate, le posizioni espresse, ciò che resta in sospeso.
+  Sviluppare NON è riempire: nessun paragrafo si inventa, e un tema davvero sbrigato
+  resta breve.
 - **Animatore convalidato (solo se il contesto lo riporta)**: il file di contesto può
   contrassegnare un partecipante con `is_animator: true`. È una scelta UMANA esplicita, non
   una deduzione: non contraddirla e non designarne un altro. Serve da **filo della

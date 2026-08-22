@@ -424,6 +424,14 @@ Si no se detecta ningún término sospechoso, escriba bajo `## Términos dudosos
   fidelidad: cada elemento está anclado en la transcripción — la calidad redaccional NUNCA
   lleva a inventar una decisión, una acción, una cifra, un nombre o un plazo. Si no se
   identifica ninguna decisión, no crear ninguna.
+  **Longitud MÍNIMA, verificada por el código**: al menos un párrafo por punto del orden
+  del día identificado Y al menos un párrafo por cada 15 minutos de reunión (2 h ⇒ al
+  menos 8 párrafos). Medido en reuniones reales: un resumen de seis párrafos sale igual
+  para una reunión de 15 minutos que para una de dos horas — ese es el defecto que no hay
+  que reproducir. En una reunión larga cada gran tema merece su desarrollo: lo decidido,
+  las cifras anunciadas, las posiciones expresadas, lo que queda pendiente. Desarrollar NO
+  es rellenar: ningún párrafo se inventa, y un tema realmente despachado sigue siendo
+  corto.
 - **Animador validado (solo si el contexto lo indica)**: el archivo de contexto puede marcar
   a un participante con `is_animator: true`. Es una elección HUMANA explícita, no una
   deducción: no la contradigas ni designes a otro. Sirve de **hilo de estructura** — orden
