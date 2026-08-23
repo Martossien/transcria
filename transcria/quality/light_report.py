@@ -31,6 +31,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segments très courts (< 0,5s) : {n} — envisager la fusion.",
         "long": "Segments très longs (> 60s) : {n} — envisager le découpage.",
         "missing_srt": "SRT absent ou vide — la transcription a échoué.",
+        "correction_muette": ("La passe de correction n'a modifié aucun segment — elle n'a "
+                              "probablement pas abouti. Les erreurs de transcription et les "
+                              "variantes du lexique sont donc restées telles quelles."),
+        "relecture_muette": ("La relecture finale n'a rien produit — l'harmonisation sur le "
+                             "glossaire validé n'a pas eu lieu."),
         "gaps": ("Trous de transcription anormaux : {n} (max {max_s:.0f}s vers {at}) — "
                  "le moteur a pu omettre un passage, réécouter ces zones."),
         "tail": ("Fin de réunion possiblement tronquée : dernière parole à {at} pour un "
@@ -46,6 +51,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Very short segments (< 0.5s): {n} — consider merging.",
         "long": "Very long segments (> 60s): {n} — consider splitting.",
         "missing_srt": "SRT missing or empty — transcription failed.",
+        "correction_muette": ("The correction pass changed no segment — it most likely did not "
+                              "complete. Transcription errors and glossary variants were left "
+                              "as they were."),
+        "relecture_muette": ("The final review produced nothing — harmonisation against the "
+                             "validated glossary did not happen."),
         "gaps": ("Abnormal transcription gaps: {n} (max {max_s:.0f}s around {at}) — "
                  "the engine may have skipped a passage, re-listen to these areas."),
         "tail": ("Meeting end possibly truncated: last speech at {at} for an audio of "
@@ -61,6 +71,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Sehr kurze Segmente (< 0,5 s): {n} — Zusammenführung erwägen.",
         "long": "Sehr lange Segmente (> 60 s): {n} — Aufteilung erwägen.",
         "missing_srt": "SRT fehlt oder ist leer — die Transkription ist fehlgeschlagen.",
+        "correction_muette": ("Der Korrekturlauf hat kein Segment geändert — er wurde "
+                              "wahrscheinlich nicht abgeschlossen. Transkriptionsfehler und "
+                              "Lexikonvarianten blieben unverändert."),
+        "relecture_muette": ("Die Schlussdurchsicht hat nichts erzeugt — der Abgleich mit dem "
+                             "geprüften Glossar hat nicht stattgefunden."),
         "gaps": (
             "Ungewöhnliche Transkriptionslücken: {n} (max. {max_s:.0f} s bei {at}) — die Engine könnte eine Passage "
             "ausgelassen haben, diese Bereiche erneut anhören."
@@ -80,6 +95,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segmentos muy cortos (< 0,5s): {n} — considerar la fusión.",
         "long": "Segmentos muy largos (> 60s): {n} — considerar la división.",
         "missing_srt": "SRT ausente o vacío — la transcripción falló.",
+        "correction_muette": ("La pasada de corrección no modificó ningún segmento — "
+                              "probablemente no llegó a término. Los errores de transcripción y "
+                              "las variantes del léxico quedaron tal cual."),
+        "relecture_muette": ("La revisión final no produjo nada — la armonización con el "
+                             "glosario validado no tuvo lugar."),
         "gaps": (
             "Huecos de transcripción anómalos: {n} (máx {max_s:.0f}s hacia {at}) — es posible que el motor haya "
             "omitido un pasaje, reescuche estas zonas."
@@ -99,6 +119,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segmenti molto brevi (< 0,5s): {n} — valutare l'unione.",
         "long": "Segmenti molto lunghi (> 60s): {n} — valutare la suddivisione.",
         "missing_srt": "SRT assente o vuoto — la trascrizione non è riuscita.",
+        "correction_muette": ("La passata di correzione non ha modificato alcun segmento — "
+                              "probabilmente non è giunta a termine. Gli errori di trascrizione "
+                              "e le varianti del lessico sono rimasti invariati."),
+        "relecture_muette": ("La rilettura finale non ha prodotto nulla — l'armonizzazione sul "
+                             "glossario validato non è avvenuta."),
         "gaps": (
             "Vuoti di trascrizione anomali: {n} (max {max_s:.0f}s verso {at}) — il motore potrebbe aver omesso un "
             "passaggio, riascoltare queste zone."
@@ -127,6 +152,31 @@ _REVIEW_LOAD_ZERO = {
 }
 
 
+def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict) -> list[dict]:
+    """Les passes LLM d'aval qui n'ont rien produit, à dire À L'UTILISATEUR.
+
+    « Rien produit » n'est pas « rien à faire » : c'est presque toujours un agent qui n'a
+    pas abouti. Le silence coûte cher — le document part comme s'il avait été relu.
+    """
+    muettes: list[dict] = []
+    corrige = fs.load_text("metadata/transcription_corrigee.srt")
+    if srt_content.strip() and corrige is not None and corrige.strip() == srt_content.strip():
+        muettes.append({
+            "_check": {"type": "silent_correction", "severity": "warning"},
+            "texte": S["correction_muette"],
+        })
+    ctx = fs.load_json("context/meeting_context.json") or {}
+    # La relecture n'est jugée que si elle avait de quoi travailler : sans synthèse amont,
+    # ne rien produire est le comportement correct, pas une panne.
+    attendue = str(ctx.get("summary_llm") or "").strip()
+    if attendue and not str(ctx.get("summary_harmonized") or "").strip():
+        muettes.append({
+            "_check": {"type": "silent_final_review", "severity": "warning"},
+            "texte": S["relecture_muette"],
+        })
+    return muettes
+
+
 def run_light_quality(job: Job, config: dict) -> dict:
     """Exécute le contrôle léger et écrit `quality/quality_report.{json,md}` + review_points."""
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
@@ -144,6 +194,16 @@ def run_light_quality(job: Job, config: dict) -> dict:
     if not srt_content.strip():
         checks.append({"type": "missing_srt", "severity": "error"})
         review_points.append(S["missing_srt"])
+
+    # Une passe LLM qui ne rend RIEN se terminait en silence : le rapport listait ses
+    # conséquences (variantes non résolues) sans jamais nommer la cause, et l'utilisateur
+    # devait remonter des symptômes au diagnostic. Vécu le 2026-08-23 : moteur d'arbitrage
+    # mort en cours de route, job « terminé », correction et relecture toutes deux muettes.
+    for check in _passes_llm_muettes(fs, srt_content, S):
+        total_checks += 1
+        checks.append(check.pop("_check"))
+        review_points.append(check["texte"])
+        warnings += 1
 
     empty = [s for s in segments if not (s.get("text") or "").strip()]
     total_checks += 1

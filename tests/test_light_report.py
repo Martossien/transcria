@@ -121,3 +121,62 @@ def test_fin_silencieuse_sans_moss_pas_d_alerte(tmp_dir):
 
     report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
     assert not any(c["type"] == "truncated_tail" for c in report["checks"])
+
+
+class TestPassesLlmMuettes:
+    """Une passe LLM qui ne rend RIEN doit se DIRE, pas se deviner.
+
+    Vécu le 2026-08-23 : le moteur d'arbitrage est mort en cours de parcours. Le job
+    s'est terminé « avec succès », correction et relecture toutes deux muettes, et le
+    rapport ne listait que les conséquences (variantes non résolues) — jamais la cause.
+    """
+
+    def test_correction_sans_aucune_modification_leve_un_point(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "job-light")
+        srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n"
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt", srt)
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert any(c["type"] == "silent_correction" for c in report["checks"])
+        assert any("correction" in p.lower() for p in report["review_points"])
+
+    def test_correction_qui_a_modifie_ne_leve_rien(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "job-light")
+        fs.save_text("metadata/transcription.srt",
+                     "1\n00:00:01,000 --> 00:00:04,000\nbonjour\n")
+        fs.save_text("metadata/transcription_corrigee.srt",
+                     "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n")
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert not any(c["type"] == "silent_correction" for c in report["checks"])
+
+    def test_relecture_muette_leve_un_point_quand_il_y_avait_de_quoi_travailler(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "job-light")
+        fs.save_text("metadata/transcription.srt",
+                     "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n")
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+        fs.save_json("context/meeting_context.json", {"summary_llm": "## Synthèse\n\nUn texte."})
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert any(c["type"] == "silent_final_review" for c in report["checks"])
+
+    def test_sans_synthese_amont_la_relecture_muette_est_normale(self, tmp_dir):
+        """Ne rien produire quand il n'y avait rien à harmoniser n'est pas une panne."""
+        fs = JobFilesystem(tmp_dir, "job-light")
+        fs.save_text("metadata/transcription.srt",
+                     "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n")
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert not any(c["type"] == "silent_final_review" for c in report["checks"])

@@ -1,6 +1,4 @@
-# PROMPT RELECTURE FINALE — TranscIA v3.0
-# v3.0 : contrat de priorités en tête (audit rédactionnel du 12/06/2026) — le contenu
-#        v1.0, déjà le plus précis des trois prompts, est conservé quasi tel quel.
+# PROMPT RELECTURE FINALE
 # Passe de cohérence et de fidélité exécutée APRÈS la correction du SRT, avec les
 # données validées par l'humain (participants, lexique). Quatre tâches :
 #   A. Harmoniser la synthèse sur le glossaire validé.

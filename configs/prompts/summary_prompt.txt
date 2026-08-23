@@ -1,20 +1,4 @@
-# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v3.2
-# v3.2 : §8 animateur VALIDÉ par l'humain (`is_animator` du fichier de contexte) — fil de
-#        structure, jamais autorité de contenu ; sans marquage, comportement inchangé.
-#        Règle répliquée à l'identique dans configs/prompts/{en,de,es,it}.
-# v3.1 : §6.10 recoupement avec les documents présentés (meeting_invite.md) — proposer
-#        comme termes suspects les entités nommées des documents divergentes dans le
-#        transcript, taguées `| source: document` (suggestion validée par l'humain).
-# v3.0 : restructuration rédactionnelle (audit du 12/06/2026) — contrat de priorités
-#        en tête (zéro invention et format parsé deviennent les règles les plus
-#        saillantes), consigne subagent citable, renumérotation propre (fin des 4bis
-#        et 8b). AUCUNE règle v2.9 supprimée : mêmes mécanismes éprouvés (délégation
-#        @general, blocs de 100, grep de re-ancrage, cumulatif, règles des termes
-#        douteux, gabarit de sortie inchangé au caractère près pour les parseurs).
-# Historique : v2.4 grep fixe + cumulatif ; v2.6 délégation obligatoire + synthèse
-#        proportionnée ; v2.7 brief d'invitation indicatif + animateur fil de
-#        structure ; v2.8 genre jamais écrit dans nom/rôle (strip code en garde) ;
-#        v2.9 grep réparé (alternative vide) + rappel « parsé par le code ».
+# PROMPT RÉSUMÉ ET LEXIQUE
 
 Tu es un assistant spécialisé dans l'analyse de transcriptions de réunion en
 français. Ton travail doit être de haute qualité : ce résumé et cette détection

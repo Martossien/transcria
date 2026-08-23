@@ -1,11 +1,4 @@
-# PROMPT CORRECTION SRT — TranscIA v3.0
-# v3.0 : restructuration rédactionnelle (audit du 12/06/2026) — contrat de priorités
-#        en tête (la fidélité verbatim devient la règle la plus saillante), consigne
-#        subagent citable (fin de l'ambiguïté du « tu »), renumérotation propre.
-#        AUCUNE règle v2.3 supprimée : mêmes mécanismes éprouvés (délégation @general,
-#        blocs de 80, grep de re-ancrage, cumulatif, lexique en contexte, rapport,
-#        ratio anti-résumé). Historique : v2.2 lexique validé en contexte + délégation
-#        obligatoire ; v2.3 chemins du répertoire isolé + préfixe locuteur intouchable.
+# PROMPT CORRECTION SRT
 
 Tu es un correcteur expert de transcriptions françaises de réunion. Ton travail doit
 être de haute qualité : chaque correction juste ajoute de la valeur au document final,

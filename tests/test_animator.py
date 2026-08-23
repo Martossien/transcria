@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.meeting_context import summary_untouched_by_human
@@ -26,9 +27,11 @@ from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.llm_parsing import parse_summary_term_line, strip_variant_comment
 from transcria.llm_tools.prompt_locator import build_harmonization_glossary
 from transcria.web.pages_routes import _apply_animator_suggestion
+from transcria.workflow.agent_workspace import AgentWorkspace
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.phases.correction import (
     _persist_reanchored_summary,
+    _stage_context_sans_formes_ambigues,
     reanchored_summary_error,
     sans_formes_ambigues,
     summary_to_reanchor,
@@ -647,3 +650,49 @@ class TestRefusDesFormesAmbigues:
         # Le filtrage porte sur la copie transmise à l'agent, jamais sur le canonique.
         assert "session_lexicon_filtered.json" in bloc
         assert 'fs.save_json("context/session_lexicon.json"' not in bloc
+
+class TestContexteMisEnSceneSansFormesAmbigues:
+    """La deuxième porte : le CONTEXTE du job embarque une copie du lexique.
+
+    Le refus des formes « A / B » ne filtrait que le fichier de lexique. L'agent lisait la
+    forme écartée dans le contexte et l'appliquait quand même — constaté le 2026-08-23,
+    une forme ambiguë écrite telle quelle dans un transcript livré. Une porte fermée sur
+    deux ne ferme rien.
+    """
+
+    def _fs_avec_contexte(self, tmp_dir, lexique):
+        fs = JobFilesystem(tmp_dir, "j-ctx")
+        fs.save_json("context/job_context.json", {"meeting": {"title": "T"}, "lexicon": lexique})
+        fs.save_text("context/job_context.yaml",
+                     yaml.dump({"meeting": {"title": "T"}, "lexicon": lexique},
+                               allow_unicode=True, default_flow_style=False))
+        return fs
+
+    def test_la_forme_ambigue_disparait_de_la_copie_de_l_agent(self, tmp_dir):
+        lexique = [{"term": "Passerelle", "variants": []},
+                   {"term": "Dépôt / Dépose", "variants": ["depot"]}]
+        fs = self._fs_avec_contexte(tmp_dir, lexique)
+        workspace = AgentWorkspace(fs, "correction", work_root=str(Path(tmp_dir) / "work"))
+
+        stage = _stage_context_sans_formes_ambigues(fs, workspace)
+        vu_par_l_agent = yaml.safe_load(Path(stage).read_text(encoding="utf-8"))
+
+        assert [e["term"] for e in vu_par_l_agent["lexicon"]] == ["Passerelle"]
+        # Le canonique n'est PAS touché : interface, archive et reprise en ont besoin.
+        assert len(fs.load_json("context/job_context.json")["lexicon"]) == 2
+
+    def test_sans_forme_ambigue_le_contexte_canonique_est_mis_en_scene_tel_quel(self, tmp_dir):
+        fs = self._fs_avec_contexte(tmp_dir, [{"term": "Passerelle", "variants": []}])
+        workspace = AgentWorkspace(fs, "correction", work_root=str(Path(tmp_dir) / "work"))
+
+        stage = _stage_context_sans_formes_ambigues(fs, workspace)
+
+        assert yaml.safe_load(Path(stage).read_text(encoding="utf-8"))["lexicon"]
+
+    def test_un_contexte_sans_lexique_ne_casse_rien(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "j-ctx")
+        fs.save_json("context/job_context.json", {"meeting": {"title": "T"}})
+        fs.save_text("context/job_context.yaml", "meeting:\n  title: T\n")
+        workspace = AgentWorkspace(fs, "correction", work_root=str(Path(tmp_dir) / "work"))
+
+        assert Path(_stage_context_sans_formes_ambigues(fs, workspace)).is_file()

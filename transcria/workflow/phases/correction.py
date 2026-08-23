@@ -8,6 +8,9 @@ anti-gel opencode, garde déterministe d'intégrité. Les coutures runner
 """
 import logging
 import re
+from pathlib import Path
+
+import yaml
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.job_context_builder import JobContextBuilder
@@ -189,7 +192,7 @@ def _prepare_and_stage_inputs(runner, fs, job: Job, config: dict, lexicon_path):
     workspace = AgentWorkspace(fs, "correction", work_root=resolve_agent_work_root(config))
     staged = {
         "staged_srt": str(workspace.stage("metadata/transcription.srt")),
-        "staged_context": str(workspace.stage("context/job_context.yaml")),
+        "staged_context": str(_stage_context_sans_formes_ambigues(fs, workspace)),
         "staged_lexicon": str(workspace.stage(str(lexicon_path.relative_to(fs.job_dir)))),
         "staged_invite": (
             str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
@@ -218,6 +221,31 @@ def _srt_source_error(srt_path) -> dict | None:
         return {"success": False,
                 "error": "SRT source vide (aucune parole transcrite) — rien à corriger"}
     return None
+
+
+def _stage_context_sans_formes_ambigues(fs, workspace) -> Path:
+    """Le contexte mis en scène pour l'agent, PRIVÉ des entrées de lexique ambiguës.
+
+    Le refus des formes « A / B » ne suffisait pas à filtrer le seul fichier de lexique :
+    le contexte du job embarque une COPIE du lexique, et l'agent y lisait la forme écartée
+    pour l'appliquer quand même (constaté le 2026-08-23 — une forme ambiguë écrite telle
+    quelle dans le transcript livré). Une porte fermée sur deux ne ferme rien.
+
+    Le fichier canonique garde tout : l'interface, l'archive et la reprise ont besoin du
+    lexique complet. Seule la copie que voit l'agent est amputée.
+    """
+    contexte = fs.load_json("context/job_context.json") or {}
+    lexique = contexte.get("lexicon")
+    if not isinstance(lexique, list) or not lexique:
+        return workspace.stage("context/job_context.yaml")
+    gardees, ecartees = sans_formes_ambigues(lexique)
+    if not ecartees:
+        return workspace.stage("context/job_context.yaml")
+    logger.info("Contexte de correction : %d entrée(s) de lexique ambiguë(s) retirée(s)", ecartees)
+    return workspace.write_input(
+        "job_context.yaml",
+        yaml.dump({**contexte, "lexicon": gardees}, allow_unicode=True, default_flow_style=False),
+    )
 
 
 #: Une forme validée qui propose plusieurs graphies séparées par « / » n'est pas une
