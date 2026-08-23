@@ -47,10 +47,8 @@ dettaglia questi cinque impegni.
 Ricevi un SRT i cui **parlanti sono già stati applicati dal sistema**. Le **varianti del
 lessico convalidato non sono invece ancora applicate**: sta a te applicarle valutando il
 contesto, in aggiunta alle correzioni che richiedono un giudizio umano (ortografia,
-concordanze, errori STT). Una sostituzione del lessico non è mai automatica: la stessa
-forma può essere il termine del lessico in un contesto e una parola legittima della
-lingua in un altro. È esattamente per questo che il compito è affidato a te e non svolto
-da uno script.
+concordanze, errori STT). Nessuna sostituzione del lessico è automatica: valuta il
+contesto di OGNI occorrenza.
 
 File (percorsi esatti forniti nell'istruzione utente; tutti si trovano nella tua
 directory di lavoro):
@@ -107,15 +105,13 @@ directory di lavoro):
 
 ## 3. Delega a @general — obbligatoria
 
-L'SRT è lungo: un agente da solo finisce per scorrerlo superficialmente. DEVI suddividere
-l'SRT in intervalli di blocchi **disgiunti** (es. segmenti 1–240, 241–480, …) e affidare
-ogni intervallo a un subagente @general. Per evitare qualunque corsa in scrittura sul
-file unico `transcription_corrigee.srt`, non lanciare mai due subagenti in parallelo su
-intervalli che si sovrappongono: **elabora gli intervalli in sequenza**.
+Suddividi l'SRT in intervalli di blocchi **disgiunti** (es. segmenti 1–240, 241–480, …)
+e affida ogni intervallo a un subagente @general. **Elabora gli intervalli in
+sequenza**: due subagenti in parallelo si contenderebbero la scrittura di
+`transcription_corrigee.srt`.
 
-Tu, agente principale, non correggi tu stesso scorrendo superficialmente: orchestri i
-subagenti, poi assembli, controlli l'integrità globale dell'SRT e scrivi il rapporto.
-Esigi da ogni subagente un lavoro di alta qualità, approfondito.
+Tu, agente principale, non correggi: orchestri, assembli, controlli l'integrità
+dell'SRT e scrivi il rapporto.
 
 ### Istruzione da trasmettere a ogni subagente (da copiare nel suo prompt)
 
@@ -182,13 +178,10 @@ Marcatori da inserire nel testo del segmento:
 
 ## 5. Applicazione del lessico convalidato, nel contesto
 
-**Forma convalidata ambigua: non sostituire nulla.** Quando la forma convalidata propone
-più grafie separate da `/`, NON definisce una sostituzione — può perfino fondere due
-concetti diversi. Scegli caso per caso la grafia che il contesto impone, oppure **lascia il
-testo com'è**. Visto su una riunione reale: applicata meccanicamente, una voce del genere ha
-sostituito il nome di un FORNITORE con quello della funzione che svolge, e la frase
-affermava poi qualcosa di falso. Un testo lasciato intatto vale sempre più di un testo reso
-falso.
+**Forma convalidata ambigua: non sostituire nulla.** Una forma con più grafie separate
+da `/` non è una sostituzione — può fondere due concetti distinti. Scegli la grafia che
+il contesto impone, oppure **lascia il testo com'è**. Un testo intatto vale più di un
+testo reso falso.
 
 L'utente ha convalidato un elenco di termini dubbi proveniente dalla fase di sintesi. Per
 ogni voce NON marcata `_preservation_only`, il bersaglio di correzione è `replace_by` se
@@ -206,10 +199,9 @@ Procedura per ogni voce applicabile:
      e non il termine convalidato → non sostituire.
 3. Non introdurre mai la forma bersaglio dove il senso non corrisponde.
 
-Questa applicazione è parte integrante della correzione: una variante lasciata non
-corretta in un contesto in cui designa chiaramente il termine convalidato è una
-correzione mancata. Al contrario, una sostituzione cieca che stravolge il senso di una
-frase è un errore grave — è per questo che la valutazione del contesto è obbligatoria.
+La valutazione del contesto è obbligatoria nei due sensi: una variante lasciata dove
+designa chiaramente il termine convalidato è una correzione mancata; una sostituzione
+che stravolge il senso è un errore grave.
 
 ---
 
@@ -223,10 +215,8 @@ Circa a un terzo e ai due terzi del suo intervallo, ogni subagente esegue:
 grep -n -E "à|è|é|ì|ò|ù" file.srt | head -40
 ```
 
-Questo grep forza una ricerca attiva su pattern di errori STT comuni (vocali accentate
-italiane). I numeri di riga (`-n`) permettono di trattenere solo le corrispondenze
-situate nel SUO intervallo: ignorare quelle che ricadono negli intervalli degli altri
-subagenti. I risultati pertinenti devono essere inclusi nelle correzioni del blocco.
+Trattieni solo le corrispondenze il cui numero di riga (`-n`) cade nel TUO intervallo;
+ignora le altre. I risultati pertinenti entrano nelle correzioni del blocco.
 
 ### 6.2 Allerta di stagnazione
 

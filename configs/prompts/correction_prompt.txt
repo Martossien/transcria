@@ -33,12 +33,9 @@ prompt détaille ces cinq engagements.
 ## 1. Situation et fichiers d'entrée
 
 Tu reçois un SRT dont les **locuteurs ont déjà été appliqués par le système**. En
-revanche, **les variantes du lexique validé ne sont PAS encore appliquées** : c'est à
-toi de les appliquer en jugeant le contexte, en plus des corrections qui exigent un
-jugement humain (orthographe, accords, fautes STT). Un remplacement de lexique n'est
-jamais automatique : une même forme peut être le terme du lexique dans un contexte et
-un mot légitime de la langue dans un autre. C'est précisément pourquoi cette tâche
-t'est confiée et n'est pas faite par un script.
+revanche, **les variantes du lexique validé ne sont PAS encore appliquées** : applique-les
+en jugeant le contexte de CHAQUE occurrence, en plus des corrections d'orthographe,
+d'accords et de fautes STT. Aucun remplacement de lexique n'est automatique.
 
 Fichiers (chemins exacts donnés dans l'instruction utilisateur ; tous sont dans ton
 répertoire de travail) :
@@ -96,15 +93,12 @@ répertoire de travail) :
 
 ## 3. Délégation @general — obligatoire
 
-Le SRT est long : un agent seul finit par survoler. Tu DOIS découper le SRT en plages
-de blocs **disjointes** (ex. segments 1–240, 241–480, …) et confier chaque plage à un
-subagent @general. Pour éviter toute course à l'écriture sur le fichier unique
-`transcription_corrigee.srt`, ne lance jamais deux subagents en parallèle sur des
-plages qui se chevauchent : **traite les plages séquentiellement**.
+Découpe le SRT en plages **disjointes** (ex. segments 1–240, 241–480, …) et confie
+chaque plage à un subagent @general. **Traite les plages séquentiellement** : deux
+subagents en parallèle se disputeraient l'écriture de `transcription_corrigee.srt`.
 
-Toi, agent principal, tu ne corriges pas toi-même en survol : tu orchestres les
-subagents, puis tu assembles, tu contrôles l'intégrité globale du SRT et tu rédiges
-le rapport. Exige de chaque subagent un travail de haute qualité, en profondeur.
+Toi, agent principal, tu ne corriges pas : tu orchestres, tu assembles, tu contrôles
+l'intégrité du SRT et tu rédiges le rapport.
 
 ### Consigne à transmettre à chaque subagent (à recopier dans son prompt)
 
@@ -172,13 +166,10 @@ Marqueurs à poser dans le texte du segment :
 
 ## 5. Application du lexique validé, en contexte
 
-**Forme validée ambiguë : ne rien substituer.** Quand la forme validée propose plusieurs
-graphies séparées par `/` (« Fonction / Éditeur / Sigle »), elle ne définit PAS
-un remplacement : elle peut même fusionner deux concepts différents. Choisis au cas par cas
-la graphie que le contexte impose, ou **laisse le texte tel quel**. Vécu sur une réunion
-réelle : appliquée mécaniquement, une entrée de ce genre a remplacé un nom de FOURNISSEUR
-par le nom de la fonction qu'il rend, et la phrase affirmait ensuite quelque chose de faux.
-Un texte laissé intact vaut toujours mieux qu'un texte rendu faux.
+**Forme validée ambiguë : ne rien substituer.** Une forme qui propose plusieurs graphies
+séparées par `/` n'est pas un remplacement — elle peut fusionner deux concepts distincts.
+Choisis la graphie que le contexte impose, ou **laisse le texte tel quel**. Un texte
+intact vaut mieux qu'un texte rendu faux.
 
 L'utilisateur a validé une liste de termes douteux issue de la phase résumé. Pour
 chaque entrée NON marquée `_preservation_only`, la cible de correction est
@@ -196,10 +187,9 @@ Procédure pour chaque entrée applicable :
      et non le terme validé → ne pas remplacer.
 3. Ne jamais introduire la forme cible là où le sens ne correspond pas.
 
-Cette application fait partie intégrante de la correction : une variante laissée non
-corrigée dans un contexte où elle désigne clairement le terme validé est une
-correction manquée. À l'inverse, un remplacement aveugle qui détourne le sens d'une
-phrase est une faute grave — c'est pourquoi le jugement de contexte est obligatoire.
+Juger le contexte est obligatoire dans les deux sens : une variante laissée en place là
+où elle désigne clairement le terme validé est une correction manquée ; un remplacement
+qui détourne le sens est une faute grave.
 
 ---
 
@@ -213,10 +203,8 @@ Environ au tiers et aux deux tiers de sa plage, chaque subagent exécute :
 grep -n -E "é|è|ê|à|ù|ç|oeu|eu" fichier.srt | head -40
 ```
 
-Ce grep force une recherche active sur des patterns d'erreurs STT courantes. Les
-numéros de ligne (`-n`) permettent de ne retenir que les correspondances situées dans
-SA plage : ignorer celles qui tombent dans les plages des autres subagents. Les
-résultats pertinents doivent être inclus dans les corrections du bloc.
+Ne retiens que les correspondances dont le numéro de ligne (`-n`) tombe dans TA plage ;
+ignore les autres. Les résultats pertinents entrent dans les corrections du bloc.
 
 ### 6.2 Alerte de stagnation
 

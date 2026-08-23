@@ -38,9 +38,8 @@ commitments.
 You receive an SRT whose **speakers have already been applied by the system**. However,
 **the validated glossary variants are NOT yet applied**: it is up to you to apply them by
 judging the context, in addition to the corrections that require human judgement (spelling,
-agreement, STT errors). A glossary replacement is never automatic: the same form may be
-the glossary term in one context and a legitimate word of the language in another. That is
-precisely why this task is entrusted to you and not done by a script.
+agreement, STT errors). No glossary replacement is automatic: judge the context of EACH
+occurrence.
 
 Files (exact paths given in the user instruction; all are in your working directory):
 
@@ -94,14 +93,12 @@ Files (exact paths given in the user instruction; all are in your working direct
 
 ## 3. @general delegation — mandatory
 
-The SRT is long: a single agent ends up skimming. You MUST split the SRT into **disjoint**
-ranges of blocks (e.g. segments 1–240, 241–480, …) and hand each range to a @general
-subagent. To avoid any write race on the single file `transcription_corrigee.srt`, never
-launch two subagents in parallel on overlapping ranges: **process the ranges sequentially**.
+Split the SRT into **disjoint** ranges of blocks (e.g. segments 1–240, 241–480, …) and
+hand each range to a @general subagent. **Process the ranges sequentially**: two parallel
+subagents would race for writes on `transcription_corrigee.srt`.
 
-You, the main agent, do not correct by skimming yourself: you orchestrate the subagents,
-then you assemble, you check the global integrity of the SRT and you write the report.
-Require high-quality, in-depth work from each subagent.
+You, the main agent, do not correct: you orchestrate, you assemble, you check the
+integrity of the SRT and you write the report.
 
 ### Instruction to pass to each subagent (to copy into its prompt)
 
@@ -163,12 +160,10 @@ Markers to place in the segment text:
 
 ## 5. Applying the validated glossary, in context
 
-**Ambiguous validated form: substitute nothing.** When the validated form offers several
-spellings separated by `/`, it does NOT define a replacement — it may even merge two
-different concepts. Pick, case by case, the spelling the context requires, or **leave the
-text as it is**. Seen on a real meeting: applied mechanically, such an entry replaced a
-VENDOR name by the name of the function it provides, and the sentence then asserted
-something false. Text left intact always beats text made false.
+**Ambiguous validated form: substitute nothing.** A form offering several spellings
+separated by `/` is not a replacement — it may merge two distinct concepts. Pick the
+spelling the context requires, or **leave the text as it is**. Intact text beats text
+made false.
 
 The user validated a list of doubtful terms from the summary phase. For each entry NOT
 marked `_preservation_only`, the correction target is `replace_by` if set, otherwise
@@ -185,10 +180,9 @@ Procedure for each applicable entry:
      not the validated term → do not replace.
 3. Never introduce the target form where the meaning does not match.
 
-This application is an integral part of the correction: a variant left uncorrected in a
-context where it clearly denotes the validated term is a missed correction. Conversely, a
-blind replacement that distorts the meaning of a sentence is a serious fault — that is why
-the context judgement is mandatory.
+Judging the context is mandatory both ways: a variant left in place where it clearly
+denotes the validated term is a missed correction; a replacement that distorts the
+meaning is a serious fault.
 
 ---
 
@@ -202,9 +196,8 @@ At roughly one third and two thirds of its range, each subagent runs:
 grep -n -E "é|è|ê|à|ù|ç|oeu|eu" file.srt | head -40
 ```
 
-This grep forces an active search on patterns of common STT errors. The line numbers
-(`-n`) allow keeping only the matches located within ITS range: ignore those falling in
-other subagents' ranges. The relevant results must be included in the block's corrections.
+Keep only the matches whose line number (`-n`) falls within YOUR range; ignore the
+others. Relevant results go into the block's corrections.
 
 ### 6.2 Stagnation alert
 

@@ -48,10 +48,8 @@ diese fünf Verpflichtungen im Detail aus.
 Du erhältst ein SRT, dessen **Sprecher bereits vom System zugeordnet wurden**. Die **Varianten
 des validierten Lexikons sind jedoch NOCH NICHT angewendet**: Es liegt an dir, sie unter
 Beurteilung des Kontexts anzuwenden, zusätzlich zu den Korrekturen, die menschliches
-Urteilsvermögen erfordern (Rechtschreibung, Grammatik, STT-Fehler). Ein Lexikon-Ersatz ist nie
-automatisch: Dieselbe Form kann in einem Kontext der Lexikonbegriff sein und in einem anderen
-ein legitimes Wort der Sprache. Genau deshalb wird diese Aufgabe dir anvertraut und nicht von
-einem Skript erledigt.
+Urteilsvermögen erfordern (Rechtschreibung, Grammatik, STT-Fehler). Kein Lexikon-Ersatz ist
+automatisch: Beurteile den Kontext JEDES Vorkommens.
 
 Dateien (genaue Pfade in der Benutzeranweisung angegeben; alle befinden sich in deinem
 Arbeitsverzeichnis):
@@ -108,15 +106,13 @@ Arbeitsverzeichnis):
 
 ## 3. Delegation an @general — verpflichtend
 
-Das SRT ist lang: Ein einzelner Agent überfliegt es am Ende nur noch. Du MUSST das SRT in
-**disjunkte** Blockbereiche aufteilen (z. B. Segmente 1–240, 241–480, …) und jeden Bereich
-einem @general-Subagenten übergeben. Um jeden Schreibwettlauf auf die einzelne Datei
-`transcription_corrigee.srt` zu vermeiden, starte niemals zwei Subagenten parallel auf
-überlappenden Bereichen: **bearbeite die Bereiche nacheinander**.
+Teile das SRT in **disjunkte** Blockbereiche auf (z. B. Segmente 1–240, 241–480, …) und
+übergib jeden Bereich einem @general-Subagenten. **Bearbeite die Bereiche nacheinander**:
+zwei parallele Subagenten würden sich das Schreiben von `transcription_corrigee.srt`
+streitig machen.
 
-Du, der Hauptagent, korrigierst nicht selbst im Überflug: Du orchestrierst die Subagenten,
-führst dann zusammen, prüfst die globale Integrität des SRT und verfasst den Bericht. Verlange
-von jedem Subagenten hochwertige, gründliche Arbeit.
+Du, der Hauptagent, korrigierst nicht: Du orchestrierst, führst zusammen, prüfst die
+Integrität des SRT und verfasst den Bericht.
 
 ### Anweisung, die an jeden Subagenten weiterzugeben ist (in sein Prompt zu kopieren)
 
@@ -184,13 +180,10 @@ Markierungen, die im Segmenttext zu setzen sind:
 
 ## 5. Anwendung des validierten Lexikons, im Kontext
 
-**Mehrdeutige validierte Form: nichts ersetzen.** Bietet die validierte Form mehrere durch
-`/` getrennte Schreibweisen, definiert sie KEINE Ersetzung — sie kann sogar zwei
-verschiedene Begriffe zusammenführen. Wähle von Fall zu Fall die vom Kontext geforderte
-Schreibweise oder **lass den Text unverändert**. An einer realen Sitzung erlebt: mechanisch
-angewandt hat ein solcher Eintrag einen Anbieternamen durch den Namen der erbrachten
-Funktion ersetzt, und der Satz behauptete danach etwas Falsches. Unveränderter Text ist
-immer besser als falsch gemachter Text.
+**Mehrdeutige validierte Form: nichts ersetzen.** Eine Form mit mehreren durch `/`
+getrennten Schreibweisen ist keine Ersetzung — sie kann zwei verschiedene Begriffe
+zusammenführen. Wähle die vom Kontext geforderte Schreibweise oder **lass den Text
+unverändert**. Unveränderter Text ist besser als falsch gemachter Text.
 
 Der Benutzer hat eine Liste zweifelhafter Begriffe aus der Zusammenfassungsphase validiert. Für
 jeden NICHT mit `_preservation_only` markierten Eintrag ist das Korrekturziel `replace_by`,
@@ -208,10 +201,9 @@ Vorgehen für jeden anwendbaren Eintrag:
      nicht der validierte Begriff → nicht ersetzen.
 3. Führe die Zielform niemals dort ein, wo der Sinn nicht übereinstimmt.
 
-Diese Anwendung ist fester Bestandteil der Korrektur: eine Variante, die in einem Kontext
-unkorrigiert bleibt, in dem sie eindeutig den validierten Begriff bezeichnet, ist eine
-verpasste Korrektur. Umgekehrt ist ein blinder Ersatz, der den Sinn eines Satzes verfälscht,
-ein schwerer Fehler — deshalb ist die Kontextbeurteilung verpflichtend.
+Die Kontextbeurteilung ist in beide Richtungen verpflichtend: eine Variante, die dort
+stehen bleibt, wo sie eindeutig den validierten Begriff bezeichnet, ist eine verpasste
+Korrektur; ein Ersatz, der den Sinn verfälscht, ist ein schwerer Fehler.
 
 ---
 
@@ -225,10 +217,8 @@ Ungefähr bei einem Drittel und bei zwei Dritteln seines Bereichs führt jeder S
 grep -n -E "ä|ö|ü|ß|ae|oe|ue" datei.srt | head -40
 ```
 
-Dieser Grep erzwingt eine aktive Suche nach Mustern typischer STT-Fehler (Umlaute/ß und ihre
-Ersatzschreibweisen). Die Zeilennummern (`-n`) erlauben es, nur die Treffer zu behalten, die in
-SEINEM Bereich liegen: Treffer, die in die Bereiche anderer Subagenten fallen, werden ignoriert.
-Relevante Treffer müssen in die Korrekturen des Blocks einfließen.
+Behalte nur die Treffer, deren Zeilennummer (`-n`) in DEINEN Bereich fällt; ignoriere die
+anderen. Relevante Treffer fließen in die Korrekturen des Blocks ein.
 
 ### 6.2 Stagnationswarnung
 

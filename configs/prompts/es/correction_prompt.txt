@@ -49,10 +49,8 @@ prompt detalla estos cinco compromisos.
 Usted recibe un SRT cuyos **interlocutores ya han sido asignados por el sistema**. En
 cambio, **las variantes del léxico validado AÚN NO están aplicadas**: le corresponde a
 usted aplicarlas juzgando el contexto, además de las correcciones que exigen criterio
-humano (ortografía, concordancia, errores STT). Una sustitución de léxico nunca es
-automática: una misma forma puede ser el término del léxico en un contexto y una palabra
-legítima del idioma en otro. Precisamente por eso esta tarea se le confía a usted y no la
-realiza un script.
+humano (ortografía, concordancia, errores STT). Ninguna sustitución de léxico es
+automática: juzgue el contexto de CADA aparición.
 
 Archivos (rutas exactas indicadas en la instrucción del usuario; todos están en su
 directorio de trabajo):
@@ -111,15 +109,13 @@ directorio de trabajo):
 
 ## 3. Delegación a @general — obligatoria
 
-El SRT es largo: un solo agente termina por pasarlo por alto. USTED DEBE dividir el SRT
-en rangos de bloques **disjuntos** (por ejemplo, segmentos 1–240, 241–480, …) y confiar
-cada rango a un subagente @general. Para evitar cualquier carrera de escritura sobre el
-único archivo `transcription_corrigee.srt`, nunca lance dos subagentes en paralelo sobre
-rangos que se solapen: **procese los rangos secuencialmente**.
+Divida el SRT en rangos de bloques **disjuntos** (por ejemplo, segmentos 1–240,
+241–480, …) y confíe cada rango a un subagente @general. **Procese los rangos
+secuencialmente**: dos subagentes en paralelo se disputarían la escritura de
+`transcription_corrigee.srt`.
 
-Usted, como agente principal, no corrige usted mismo por encima: orquesta a los
-subagentes, luego ensambla, controla la integridad global del SRT y redacta el informe.
-Exija a cada subagente un trabajo de alta calidad, en profundidad.
+Usted, agente principal, no corrige: orquesta, ensambla, controla la integridad del SRT
+y redacta el informe.
 
 ### Consigna a transmitir a cada subagente (para copiar en su prompt)
 
@@ -189,12 +185,10 @@ Marcadores a colocar en el texto del segmento:
 
 ## 5. Aplicación del léxico validado, en contexto
 
-**Forma validada ambigua: no sustituir nada.** Cuando la forma validada ofrece varias
-grafías separadas por `/`, NO define una sustitución — incluso puede fusionar dos conceptos
-distintos. Elige caso por caso la grafía que el contexto impone, o **deja el texto tal
-cual**. Visto en una reunión real: aplicada mecánicamente, una entrada así sustituyó el
-nombre de un PROVEEDOR por el de la función que presta, y la frase afirmaba entonces algo
-falso. Un texto intacto siempre vale más que un texto hecho falso.
+**Forma validada ambigua: no sustituir nada.** Una forma con varias grafías separadas
+por `/` no es una sustitución — puede fusionar dos conceptos distintos. Elija la grafía
+que el contexto impone, o **deje el texto tal cual**. Un texto intacto vale más que un
+texto hecho falso.
 
 El usuario ha validado una lista de términos dudosos procedentes de la fase de resumen.
 Para cada entrada NO marcada `_preservation_only`, el objetivo de corrección es
@@ -212,10 +206,9 @@ Procedimiento para cada entrada aplicable:
      y no el término validado → no sustituir.
 3. Nunca introducir la forma objetivo donde el sentido no corresponda.
 
-Esta aplicación forma parte integral de la corrección: una variante dejada sin
-corregir en un contexto donde designa claramente el término validado es una corrección
-perdida. A la inversa, una sustitución ciega que distorsiona el sentido de una frase es
-una falta grave — por eso el juicio de contexto es obligatorio.
+El juicio de contexto es obligatorio en ambos sentidos: una variante dejada donde
+designa claramente el término validado es una corrección perdida; una sustitución que
+distorsiona el sentido es una falta grave.
 
 ---
 
@@ -230,10 +223,8 @@ ejecuta:
 grep -n -E "á|é|í|ó|ú|ñ|ü" archivo.srt | head -40
 ```
 
-Este grep obliga a una búsqueda activa sobre patrones de errores STT frecuentes. Los
-números de línea (`-n`) permiten conservar solo las coincidencias situadas dentro de SU
-rango: ignorar las que caen en los rangos de otros subagentes. Los resultados
-relevantes deben incluirse en las correcciones del bloque.
+Conserve solo las coincidencias cuyo número de línea (`-n`) cae dentro de SU rango;
+ignore las demás. Los resultados relevantes entran en las correcciones del bloque.
 
 ### 6.2 Alerta de estancamiento
 

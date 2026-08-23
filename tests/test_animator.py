@@ -593,14 +593,19 @@ class TestFormeValideeAmbigue:
 
     def test_la_regle_est_dans_les_trois_prompts_et_cinq_langues(self):
         """Une règle écrite en français seulement ne protège que les livrables français."""
-        marqueurs = {"": ("fournisseur", "ambigu"), "en/": ("VENDOR", "mbiguous"),
-                     "de/": ("Anbieternamen", "ehrdeutig"), "es/": ("PROVEEDOR", "mbigua"),
-                     "it/": ("FORNITORE", "mbigua")}
+        # Ce qu'on épingle est la RÈGLE, pas l'anecdote qui l'illustrait : la version
+        # française a perdu son récit d'incident (expérience E6 — les justifications
+        # diluent l'ordre), et un garde-fou qui casse pour cette raison-là épingle la
+        # mauvaise chose. La règle, elle, doit rester dans les cinq langues : écrite en
+        # français seulement, elle ne protègerait que les livrables français.
+        marqueurs = {"": "ambigu", "en/": "mbiguous", "de/": "ehrdeutig",
+                     "es/": "mbigua", "it/": "mbigua"}
         for gabarit in ("correction_prompt.txt", "final_review_prompt.txt"):
-            for loc, (mot, ambig) in marqueurs.items():
-                texte = (ROOT / f"configs/prompts/{loc}{gabarit}").read_text(encoding="utf-8")
-                assert mot.lower() in texte.lower(), f"{loc}{gabarit} : « {mot} » absent"
-                assert ambig.lower() in texte.lower(), f"{loc}{gabarit} : ambiguïté non traitée"
+            for loc, ambig in marqueurs.items():
+                texte = (ROOT / f"configs/prompts/{loc}{gabarit}").read_text(encoding="utf-8").lower()
+                assert ambig.lower() in texte, f"{loc}{gabarit} : ambiguïté non traitée"
+                # Et la règle doit ORDONNER, pas seulement mentionner le mot.
+                assert "/" in texte, f"{loc}{gabarit} : la forme « A / B » n'est pas nommée"
         # La règle correspondante À LA SOURCE (« une seule forme de référence ») a été
         # RETIRÉE après mesure : sur six parcours d'une même réunion, le nombre d'entrées
         # ambiguës ne bouge pas (12, 12 avec la règle ; 11, 18, 4 sans). Elle n'agissait pas
