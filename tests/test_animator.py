@@ -29,8 +29,8 @@ from transcria.web.pages_routes import _apply_animator_suggestion
 from transcria.workflow.animator_hint import animator_from_roles, suggest_animator
 from transcria.workflow.phases.correction import (
     _persist_reanchored_summary,
-    sans_formes_ambigues,
     reanchored_summary_error,
+    sans_formes_ambigues,
     summary_to_reanchor,
 )
 from transcria.workflow.phases.summary_llm import paragraph_floor, synthese_shortfall
@@ -598,10 +598,12 @@ class TestFormeValideeAmbigue:
                 texte = (ROOT / f"configs/prompts/{loc}{gabarit}").read_text(encoding="utf-8")
                 assert mot.lower() in texte.lower(), f"{loc}{gabarit} : « {mot} » absent"
                 assert ambig.lower() in texte.lower(), f"{loc}{gabarit} : ambiguïté non traitée"
-        # Et à la SOURCE : la forme de référence est une forme, pas une alternative.
-        for loc in marqueurs:
-            texte = (ROOT / f"configs/prompts/{loc}summary_prompt.txt").read_text(encoding="utf-8")
-            assert "192" in texte, f"{loc}summary_prompt.txt : règle « une seule forme » absente"
+        # La règle correspondante À LA SOURCE (« une seule forme de référence ») a été
+        # RETIRÉE après mesure : sur six parcours d'une même réunion, le nombre d'entrées
+        # ambiguës ne bouge pas (12, 12 avec la règle ; 11, 18, 4 sans). Elle n'agissait pas
+        # sur ce qu'elle prétendait traiter, et une règle inerte dilue celles qui servent.
+        # Ce qui protège vraiment est le garde-fou à l'USAGE, doublé d'un refus en code
+        # (voir TestRefusDesFormesAmbigues) : une forme « A / B » n'est jamais substituée.
 
 
 class TestRefusDesFormesAmbigues:

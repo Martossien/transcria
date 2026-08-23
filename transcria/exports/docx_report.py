@@ -286,8 +286,11 @@ class DocxReport:
                 render = {"participants": self._section_participants,
                           "transcript": self._section_transcript,
                           "quality": self._section_quality}[key]
-                render(doc, base=num)
-                num += 1
+                # Une section qui ne rend RIEN ne consomme pas de numéro : sur un ordre
+                # personnalisé, « Points à vérifier » vide faisait sauter la numérotation
+                # de 6 à 8 dans le document livré.
+                if render(doc, base=num) is not False:
+                    num += 1
         self._setup_footer(doc)
         return doc
 
@@ -964,7 +967,7 @@ class DocxReport:
     # Libellés génériques des contrôles qualité → désormais dans _DOCX_LABELS (clés « chk_* »),
     # résolus par langue via self.L (Axe B).
 
-    def _section_quality(self, doc: DocumentT, base: int = 4) -> None:
+    def _section_quality(self, doc: DocumentT, base: int = 4) -> bool:
         checks = self.quality.get("checks", [])
         points: list[tuple[str, str]] = []  # (emoji_label, description)
 
@@ -1026,7 +1029,7 @@ class DocxReport:
                 points.append((f"⚠  {label}", desc))
 
         if not points:
-            return
+            return False
 
         self._section_heading(doc, f"{base}.", self.L["sec_review"])
 
@@ -1051,6 +1054,7 @@ class DocxReport:
             r1.font.size = Pt(9.5)
             r1.font.color.rgb = RGBColor(0x7B, 0x36, 0x06)
             r1.font.name = "Calibri"
+        return True
 
     # ── Pied de page ──────────────────────────────────────────────────────────
 

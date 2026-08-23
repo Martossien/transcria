@@ -276,15 +276,6 @@ Aufbau des menschlichen Korrekturlexikons nützlich sind.
 
 ### 6.4 Referenzform
 
-**EINE einzige Form, nie eine Alternative.** Schreibe niemals „A / B“ als Referenzform: das
-ist keine Schreibweise, sondern ein Zögern, und der anwendende Code kann es nicht auflösen.
-An realen Sitzungen gemessen: 28 von 192 Einträgen waren so, und einige führten UNTER-
-SCHIEDLICHE Begriffe zusammen (zwei Werkzeuge, zwei Rollen, zwei Jahre). Einer davon ließ
-einen Anbieternamen durch den Namen der erbrachten Funktion ersetzen — der Satz behauptete
-danach etwas Falsches. Koexistieren zwei Formen zu Recht, sind das ZWEI Einträge (§ 6.3).
-Zögerst du zwischen zwei Schreibweisen DESSELBEN Begriffs, wähle eine und benenne das
-Zögern im Kommentar.
-
 Sie hilft dem Menschen, das Konzept zu erkennen: eine in der Transkription vorhandene
 Form oder eine durch den Kontext stark begründete wahrscheinliche Korrektur. Ist sie
 unsicher, muss der Kommentar dies klar sagen — niemals eine wahrscheinliche Korrektur

@@ -265,15 +265,6 @@ construire le lexique de correction humain.
 
 ### 6.4 Forme de référence
 
-**UNE seule forme, jamais une alternative.** N'écris jamais « A / B » comme forme de
-référence : ce n'est pas une graphie, c'est une hésitation, et le code qui l'applique ne
-peut pas la trancher. Mesuré sur des réunions réelles : 28 entrées sur 192 étaient dans ce
-cas, et certaines fusionnaient des concepts DISTINCTS (deux outils, deux rôles, deux
-années). L'une d'elles a fait remplacer un nom de fournisseur par le nom de la fonction
-qu'il rend — la phrase affirmait ensuite quelque chose de faux. Si deux formes coexistent
-légitimement, ce sont DEUX entrées (§ 6.3). Si tu hésites entre deux graphies du MÊME
-concept, choisis-en une et dis l'hésitation dans le commentaire.
-
 Elle aide l'humain à reconnaître le concept : une forme présente dans la
 transcription, ou une correction probable fortement justifiée par le contexte. Si
 elle est incertaine, le commentaire doit le dire clairement — ne jamais présenter une

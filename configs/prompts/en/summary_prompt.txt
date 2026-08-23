@@ -238,14 +238,6 @@ human correction glossary.
 
 ### 6.4 Reference form
 
-**ONE single form, never an alternative.** Never write "A / B" as the reference form: that
-is not a spelling, it is a hesitation, and the code applying it cannot resolve it. Measured
-on real meetings: 28 entries out of 192 were in this state, and some merged DISTINCT
-concepts (two tools, two roles, two years). One of them caused a vendor name to be replaced
-by the name of the function it provides — the sentence then asserted something false. If
-two forms legitimately coexist, that is TWO entries (§ 6.3). If you hesitate between two
-spellings of the SAME concept, pick one and state the hesitation in the comment.
-
 It helps the human recognise the concept: a form present in the transcription, or a
 probable correction strongly justified by the context. If it is uncertain, the comment
 must say so clearly — never present a probable correction as certain.

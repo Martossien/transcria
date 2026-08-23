@@ -208,7 +208,9 @@
   };
   function chunkReliability(c) {
     // [INCERTAIN] posé par la correction = douteux par définition, même sans intervalle.
-    const marked = /\[INCERTAIN\]/.test(c.text || "");
+    // Le prompt demande `[INCERTAIN: raison]` : chercher le crochet fermant ne trouvait
+    // jamais rien, et le filet était mort depuis l'origine (constaté sur 3 parcours réels).
+    const marked = /\[INCERTAIN\b/.test(c.text || "");
     let level = marked ? "suspect" : null;
     const reasons = new Set(marked ? [_t("marqué [INCERTAIN] par la correction")] : []);
     for (const r of state.reliability) {
