@@ -710,3 +710,33 @@ class TestRelaisDeLecture:
         seg = fs.load_json("metadata/transcription_segments.json")[0]
         assert seg["reliability"] == "degrade"
         assert "correction_lourde" in seg["reliability_reasons"]
+
+
+class TestGardeStructureDesBlocs:
+    """T4 (2026-08-23) : un SRT aux blocs éclatés — ligne vide entre numéro, timecode et
+    texte — portait le même nombre de timecodes et un ratio en bande : la garde le
+    laissait passer et le livrable partait avec un SRT invalide."""
+
+    SRC = ("1\n00:00:01,000 --> 00:00:02,000\nSPEAKER_00(A): bonjour\n\n"
+           "2\n00:00:03,000 --> 00:00:04,000\nSPEAKER_00(A): le monde entier\n")
+
+    def test_un_srt_aux_blocs_eclates_est_rejete(self):
+        from transcria.workflow.phases.correction import corrected_srt_integrity_error
+
+        eclate = self.SRC.replace("\n", "\n\n")
+
+        err = corrected_srt_integrity_error(self.SRC, eclate, "fr")
+
+        assert err is not None and "blocs" in err
+
+    def test_un_srt_intact_passe_toujours(self):
+        from transcria.workflow.phases.correction import corrected_srt_integrity_error
+
+        assert corrected_srt_integrity_error(self.SRC, self.SRC, "fr") is None
+
+    def test_le_message_existe_dans_les_cinq_langues(self):
+        from transcria.workflow.phases.correction import _MSG
+
+        for lang, table in _MSG.items():
+            assert "block_structure" in table, lang
+            assert "{out}" in table["block_structure"] and "{src}" in table["block_structure"], lang

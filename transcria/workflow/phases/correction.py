@@ -597,6 +597,11 @@ _MSG: dict[str, dict[str, str]] = {
             "SRT corrigé non conforme : {out} segments au lieu de {src} "
             "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
             "relancez le traitement, seule la correction sera rejouée."),
+        "block_structure": (
+            "SRT corrigé non conforme : {out} blocs pour {src} segments source — la structure "
+            "interne des segments est cassée (lignes vides insérées ou blocs fusionnés). "
+            "Le SRT brut est conservé — relancez le traitement, seule la correction sera "
+            "rejouée."),
         "size_ratio": (
             "SRT corrigé non conforme : ratio de taille {ratio:.2f} hors [0.90, 1.10] "
             "(contenu tronqué, résumé ou réécrit — ex. préfixes locuteurs altérés). "
@@ -611,6 +616,10 @@ _MSG: dict[str, dict[str, str]] = {
             "Corrected SRT invalid: {out} segments instead of {src} "
             "(segments lost, merged or added by the LLM). The raw SRT is kept — "
             "re-run the job, only the correction will be replayed."),
+        "block_structure": (
+            "Corrected SRT invalid: {out} blocks for {src} source segments — internal segment "
+            "structure broken (blank lines inserted or blocks merged). The raw SRT is kept "
+            "— re-run the job, only the correction will be replayed."),
         "size_ratio": (
             "Corrected SRT invalid: size ratio {ratio:.2f} outside [0.90, 1.10] "
             "(content truncated, summarised or rewritten — e.g. altered speaker prefixes). "
@@ -626,6 +635,11 @@ _MSG: dict[str, dict[str, str]] = {
             "oder hinzugefügt). Das Roh-SRT wird beibehalten — starten Sie den Job erneut, es wird nur die Korrektur "
             "wiederholt."
         ),
+        "block_structure": (
+            "Korrigiertes SRT ungültig: {out} Blöcke bei {src} Quellsegmenten — die innere "
+            "Segmentstruktur ist beschädigt (Leerzeilen eingefügt oder Blöcke verschmolzen). "
+            "Das rohe SRT bleibt erhalten — Job erneut starten, nur die Korrektur wird "
+            "wiederholt."),
         "size_ratio": (
             "Korrigiertes SRT ungültig: Größenverhältnis {ratio:.2f} außerhalb von [0.90, 1.10] (Inhalt gekürzt, "
             "zusammengefasst oder umgeschrieben — z. B. veränderte Sprecherpräfixe). Das Roh-SRT wird beibehalten — "
@@ -641,6 +655,11 @@ _MSG: dict[str, dict[str, str]] = {
             "SRT corregido no conforme: {out} segmentos en lugar de {src} (segmentos perdidos, fusionados o añadidos "
             "por la LLM). Se conserva el SRT bruto — vuelva a lanzar el trabajo, solo se repetirá la corrección."
         ),
+        "block_structure": (
+            "SRT corregido no conforme: {out} bloques para {src} segmentos fuente — la "
+            "estructura interna de los segmentos está rota (líneas vacías insertadas o "
+            "bloques fusionados). El SRT bruto se conserva — relance el trabajo, solo se "
+            "repetirá la corrección."),
         "size_ratio": (
             "SRT corregido no conforme: relación de tamaño {ratio:.2f} fuera de [0.90, 1.10] (contenido truncado, "
             "resumido o reescrito — ej. prefijos de interlocutor alterados). Se conserva el SRT bruto — vuelva a "
@@ -656,6 +675,10 @@ _MSG: dict[str, dict[str, str]] = {
             "SRT corretto non conforme: {out} segmenti invece di {src} (segmenti persi, uniti o aggiunti dalla LLM). "
             "L'SRT grezzo viene conservato — rilanciare il trattamento, verrà rieseguita solo la correzione."
         ),
+        "block_structure": (
+            "SRT corretto non conforme: {out} blocchi per {src} segmenti sorgente — la "
+            "struttura interna dei segmenti è rotta (righe vuote inserite o blocchi fusi). "
+            "L'SRT grezzo è conservato — rilanciare il job, solo la correzione sarà rieseguita."),
         "size_ratio": (
             "SRT corretto non conforme: rapporto di dimensione {ratio:.2f} fuori da [0.90, 1.10] (contenuto troncato, "
             "riassunto o riscritto — es. prefissi dei parlanti alterati). L'SRT grezzo viene conservato — rilanciare "
@@ -687,6 +710,14 @@ def corrected_srt_integrity_error(source: str, corrected: str, language: str = "
     msg = _msg(language)
     if src_segments and out_segments != src_segments:
         return msg["segment_parity"].format(out=out_segments, src=src_segments)
+    # Structure des BLOCS : un SRT dont chaque ligne interne est devenue un bloc (ligne
+    # vide entre numéro, timecode et texte) portait 1565 timecodes et un ratio 1.026 — la
+    # garde le laissait passer, le livrable partait avec un SRT invalide (vécu 2026-08-23,
+    # agent à température basse). Le compte de blocs est aussi déterministe que la parité.
+    src_blocs = len(re.split(r"\n\s*\n+", source.strip()))
+    out_blocs = len(re.split(r"\n\s*\n+", corrected.strip()))
+    if src_blocs and out_blocs != src_blocs:
+        return msg["block_structure"].format(out=out_blocs, src=src_blocs)
     if len(source) >= 2000:
         ratio = len(corrected) / max(len(source), 1)
         if not (0.90 <= ratio <= 1.10):
