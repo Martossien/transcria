@@ -180,3 +180,42 @@ class TestPassesLlmMuettes:
         report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
 
         assert not any(c["type"] == "silent_final_review" for c in report["checks"])
+
+    def test_un_profil_sans_correction_ne_leve_jamais_ces_points(self, tmp_dir):
+        """Cinq profils légers ne lancent ni correction ni relecture : un SRT « identique »
+        et une harmonisation absente y sont l'état NORMAL, pas une panne. Sans la garde,
+        chaque livrable srt_express/word_rapide portait un faux avertissement."""
+        from transcria.workflow.profiles import get_profile
+
+        fs = JobFilesystem(tmp_dir, "job-light")
+        srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n"
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt", srt)
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+        fs.save_json("context/meeting_context.json", {"summary_llm": "## Synthèse\n\nTexte."})
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}},
+                                   profile=get_profile("word_rapide"))
+
+        types = {c["type"] for c in report["checks"]}
+        assert "silent_correction" not in types
+        assert "silent_final_review" not in types
+
+    def test_le_profil_word_corrige_garde_les_deux_controles(self, tmp_dir):
+        from transcria.workflow.profiles import get_profile
+
+        fs = JobFilesystem(tmp_dir, "job-light")
+        srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n"
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt", srt)
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour"}])
+        fs.save_json("context/meeting_context.json", {"summary_llm": "## Synthèse\n\nTexte."})
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}},
+                                   profile=get_profile("word_corrige"))
+
+        types = {c["type"] for c in report["checks"]}
+        assert {"silent_correction", "silent_final_review"} <= types
+

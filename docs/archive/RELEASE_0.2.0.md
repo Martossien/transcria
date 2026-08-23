@@ -742,12 +742,12 @@ corriger » beta.9).
 | # | Anomalie | Source | Statut |
 |---|---|---|---|
 | A1 | Formes incohérentes hors glossaire | [[final_review_glossary_scope]] | **signalée sans corriger** (beta.9) ; harmonisation 1-clic = candidat 0.3 |
-| A2 | Rôles attribués par le LLM douteux | [[drite_saas_comparison]] | ouverte |
-| A3 | Faux positif « musique » | [[drite_saas_comparison]] | ouverte |
-| A4 | Résumé trop court | [[drite_saas_comparison]] | **signalée** (`summary_too_short`) |
-| A5 | Lexique non appliqué (vs SaaS) | [[drite_saas_comparison]] | ouverte → instruite en C3.7 |
+| A2 | Rôles attribués par le LLM douteux | [[comparaison_saas]] | ouverte |
+| A3 | Faux positif « musique » | [[comparaison_saas]] | ouverte |
+| A4 | Résumé trop court | [[comparaison_saas]] | **signalée** (`summary_too_short`) |
+| A5 | Lexique non appliqué (vs SaaS) | [[comparaison_saas]] | ouverte → instruite en C3.7 |
 | A6 | Garde nom locuteur SRT (solution B) | [[speaker_name_srt_guard]] | différée — décision en C3.1/É7 |
-| A7 | Support pptx/pdf | [[drite_saas_comparison]] | **candidat 0.3** |
+| A7 | Support pptx/pdf | [[comparaison_saas]] | **candidat 0.3** |
 | A8 | `/result` 500 sans rapport qualité | seed `/result` | **corrigée** |
 | A9 | Résumé édité étape 4 absent du ZIP | retour utilisateur | **corrigée** (beta.9) |
 | A10 | CSS/JS périmés (cache navigateur) | retour utilisateur | **corrigée** (asset_url) |

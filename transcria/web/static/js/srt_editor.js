@@ -205,6 +205,7 @@
     hallucination_generique: () => _t("motif d'hallucination générique"),
     signature_hallucination_moteur: () => _t("signature d'hallucination connue de ce moteur"),
     audio_preflight_degrade: () => _t("zone audio dégradée (diagnostic)"),
+    correction_lourde: () => _t("fortement réécrit par la correction"),
   };
   function chunkReliability(c) {
     // [INCERTAIN] posé par la correction = douteux par définition, même sans intervalle.

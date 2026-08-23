@@ -152,15 +152,24 @@ _REVIEW_LOAD_ZERO = {
 }
 
 
-def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict) -> list[dict]:
+def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict, profile=None) -> list[dict]:
     """Les passes LLM d'aval qui n'ont rien produit, à dire À L'UTILISATEUR.
 
     « Rien produit » n'est pas « rien à faire » : c'est presque toujours un agent qui n'a
     pas abouti. Le silence coûte cher — le document part comme s'il avait été relu.
+
+    Chaque contrôle est GARDÉ par le profil : cinq profils légers ne lancent ni
+    correction ni relecture, et le résumé de l'assistant (summary_llm) existe pour tous
+    les jobs — sans cette garde, chacun de leurs livrables aurait porté un faux
+    avertissement « la relecture n'a rien produit ». Un profil absent (jobs d'avant les
+    profils) est réputé avoir lancé les deux phases : c'était leur pipeline.
     """
+    correction_prevue = profile.run_llm_correction if profile is not None else True
+    relecture_prevue = profile.run_final_review if profile is not None else True
     muettes: list[dict] = []
     corrige = fs.load_text("metadata/transcription_corrigee.srt")
-    if srt_content.strip() and corrige is not None and corrige.strip() == srt_content.strip():
+    if (correction_prevue and srt_content.strip() and corrige is not None
+            and corrige.strip() == srt_content.strip()):
         muettes.append({
             "_check": {"type": "silent_correction", "severity": "warning"},
             "texte": S["correction_muette"],
@@ -169,7 +178,7 @@ def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict) -> list[di
     # La relecture n'est jugée que si elle avait de quoi travailler : sans synthèse amont,
     # ne rien produire est le comportement correct, pas une panne.
     attendue = str(ctx.get("summary_llm") or "").strip()
-    if attendue and not str(ctx.get("summary_harmonized") or "").strip():
+    if relecture_prevue and attendue and not str(ctx.get("summary_harmonized") or "").strip():
         muettes.append({
             "_check": {"type": "silent_final_review", "severity": "warning"},
             "texte": S["relecture_muette"],
@@ -177,7 +186,7 @@ def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict) -> list[di
     return muettes
 
 
-def run_light_quality(job: Job, config: dict) -> dict:
+def run_light_quality(job: Job, config: dict, profile=None) -> dict:
     """Exécute le contrôle léger et écrit `quality/quality_report.{json,md}` + review_points."""
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     lang = resolve_output_language(job)
@@ -199,7 +208,7 @@ def run_light_quality(job: Job, config: dict) -> dict:
     # conséquences (variantes non résolues) sans jamais nommer la cause, et l'utilisateur
     # devait remonter des symptômes au diagnostic. Vécu le 2026-08-23 : moteur d'arbitrage
     # mort en cours de route, job « terminé », correction et relecture toutes deux muettes.
-    for check in _passes_llm_muettes(fs, srt_content, S):
+    for check in _passes_llm_muettes(fs, srt_content, S, profile):
         total_checks += 1
         checks.append(check.pop("_check"))
         review_points.append(check["texte"])

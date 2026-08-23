@@ -369,7 +369,10 @@ def _persist_correction_result(runner, fs, result: dict, job: Job | None = None)
             return {"success": False, "error": integrity_error}
         fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
         if result["report"]:
-            fs.save_text("metadata/correction_report.md", result["report"])
+            language = resolve_output_language(job) if job is not None else "fr"
+            fs.save_text("metadata/correction_report.md",
+                         result["report"].rstrip()
+                         + _annexe_diff(source_srt, result["corrected_srt"], language))
         else:
             # RARE et non déterministe (enquête 2026-08-05 : 2 omissions le 04 au soir,
             # puis 10/10 rapports rendus en reproduction — cause environnementale non
@@ -380,6 +383,7 @@ def _persist_correction_result(runner, fs, result: dict, job: Job | None = None)
                            "rapport de repli généré par diff")
             fs.save_text("metadata/correction_report.md",
                          _fallback_diff_report(source_srt, result["corrected_srt"]))
+        _flag_heavy_rewrites(fs, source_srt, result["corrected_srt"])
         _persist_reanchored_summary(fs, result, job)
         logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
         if result.get("warning"):
@@ -485,11 +489,11 @@ def _persist_reanchored_summary(fs, result: dict, job: Job | None) -> None:
                 len(previous), len(rewritten))
 
 
-def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:
-    """Rapport factuel minimal quand l'agent n'a pas rendu le sien : lignes modifiées.
+def _diff_factuel(source_srt: str, corrected_srt: str) -> tuple[int, str]:
+    """Le diff ligne à ligne source → corrigé : (nombre de lignes modifiées, texte).
 
     Pas une reconstruction des RAISONS (seul l'agent les connaissait) — un constat
-    honnête de CE QUI a changé, ligne à ligne, exploitable en relecture."""
+    honnête de CE QUI a changé, exploitable en relecture."""
     import difflib
 
     changes: list[str] = []
@@ -499,19 +503,96 @@ def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:
             changes.append(f"- avant : {line[1:].strip()}")
         elif line.startswith("+") and not line.startswith("+++"):
             changes.append(f"- après : {line[1:].strip()}")
+    return (sum(1 for c in changes if c.startswith("- avant")),
+            "\n".join(changes) if changes else "")
+
+
+def _fallback_diff_report(source_srt: str, corrected_srt: str) -> str:
+    """Rapport factuel minimal quand l'agent n'a pas rendu le sien : lignes modifiées."""
+    n, corps = _diff_factuel(source_srt, corrected_srt)
     header = (
         "## Rapport de correction (repli système)\n\n"
         "L'agent de correction n'a pas produit son rapport — voici le diff factuel "
         "source → corrigé (les raisons des corrections ne sont pas reconstituables).\n\n"
-        f"Lignes modifiées : {sum(1 for c in changes if c.startswith('- avant'))}\n\n"
+        f"Lignes modifiées : {n}\n\n"
     )
-    return header + ("\n".join(changes) if changes else "Aucune modification de ligne.")
+    return header + (corps or "Aucune modification de ligne.")
+
+
+def _annexe_diff(source_srt: str, corrected_srt: str, language: str | None) -> str:
+    """L'annexe factuelle ajoutée à CHAQUE rapport de correction rendu par l'agent.
+
+    Le rapport de l'agent est une auto-déclaration : le banc a montré qu'elle omet des
+    modifications réelles. Le diff, lui, est la vérité terrain — l'utilisateur lit les
+    deux et voit immédiatement ce que l'agent a tu."""
+    n, corps = _diff_factuel(source_srt, corrected_srt)
+    m = _msg(language)
+    return "\n\n---\n\n" + m["diff_annex_title"] + "\n\n" + m["diff_annex_intro"].format(n=n) + (
+        "\n\n" + corps if corps else ""
+    )
+
+
+_PREFIXE_LOCUTEUR = re.compile(r"^SPEAKER_\d+\([^)]*\):\s*")
+_MARQUEUR_CORRECTION = re.compile(r"\[(INCERTAIN|ÉTRANGER|FOREIGN)\b")
+
+
+def _flag_heavy_rewrites(fs, source_srt: str, corrected_srt: str) -> None:
+    """Marque « suspect » les segments que la correction a FORTEMENT réécrits.
+
+    Le banc a montré que les seuls dégâts qui échappent aux gardes déterministes sont
+    des réécritures : mot réellement prononcé supprimé, phrase remaniée. L'éditeur SRT
+    sait déjà afficher des raisons de fiabilité — on lui donne celle-ci, et l'humain
+    arbitre là où la machine a le plus touché, au lieu de relire 1 500 segments.
+
+    Seuils : similarité < 0,85 (remaniement) ou raccourci d'au moins 8 caractères
+    (suppression). Les segments porteurs d'un marqueur [INCERTAIN]/[ÉTRANGER] sont déjà
+    signalés par l'éditeur — on ne les double pas. Une petite correction (accent, casse,
+    un mot substitué) reste sous les seuils : signaler tout reviendrait à ne rien signaler.
+    """
+    import difflib
+
+    seg_src = re.split(r"\n\n+", source_srt.strip())
+    seg_cor = re.split(r"\n\n+", corrected_srt.strip())
+    segments = fs.load_json("metadata/transcription_segments.json")
+    if not isinstance(segments, list) or len(segments) != len(seg_src) or len(seg_src) != len(seg_cor):
+        # Sans alignement 1:1 prouvé, on n'écrit rien : un drapeau posé sur le mauvais
+        # segment serait pire que l'absence de drapeau.
+        return
+    touches = 0
+    for i, (x, y) in enumerate(zip(seg_src, seg_cor, strict=True)):
+        if x == y:
+            continue
+        tx = _PREFIXE_LOCUTEUR.sub("", " ".join(x.split("\n")[2:])).strip()
+        ty = _PREFIXE_LOCUTEUR.sub("", " ".join(y.split("\n")[2:])).strip()
+        if _MARQUEUR_CORRECTION.search(ty):
+            continue
+        raccourci = len(tx) - len(ty) >= 8
+        remanie = difflib.SequenceMatcher(None, tx, ty).ratio() < 0.85
+        if not (raccourci or remanie):
+            continue
+        seg = segments[i]
+        if not isinstance(seg, dict):
+            continue
+        if seg.get("reliability") != "degrade":
+            seg["reliability"] = "suspect"
+        raisons = list(seg.get("reliability_reasons") or [])
+        if "correction_lourde" not in raisons:
+            raisons.append("correction_lourde")
+        seg["reliability_reasons"] = raisons
+        touches += 1
+    if touches:
+        fs.save_json("metadata/transcription_segments.json", segments)
+        logger.info("[correction] %d segment(s) fortement réécrit(s) signalés à l'éditeur", touches)
 
 
 # Messages d'intégrité du SRT corrigé, par langue des livrables (Axe B ; fr = historique).
 # Ajouter une langue = ajouter son dict (repli fr) — cf. locales bêta de/es/it.
 _MSG: dict[str, dict[str, str]] = {
     "fr": {
+        "diff_annex_title": "## Annexe — diff factuel (généré par le code)",
+        "diff_annex_intro": ("Ce diff est calculé mécaniquement, indépendamment du rapport de l'agent ci-dessus "
+             ": {n} ligne(s) modifiée(s). Si une modification listée ici manque au rapport, "
+             "l'agent l'a faite sans la déclarer."),
         "segment_parity": (
             "SRT corrigé non conforme : {out} segments au lieu de {src} "
             "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
@@ -522,6 +603,10 @@ _MSG: dict[str, dict[str, str]] = {
             "Le SRT brut est conservé — relancez le traitement, seule la correction sera rejouée."),
     },
     "en": {
+        "diff_annex_title": "## Appendix — factual diff (code-generated)",
+        "diff_annex_intro": ("This diff is computed mechanically, independently of the agent report above: "
+             "{n} modified line(s). A change listed here but missing from the report was "
+             "made without being declared."),
         "segment_parity": (
             "Corrected SRT invalid: {out} segments instead of {src} "
             "(segments lost, merged or added by the LLM). The raw SRT is kept — "
@@ -532,6 +617,10 @@ _MSG: dict[str, dict[str, str]] = {
             "The raw SRT is kept — re-run the job, only the correction will be replayed."),
     },
     "de": {
+        "diff_annex_title": "## Anhang — faktisches Diff (vom Code erzeugt)",
+        "diff_annex_intro": ("Dieses Diff wird mechanisch berechnet, unabhängig vom obigen Bericht des Agenten: "
+             "{n} geänderte Zeile(n). Eine hier gelistete, im Bericht fehlende Änderung "
+             "wurde ohne Angabe vorgenommen."),
         "segment_parity": (
             "Korrigiertes SRT ungültig: {out} Segmente statt {src} (Segmente von der LLM verloren, zusammengeführt "
             "oder hinzugefügt). Das Roh-SRT wird beibehalten — starten Sie den Job erneut, es wird nur die Korrektur "
@@ -544,6 +633,10 @@ _MSG: dict[str, dict[str, str]] = {
         ),
     },
     "es": {
+        "diff_annex_title": "## Anexo — diff factual (generado por el código)",
+        "diff_annex_intro": ("Este diff se calcula mecánicamente, con independencia del informe del agente "
+             "anterior: {n} línea(s) modificada(s). Un cambio listado aquí y ausente del "
+             "informe se hizo sin declararlo."),
         "segment_parity": (
             "SRT corregido no conforme: {out} segmentos en lugar de {src} (segmentos perdidos, fusionados o añadidos "
             "por la LLM). Se conserva el SRT bruto — vuelva a lanzar el trabajo, solo se repetirá la corrección."
@@ -555,6 +648,10 @@ _MSG: dict[str, dict[str, str]] = {
         ),
     },
     "it": {
+        "diff_annex_title": "## Appendice — diff fattuale (generato dal codice)",
+        "diff_annex_intro": ("Questo diff è calcolato meccanicamente, indipendentemente dal rapporto dell'agente "
+             "qui sopra: {n} riga/righe modificata/e. Una modifica elencata qui ma assente "
+             "dal rapporto è stata fatta senza dichiararla."),
         "segment_parity": (
             "SRT corretto non conforme: {out} segmenti invece di {src} (segmenti persi, uniti o aggiunti dalla LLM). "
             "L'SRT grezzo viene conservato — rilanciare il trattamento, verrà rieseguita solo la correzione."

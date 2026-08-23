@@ -79,12 +79,20 @@ def empreinte(token: str) -> str:
 
 
 def tokens_candidats(texte: str, max_mots: int = _MAX_MOTS):
-    """Groupes de 1 à `max_mots` mots consécutifs — les candidats à hacher."""
+    """Groupes de 1 à `max_mots` mots consécutifs — les candidats à hacher.
+
+    Les mots en snake_case sont AUSSI éclatés sur `_` : un token collé dans un
+    identifiant (`token_saas_comparison`) échappait à la garde, l'identifiant entier
+    ayant sa propre empreinte — constaté le 2026-08-23 dans une archive de docs.
+    """
     mots = _MOT.findall(texte)
     for i in range(len(mots)):
         for n in range(1, max_mots + 1):
             if i + n <= len(mots):
                 yield " ".join(mots[i:i + n])
+    for mot in mots:
+        if "_" in mot:
+            yield from (part for part in mot.split("_") if part)
 
 
 def test_aucun_nom_reel_dans_les_fichiers_versionnes():
@@ -134,3 +142,14 @@ def test_la_garde_attrape_bien_un_token_surveille():
 
     assert trouve, "la détection ne reconnaît plus un token pourtant surveillé"
     assert len(_DENYLIST_SHA256) > 20, "la liste d'empreintes a été vidée"
+
+
+def test_la_garde_attrape_un_token_colle_dans_un_identifiant():
+    """Le trou du 2026-08-23 : un token dans `token_saas_comparison` passait, l'identifiant
+    snake_case entier ayant sa propre empreinte. La sentinelle rejoue ce cas exact."""
+    texte = "voir [[zzz-sentinelle-vie-privee_saas_comparison]] pour le detail"
+    # `-` fait partie de _MOT : le mot capturé est l'identifiant entier ; seul
+    # l'éclatement sur `_` isole la sentinelle.
+    trouve = [c for c in tokens_candidats(texte) if empreinte(c) in _DENYLIST_SHA256]
+
+    assert trouve, "un token collé dans un identifiant snake_case échappe à la garde"

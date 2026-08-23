@@ -80,7 +80,7 @@ class TestQualityPhaseBranches:
             monkeypatch.setattr(quality_mod, "profile_for_job",
                                 lambda job: SimpleNamespace(run_quality="light"))
             monkeypatch.setattr(quality_mod, "run_light_quality",
-                                lambda job, config: {"success": True, "mode": "light"})
+                                lambda job, config, profile=None: {"success": True, "mode": "light"})
 
             result = runner.run_quality_checks(job, cfg)
 

@@ -33,7 +33,7 @@ def run(runner, job: Job, config: dict) -> dict:
         if profile is not None and profile.run_quality == "light":
             # Profil léger : contrôle minimal (invariants SRT), pas le rapport complet.
 
-            result = run_light_quality(job, config)
+            result = run_light_quality(job, config, profile=profile)
         else:
             # Profil complet OU job legacy (profil absent) → rapport complet (inchangé).
 

@@ -219,6 +219,7 @@ JS_MESSAGES: tuple[str, ...] = (
     N_("signature d'hallucination connue de ce moteur"),
     N_('zone audio dégradée (diagnostic)'),
     N_('marqué [INCERTAIN] par la correction'),
+    N_('fortement réécrit par la correction'),
     N_('douteux'),
     N_('à vérifier'),
     N_('%(n)s à vérifier'),

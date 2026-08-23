@@ -611,3 +611,102 @@ def test_rapport_de_repli_quand_l_agent_n_en_rend_pas(app, owner_id, monkeypatch
         report = fs.load_text("metadata/correction_report.md")
         assert report and "repli système" in report
         assert "avant : Bonjour" in report and "après : Bonjour corrigé" in report
+
+
+class TestRelaisDeLecture:
+    """Les deux relais nés du banc 2026-08-23 : seule la LECTURE attrapait les dégâts
+    de la correction — le code met désormais sous les yeux ce qui doit être lu."""
+
+    def _srt(self, *textes):
+        return "\n\n".join(
+            f"{i}\n00:0{i}:00,000 --> 00:0{i}:04,000\nSPEAKER_00(Alice): {txt}"
+            for i, txt in enumerate(textes, 1)
+        )
+
+    def test_l_annexe_diff_est_ajoutee_au_rapport_de_l_agent(self, tmp_path):
+        """Le rapport de l'agent est une auto-déclaration ; l'annexe est la vérité
+        terrain. L'utilisateur voit immédiatement ce que l'agent a tu."""
+        from transcria.workflow.phases.correction import _annexe_diff
+
+        source = self._srt("bonjour a tous", "rien à dire")
+        corrige = self._srt("bonjour à tous", "rien à dire")
+
+        annexe = _annexe_diff(source, corrige, "fr")
+
+        assert "## Annexe — diff factuel" in annexe
+        assert "1 ligne(s) modifiée(s)" in annexe
+        assert "bonjour a tous" in annexe and "bonjour à tous" in annexe
+
+    def test_l_annexe_existe_dans_les_cinq_langues(self):
+        from transcria.workflow.phases.correction import _MSG
+
+        for lang, table in _MSG.items():
+            assert "diff_annex_title" in table, lang
+            assert "{n}" in table["diff_annex_intro"], lang
+
+    def _prepare(self, tmp_path, source, corrige):
+        from transcria.workflow.phases.correction import _flag_heavy_rewrites
+
+        fs = JobFilesystem(str(tmp_path), "j-relais")
+        n = len(source.strip().split("\n\n"))
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": float(i), "end": i + 4.0, "text": "x"} for i in range(n)])
+        _flag_heavy_rewrites(fs, source, corrige)
+        return fs.load_json("metadata/transcription_segments.json")
+
+    def test_un_segment_fortement_reecrit_devient_suspect(self, tmp_path):
+        source = self._srt("On avait un outil qui est Machin, qui est un produit national", "ok")
+        corrige = self._srt("On avait un outil qui est un produit national", "ok")
+
+        segments = self._prepare(tmp_path, source, corrige)
+
+        assert segments[0]["reliability"] == "suspect"
+        assert "correction_lourde" in segments[0]["reliability_reasons"]
+        assert "reliability" not in segments[1] or segments[1].get("reliability") != "suspect"
+
+    def test_une_petite_correction_ne_declenche_rien(self, tmp_path):
+        """Accent, casse, un mot : signaler tout reviendrait à ne rien signaler."""
+        source = self._srt("bonjour a tous les collegues presents aujourd'hui")
+        corrige = self._srt("bonjour à tous les collègues présents aujourd'hui")
+
+        segments = self._prepare(tmp_path, source, corrige)
+
+        assert segments[0].get("reliability") != "suspect"
+
+    def test_un_segment_marque_incertain_n_est_pas_double(self, tmp_path):
+        """[INCERTAIN]/[ÉTRANGER] : l'éditeur les signale déjà par le texte même."""
+        source = self._srt("une phrase entière qui va être remplacée par un marqueur")
+        corrige = self._srt("une phrase [INCERTAIN: hallucination probable]")
+
+        segments = self._prepare(tmp_path, source, corrige)
+
+        assert segments[0].get("reliability") != "suspect"
+
+    def test_sans_alignement_1_1_on_n_ecrit_rien(self, tmp_path):
+        """Un drapeau posé sur le mauvais segment serait pire que pas de drapeau."""
+        from transcria.workflow.phases.correction import _flag_heavy_rewrites
+
+        fs = JobFilesystem(str(tmp_path), "j-relais")
+        fs.save_json("metadata/transcription_segments.json", [{"start": 0.0, "end": 4.0}])
+        source = self._srt("un texte assez long pour être flaggé sans hésitation", "deux")
+        corrige = self._srt("court", "deux")
+
+        _flag_heavy_rewrites(fs, source, corrige)
+
+        assert "reliability" not in fs.load_json("metadata/transcription_segments.json")[0]
+
+    def test_un_niveau_degrade_n_est_pas_retrograde(self, tmp_path):
+        from transcria.workflow.phases.correction import _flag_heavy_rewrites
+
+        fs = JobFilesystem(str(tmp_path), "j-relais")
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 0.0, "end": 4.0, "reliability": "degrade",
+                       "reliability_reasons": ["audio_preflight_degrade"]}])
+        source = self._srt("un long segment qui sera très fortement réécrit par l'agent")
+        corrige = self._srt("réécrit")
+
+        _flag_heavy_rewrites(fs, source, corrige)
+
+        seg = fs.load_json("metadata/transcription_segments.json")[0]
+        assert seg["reliability"] == "degrade"
+        assert "correction_lourde" in seg["reliability_reasons"]

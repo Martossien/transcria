@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-22 01:28+0200\n"
+"POT-Creation-Date: 2026-08-23 11:37+0200\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -1095,317 +1095,321 @@ msgid "marqué [INCERTAIN] par la correction"
 msgstr "marcado [INCERTAIN] por la corrección"
 
 #: transcria/i18n/js_catalog.py:222
+msgid "fortement réécrit par la correction"
+msgstr "fuertemente reescrito por la corrección"
+
+#: transcria/i18n/js_catalog.py:223
 msgid "douteux"
 msgstr "dudoso"
 
-#: transcria/i18n/js_catalog.py:223
+#: transcria/i18n/js_catalog.py:224
 msgid "à vérifier"
 msgstr "por verificar"
 
-#: transcria/i18n/js_catalog.py:224
+#: transcria/i18n/js_catalog.py:225
 #, python-format
 msgid "%(n)s à vérifier"
 msgstr "%(n)s por verificar"
 
-#: transcria/i18n/js_catalog.py:225
+#: transcria/i18n/js_catalog.py:226
 msgid "restauré"
 msgstr "restaurado"
 
-#: transcria/i18n/js_catalog.py:226
+#: transcria/i18n/js_catalog.py:227
 msgid "restaurer"
 msgstr "restaurar"
 
-#: transcria/i18n/js_catalog.py:227
+#: transcria/i18n/js_catalog.py:228
 #, python-format
 msgid "%(n)s segment(s) retirés comme hallucinations confirmées — vérifier / restaurer"
 msgstr "%(n)s segmento(s) retirados como alucinaciones confirmadas — verificar / restaurar"
 
-#: transcria/i18n/js_catalog.py:228
+#: transcria/i18n/js_catalog.py:229
 msgid "Retirés sur double preuve (signature du moteur + zone sans parole). La restauration réinsère le texte à sa place — enregistrez ensuite une version."
 msgstr "Retirados por doble prueba (firma del motor + zona sin habla). La restauración reinserta el texto en su lugar — guarde después una versión."
 
-#: transcria/i18n/js_catalog.py:230
+#: transcria/i18n/js_catalog.py:231
 msgid "aucune modification"
 msgstr "sin modificaciones"
 
-#: transcria/i18n/js_catalog.py:231
+#: transcria/i18n/js_catalog.py:232
 #, python-format
 msgid "brouillon enregistré à %(t)s"
 msgstr "borrador guardado a las %(t)s"
 
-#: transcria/i18n/js_catalog.py:232
+#: transcria/i18n/js_catalog.py:233
 msgid "brouillon non enregistré — nouvelle tentative"
 msgstr "borrador no guardado — nuevo intento"
 
-#: transcria/i18n/js_catalog.py:233
+#: transcria/i18n/js_catalog.py:234
 msgid "brouillon repris — pensez à enregistrer une version"
 msgstr "borrador retomado — recuerde guardar una versión"
 
-#: transcria/i18n/js_catalog.py:234
+#: transcria/i18n/js_catalog.py:235
 msgid "brouillon suspendu (édition ailleurs)"
 msgstr "borrador suspendido (edición en otro lugar)"
 
-#: transcria/i18n/js_catalog.py:235
+#: transcria/i18n/js_catalog.py:236
 msgid "chevauche"
 msgstr "se superpone con"
 
-#: transcria/i18n/js_catalog.py:236
+#: transcria/i18n/js_catalog.py:237
 msgid "enregistrement de la version…"
 msgstr "guardando la versión…"
 
-#: transcria/i18n/js_catalog.py:237
+#: transcria/i18n/js_catalog.py:238
 msgid "enregistrement impossible"
 msgstr "No se pudo guardar"
 
-#: transcria/i18n/js_catalog.py:238
+#: transcria/i18n/js_catalog.py:239
 #, python-format
 msgid "ex. %(name)s — mon équipe"
 msgstr "ej. %(name)s — mi equipo"
 
-#: transcria/i18n/js_catalog.py:239
+#: transcria/i18n/js_catalog.py:240
 msgid "modifications non enregistrées"
 msgstr "cambios sin guardar"
 
-#: transcria/i18n/js_catalog.py:240
+#: transcria/i18n/js_catalog.py:241
 msgid "préparation de la forme d'onde…"
 msgstr "preparando la forma de onda…"
 
-#: transcria/i18n/js_catalog.py:241
+#: transcria/i18n/js_catalog.py:242
 #, python-format
 msgid "relu : %(pct)s %%"
 msgstr "revisado: %(pct)s %%"
 
-#: transcria/i18n/js_catalog.py:242
+#: transcria/i18n/js_catalog.py:243
 msgid "suivants +500 ms ⇥"
 msgstr "siguientes +500 ms ⇥"
 
-#: transcria/i18n/js_catalog.py:243
+#: transcria/i18n/js_catalog.py:244
 #, python-format
 msgid "version v%(v)s enregistrée — documents à jour au téléchargement"
 msgstr "versión v%(v)s guardada — documentos actualizados al descargar"
 
-#: transcria/i18n/js_catalog.py:245
+#: transcria/i18n/js_catalog.py:246
 msgid "Vos corrections sont dans le verbatim. La synthèse (résumé, décisions) n'est pas encore à jour :"
 msgstr "Sus correcciones están en la transcripción. La síntesis (resumen, decisiones) todavía no está actualizada:"
 
-#: transcria/i18n/js_catalog.py:246
+#: transcria/i18n/js_catalog.py:247
 msgid "DOCX rapide (synthèse inchangée)"
 msgstr "DOCX rápido (resumen sin cambios)"
 
-#: transcria/i18n/js_catalog.py:247
+#: transcria/i18n/js_catalog.py:248
 msgid "Mettre à jour la synthèse (LLM, quelques minutes)"
 msgstr "Actualizar el resumen (LLM, unos minutos)"
 
-#: transcria/i18n/js_catalog.py:248
+#: transcria/i18n/js_catalog.py:249
 msgid "Mise à jour en cours…"
 msgstr "Actualizando…"
 
-#: transcria/i18n/js_catalog.py:249
+#: transcria/i18n/js_catalog.py:250
 msgid "Mise à jour de la synthèse impossible"
 msgstr "No se pudo actualizar el resumen"
 
-#: transcria/i18n/js_catalog.py:250
+#: transcria/i18n/js_catalog.py:251
 msgid "Mise à niveau demandée…"
 msgstr "Actualización solicitada…"
 
-#: transcria/i18n/js_catalog.py:251
+#: transcria/i18n/js_catalog.py:252
 msgid "Mise à niveau terminée — rechargement…"
 msgstr "Actualización finalizada — recargando…"
 
-#: transcria/i18n/js_catalog.py:252
+#: transcria/i18n/js_catalog.py:253
 #, python-format
 msgid "Échec de la mise à niveau : %(e)s"
 msgstr "Fallo en la actualización: %(e)s"
 
-#: transcria/i18n/js_catalog.py:253
+#: transcria/i18n/js_catalog.py:254
 msgid "Le service redémarre — reconnexion…"
 msgstr "El servicio se está reiniciando — reconectando…"
 
-#: transcria/i18n/js_catalog.py:254
+#: transcria/i18n/js_catalog.py:255
 msgid "Synthèse mise à jour (versionnée — restaurable depuis le chat d'affinage)."
 msgstr "Resumen actualizado (versionado — restaurable desde el chat de afinado)."
 
-#: transcria/i18n/js_catalog.py:255
+#: transcria/i18n/js_catalog.py:256
 msgid "Télécharger le DOCX à jour"
 msgstr "Descargar el DOCX actualizado"
 
-#: transcria/i18n/js_catalog.py:256
+#: transcria/i18n/js_catalog.py:257
 msgid "Voir le détail dans le chat"
 msgstr "Ver el detalle en el chat"
 
-#: transcria/i18n/js_catalog.py:257
+#: transcria/i18n/js_catalog.py:258
 msgid "Votre navigateur ne permet pas l'enregistrement audio."
 msgstr "Su navegador no permite la grabación de audio."
 
-#: transcria/i18n/js_catalog.py:258
+#: transcria/i18n/js_catalog.py:259
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "Por señalar (ej. importes presupuestarios citados explícitamente)"
 
-#: transcria/i18n/js_catalog.py:259
+#: transcria/i18n/js_catalog.py:260
 msgid "À valider"
 msgstr "Por validar"
 
-#: transcria/i18n/js_catalog.py:260
+#: transcria/i18n/js_catalog.py:261
 #, python-format
 msgid "À vérifier %(done)s/%(total)s"
 msgstr "Por verificar %(done)s/%(total)s"
 
-#: transcria/i18n/js_catalog.py:261
+#: transcria/i18n/js_catalog.py:262
 msgid "Écouter ce segment"
 msgstr "Escuchar este segmento"
 
-#: transcria/i18n/js_catalog.py:262
+#: transcria/i18n/js_catalog.py:263
 msgid "⇤ suivants −500 ms"
 msgstr "⇤ siguientes −500 ms"
 
-#: transcria/i18n/js_catalog.py:263
+#: transcria/i18n/js_catalog.py:264
 msgid "✂ — couper au curseur · ⧉ — fusionner avec le précédent"
 msgstr "✂ — cortar en el cursor · ⧉ — fusionar con el anterior"
 
-#: transcria/i18n/js_catalog.py:265
+#: transcria/i18n/js_catalog.py:266
 msgid "Proposition"
 msgstr "Propuesta"
 
-#: transcria/i18n/js_catalog.py:266
+#: transcria/i18n/js_catalog.py:267
 msgid "Appliquer cette proposition"
 msgstr "Aplicar esta propuesta"
 
-#: transcria/i18n/js_catalog.py:267
+#: transcria/i18n/js_catalog.py:268
 #: transcria/web/templates/admin_maintenance.html:11
 msgid "Version"
 msgstr "Versión"
 
-#: transcria/i18n/js_catalog.py:268
+#: transcria/i18n/js_catalog.py:269
 #, python-brace-format
 msgid "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 msgstr "Afinado aplicado (versión v{v}) — los documentos anteriores se regeneran en cada descarga e incluyen sus cambios."
 
-#: transcria/i18n/js_catalog.py:269
+#: transcria/i18n/js_catalog.py:270
 msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
 msgstr "Describa el cambio que desea aplicar, o haga clic en «Aplicar esta propuesta» debajo de una respuesta del asistente."
 
-#: transcria/i18n/js_catalog.py:270
+#: transcria/i18n/js_catalog.py:271
 msgid "Écrivez d'abord votre demande."
 msgstr "Escriba primero su solicitud."
 
-#: transcria/i18n/js_catalog.py:271
+#: transcria/i18n/js_catalog.py:272
 msgid "Appliquer aux documents :"
 msgstr "Aplicar a los documentos:"
 
-#: transcria/i18n/js_catalog.py:272
+#: transcria/i18n/js_catalog.py:273
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "Se creará una versión restaurable (se puede deshacer)."
 
-#: transcria/i18n/js_catalog.py:273 transcria/notifications/mailer.py:258
+#: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:258
 #: transcria/notifications/mailer.py:306 transcria/queue/routes.py:41
 msgid "Erreur"
 msgstr "Error"
 
-#: transcria/i18n/js_catalog.py:274
+#: transcria/i18n/js_catalog.py:275
 msgid "Erreur réseau — réessayez."
 msgstr "Error de red — vuelva a intentarlo."
 
-#: transcria/i18n/js_catalog.py:275
+#: transcria/i18n/js_catalog.py:276
 msgid "Options invalides"
 msgstr "Opciones no válidas"
 
-#: transcria/i18n/js_catalog.py:276
+#: transcria/i18n/js_catalog.py:277
 #, python-brace-format
 msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
 msgstr "¿Restaurar la versión v{v}? Los documentos volverán a ese estado."
 
-#: transcria/i18n/js_catalog.py:277
+#: transcria/i18n/js_catalog.py:278
 msgid "Restauration impossible"
 msgstr "Restauración fallida"
 
-#: transcria/i18n/js_catalog.py:279
+#: transcria/i18n/js_catalog.py:280
 msgid "Impossible de modifier l'agenda."
 msgstr "No se pudo modificar la agenda."
 
-#: transcria/i18n/js_catalog.py:280
+#: transcria/i18n/js_catalog.py:281
 msgid "Modification impossible."
 msgstr "No es posible modificar."
 
-#: transcria/i18n/js_catalog.py:281
+#: transcria/i18n/js_catalog.py:282
 msgid "Sélectionne au moins un jour."
 msgstr "Seleccione al menos un día."
 
-#: transcria/i18n/js_catalog.py:282
+#: transcria/i18n/js_catalog.py:283
 msgid "Supprimer ce créneau ?"
 msgstr "¿Eliminar esta franja horaria?"
 
-#: transcria/i18n/js_catalog.py:284
+#: transcria/i18n/js_catalog.py:285
 msgid "Action impossible sur ce job."
 msgstr "No es posible actuar sobre este trabajo."
 
-#: transcria/i18n/js_catalog.py:285
+#: transcria/i18n/js_catalog.py:286
 msgid "Annuler ce job ?"
 msgstr "¿Cancelar este trabajo?"
 
-#: transcria/i18n/js_catalog.py:286
+#: transcria/i18n/js_catalog.py:287
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "La prioridad debe estar entre 1 y 100."
 
-#: transcria/i18n/js_catalog.py:287
+#: transcria/i18n/js_catalog.py:288
 msgid "Supprimer tous les jobs de test ?"
 msgstr "¿Eliminar todos los trabajos de prueba?"
 
-#: transcria/i18n/js_catalog.py:288
+#: transcria/i18n/js_catalog.py:289
 msgid "Les jobs en cours seront ignorés."
 msgstr "Los trabajos en curso se ignorarán."
 
-#: transcria/i18n/js_catalog.py:289
+#: transcria/i18n/js_catalog.py:290
 msgid "Nettoyage impossible."
 msgstr "No se pudo limpiar."
 
-#: transcria/i18n/js_catalog.py:290
+#: transcria/i18n/js_catalog.py:291
 msgid "job(s) de test supprimé(s)."
 msgstr "trabajo(s) de prueba eliminado(s)."
 
-#: transcria/i18n/js_catalog.py:292
+#: transcria/i18n/js_catalog.py:293
 msgid "tout local"
 msgstr "todo local"
 
-#: transcria/i18n/js_catalog.py:293
+#: transcria/i18n/js_catalog.py:294
 msgid "Aucune ressource distante configurée (tout intégré)."
 msgstr "No hay ningún recurso remoto configurado (todo integrado)."
 
-#: transcria/i18n/js_catalog.py:294
+#: transcria/i18n/js_catalog.py:295
 msgid "injoignable"
 msgstr "inaccesible"
 
-#: transcria/i18n/js_catalog.py:295
+#: transcria/i18n/js_catalog.py:296
 #, python-brace-format
 msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}."
 msgstr "Nodo de recursos inaccesible — las transcripciones remotas se ponen en cola. Requerido: {reqs}."
 
-#: transcria/i18n/js_catalog.py:296
+#: transcria/i18n/js_catalog.py:297
 msgid "distant"
 msgstr "remoto"
 
-#: transcria/i18n/js_catalog.py:297
+#: transcria/i18n/js_catalog.py:298
 msgid "GPU :"
 msgstr "GPU:"
 
-#: transcria/i18n/js_catalog.py:298
+#: transcria/i18n/js_catalog.py:299
 #, python-brace-format
 msgid "GPU {i} — libre {free} / {total} Mo"
 msgstr "GPU {i} — libre {free} / {total} MB"
 
-#: transcria/i18n/js_catalog.py:299
+#: transcria/i18n/js_catalog.py:300
 msgid "Aucun moteur déclaré."
 msgstr "Ningún motor declarado."
 
-#: transcria/i18n/js_catalog.py:300
+#: transcria/i18n/js_catalog.py:301
 msgid "erreur"
 msgstr "error"
 
-#: transcria/i18n/js_catalog.py:301
+#: transcria/i18n/js_catalog.py:302
 #, python-brace-format
 msgid "Statut indisponible ({e})."
 msgstr "Estado no disponible ({e})."
 
-#: transcria/i18n/js_catalog.py:303
+#: transcria/i18n/js_catalog.py:304
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
 #: transcria/web/templates/dashboard_status.html:28
@@ -1413,7 +1417,7 @@ msgstr "Estado no disponible ({e})."
 msgid "Go"
 msgstr "GB"
 
-#: transcria/i18n/js_catalog.py:304
+#: transcria/i18n/js_catalog.py:305
 msgid "téléchargement…"
 msgstr "descargando…"
 
