@@ -734,11 +734,11 @@ La transcription contient peut-être des termes métier, mais je ne peux pas les
 
     def test_parse_termes_suspects_context_strips_llm_quote_wrappers(self):
         context = '"[00:05] SPEAKER_XX: "De l\'émenteal, ça ira comme ça ?""'
-        text = """## Termes douteux à valider
+        text = f"""## Termes douteux à valider
 
 - **Emmental** [produit] (critique) | variantes_suspectes: émenteal | commentaire: à vérifier. | contextes: {context}
 
-""".format(context=context)
+"""
         result = OpenCodeRunner._parse_structured_summary(text)
 
         context = result["termes_suspects"][0]["contexts"][0]
@@ -1514,3 +1514,135 @@ class TestWatchdogVllmSignal:
 
         monkeypatch.setattr(requests, "get", _timeout)
         assert runner._llm_is_processing() is None
+
+
+class TestLlmGpusActive:
+    """Second capteur du gel (2026-08-23) : les GPU réservés à la LLM. Un kill sur le
+    seul échantillon /slots transformait une erreur d'instrument en session détruite —
+    désormais tuer exige les deux capteurs d'accord (slots idle ET GPU inactifs)."""
+
+    def _runner(self, tmp_path, gpu=None, arbitrage=None):
+        cfg = {"workflow": {"arbitration_llm": {"model_id": "local/arbitrage"}}}
+        if gpu is not None:
+            cfg["gpu"] = gpu
+        if arbitrage is not None:
+            cfg["services"] = arbitrage
+        return OpenCodeRunner(str(tmp_path), config=cfg)
+
+    def test_gpu_actifs_suspendent_le_kill(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path, gpu={"llm_gpu_indices": [0, 1]})
+        monkeypatch.setattr(sp, "run", lambda *a, **k: type("R", (), {
+            "returncode": 0, "stdout": "42\n3\n"})())
+
+        assert runner._llm_gpus_active() is True
+
+    def test_gpu_inactifs_laissent_le_diagnostic_slots_souverain(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path, gpu={"llm_gpu_indices": [0, 1]})
+        monkeypatch.setattr(sp, "run", lambda *a, **k: type("R", (), {
+            "returncode": 0, "stdout": "0\n2\n"})())
+
+        assert runner._llm_gpus_active() is False
+
+    def test_sans_indices_configures_le_signal_est_inconnu(self, tmp_path):
+        assert self._runner(tmp_path)._llm_gpus_active() is None
+
+    def test_arbitrage_distant_rend_le_signal_inconnu(self, tmp_path, monkeypatch):
+        """Les cartes LOCALES ne disent rien d'une LLM distante : jamais de corroboration."""
+        import transcria.gpu.arbitrage_endpoint as ep
+
+        runner = self._runner(tmp_path, gpu={"llm_gpu_indices": [0]})
+        monkeypatch.setattr(ep, "is_remote_arbitrage", lambda cfg: True)
+
+        assert runner._llm_gpus_active() is None
+
+    def test_nvidia_smi_en_echec_rend_le_signal_inconnu(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path, gpu={"llm_gpu_indices": [0]})
+        monkeypatch.setattr(sp, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()))
+
+        assert runner._llm_gpus_active() is None
+
+class TestDetectionDesCartesLlm:
+    """Les cartes de la LLM sont DÉTECTÉES (port → PID → VRAM), jamais seulement
+    déclarées : sur une machine où la LLM vit sur les cartes 3-4, la config
+    `llm_gpu_indices` héritée d'une autre topologie regarderait les mauvaises cartes."""
+
+    def _runner(self, tmp_path):
+        return OpenCodeRunner(str(tmp_path), config={
+            "workflow": {"arbitration_llm": {"model_id": "local/arbitrage"}}, "services": {}})
+
+    def _fake_run(self, reponses):
+        def fake(cmd, **_kw):
+            cle = cmd[0] if cmd[0] != "nvidia-smi" else cmd[1]
+            sortie = reponses.get(cle, "")
+            return type("R", (), {"returncode": 0 if sortie is not None else 1,
+                                  "stdout": sortie or ""})()
+        return fake
+
+    def test_detecte_les_cartes_par_le_pid_du_serveur(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path)
+        monkeypatch.setattr(sp, "run", self._fake_run({
+            "ss": 'LISTEN 0 512 0.0.0.0:8080 0.0.0.0:* users:(("llama-server",pid=4242,fd=9))\n',
+            "--query-compute-apps=pid,gpu_uuid,used_memory":
+                "4242, GPU-AAA, 16000\n4242, GPU-DDD, 15000\n999, GPU-BBB, 256\n",
+            "--query-gpu=index,uuid": "0, GPU-AAA\n1, GPU-BBB\n2, GPU-CCC\n3, GPU-DDD\n",
+        }))
+
+        # Cartes 0 et 3 — PAS 0,1,2 : la détection suit le PID, pas une convention.
+        assert runner._llm_gpu_indices_detectes() == [0, 3]
+
+    def test_la_vram_residuelle_d_autres_process_est_ignoree(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path)
+        monkeypatch.setattr(sp, "run", self._fake_run({
+            "ss": 'LISTEN 0 512 0.0.0.0:8080 0.0.0.0:* users:(("llama-server",pid=4242,fd=9))\n',
+            "--query-compute-apps=pid,gpu_uuid,used_memory":
+                "4242, GPU-AAA, 16000\n4242, GPU-BBB, 300\n",  # 300 Mo < 1 Go : pas le modèle
+            "--query-gpu=index,uuid": "0, GPU-AAA\n1, GPU-BBB\n",
+        }))
+
+        assert runner._llm_gpu_indices_detectes() == [0]
+
+    def test_indetectable_sans_pid_visible_et_le_repli_config_prend_la_main(self, tmp_path, monkeypatch):
+        """Hors root, `ss` cache le PID d'un serveur root : la détection dit None et
+        `_llm_gpus_active` retombe sur la config déclarée."""
+        import subprocess as sp
+
+        runner = OpenCodeRunner(str(tmp_path), config={
+            "workflow": {"arbitration_llm": {"model_id": "local/arbitrage"}},
+            "services": {}, "gpu": {"llm_gpu_indices": [5]}})
+        appels = []
+
+        def fake(cmd, **_kw):
+            appels.append(cmd)
+            if cmd[0] == "ss":
+                return type("R", (), {"returncode": 0, "stdout": "LISTEN 0 512 *:8080 *:*\n"})()
+            return type("R", (), {"returncode": 0, "stdout": "7\n"})()
+        monkeypatch.setattr(sp, "run", fake)
+
+        assert runner._llm_gpu_indices_detectes() is None
+        assert runner._llm_gpus_active() is False  # util 7 % < seuil, lue sur la carte 5
+        assert any("-i" in c and "5" in c for c in appels if c[0] == "nvidia-smi")
+
+    def test_le_resultat_est_memoise(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        runner = self._runner(tmp_path)
+        compteur = {"n": 0}
+
+        def fake(cmd, **_kw):
+            compteur["n"] += 1
+            return type("R", (), {"returncode": 1, "stdout": ""})()
+        monkeypatch.setattr(sp, "run", fake)
+
+        runner._llm_gpu_indices_detectes(); runner._llm_gpu_indices_detectes()
+        assert compteur["n"] == 1
+

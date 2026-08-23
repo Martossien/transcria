@@ -438,7 +438,7 @@ class QualityReporter:
             "substantial_transcript_chars": t.get("substantial_transcript_chars", 3000),
         }
 
-    def run_all_checks(self, job: Job) -> dict:
+    def run_all_checks(self, job: Job, profile=None) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         self._lang = resolve_output_language(job)
         self.S = _qr_strings(self._lang)
@@ -464,6 +464,20 @@ class QualityReporter:
             "audio_preflight_flags": 0,
             "degraded_reliability_segments": 0,
         }
+
+        # 0. Passes LLM muettes — mêmes contrôles que le rapport léger, mêmes gardes de
+        # profil. Ils ne vivaient QUE dans le chemin léger : la relecture finale morte
+        # d'un job dossier_qualite (gel amont, 0/4 sorties) n'a levé aucun point à
+        # vérifier — constaté le 2026-08-23. Une garde posée sur un seul des deux
+        # chemins ne protège pas.
+        from transcria.quality.light_report import _passes_llm_muettes
+        from transcria.quality.light_report import _strings as _lr_strings
+
+        for muette in _passes_llm_muettes(fs, srt_content, _lr_strings(self._lang), profile):
+            total_checks += 1
+            checks.append(muette.pop("_check"))
+            review_points.append(muette["texte"])
+            warnings += 1
 
         # 1. Segments vides
         empty_segments = [s for s in segments if not s.get("text", "").strip()]

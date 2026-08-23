@@ -124,11 +124,9 @@ de biaiser la synthèse vers son cadrage ni de gonfler son rôle.
 
 ## 4. Délégation @general — obligatoire
 
-La transcription est longue : un agent seul finit par survoler. Tu DOIS la découper
-en plages de blocs **disjointes** et confier chaque plage à un subagent @general.
-Chaque subagent analyse SA plage en profondeur et te renvoie ses constats :
-compréhension thématique + termes suspects avec contextes. Exige de chaque subagent
-un travail de haute qualité, pas un survol.
+Découpe la transcription en plages de blocs **disjointes** et confie chaque plage à
+un subagent @general. Chaque subagent analyse SA plage en profondeur et te renvoie
+ses constats : compréhension thématique + termes suspects avec contextes.
 
 Toi, agent principal, tu es le **seul à écrire `summary.md`** : tu lis la diarisation
 en entier, tu fusionnes les constats des subagents, tu attribues les rôles et tu
@@ -413,13 +411,10 @@ Si aucun terme suspect n'est détecté, écrire sous `## Termes douteux à valid
   un nom ou une échéance. Si aucune décision n'est identifiable, ne pas en créer.
   **Longueur MINIMALE, vérifiée par le code** : au moins un paragraphe par point
   d'ordre du jour identifié, ET au moins un paragraphe par tranche de 15 minutes de
-  réunion (2 h ⇒ au moins 8 paragraphes). Mesuré sur des réunions réelles : une
-  synthèse de six paragraphes tombe aussi bien sur une réunion de 15 minutes que sur
-  une de deux heures — c'est le défaut à ne pas reproduire. Sur une réunion longue,
-  chaque grand thème mérite son développement : ce qui a été décidé, les chiffres
-  annoncés, les positions exprimées, ce qui reste en suspens. Développer n'est PAS
-  broder : aucun paragraphe ne s'invente, et un thème réellement expédié en séance
-  reste court.
+  réunion (2 h ⇒ au moins 8 paragraphes). Sur une réunion longue, chaque grand thème
+  a son développement : ce qui a été décidé, les chiffres annoncés, les positions
+  exprimées, ce qui reste en suspens. Développer n'est PAS broder : aucun paragraphe
+  ne s'invente, et un thème réellement expédié en séance reste court.
 - **Animateur validé (seulement si le contexte le porte)** : le fichier de contexte peut
   marquer un participant `is_animator: true`. C'est un choix HUMAIN explicite, pas une
   déduction : ne le contredis pas et n'en désigne pas un autre. Il sert de **fil de

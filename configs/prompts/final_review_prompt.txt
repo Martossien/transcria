@@ -39,13 +39,12 @@ les chemins de tous les fichiers ci-dessous.
   réordonné ; aucun titre/paragraphe/balisage Markdown modifié dans la synthèse.
 
 ## 3. Délégation @general (OBLIGATOIRE pour le SRT)
-Le SRT peut être long. Pour les tâches **C** et **D**, tu DOIS répartir le travail sur
-des **subagents @general**, une plage de segments disjointe par subagent (jamais
-@explore, qui est en lecture seule). Chaque subagent applique sur SA plage la
-cohérence des noms/termes validés. Tu restes responsable de l'assemblage, de la
-cohérence **globale** (le même terme écrit pareil d'une plage à l'autre) et du
-rapport. La synthèse (A) et l'audit structuré (G) sont courts : traite-les toi-même.
-Exige de chaque subagent un travail de **haute qualité**, pas un survol.
+Pour les tâches **C** et **D**, répartis le travail sur des **subagents @general**,
+une plage de segments disjointe par subagent (jamais @explore, en lecture seule).
+Chaque subagent applique sur SA plage la cohérence des noms/termes validés. Tu restes
+responsable de l'assemblage, de la cohérence **globale** (le même terme écrit pareil
+d'une plage à l'autre) et du rapport. La synthèse (A) et l'audit structuré (G) sont
+courts : traite-les toi-même.
 
 ### Consigne à transmettre à chaque subagent (à recopier dans son prompt)
 
@@ -67,19 +66,14 @@ même longueur, même structure ; seules les graphies couvertes changent.
 
 ## 5. Tâches C + D — Cohérence et variantes du SRT
 
-**Deux règles apprises sur une réunion réelle de 1 h 52 (2026-08-22).**
-
-1. **Forme validée ambiguë : ne rien substituer.** Quand la forme validée propose plusieurs
-   graphies séparées par `/`, elle ne définit PAS un remplacement — elle peut même fusionner
-   deux concepts différents ; le glossaire te le signale par `⚠ forme ambiguë`. Choisis la
-   graphie que le contexte impose, ou **laisse le texte tel quel**. Appliquée mécaniquement,
-   une entrée de ce genre a remplacé un nom de FOURNISSEUR par le nom de la fonction qu'il
-   rend : la phrase affirmait ensuite quelque chose de faux.
-2. **Face au volume, délègue — n'écris pas de script.** Sur un SRT long, un script de
-   substitution paraît tentant : il a fallu quatre versions successives pour un résultat que
-   la délégation par plages (section 3) rend directement, et un script ne peut pas juger le
-   cas ci-dessus, qui est justement celui qui coûte cher. Chaque remplacement reste un
-   `Edit` ciblé, décidé au vu de la phrase qui l'entoure.
+1. **Forme validée ambiguë : ne rien substituer.** Une forme à plusieurs graphies
+   séparées par `/` n'est pas un remplacement — elle peut fusionner deux concepts
+   distincts ; le glossaire la signale par `⚠ forme ambiguë`. Choisis la graphie que le
+   contexte impose, ou **laisse le texte tel quel**. Un texte intact vaut mieux qu'un
+   texte rendu faux.
+2. **Face au volume, délègue — n'écris JAMAIS de script.** Un script de substitution ne
+   sait pas juger le cas ci-dessus, qui est justement celui qui coûte cher. Chaque
+   remplacement reste un `Edit` ciblé, décidé au vu de la phrase qui l'entoure.
 - **C** : garantis que chaque nom de participant et chaque terme du glossaire est
   écrit **de façon identique partout** dans le SRT (pas « Tickéo » ici et « Tikeo »
   ailleurs). Ne touche pas aux préfixes `SPEAKER_XX(nom)` (déjà fixés par le système).

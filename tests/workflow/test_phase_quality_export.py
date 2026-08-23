@@ -37,7 +37,7 @@ class TestWorkflowRunnerRunQualityChecks:
             from transcria.quality.quality_report import QualityReporter
 
             fake_report = {"quality_score": 85, "total_checks": 5, "checks": []}
-            monkeypatch.setattr(QualityReporter, "run_all_checks", lambda self, job: fake_report)
+            monkeypatch.setattr(QualityReporter, "run_all_checks", lambda self, job, profile=None: fake_report)
 
             result = runner.run_quality_checks(job, cfg)
             assert result["quality_score"] == 85

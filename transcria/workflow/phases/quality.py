@@ -37,7 +37,7 @@ def run(runner, job: Job, config: dict) -> dict:
         else:
             # Profil complet OU job legacy (profil absent) → rapport complet (inchangé).
 
-            result = QualityReporter(config).run_all_checks(job)
+            result = QualityReporter(config).run_all_checks(job, profile=profile)
         runner.store.update_state(job.id, JobState.QUALITY_CHECKED)
         runner.progress.update(
             job.id,

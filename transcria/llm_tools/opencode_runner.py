@@ -66,6 +66,8 @@ class OpenCodeRunner:
     ):
         self.work_dir = Path(work_dir).resolve()
         self._config = config
+        # ... = « jamais calculé » (None est un résultat valide : indétectable)
+        self._gpu_indices_llm_cache: list[int] | None | object = ...
 
         if config:
             llm = config.get("workflow", {}).get("arbitration_llm", {})
@@ -194,6 +196,101 @@ class OpenCodeRunner:
         except Exception:  # noqa: BLE001 — signal best-effort du watchdog, jamais bloquant
             return None
 
+    def _llm_gpus_active(self) -> bool | None:
+        """Second capteur du gel : les GPU où la LLM est chargée travaillent-ils ?
+
+        True = activité soutenue sur au moins une carte de ``gpu.llm_gpu_indices``,
+        False = toutes inactives, None = signal indisponible (nvidia-smi absent,
+        indices non configurés, ou arbitrage DISTANT — les cartes locales ne disent
+        alors rien de la LLM).
+
+        Légitime UNIQUEMENT parce que la règle « un propriétaire par GPU » réserve ces
+        cartes à la LLM : toute activité y est la sienne. Ne jamais réutiliser cette
+        sonde pour un GPU partagé.
+        """
+        if not self._config:
+            return None
+        try:
+            from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage as _remote
+
+            if _remote(self._config):
+                return None
+            indices = self._llm_gpu_indices_detectes()
+            if indices is None:
+                # Repli : la déclaration de config. Moins fiable qu'une détection (elle
+                # peut dériver du script de lancement réel), mais mieux que rien.
+                indices = (self._config.get("gpu") or {}).get("llm_gpu_indices") or []
+            if not indices:
+                return None
+            import subprocess
+
+            r = subprocess.run(
+                ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits",
+                 "-i", ",".join(str(int(i)) for i in indices)],
+                capture_output=True, text=True, timeout=3,
+            )
+            if r.returncode != 0:
+                return None
+            utils = [int(line.strip()) for line in r.stdout.splitlines() if line.strip().isdigit()]
+            if not utils:
+                return None
+            return any(u >= 10 for u in utils)
+        except Exception:  # noqa: BLE001 — capteur best-effort, jamais bloquant
+            return None
+
+    def _llm_gpu_indices_detectes(self) -> list[int] | None:
+        """Les cartes où la LLM est RÉELLEMENT chargée, détectées — jamais déclarées.
+
+        Chaîne : port d'arbitrage → PID du serveur qui écoute (``ss``) → cartes où ce
+        PID tient ≥ 1 Go de VRAM (``nvidia-smi --query-compute-apps``) → index. Vraie
+        sur toute machine, quel que soit le nombre de GPU et leur placement — là où la
+        config ``llm_gpu_indices`` n'est qu'une déclaration qui peut dériver du script
+        de lancement réel (divergence déjà vécue, doctor du 2026-07-30).
+
+        None = indétectable (pas de serveur local, outils absents, droits manquants) —
+        l'appelant se replie alors sur la config. Résultat mémoïsé : les cartes d'un
+        serveur ne changent pas en cours de session.
+        """
+        if self._gpu_indices_llm_cache is not ...:
+            cache = self._gpu_indices_llm_cache
+            return cache if isinstance(cache, list) else None
+        indices: list[int] | None = None
+        try:
+            import re as _re
+            import subprocess
+
+            _, port = resolve_arbitrage_endpoint(self._config or {})
+            r = subprocess.run(["ss", "-tlnpH", f"sport = :{port}"],
+                               capture_output=True, text=True, timeout=3)
+            pids = {int(m) for m in _re.findall(r"pid=(\d+)", r.stdout)} if r.returncode == 0 else set()
+            if pids:
+                apps = subprocess.run(
+                    ["nvidia-smi", "--query-compute-apps=pid,gpu_uuid,used_memory",
+                     "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=3)
+                cartes = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=3)
+                if apps.returncode == 0 and cartes.returncode == 0:
+                    index_par_uuid = {}
+                    for ligne in cartes.stdout.splitlines():
+                        morceaux = [m.strip() for m in ligne.split(",")]
+                        if len(morceaux) == 2 and morceaux[0].isdigit():
+                            index_par_uuid[morceaux[1]] = int(morceaux[0])
+                    vus = set()
+                    for ligne in apps.stdout.splitlines():
+                        morceaux = [m.strip() for m in ligne.split(",")]
+                        if (len(morceaux) == 3 and morceaux[0].isdigit()
+                                and int(morceaux[0]) in pids and morceaux[2].isdigit()
+                                and int(morceaux[2]) >= 1024 and morceaux[1] in index_par_uuid):
+                            vus.add(index_par_uuid[morceaux[1]])
+                    if vus:
+                        indices = sorted(vus)
+        except Exception:  # noqa: BLE001 — détection best-effort, le repli config existe
+            indices = None
+        self._gpu_indices_llm_cache = indices
+        return indices
+
     def _wait_llm_endpoint_ready(self, wait_s: float) -> tuple[str, int] | None:
         """Pré-garde : sonde TCP l'endpoint d'arbitrage jusqu'à ce qu'il ACCEPTE (ou expiration).
 
@@ -304,6 +401,18 @@ class OpenCodeRunner:
                           "— gel au démarrage opencode (pré-session)")
                 break
             if idle >= idle_grace_s and self._llm_is_processing() is False:
+                # CORROBORATION avant de tuer : /slots est un échantillon ponctuel — un
+                # kill sur capteur unique transforme une erreur d'instrument en session
+                # détruite. Les GPU de la LLM sont un second capteur INDÉPENDANT (cartes
+                # réservées, règle « un propriétaire par GPU ») : s'ils travaillent, la
+                # LLM n'est pas idle, quoi qu'ait dit le slot — on laisse vivre et on
+                # journalise la contradiction. GPU idle ou signal indisponible ⇒ le
+                # diagnostic /slots reste souverain, comportement historique inchangé.
+                if self._llm_gpus_active() is True:
+                    logger.warning(
+                        "opencode watchdog: contradiction capteurs — /slots idle mais GPU LLM "
+                        "actifs (silence %ds) ; kill suspendu, on continue d'observer", int(idle))
+                    continue
                 reason = (f"opencode silencieux {int(idle)}s + LLM idle "
                           "— gel détecté (opencode#17516)")
                 break
