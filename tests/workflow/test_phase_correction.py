@@ -740,3 +740,50 @@ class TestGardeStructureDesBlocs:
         for lang, table in _MSG.items():
             assert "block_structure" in table, lang
             assert "{out}" in table["block_structure"] and "{src}" in table["block_structure"], lang
+
+
+class TestRefusDesVariantesExpansions:
+    """T6 (2026-08-24) : l'expansion en toutes lettres d'un sigle listée comme
+    « variante fautive » faisait remplacer des mots réellement prononcés par le sigle.
+    La règle définitionnelle du prompt n'a pas déplacé le taux (1, 0, 3 avec ; 3, 0, 1
+    sans) — le refus passe en code, comme E1 pour les formes ambiguës."""
+
+    def test_la_variante_multi_mots_d_un_sigle_perd_le_pouvoir_de_substituer(self):
+        from transcria.workflow.phases.correction import sans_variantes_expansions
+
+        lexique = [{"term": "SNRV", "variants": ["système national de réservation des visites", "snrv"]}]
+
+        epurees, retirees = sans_variantes_expansions(lexique)
+
+        assert retirees == 1
+        assert epurees[0]["variants"] == ["snrv"]  # la déformation courte reste applicable
+
+    def test_l_entree_elle_meme_n_est_jamais_supprimee(self):
+        from transcria.workflow.phases.correction import sans_variantes_expansions
+
+        lexique = [{"term": "ZOG", "variants": ["zone organisationnelle générale"]}]
+
+        epurees, _ = sans_variantes_expansions(lexique)
+
+        assert [e["term"] for e in epurees] == ["ZOG"]  # visible pour l'humain, sans arme
+
+    def test_un_terme_long_ou_minuscule_n_est_pas_concerne(self):
+        from transcria.workflow.phases.correction import sans_variantes_expansions
+
+        lexique = [
+            {"term": "Classeur numérique", "variants": ["le classe heure numérique"]},
+            {"term": "zDossier", "variants": ["z slash dossier xy"]},
+        ]
+
+        _, retirees = sans_variantes_expansions(lexique)
+
+        assert retirees == 0  # la garde vise les SIGLES courts en capitales, rien d'autre
+
+    def test_les_variantes_courtes_d_un_sigle_restent_intactes(self):
+        from transcria.workflow.phases.correction import sans_variantes_expansions
+
+        lexique = [{"term": "MOUVEX", "variants": ["mouvements exquis", "mouvex"]}]
+
+        epurees, retirees = sans_variantes_expansions(lexique)
+
+        assert retirees == 0 and epurees[0]["variants"] == ["mouvements exquis", "mouvex"]

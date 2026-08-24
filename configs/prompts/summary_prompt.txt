@@ -255,7 +255,11 @@ correction probable comme certaine.
 ### 6.5 Variantes suspectes
 
 Après `variantes_suspectes:`, uniquement les formes douteuses réellement observées
-dans la transcription. Si l'entrée sert seulement à valider ou préserver une forme
+dans la transcription. Une variante est une DÉFORMATION phonétique ou graphique du
+terme — jamais son expansion en toutes lettres ni un synonyme : si le locuteur a
+prononcé la forme longue d'un sigle, cette forme est correcte et ne doit pas être
+listée comme variante (la correction remplacerait des mots réellement prononcés).
+Si l'entrée sert seulement à valider ou préserver une forme
 sensible : `variantes_suspectes: (aucune)`.
 
 ### 6.6 Catégorie et priorité

@@ -239,9 +239,10 @@ def _stage_context_sans_formes_ambigues(fs, workspace) -> Path:
     if not isinstance(lexique, list) or not lexique:
         return workspace.stage("context/job_context.yaml")
     gardees, ecartees = sans_formes_ambigues(lexique)
-    if not ecartees:
+    gardees, expansions = sans_variantes_expansions(gardees)
+    if not ecartees and not expansions:
         return workspace.stage("context/job_context.yaml")
-    logger.info("Contexte de correction : %d entrée(s) de lexique ambiguë(s) retirée(s)", ecartees)
+    logger.info("Contexte de correction : %d entrée(s) ambiguë(s) et %d variante(s) multi-mots retirées", ecartees, expansions)
     return workspace.write_input(
         "job_context.yaml",
         yaml.dump({**contexte, "lexicon": gardees}, allow_unicode=True, default_flow_style=False),
@@ -270,6 +271,37 @@ def sans_formes_ambigues(lexicon: list) -> tuple[list, int]:
     return gardees, len(lexicon) - len(gardees)
 
 
+def sans_variantes_expansions(lexicon: list) -> tuple[list, int]:
+    """Retire les variantes MULTI-MOTS (≥ 3) des cibles de substitution d'un sigle.
+
+    Constaté sur trois parcours réels (2026-08-24) : la phase résumé liste parfois
+    l'expansion en toutes lettres d'un sigle comme « variante fautive » (« système
+    national de gestion du temps » pour un terme court en capitales). La correction,
+    obéissante, remplace alors des mots réellement prononcés par le sigle — violation
+    verbatim ORDONNÉE par les données. Une règle définitionnelle dans le prompt de
+    résumé n'a pas déplacé le taux (1, 0, 3 avec elle ; 3, 0, 1 sans).
+
+    Et même une déformation authentique multi-mots est destructrice comme CIBLE de
+    substitution : remplacer toute la locution par le sigle efface les mots voisins.
+    On retire donc ces variantes-là du pouvoir de substitution — l'ENTRÉE reste, avec
+    ses variantes courtes, et l'humain voit toujours tout dans le lexique de session.
+    """
+    epurees, retirees = [], 0
+    for entree in lexicon:
+        if not isinstance(entree, dict):
+            epurees.append(entree)
+            continue
+        term = str(entree.get("term", ""))
+        variants = entree.get("variants") or []
+        if len(term) <= 10 and term.isupper() and isinstance(variants, list):
+            gardees = [v for v in variants if len(str(v).split()) < 3]
+            if len(gardees) != len(variants):
+                retirees += len(variants) - len(gardees)
+                entree = {**entree, "variants": gardees}
+        epurees.append(entree)
+    return epurees, retirees
+
+
 def _prefilter_lexicon(fs, job: Job):
     """Préfiltre le lexique de session par présence dans le SRT (charge utile LLM réduite).
 
@@ -286,6 +318,10 @@ def _prefilter_lexicon(fs, job: Job):
         if isinstance(lexicon, list):
             filtered_lexicon, filter_stats = filter_lexicon_by_srt_presence(lexicon, srt_text)
             filtered_lexicon, ecartees = sans_formes_ambigues(filtered_lexicon)
+            filtered_lexicon, expansions = sans_variantes_expansions(filtered_lexicon)
+            if expansions:
+                logger.info("Préfiltrage lexique : %d variante(s) multi-mots retirée(s) de la "
+                            "substitution (expansion de sigle, job=%s)", expansions, job.id)
             if ecartees:
                 # Ces entrées RESTENT dans le lexique de session (donc sous les yeux de
                 # l'humain, et dans les points à vérifier) : on leur retire seulement le
