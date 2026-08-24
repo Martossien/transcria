@@ -1646,3 +1646,50 @@ class TestDetectionDesCartesLlm:
         runner._llm_gpu_indices_detectes(); runner._llm_gpu_indices_detectes()
         assert compteur["n"] == 1
 
+
+
+class TestCorrectionRanges:
+    """v4 : l'arithmétique des plages sort de l'agent — le code la fait exactement,
+    en trois unités (segments, lignes, temps) pour que chaque rôle ait la sienne."""
+
+    def _srt(self, n):
+        return "\n".join(
+            f"{i}\n00:{i // 60:02d}:{i % 60:02d},000 --> 00:{i // 60:02d}:{i % 60:02d},900\n"
+            f"SPEAKER_00(A): segment numéro {i}\n"
+            for i in range(1, n + 1)
+        )
+
+    def test_decoupe_exacte_avec_bornes_en_lignes(self):
+        from transcria.llm_tools.opencode_runner import correction_ranges
+
+        plages = correction_ranges(self._srt(700), target_size=300)
+
+        assert [(p["seg_debut"], p["seg_fin"]) for p in plages] == [(1, 300), (301, 700)]
+        # 4 lignes par segment (numéro, timecode, texte, vide) : bornes EXACTES.
+        assert plages[0]["ligne_debut"] == 1 and plages[0]["ligne_fin"] == 1200
+        assert plages[1]["ligne_debut"] == 1201
+        assert plages[0]["temps_debut"] == "00:00:01"
+        assert plages[1]["temps_fin"] == "00:11:40"
+
+    def test_le_dernier_paquet_trop_petit_est_fusionne(self):
+        from transcria.llm_tools.opencode_runner import correction_ranges
+
+        plages = correction_ranges(self._srt(320), target_size=300)
+
+        # 20 segments restants < 150 : pas de mini-plage, une seule plage de 320.
+        assert [(p["seg_debut"], p["seg_fin"]) for p in plages] == [(1, 320)]
+
+    def test_un_srt_vide_rend_une_liste_vide(self):
+        from transcria.llm_tools.opencode_runner import correction_ranges
+
+        assert correction_ranges("") == []
+
+    def test_les_plages_couvrent_tout_sans_trou_ni_recouvrement(self):
+        from transcria.llm_tools.opencode_runner import correction_ranges
+
+        plages = correction_ranges(self._srt(1565), target_size=350)
+
+        assert plages[0]["seg_debut"] == 1 and plages[-1]["seg_fin"] == 1565
+        for avant, apres in zip(plages, plages[1:], strict=False):
+            assert apres["seg_debut"] == avant["seg_fin"] + 1
+            assert apres["ligne_debut"] == avant["ligne_fin"] + 1

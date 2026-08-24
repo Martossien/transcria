@@ -37,6 +37,52 @@ logger = logging.getLogger(__name__)
 _DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
 
 
+def correction_ranges(srt_text: str, target_size: int = 350) -> list[dict]:
+    """Les plages de délégation de la correction, CALCULÉES — jamais laissées à l'agent.
+
+    L'arithmétique des plages était le travail de l'agent principal (« découpe en
+    plages disjointes, ex. 1–240… ») : segments vs lignes jamais convertis, bornes
+    approximatives — une classe d'erreurs entière pour un calcul que le code fait
+    exactement. Chaque plage porte ses bornes en SEGMENTS (le contrat), en LIGNES
+    (ce que Read/grep manipulent) et son INTERVALLE TEMPOREL (ce qui permet de
+    rattacher les hints horodatés sans relire le SRT).
+
+    Dernier paquet < ``target_size``/2 ⇒ fusionné au précédent (une mini-plage
+    coûterait un subagent entier pour quelques segments).
+    """
+    lignes = srt_text.split("\n")
+    segments: list[dict] = []  # {ligne (1-based), debut, fin} par segment
+    for i, ligne in enumerate(lignes):
+        if " --> " in ligne:
+            gauche, _, droite = ligne.partition(" --> ")
+            segments.append({
+                # la ligne du NUMÉRO du segment (celle au-dessus du timecode)
+                "ligne": max(1, i),
+                "debut": gauche.strip().split(",")[0],
+                "fin": droite.strip().split(",")[0],
+            })
+    if not segments:
+        return []
+    paquets: list[tuple[int, int]] = []  # (index premier, index dernier) 0-based
+    debut = 0
+    while debut < len(segments):
+        fin = min(debut + target_size, len(segments))
+        if len(segments) - fin < target_size // 2:
+            fin = len(segments)
+        paquets.append((debut, fin - 1))
+        debut = fin
+    plages = []
+    for premier, dernier in paquets:
+        ligne_fin = (segments[dernier + 1]["ligne"] - 1 if dernier + 1 < len(segments)
+                     else len(lignes))
+        plages.append({
+            "seg_debut": premier + 1, "seg_fin": dernier + 1,
+            "ligne_debut": segments[premier]["ligne"], "ligne_fin": ligne_fin,
+            "temps_debut": segments[premier]["debut"], "temps_fin": segments[dernier]["fin"],
+        })
+    return plages
+
+
 def stop_on_pure_idle(idle_s: float, cap_s: float, llm_busy: bool | None) -> bool:
     """Faut-il tuer un opencode silencieux sur le seul plafond de silence ?
 
@@ -794,6 +840,20 @@ class OpenCodeRunner:
                 "documents, n'ajoute aucune information absente du SRT — le lexique validé "
                 "reste la seule autorité de remplacement. "
             )
+        try:
+            plages = correction_ranges(Path(srt_path).read_text(encoding="utf-8"))
+        except OSError:
+            plages = []
+        if plages:
+            rendu = " ; ".join(
+                f"{n}) segments {p['seg_debut']}\u2013{p['seg_fin']} "
+                f"(lignes {p['ligne_debut']}\u2013{p['ligne_fin']}, "
+                f"de {p['temps_debut']} \u00e0 {p['temps_fin']})"
+                for n, p in enumerate(plages, 1)
+            )
+            instruction += (
+                f"Plages de délégation, calculées par le système — ne les recalcule pas : {rendu}. "
+            )
         instruction += (
             "Compte les entrées du lexique validé, applique les corrections validées "
             "avec prudence et documente chaque correction ou préservation lexicale, "
@@ -807,10 +867,11 @@ class OpenCodeRunner:
             # ORDRE, pas parallèle : le SRT est l'artefact critique (gardes de parité et
             # de ratio côté code). Le réancrage se fait APRÈS, depuis le fichier corrigé.
             instruction += (
-                f" ENSUITE SEULEMENT, une fois transcription_corrigee.srt terminé : lis la "
-                f"synthèse {summary_path} et réancre-la sur le SRT corrigé selon le § 8 du "
-                "prompt système, puis écris un 3e fichier summary_reancree.md. Si tu ne peux "
-                "pas le faire dans ces contraintes, n'écris pas ce fichier — le système "
+                f" ENSUITE SEULEMENT, une fois transcription_corrigee.srt terminé et "
+                f"contrôlé : la synthèse à réancrer est {summary_path}. Applique la section "
+                "« Réancrage de la synthèse » du prompt système — DÉLÈGUE ce travail à un "
+                "subagent @general avec la consigne prévue, qui écrira summary_reancree.md. "
+                "Si le subagent ne rend pas le fichier, n'insiste pas — le système "
                 "conservera la synthèse existante."
             )
 
