@@ -156,8 +156,10 @@ sera rejeté.)
 
 ## 6. Réancrage de la synthèse — SEULEMENT si `synthese_a_reancrer.md` existe
 
-Ne le fais pas toi-même : lance UN subagent @general avec cette consigne, une fois
-`transcription_corrigee.srt` terminé et contrôlé :
+!!! ATTENTION !!! Cette étape est celle qui est le plus souvent OUBLIÉE : si
+`synthese_a_reancrer.md` existe et que tu termines sans avoir lancé ce subagent, ton
+travail est INCOMPLET. Ne le fais pas toi-même — lance UN subagent @general avec cette
+consigne, une fois `transcription_corrigee.srt` terminé et contrôlé :
 
 > Tu disposes de deux fichiers dans <chemin> : `transcription_corrigee.srt` (la
 > transcription corrigée DÉFINITIVE) et `synthese_a_reancrer.md` (une synthèse
