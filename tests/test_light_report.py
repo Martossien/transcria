@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -219,3 +220,43 @@ class TestPassesLlmMuettes:
         types = {c["type"] for c in report["checks"]}
         assert {"silent_correction", "silent_final_review"} <= types
 
+
+
+class TestMarquageExigeParLesHints:
+    """Le prompt IMPOSE un marqueur [INCERTAIN] sur tout segment à hint fort — personne
+    ne le vérifiait. Contrôle déterministe : gain = visibilité (l'humain sait quels
+    segments douteux n'ont même pas leur marqueur)."""
+
+    def _fs(self, tmp_path, texte_seg1="Bonjour tout le monde"):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(tmp_path), "job-light")
+        srt = (f"1\n00:00:01,000 --> 00:00:04,000\n{texte_seg1}\n\n"
+               "2\n00:00:05,000 --> 00:00:08,000\nSuite normale\n")
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt",
+                     srt.replace("Bonjour", "Bonjour,"))  # corrigée ≠ source
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": texte_seg1},
+                      {"start": 5.0, "end": 8.0, "text": "Suite normale"}])
+        fs.save_json("context/job_context.json", {"quality_hints": {"segments": [
+            {"segment_index": 0, "level": "degrade", "reasons": ["signature_hallucination_moteur"]},
+        ]}})
+        return fs
+
+    def test_un_hint_fort_sans_marqueur_leve_un_point(self, tmp_dir):
+        self._fs(Path(tmp_dir))
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert any(c["type"] == "hint_marking_missing" for c in report["checks"])
+
+    def test_un_hint_fort_marque_ne_leve_rien(self, tmp_dir):
+
+        fs = self._fs(Path(tmp_dir))
+        corr = fs.load_text("metadata/transcription_corrigee.srt").replace(
+            "Bonjour,", "Bonjour, [INCERTAIN: hallucination probable]")
+        fs.save_text("metadata/transcription_corrigee.srt", corr)
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert not any(c["type"] == "hint_marking_missing" for c in report["checks"])

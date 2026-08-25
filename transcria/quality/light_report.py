@@ -13,6 +13,7 @@ coût du rapport complet réservé à `dossier_qualite`. Ne remplace pas le rapp
 from __future__ import annotations
 
 import logging
+import re
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -31,6 +32,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segments très courts (< 0,5s) : {n} — envisager la fusion.",
         "long": "Segments très longs (> 60s) : {n} — envisager le découpage.",
         "missing_srt": "SRT absent ou vide — la transcription a échoué.",
+        "marquage_manquant": ("Segments peu fiables non marqués : {n} — la correction devait y poser"
+                              " un marqueur [INCERTAIN] (hint fort) et ne l'a pas fait."
+                              " À réécouter en priorité."),
         "correction_muette": ("La passe de correction n'a modifié aucun segment — elle n'a "
                               "probablement pas abouti. Les erreurs de transcription et les "
                               "variantes du lexique sont donc restées telles quelles."),
@@ -51,6 +55,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Very short segments (< 0.5s): {n} — consider merging.",
         "long": "Very long segments (> 60s): {n} — consider splitting.",
         "missing_srt": "SRT missing or empty — transcription failed.",
+        "marquage_manquant": ("Unreliable segments left unmarked: {n} — the correction was required"
+                              " to place an [INCERTAIN] marker there (strong hint) and did not."
+                              " Re-listen first."),
         "correction_muette": ("The correction pass changed no segment — it most likely did not "
                               "complete. Transcription errors and glossary variants were left "
                               "as they were."),
@@ -71,6 +78,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Sehr kurze Segmente (< 0,5 s): {n} — Zusammenführung erwägen.",
         "long": "Sehr lange Segmente (> 60 s): {n} — Aufteilung erwägen.",
         "missing_srt": "SRT fehlt oder ist leer — die Transkription ist fehlgeschlagen.",
+        "marquage_manquant": ("Unzuverlässige Segmente ohne Markierung: {n} — die Korrektur musste"
+                              " dort einen [INCERTAIN]-Marker setzen (starker Hint) und tat es"
+                              " nicht. Zuerst nachhören."),
         "correction_muette": ("Der Korrekturlauf hat kein Segment geändert — er wurde "
                               "wahrscheinlich nicht abgeschlossen. Transkriptionsfehler und "
                               "Lexikonvarianten blieben unverändert."),
@@ -95,6 +105,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segmentos muy cortos (< 0,5s): {n} — considerar la fusión.",
         "long": "Segmentos muy largos (> 60s): {n} — considerar la división.",
         "missing_srt": "SRT ausente o vacío — la transcripción falló.",
+        "marquage_manquant": ("Segmentos poco fiables sin marcar: {n} — la corrección debía poner"
+                              " ahí un marcador [INCERTAIN] (hint fuerte) y no lo hizo."
+                              " Reescuchar primero."),
         "correction_muette": ("La pasada de corrección no modificó ningún segmento — "
                               "probablemente no llegó a término. Los errores de transcripción y "
                               "las variantes del léxico quedaron tal cual."),
@@ -119,6 +132,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segmenti molto brevi (< 0,5s): {n} — valutare l'unione.",
         "long": "Segmenti molto lunghi (> 60s): {n} — valutare la suddivisione.",
         "missing_srt": "SRT assente o vuoto — la trascrizione non è riuscita.",
+        "marquage_manquant": ("Segmenti poco affidabili non marcati: {n} — la correzione doveva"
+                              " porvi un marcatore [INCERTAIN] (hint forte) e non l'ha fatto."
+                              " Riascoltare per primi."),
         "correction_muette": ("La passata di correzione non ha modificato alcun segmento — "
                               "probabilmente non è giunta a termine. Gli errori di trascrizione "
                               "e le varianti del lessico sono rimasti invariati."),
@@ -174,6 +190,30 @@ def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict, profile=No
             "_check": {"type": "silent_correction", "severity": "warning"},
             "texte": S["correction_muette"],
         })
+    if correction_prevue and srt_content.strip() and corrige:
+        # Marquage EXIGÉ par les hints forts : le prompt l'impose, personne ne le
+        # vérifiait (contrôle demandé par le mainteneur — gain = visibilité : l'humain
+        # sait quels segments douteux n'ont même pas leur marqueur).
+        hints = ((fs.load_json("context/job_context.json") or {})
+                 .get("quality_hints") or {}).get("segments") or []
+        forts = [h for h in hints if isinstance(h, dict) and (
+            h.get("level") == "degrade"
+            or (h.get("no_speech_prob") or 0) >= 0.8
+            or "signature_hallucination_moteur" in (h.get("reasons") or []))]
+        if forts:
+            seg_cor = re.split(r"\n\s*\n+", corrige.strip())
+            manquants = 0
+            for h in forts:
+                idx = h.get("segment_index")
+                if isinstance(idx, int) and 0 <= idx < len(seg_cor):
+                    if "[INCERTAIN" not in seg_cor[idx]:
+                        manquants += 1
+            if manquants:
+                muettes.append({
+                    "_check": {"type": "hint_marking_missing", "count": manquants,
+                               "severity": "warning"},
+                    "texte": S["marquage_manquant"].format(n=manquants),
+                })
     ctx = fs.load_json("context/meeting_context.json") or {}
     # La relecture n'est jugée que si elle avait de quoi travailler : sans synthèse amont,
     # ne rien produire est le comportement correct, pas une panne.
