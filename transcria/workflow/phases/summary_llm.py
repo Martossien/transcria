@@ -185,8 +185,15 @@ def _warn_if_summary_too_short(fs, sl, duree_s: float) -> None:
     """
     meeting = fs.load_json("context/meeting_context.json") or {}
     synthese = str(meeting.get("summary_llm") or "")
-    if "## Synthèse" in synthese:
-        synthese = synthese.split("## Synthèse", 1)[1].split("\n## ", 1)[0]
+    # Marqueur de la LANGUE des livrables, pas « ## Synthèse » en dur : sur un job
+    # en/de/es/it le découpage ne matchait jamais, le document ENTIER comptait comme
+    # synthèse et l'avertissement de longueur sous-tirait (revue croisée 2026-08-25).
+    from transcria.context.meeting_context import synthese_section
+    from transcria.llm_tools.opencode_runner import _SUMMARY_MARKERS, summary_markers
+
+    marqueurs = ([summary_markers(meeting.get("language"))["summary_heading"]]
+                 + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
+    synthese = synthese_section(synthese, marqueurs)
     odj = len(((meeting.get("structured_data") or {}).get("points_odj")) or [])
     rendus, plancher = synthese_shortfall(synthese, duree_s / 60, odj)
     if rendus < plancher:
