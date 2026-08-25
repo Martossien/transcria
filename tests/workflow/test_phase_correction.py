@@ -176,7 +176,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
 
             def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None, **_kw):
                 captured["lexicon_path"] = lexicon_path
-                with open(lexicon_path, "r", encoding="utf-8") as fh:
+                with open(lexicon_path, encoding="utf-8") as fh:
                     captured["lexicon"] = json.load(fh)
                 return {
                     "success": True,
@@ -787,3 +787,63 @@ class TestRefusDesVariantesExpansions:
         epurees, retirees = sans_variantes_expansions(lexique)
 
         assert retirees == 0 and epurees[0]["variants"] == ["mouvements exquis", "mouvex"]
+
+
+class TestReparationDesMarqueursDevorants:
+    """Défaut résiduel localisé (zones d'audio dégradé, 4 parcours) : sur du charabia,
+    l'ouvrier remplace le mot par le marqueur malgré la consigne additive. Réparation
+    mécanique : texte source restauré + marqueurs conservés à la fin."""
+
+    def _seg(self, n, texte):
+        return f"{n}\n00:00:0{n},000 --> 00:00:0{n},900\nSPEAKER_00(A): {texte}"
+
+    def test_le_texte_devore_est_restaure_et_le_marqueur_conserve(self):
+        from transcria.workflow.phases.correction import repare_marqueurs_devorants
+
+        source = "\n\n".join([self._seg(1, "tout est ensinant, mais je continue"),
+                              self._seg(2, "rien à signaler ici")])
+        corrige = "\n\n".join([self._seg(1, "tout est [INCERTAIN: mot inexistant], mais je continue"
+                                            ).replace("ensinant, mais je continue, ", ""),
+                               self._seg(2, "rien à signaler ici")])
+        # simule le vrai défaut : le mot a disparu, le marqueur est là
+        corrige = "\n\n".join([self._seg(1, "tout est [INCERTAIN: mot inexistant]"),
+                               self._seg(2, "rien à signaler ici")])
+
+        repare, n = repare_marqueurs_devorants(source, corrige)
+
+        assert n == 1
+        assert "ensinant, mais je continue" in repare       # le dit est de retour
+        assert "[INCERTAIN: mot inexistant]" in repare      # le doute reste signalé
+
+    def test_un_marqueur_additif_correct_n_est_pas_touche(self):
+        from transcria.workflow.phases.correction import repare_marqueurs_devorants
+
+        source = self._seg(1, "tout est ensinant, mais je continue")
+        corrige = self._seg(1, "tout est ensinant [INCERTAIN: mot inexistant], mais je continue")
+
+        repare, n = repare_marqueurs_devorants(source, corrige)
+
+        assert n == 0 and repare == corrige
+
+    def test_sans_marqueur_rien_ne_bouge_meme_si_le_texte_a_change(self):
+        """Une correction légitime raccourcit parfois (variante longue → forme courte) :
+        sans marqueur, la réparation n'a pas à s'en mêler — c'est le rôle du relais
+        « segments raccourcis » de la carte, pas du code."""
+        from transcria.workflow.phases.correction import repare_marqueurs_devorants
+
+        source = self._seg(1, "le para fleur électronique de la salle")
+        corrige = self._seg(1, "le Classeur numérique de la salle")
+
+        repare, n = repare_marqueurs_devorants(source, corrige)
+
+        assert n == 0 and repare == corrige
+
+    def test_parite_rompue_aucune_reparation_tentee(self):
+        from transcria.workflow.phases.correction import repare_marqueurs_devorants
+
+        source = "\n\n".join([self._seg(1, "un"), self._seg(2, "deux")])
+        corrige = self._seg(1, "un [INCERTAIN: x]")
+
+        repare, n = repare_marqueurs_devorants(source, corrige)
+
+        assert n == 0 and repare == corrige  # la garde de parité s'en chargera

@@ -399,6 +399,11 @@ def _persist_correction_result(runner, fs, result: dict, job: Job | None = None)
         # ratio anti-résumé), le code VÉRIFIE — l'auto-déclaration de l'agent ne
         # suffit pas (un SRT tronqué ou réécrit passait avec « non vide »).
         source_srt = fs.load_text("metadata/transcription.srt") or ""
+        result["corrected_srt"], devores = repare_marqueurs_devorants(
+            source_srt, result["corrected_srt"])
+        if devores:
+            logger.warning("[correction] %d segment(s) réparé(s) : un marqueur avait remplacé "
+                           "le texte au lieu de s'y ajouter — texte d'origine restauré", devores)
         integrity_error = runner._corrected_srt_integrity_error(source_srt, result["corrected_srt"])
         if integrity_error:
             logger.error("[correction] %s", integrity_error)
@@ -726,6 +731,43 @@ _MSG: dict[str, dict[str, str]] = {
 
 def _msg(language: str | None) -> dict[str, str]:
     return _MSG.get((language or "fr"), _MSG["fr"])
+
+
+_MARQUEUR_INLINE = re.compile(r"\s*\[(?:INCERTAIN|ÉTRANGER|FOREIGN)\b[^\]]*\]")
+
+
+def repare_marqueurs_devorants(source_srt: str, corrected_srt: str) -> tuple[str, int]:
+    """Répare les segments où un marqueur a REMPLACÉ le texte au lieu de s'y ajouter.
+
+    Défaut résiduel localisé (zones d'audio dégradé, constaté sur 4 parcours réels
+    malgré la consigne « le marqueur s'ajoute ») : sur du charabia, l'ouvrier juge le
+    mot irrécupérable et le remplace. Or le contrat est l'inverse — l'humain doit
+    pouvoir lire ce qui a été dit pour arbitrer. Réparation mécanique : si un segment
+    corrigé porte un marqueur et que son texte HORS marqueurs a fondu par rapport au
+    source, on restaure « texte source + marqueurs ». Décidable sans jugement,
+    testable, constaté — les trois conditions de la migration en code.
+    """
+    seg_src = re.split(r"\n\n+", source_srt.strip())
+    seg_cor = re.split(r"\n\n+", corrected_srt.strip())
+    if len(seg_src) != len(seg_cor):
+        return corrected_srt, 0
+    repares = 0
+    sortie = []
+    for src, cor in zip(seg_src, seg_cor, strict=True):
+        marqueurs = re.findall(r"\[(?:INCERTAIN|ÉTRANGER|FOREIGN)\b[^\]]*\]", cor)
+        if marqueurs:
+            lignes_src, lignes_cor = src.split("\n"), cor.split("\n")
+            texte_src = " ".join(lignes_src[2:])
+            texte_cor_nu = _MARQUEUR_INLINE.sub("", " ".join(lignes_cor[2:]))
+            if len(texte_cor_nu.strip()) < len(texte_src.strip()) - 8:
+                # entête (numéro + timecode) du corrigé, texte du source, marqueurs à la fin
+                repare = "\n".join(lignes_cor[:2] + lignes_src[2:])
+                sortie.append(repare + " " + " ".join(marqueurs))
+                repares += 1
+                continue
+        sortie.append(cor)
+    fin = "\n" if corrected_srt.endswith("\n") else ""
+    return "\n\n".join(sortie) + fin, repares
 
 
 def corrected_srt_integrity_error(source: str, corrected: str, language: str = "fr") -> str | None:
