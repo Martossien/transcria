@@ -33,7 +33,7 @@ from typing import Protocol
 # fourni directement : les installs antérieures restent servables (le lanceur
 # préfère le GGUF s'il existe, sinon retombe sur le répertoire HF).
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
-AUDIOCPP_PINNED_COMMIT = "238ab6a9e321c17de8e120559f57efeedaeb1345"
+AUDIOCPP_PINNED_COMMIT = "c6805de83ce44d50ad2731205ecc6e9aae99e517"
 # Modèle recommandé (Apache-2.0) — id du paquet dans LEUR model_manager_v2 (spec v1).
 AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_q8_0"
 AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-GGUF"

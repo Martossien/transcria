@@ -24,7 +24,7 @@ from typing import Protocol
 # re-qualifié par le gate moteurs après le bump.
 PARAKEETCPP_REPO = "https://github.com/mudler/parakeet.cpp"
 # SHA COMPLET requis : `git fetch origin <sha>` refuse les SHA courts (exit 128).
-PARAKEETCPP_PINNED_COMMIT = "1bfbebfaaf493866f49597cd3b7901959d395c60"
+PARAKEETCPP_PINNED_COMMIT = "e75de9b6b9b688fd293aa22f7e27aa724ea286f8"
 
 
 class Runner(Protocol):

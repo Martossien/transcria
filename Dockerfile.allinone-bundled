@@ -95,8 +95,8 @@ PY
 # Binaires SEULS (/opt/runtimes) — modèles par VOLUME (snapshot HF pur pour
 # Qwen3-ASR-1.7B-hf : `hf download` suffit ; pointer STT_MODEL sur le chemin monté).
 FROM ${CUDA_IMAGE} AS stt-runtimes-builder
-ARG AUDIOCPP_REF=238ab6a9e321c17de8e120559f57efeedaeb1345
-ARG PARAKEETCPP_REF=1bfbebfaaf493866f49597cd3b7901959d395c60
+ARG AUDIOCPP_REF=c6805de83ce44d50ad2731205ecc6e9aae99e517
+ARG PARAKEETCPP_REF=e75de9b6b9b688fd293aa22f7e27aa724ea286f8
 ENV DEBIAN_FRONTEND=noninteractive
 # Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
 RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
