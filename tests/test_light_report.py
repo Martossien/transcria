@@ -260,3 +260,44 @@ class TestMarquageExigeParLesHints:
         report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
 
         assert not any(c["type"] == "hint_marking_missing" for c in report["checks"])
+
+
+class TestSyntheseEditeeVisible:
+    """L'humain édite la synthèse à l'étape 4 : son texte est souverain — réancrage et
+    harmonisation s'abstiennent PAR CONCEPTION. Cette abstention était silencieuse ;
+    elle se dit désormais, avec le seul signal mécanisable : les variantes du lexique
+    validé encore présentes dans son texte (constat, jamais une correction)."""
+
+    def _fs(self, tmp_path, summary):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(tmp_path), "job-light")
+        srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour tout le monde\n"
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt", srt.replace("Bonjour", "Bonjour,"))
+        fs.save_json("metadata/transcription_segments.json",
+                     [{"start": 1.0, "end": 4.0, "text": "Bonjour tout le monde"}])
+        fs.save_json("context/meeting_context.json", {
+            "summary_llm": "## Synthèse\n\nTexte machine initial.",
+            "summary_harmonized": "## Synthèse\n\nTexte machine initial.",
+            "summary": summary,
+        })
+        fs.save_json("context/session_lexicon.json",
+                     [{"term": "Passerelle", "variants": ["passe-relle", "pacerelle"]}])
+        return fs
+
+    def test_une_synthese_editee_est_signalee_avec_ses_variantes_restantes(self, tmp_dir):
+        self._fs(Path(tmp_dir), "Mon texte à moi, qui cite la pacerelle du projet.")
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        points = [p for p in report["review_points"] if "éditée à la main" in p]
+        assert points and "pacerelle" in points[0]
+        assert any(c["type"] == "human_edited_summary" for c in report["checks"])
+
+    def test_le_preremplissage_intact_ne_signale_rien(self, tmp_dir):
+        self._fs(Path(tmp_dir), "Texte machine initial.")
+
+        report = run_light_quality(_job(), {"storage": {"jobs_dir": tmp_dir}})
+
+        assert not any(c["type"] == "human_edited_summary" for c in report["checks"])

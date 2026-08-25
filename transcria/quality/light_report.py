@@ -35,6 +35,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "marquage_manquant": ("Segments peu fiables non marqués : {n} — la correction devait y poser"
                               " un marqueur [INCERTAIN] (hint fort) et ne l'a pas fait."
                               " À réécouter en priorité."),
+        "synthese_editee": ("Synthèse éditée à la main : conservée telle quelle — le réancrage"
+                             " sur la transcription corrigée et l'harmonisation du glossaire ne"
+                             " s'y sont volontairement PAS appliqués.{variantes}"),
+        "synthese_editee_variantes": (" {n} forme(s) du lexique validé y figurent encore sous une"
+                             " graphie non validée (ex. {ex}) — à harmoniser à la main si besoin."),
         "correction_muette": ("La passe de correction n'a modifié aucun segment — elle n'a "
                               "probablement pas abouti. Les erreurs de transcription et les "
                               "variantes du lexique sont donc restées telles quelles."),
@@ -58,6 +63,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "marquage_manquant": ("Unreliable segments left unmarked: {n} — the correction was required"
                               " to place an [INCERTAIN] marker there (strong hint) and did not."
                               " Re-listen first."),
+        "synthese_editee": ("Hand-edited summary: kept as is — re-anchoring on the corrected"
+                             " transcript and glossary harmonisation were deliberately NOT"
+                             " applied to it.{variantes}"),
+        "synthese_editee_variantes": (" {n} validated-glossary form(s) still appear in it under a"
+                             " non-validated spelling (e.g. {ex}) — harmonise by hand if needed."),
         "correction_muette": ("The correction pass changed no segment — it most likely did not "
                               "complete. Transcription errors and glossary variants were left "
                               "as they were."),
@@ -81,6 +91,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "marquage_manquant": ("Unzuverlässige Segmente ohne Markierung: {n} — die Korrektur musste"
                               " dort einen [INCERTAIN]-Marker setzen (starker Hint) und tat es"
                               " nicht. Zuerst nachhören."),
+        "synthese_editee": ("Von Hand bearbeitete Zusammenfassung: unverändert übernommen — die"
+                             " Neuverankerung auf dem korrigierten Transkript und der"
+                             " Glossarabgleich wurden darauf bewusst NICHT angewendet.{variantes}"),
+        "synthese_editee_variantes": (" {n} Form(en) des bestätigten Lexikons stehen darin noch in"
+                             " nicht bestätigter Schreibweise (z. B. {ex}) — bei Bedarf von Hand"
+                             " angleichen."),
         "correction_muette": ("Der Korrekturlauf hat kein Segment geändert — er wurde "
                               "wahrscheinlich nicht abgeschlossen. Transkriptionsfehler und "
                               "Lexikonvarianten blieben unverändert."),
@@ -108,6 +124,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "marquage_manquant": ("Segmentos poco fiables sin marcar: {n} — la corrección debía poner"
                               " ahí un marcador [INCERTAIN] (hint fuerte) y no lo hizo."
                               " Reescuchar primero."),
+        "synthese_editee": ("Resumen editado a mano: conservado tal cual — el reanclaje sobre la"
+                             " transcripción corregida y la armonización del glosario NO se le"
+                             " aplicaron deliberadamente.{variantes}"),
+        "synthese_editee_variantes": (" {n} forma(s) del léxico validado siguen figurando con una"
+                             " grafía no validada (p. ej. {ex}) — armonizar a mano si es preciso."),
         "correction_muette": ("La pasada de corrección no modificó ningún segmento — "
                               "probablemente no llegó a término. Los errores de transcripción y "
                               "las variantes del léxico quedaron tal cual."),
@@ -135,6 +156,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "marquage_manquant": ("Segmenti poco affidabili non marcati: {n} — la correzione doveva"
                               " porvi un marcatore [INCERTAIN] (hint forte) e non l'ha fatto."
                               " Riascoltare per primi."),
+        "synthese_editee": ("Sintesi modificata a mano: conservata tale quale — il riancoraggio"
+                             " sulla trascrizione corretta e l'armonizzazione del glossario NON"
+                             " vi sono stati volutamente applicati.{variantes}"),
+        "synthese_editee_variantes": (" {n} forma/e del lessico convalidato vi compaiono ancora con"
+                             " grafia non convalidata (es. {ex}) — armonizzare a mano se serve."),
         "correction_muette": ("La passata di correzione non ha modificato alcun segmento — "
                               "probabilmente non è giunta a termine. Gli errori di trascrizione "
                               "e le varianti del lessico sono rimasti invariati."),
@@ -223,6 +249,36 @@ def _passes_llm_muettes(fs: JobFilesystem, srt_content: str, S: dict, profile=No
             "_check": {"type": "silent_final_review", "severity": "warning"},
             "texte": S["relecture_muette"],
         })
+    # Synthèse ÉDITÉE À LA MAIN à l'étape 4 : par conception, réancrage et harmonisation
+    # s'abstiennent (l'humain est souverain) — mais cette abstention était SILENCIEUSE :
+    # l'utilisateur pouvait croire le glossaire appliqué à son texte. On la dit, et on
+    # ajoute le seul signal mécanisable : les variantes du lexique validé encore
+    # présentes dans son texte (constat, jamais une correction).
+    if (correction_prevue or relecture_prevue) and attendue:
+        from transcria.context.meeting_context import summary_untouched_by_human
+        from transcria.llm_tools.opencode_runner import _SUMMARY_MARKERS, summary_markers
+
+        headings = ([summary_markers(ctx.get("language"))["summary_heading"]]
+                    + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
+        if not summary_untouched_by_human(ctx, headings):
+            edite = str(ctx.get("summary") or "")
+            lexique = fs.load_json("context/session_lexicon.json") or []
+            restantes: list[str] = []
+            for entree in lexique:
+                if not isinstance(entree, dict):
+                    continue
+                for variante in (entree.get("variants") or []):
+                    v = str(variante).strip()
+                    if len(v) >= 4 and v.lower() in edite.lower():
+                        restantes.append(v)
+            detail = ""
+            if restantes:
+                detail = S["synthese_editee_variantes"].format(
+                    n=len(restantes), ex=", ".join(sorted(set(restantes))[:3]))
+            muettes.append({
+                "_check": {"type": "human_edited_summary", "severity": "info"},
+                "texte": S["synthese_editee"].format(variantes=detail),
+            })
     return muettes
 
 

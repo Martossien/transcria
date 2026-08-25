@@ -10,7 +10,7 @@
  },
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 112,
+ "deferred_internal_imports": 115,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -147,7 +147,7 @@
   "transcria.notifications.admin_alerts": 4,
   "transcria.notifications.job_facts": 5,
   "transcria.quality": 4,
-  "transcria.quality.light_report": 4,
+  "transcria.quality.light_report": 5,
   "transcria.quality.quality_report": 7,
   "transcria.queue.allocator": 7,
   "transcria.queue.calendar": 2,
