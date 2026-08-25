@@ -11,10 +11,16 @@ import logging
 from transcria.auth.store import UserStore
 from transcria.context.invite_parser import render_invite_markdown
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.context.meeting_context import synthese_section
 from transcria.context.meeting_type_prompts import build_prompt_substitutions
 from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
-from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language
+from transcria.llm_tools.opencode_runner import (
+    _SUMMARY_MARKERS,
+    OpenCodeRunner,
+    resolve_output_language,
+    summary_markers,
+)
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
 logger = logging.getLogger(__name__)
@@ -188,9 +194,6 @@ def _warn_if_summary_too_short(fs, sl, duree_s: float) -> None:
     # Marqueur de la LANGUE des livrables, pas « ## Synthèse » en dur : sur un job
     # en/de/es/it le découpage ne matchait jamais, le document ENTIER comptait comme
     # synthèse et l'avertissement de longueur sous-tirait (revue croisée 2026-08-25).
-    from transcria.context.meeting_context import synthese_section
-    from transcria.llm_tools.opencode_runner import _SUMMARY_MARKERS, summary_markers
-
     marqueurs = ([summary_markers(meeting.get("language"))["summary_heading"]]
                  + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()])
     synthese = synthese_section(synthese, marqueurs)

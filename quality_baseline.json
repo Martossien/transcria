@@ -239,7 +239,7 @@
   "transcria.workflow.phases.quality": 7,
   "transcria.workflow.phases.refine": 8,
   "transcria.workflow.phases.summary": 12,
-  "transcria.workflow.phases.summary_llm": 8,
+  "transcria.workflow.phases.summary_llm": 9,
   "transcria.workflow.phases.summary_stt": 7,
   "transcria.workflow.phases.transcription": 8,
   "transcria.workflow.profile_availability": 5,
