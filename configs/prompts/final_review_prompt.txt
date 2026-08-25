@@ -41,6 +41,8 @@ les chemins de tous les fichiers ci-dessous.
 ## 3. Délégation @general (OBLIGATOIRE pour le SRT)
 Pour les tâches **C** et **D**, répartis le travail sur des **subagents @general**,
 une plage de segments disjointe par subagent (jamais @explore, en lecture seule).
+**Traite les plages séquentiellement** — jamais deux subagents en même temps : un
+seul serveur LLM, deux sessions simultanées se bloquent.
 Chaque subagent applique sur SA plage la cohérence des noms/termes validés. Tu restes
 responsable de l'assemblage, de la cohérence **globale** (le même terme écrit pareil
 d'une plage à l'autre) et du rapport. La synthèse (A) et l'audit structuré (G) sont
