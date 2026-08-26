@@ -6,6 +6,121 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.5] — non publiée
+
+La version du banc des règles : une campagne de ~35 parcours complets sur des réunions
+réelles a mesuré ce que chaque règle de prompt fait vraiment — et transformé les leçons
+en code. L'animateur validé entre dans le compte rendu, le prompt de correction est
+refondu pour parler à ceux qui corrigent, et une série de gardes déterministes attrape
+ce qui échappait à tout le monde.
+
+### Ajouté
+
+#### L'animateur, validé par l'humain, structure le compte rendu
+
+- **Case « ★ Animateur » à l'étape des participants** : un choix humain explicite,
+  transmis à la LLM comme **fil de structure** de la synthèse (ordre du jour,
+  transitions, décisions) — jamais comme autorité de contenu : les faits de chaque
+  locuteur pèsent à égalité. Règle répliquée dans les cinq langues de prompts.
+- **Suggestion d'animateur** d'après les rôles détectés (« anime », « dirige la
+  réunion »…) : une proposition à un clic, jamais cochée d'office — le devinage
+  statistique par tours de parole a été essayé puis retiré, le corpus réel l'ayant
+  montré non discriminant.
+- **Réancrage de la synthèse sur la transcription corrigée** : la synthèse est rédigée
+  sur la transcription rapide, d'avant correction ; la phase de correction délègue
+  désormais sa réécriture factuelle (noms, chiffres, dates) à un subagent dédié qui
+  lit le SRT corrigé — best-effort, jamais bloquant, l'édition humaine toujours
+  souveraine. La relecture finale fait ensuite arriver sa version harmonisée dans le
+  document quand l'humain n'a pas touché au texte.
+- **Longueur de synthèse ancrée sur la durée** : la durée mesurée de l'audio est
+  injectée dans l'instruction, avec un plancher vérifié par le code (un paragraphe
+  par quart d'heure et par point d'ordre du jour). Mesuré avant : la synthèse
+  plafonnait à ~4 000 caractères, sur 15 minutes comme sur 2 heures.
+
+#### Ce que le pipeline n'arrivait pas à dire, il le dit
+
+- **Diff factuel annexé à chaque rapport de correction** : le rapport de l'agent est
+  une auto-déclaration ; l'annexe calculée mécaniquement montre CE QUI a changé —
+  une modification absente du rapport se voit immédiatement. Cinq langues.
+- **Segments fortement réécrits signalés à l'éditeur SRT** (« fortement réécrit par
+  la correction ») : l'humain arbitre là où la machine a le plus touché, au lieu de
+  relire 1 500 segments.
+- **Passes LLM muettes visibles** : une correction qui n'a rien modifié ou une
+  relecture finale sans sortie (gel amont, moteur tombé) levait zéro signal — le
+  job se terminait « avec succès ». Les deux rapports qualité (léger et complet) le
+  disent désormais, gardés par le profil de traitement.
+- **Marquage exigé par les hints vérifié** : tout segment signalé fortement douteux
+  doit porter son marqueur `[INCERTAIN]` — les manquants remontent en point à
+  vérifier.
+- **Synthèse éditée à la main signalée** : quand l'utilisateur modifie la synthèse à
+  l'étape 4, son texte est conservé tel quel par conception (réancrage et
+  harmonisation s'abstiennent) — le rapport le dit, avec les variantes du lexique
+  validé encore présentes dans son texte, exemples à l'appui.
+
+### Modifié
+
+#### Le prompt de correction, refondu pour son vrai lecteur (v4)
+
+- Relire le prompt **depuis le siège de l'agent qui fait le travail** a montré qu'il
+  parlait à un lecteur qui n'existe pas : les subagents — les seuls à corriger — ne
+  voyaient que quatre lignes de consigne, pendant que le catalogue des corrections
+  autorisées restait chez l'orchestrateur, qui a interdiction de corriger. La v4
+  (180 lignes contre 336, cinq langues) : consigne ouvrière autosuffisante, plages
+  de délégation **calculées par le code** (segments, lignes, intervalle temporel),
+  réancrage délégué, rituels morts supprimés. Validée sur quatre parcours réels :
+  interprétations hasardeuses en baisse, durée en baisse, conformité stable.
+- **Les trois prompts allégés** : justifications, récits d'incident et en-têtes de
+  changelog retirés après mesure (aucune garantie ne bouge) — seules les contraintes
+  portent, la rhétorique dilue. Un marqueur d'attention subsiste, sur le seul point
+  où il aide : les marqueurs d'attention conviennent aux ordres binaires (lancer une
+  étape), jamais aux règles de dosage — mesuré dans les deux sens.
+- **La relecture finale traite ses plages séquentiellement**, comme la correction :
+  face à un serveur LLM mono-slot, deux sessions simultanées se bloquent.
+
+#### Moteurs et modules externes à jour
+
+- **audio.cpp** remonté à l'amont du jour (164 commits) : sélection d'arch CUDA
+  corrigée, robustesse du chargement concurrent, allocateur de graphes ASR réécrit —
+  validé en réel (WAV de 15 minutes transcrit en 24,6 s). **parakeet.cpp** et
+  **opencode** (1.18.22) à jour. Épinglages synchronisés dans les trois Dockerfiles.
+
+### Corrigé
+
+#### Des gardes déterministes là où les consignes ne tenaient pas
+
+- **Une forme validée « A / B » ne pilote plus de remplacement** : mesuré sur des
+  rejeux réels, une entrée de ce genre substituait un nom par la fonction qu'il rend.
+  Refusée en code — dans le lexique transmis à l'agent ET dans la copie de contexte
+  (la seconde porte, découverte quand la première ne suffisait pas). L'entrée reste
+  visible pour l'humain.
+- **L'expansion en toutes lettres d'un sigle n'est plus une « variante »** à
+  substituer : la correction remplaçait des mots réellement prononcés par le sigle,
+  sur ordre des données. Même trajectoire : règle de prompt mesurée inefficace,
+  refus en code.
+- **La garde d'intégrité du SRT vérifie aussi la structure des blocs** : un SRT aux
+  segments éclatés par des lignes vides passait la parité et le ratio.
+- **Un marqueur qui a dévoré le mot est réparé** : texte d'origine restauré, doute
+  conservé en fin de segment — l'humain doit pouvoir lire ce qui a été dit.
+- **Le filet `[INCERTAIN]` de l'éditeur SRT était mort depuis l'origine** (il
+  cherchait le marqueur sans sa raison) ; la numérotation du document sautait un
+  numéro sur une section vide ; l'avertissement de longueur lisait le marqueur
+  français sur tous les livrables. Corrigés.
+
+#### Un watchdog qui ne tue plus sur un seul capteur
+
+- Le plafond de silence tuait des relectures finales **en plein travail** (34 à
+  84 minutes de travail réel détruites) : le kill exige désormais silence ET moteur
+  LLM inactif, **corroboré par l'activité des GPU de la LLM** — détectés par
+  port → PID → VRAM sur toute topologie, la config n'étant plus qu'un repli. Sept
+  faux kills évités en une seule relecture longue, mesuré en production.
+- **Les libellés techniques ne sont plus des noms** : `SPEAKER_01` devient
+  « Locuteur 1 » dans le compte rendu, un rôle nu (« Animateur ») ne se propage plus
+  comme nom de personne, et « Score qualité » devient « Fiabilité de la
+  transcription » — le score mesure la transcription, pas la prestation.
+- **La garde vie privée ne publie plus ce qu'elle protège** : liste en empreintes
+  SHA-256, identifiants snake_case éclatés, sentinelle fictive qui prouve le
+  mécanisme. Elle a intercepté une récidive avant le dépôt public depuis.
+
 ## [0.4.4] — 2026-08-14
 
 La version des premiers retours externes : deux installations de testeurs, deux vrais

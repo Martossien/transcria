@@ -206,7 +206,7 @@ transcria/
 ├── configs/                       # Prompts et lexique
 │   └── prompts/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v3.0 (contrat de priorités en tête, consigne subagent citable, @general obligatoire)
-│       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v3.0 (contrat de priorités, SPEAKER_XX(nom) intouchable)
+│       ├── correction_prompt.txt   # Prompt correction SRT — v4 (0.4.5) : orchestrateur + consigne ouvrière autosuffisante, plages calculées par le code, réancrage délégué
 │       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v3.0, après correction
 │
 ├── tests/                         # suite pytest + E2E (2500+ tests)
@@ -1583,7 +1583,15 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 opencode a un **bug amont connu** (anomalyco/opencode#17516 : « run hangs after completing tool calls — process never exits ») et n'expose **pas** de timeout de commande (issue #3950). `OpenCodeRunner` lit donc la sortie en **streaming** (deux threads, anti-deadlock stdout/stderr) et applique un watchdog d'**inactivité** — **jamais** un timeout total agressif : un gros job légitime peut durer 30+ min tant que la LLM travaille.
 
 Le process est tué (et relancé par le retry appelant) si :
-- silence opencode > `opencode_idle_grace_s` (défaut 120 s) **ET** la LLM est idle ;
+- silence opencode > `opencode_idle_grace_s` (défaut 120 s) **ET** la LLM est idle,
+  **corroboré par un second capteur** (0.4.5) : si les GPU où la LLM est chargée
+  travaillent au même moment, le kill est suspendu et la contradiction journalisée —
+  `/slots` est un échantillon ponctuel, un kill sur capteur unique détruisait des
+  sessions vivantes (7 faux kills évités mesurés sur une seule relecture longue).
+  Les cartes de la LLM sont **détectées** (port d'arbitrage → PID du serveur →
+  cartes où ce PID tient ≥ 1 Go de VRAM) ; `gpu.llm_gpu_indices` n'est que le
+  repli, et l'arbitrage distant rend le signal « inconnu » (jamais de corroboration
+  sur des cartes locales pour une LLM d'une autre machine) ;
 - pré-session : aucun événement ET LLM jamais sollicitée depuis
   `opencode_first_contact_grace_s` (défaut **120 s** — monté de 45 s le
   2026-07-18 : le boot opencode nominal mesuré est de 12-17 s sur machine
