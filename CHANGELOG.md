@@ -6,7 +6,7 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [0.4.5] — non publiée
+## [0.4.5] — 2026-08-26
 
 La version du banc des règles : une campagne de ~35 parcours complets sur des réunions
 réelles a mesuré ce que chaque règle de prompt fait vraiment — et transformé les leçons
