@@ -10,7 +10,7 @@
  },
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 115,
+ "deferred_internal_imports": 116,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -194,7 +194,7 @@
   "transcria.stt.transcriber_factory": 5,
   "transcria.stt.transcription": 16,
   "transcria.stt.voxtral_transcriber": 5,
-  "transcria.stt.whisper_transcriber": 4,
+  "transcria.stt.whisper_transcriber": 5,
   "transcria.voice": 1,
   "transcria.voice.embedding": 1,
   "transcria.voice.enrollment": 3,

@@ -32,7 +32,7 @@ RESTE_A_LA_MAIN = [
     ("E2E GPU réel", "venv/bin/python tests/test_e2e_workflow.py — arrêter d'abord le pont "
                      "Jitsi s'il tourne : il publie 127.0.0.1:8080, le port de la LLM d'arbitrage"),
     ("Gate d'installation en distro vierge",
-     "sudo systemctl stop transcria && venv/bin/python scripts/verify_install_matrix.py "
+     "sudo systemctl stop transcria transcria-arbitrage-llm && venv/bin/python scripts/verify_install_matrix.py "
      "--distro ubuntu2404 --topology all-in-one --audio tests/test2.mp3 "
      "--stt-backend whisper --diarization-backend sortformer  (~35 min)"),
     ("Images Docker — avant le tag",

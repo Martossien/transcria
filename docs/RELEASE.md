@@ -93,7 +93,9 @@ d'autre ne teste la première installation, qui est pourtant le premier contact 
 utilisateur avec le projet.
 
 ```bash
-sudo systemctl stop transcria            # il tient le port 7870
+sudo systemctl stop transcria transcria-arbitrage-llm   # le service tient le port 7870 ;
+# la LLM d'hôte tient les GPU du placement — le conteneur de la gate lance la SIENNE
+# (~49 Go) : LLM d'hôte chargée = job E2E en `waiting_vram` jusqu'au timeout (vécu 2026-08-25)
 venv/bin/python scripts/verify_install_matrix.py \
     --distro ubuntu2404 --topology all-in-one --audio tests/test2.mp3 \
     --stt-backend whisper --diarization-backend sortformer

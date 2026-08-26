@@ -149,6 +149,11 @@ class WhisperTranscriber(BaseTranscriber):
             logger.warning("Faster-Whisper: dépendances manquantes (faster_whisper)")
             return False
         try:
+            # AVANT l'import : sur un venv torch cu130, CTranslate2 ne trouve pas ses
+            # libs CUDA 12 — le préchargement RTLD_GLOBAL les lui rend visibles
+            # (no-op partout ailleurs). Cf. transcria/stt/cuda_libs.py.
+            from transcria.stt.cuda_libs import preload_ctranslate2_cuda_libs
+            preload_ctranslate2_cuda_libs()
             from faster_whisper import WhisperModel
 
             self.offload()

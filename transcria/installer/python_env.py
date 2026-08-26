@@ -140,6 +140,19 @@ def apply_python_env(
             str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec",
             "--index-url", f"https://download.pytorch.org/whl/{torch_plan.cuda_tag}", "--quiet",
         ])
+        if torch_plan.cuda_tag == "cu130":
+            # CTranslate2 (faster-whisper) charge libcublas.so.12/libcudnn cu12 — les
+            # roues torch cu130 n'embarquent QUE les variantes CUDA 13. Sans ces deux
+            # paquets, la phase résumé meurt au premier chargement Whisper
+            # (« Library libcublas.so.12 is not found ») et le llama-server embarqué
+            # (cuda-12.8) meurt au chargement (« libcudart.so.12 ») : attrapés par la gate
+            # d'installation en distro vierge le 2026-08-25, régression du passage cu130.
+            # Le préchargement runtime (transcria/stt/cuda_libs.py) les rend visibles.
+            _run(runner, [
+                str(venv_python), "-m", "pip", "install",
+                "nvidia-cuda-runtime-cu12", "nvidia-cublas-cu12", "nvidia-cudnn-cu12",
+                "--quiet",
+            ])
         console.ok(t("pe_torch_installed"))
     else:  # pragma: no cover - garde défensive (build_install_plan est exhaustif)
         raise PythonEnvError(f"Action PyTorch inconnue : {torch_plan.action}")
