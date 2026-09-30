@@ -196,8 +196,14 @@ def ensure_agent_permissions(config_path: str | Path, agent_work_root: str) -> d
     ``allow`` sur l'arbre de travail des agents, ``deny`` partout ailleurs (un accès externe
     parasite échoue proprement au lieu de suspendre — jamais ``ask`` en headless). Schéma
     confirmé par opencode (``permission.external_directory`` = objet glob→action, cf.
-    https://opencode.ai/docs/permissions). Idempotent ; préserve provider, ``$schema`` et les
-    autres clés de permission. `agent_work_root` doit venir de
+    https://opencode.ai/docs/permissions).
+
+    L'ORDRE des clés est contractuel : opencode applique la DERNIÈRE règle qui matche
+    (``findLast`` sur les règles, dans l'ordre des clés JSON — v1 et v2). Le ``"*": deny``
+    vient donc en PREMIER et l'``allow`` de l'arbre de travail en dernier ; l'ordre inverse
+    laissait le joker écraser l'``allow`` sur tout chemin externe.
+
+    Idempotent ; préserve provider, ``$schema`` et les autres clés de permission. `agent_work_root` doit venir de
     `transcria.workflow.agent_workspace.resolve_agent_work_root` (source unique du chemin).
     """
     root = str(agent_work_root).rstrip("/")
@@ -207,6 +213,6 @@ def ensure_agent_permissions(config_path: str | Path, agent_work_root: str) -> d
     if not isinstance(permission, dict):
         permission = {}
         data["permission"] = permission
-    permission["external_directory"] = {f"{root}/**": "allow", "*": "deny"}
+    permission["external_directory"] = {"*": "deny", f"{root}/**": "allow"}
     _dump_opencode_config(path, data)
     return data

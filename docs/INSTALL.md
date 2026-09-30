@@ -688,7 +688,9 @@ venv/bin/python scripts/setup_opencode.py --base-url http://NODE_IP:8080/v1
 > (`opencode run`), toute permission qui se résout en `ask` SUSPEND le run (personne pour
 > répondre) : un agent qui explore son scratch via `glob`/`grep` déclencherait sinon le défaut
 > `external_directory: ask` → sortie jamais écrite. **Si vous écrivez `opencode.json` à la main**,
-> ajoutez ce bloc `permission` (préférez `setup_opencode.py`, qui le pose pour vous).
+> ajoutez ce bloc `permission` (préférez `setup_opencode.py`, qui le pose pour vous) — en
+> gardant l'ordre des clés : opencode applique la **dernière** règle qui correspond, donc le
+> `"*": "deny"` s'écrit avant l'`allow` de l'arbre de travail.
 
 Pour référence, le fichier produit (équivalent à une écriture manuelle dans
 `$HOME/.config/opencode/opencode.json`) :

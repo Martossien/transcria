@@ -145,6 +145,24 @@ def test_agent_permissions_writes_deterministic_external_directory(tmp_path):
     assert json.loads(cfg.read_text())["permission"]["external_directory"] == ext
 
 
+def test_agent_permissions_order_lets_the_allow_win(tmp_path):
+    # opencode applique la DERNIÈRE règle qui matche, dans l'ordre des clés JSON : le joker
+    # `*` (deny) doit précéder l'allow de l'arbre de travail, sinon il l'écrase partout.
+    cfg = tmp_path / "opencode.json"
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    on_disk = json.loads(cfg.read_text())["permission"]["external_directory"]
+    assert list(on_disk) == ["*", "/tmp/transcria-agent-work/**"]
+
+
+def test_agent_permissions_repairs_a_config_written_in_the_old_order(tmp_path):
+    cfg = tmp_path / "opencode.json"
+    cfg.write_text(json.dumps({"permission": {"external_directory": {
+        "/tmp/transcria-agent-work/**": "allow", "*": "deny"}}}))
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    on_disk = json.loads(cfg.read_text())["permission"]["external_directory"]
+    assert list(on_disk)[-1] == "/tmp/transcria-agent-work/**"
+
+
 def test_agent_permissions_normalizes_trailing_slash(tmp_path):
     cfg = tmp_path / "opencode.json"
     data = ensure_agent_permissions(cfg, "/srv/agent-work/")
