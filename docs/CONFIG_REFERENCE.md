@@ -199,7 +199,7 @@ construction). Le doctor REFUSE un backend fédéré sans admin local actif.
 | `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko` — CPU pur — ou `moss`) |
 | `summary_stt_backend` | string \| null | `null` | Backend dédié à la transcription rapide de la PHASE RÉSUMÉ (`null` = même backend que `stt_backend`). Mêmes valeurs acceptées que `stt_backend` (backends servis routés inclus). `kroko` rend la phase résumé 100 % CPU : zéro réservation VRAM, plus de reclaim du LLM d'arbitrage par le résumé |
 | `live_stt_backend` | string \| null | `null` | Backend STT **streaming** dédié à la chaîne live (`null` = la façade utilise la chaîne historique). Moteurs *conçus* streaming uniquement (`nemotron-streaming`, `kyutai`, `voxtralrt`) — jamais un batch. Distinct du STT de référence du pipeline (cf. `docs/TEMPS_REEL_REUNIONS.md`, couture 3) |
-| `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
+| `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote`, `sortformer`, `nemotron_diar` ou `remote`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
@@ -460,6 +460,35 @@ avec des accents ou hésitations. Documenté dans `docs/archive/PARAKEET_STT_INT
 
 VRAM : `gpu.parakeet_vram_mb` (défaut 8000 Mo). Dépendance : `nemo_toolkit[asr]`.
 Fichier : `metadata/parakeet.json`.
+
+### `nemotron_diar`
+
+Diarisation NVIDIA **Nemotron 3** (jusqu'à **8 locuteurs**, ordre d'arrivée, non gated,
+licence OpenMDW 1.1), activée via `models.diarization_backend=nemotron_diar`. Elle ne
+passe **pas** par NeMo (la version publiée sur PyPI ne sait pas instancier ce modèle) mais
+par le binaire `audiocpp_cli` du runtime audio.cpp, lancé en **sous-process** — aucun
+serveur, aucun port, GPU ou CPU. Binaire : phase `python -m transcria.installer.cli
+audiocpp` (livré dans les images GPU) ; poids GGUF : page « Modèles ».
+
+Mesuré (0.4.6, trois réunions réelles) : 7 locuteurs exacts sur 1 h 52 en ~15 s sur GPU,
+~57× le temps réel sur CPU ; distribution des temps de parole alignée sur pyannote. La
+sortie du modèle est multi-label : les tours qui se chevauchent sont rendus **exclusifs**
+(la voix la plus confiante l'emporte, à égalité celle qui parlait déjà) et un locuteur
+fantôme (moins de `min_speaker_total_s` de parole au total) est rattaché à sa voix voisine
+— rien n'est jeté. Au-delà de 8 locuteurs saisis dans la fourchette du job, le pipeline
+bascule sur pyannote (comme Sortformer au-delà de 4).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `cli_path` | string | `""` | Binaire `audiocpp_cli` ; vide = `<runtimes>/audiocpp/bin/audiocpp_cli` |
+| `model_path` | string | `""` | GGUF ; vide = `<models>/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf` |
+| `backend` | string | `"auto"` | `auto` (le GPU réservé par la phase, sinon CPU), `cuda`, `cpu` (aucune VRAM réservée) |
+| `threads` | int | `0` | Threads du runtime ; `0` = min(16, cœurs) |
+| `timeout_s` | int | `1800` | Délai maximal du sous-process |
+| `min_speaker_total_s` | float | `2.0` | Sous ce total de parole, un locuteur est rattaché à son voisin |
+| `merge_gap_s` | float | `0.35` | Silence maximal fusionné entre deux tours du même locuteur |
+
+**Redémarrage requis :** non (lu à chaque diarisation).
 
 ### `sortformer`
 
@@ -1590,6 +1619,7 @@ Limites :
 | `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
 | `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
 | `gpu.sortformer_vram_mb` | `3500` | VRAM estimée Sortformer (NeMo) — lue par `get_diarizer_vram_mb("sortformer", config)` |
+| `gpu.nemotron_diar_vram_mb` | `2000` | VRAM estimée Nemotron 3 (audio.cpp) — `0` si `nemotron_diar.backend = cpu` |
 | `gpu.granite_vram_mb` | `6000` | VRAM estimée Granite |
 | `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
 | `gpu.llm_vram_mb` | `60000` | Empreinte **TOTALE** de la LLM d'arbitrage, tous GPU confondus. Depuis la beta.7, elle est **DÉRIVÉE automatiquement** de la taille RÉELLE du modèle (poids du fichier + KV calculé au contexte du palier, `transcria/gpu/llm_footprint`) à l'install, puis **recalée par la mesure au 1ᵉʳ chargement** (Ollama `/api/ps`) — plus besoin de la recalibrer à la main. La vérification/réservation se fait **par carte** (total ÷ nb de cartes de `llm_gpu_indices`) |

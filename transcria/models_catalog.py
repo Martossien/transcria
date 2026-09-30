@@ -21,6 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from transcria.config.local_dirs import resolve_models_dir, resolve_runtimes_dir
 from transcria.gpu.arbitrage_endpoint import (
     is_ollama_backend,
     ollama_model_name,
@@ -29,6 +30,8 @@ from transcria.gpu.arbitrage_endpoint import (
 )
 from transcria.installer.models_lib import PYANNOTE_MODEL_ID, find_hf_cache_model
 from transcria.installer.tiers import get_tier_metadata, recommend_tier
+from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_FILE as NEMOTRON_DIAR_MODEL_FILE
+from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_SUBDIR as NEMOTRON_DIAR_MODEL_SUBDIR
 from transcria.stt.registry import backends as _stt_backends
 
 
@@ -80,8 +83,6 @@ _SERVED_STT_SOURCES: dict[str, dict] = {
 }
 
 
-def resolve_runtimes_dir() -> Path:
-    return Path(os.environ.get("TRANSCRIA_RUNTIMES_DIR") or "./runtimes")
 
 
 def _declared_engine_names(cfg: dict) -> list[str]:
@@ -101,6 +102,14 @@ _DIAR_SOURCES: dict[str, dict] = {
                    "license": "NVIDIA Open Model License",
                    "license_url": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
                    "est_gb": 0.6},
+    # Nemotron 3 (8 locuteurs) : GGUF du runtime audio.cpp, posé sous MODELS_DIR — le
+    # diariseur (transcria/stt/nemotron_diarizer.py) le lit au même endroit.
+    "nemotron_diar": {"repo": "audio-cpp/Nemotron-3-Diarization-GGUF", "gated": False,
+                      "kind": "gguf", "file": NEMOTRON_DIAR_MODEL_FILE,
+                      "target_subdir": NEMOTRON_DIAR_MODEL_SUBDIR,
+                      "license": "OpenMDW 1.1 (poids NVIDIA)",
+                      "license_url": "https://huggingface.co/nvidia/Nemotron-3-Diarization",
+                      "est_gb": 0.2},
 }
 
 
@@ -121,10 +130,6 @@ class ModelSpec:
 
 def resolve_hf_home() -> Path:
     return Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
-
-
-def resolve_models_dir() -> Path:
-    return Path(os.environ.get("MODELS_DIR") or "./models")
 
 
 def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelSpec]:
@@ -176,7 +181,8 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
     if diar:
         specs.append(ModelSpec(
             role="diarization", label=f"Diarisation — {models.get('diarization_backend')}",
-            repo_id=diar["repo"], file=None, kind="hf_cache", target_subdir="", gated=diar["gated"],
+            repo_id=diar["repo"], file=diar.get("file"), kind=diar.get("kind", "hf_cache"),
+            target_subdir=diar.get("target_subdir", ""), gated=diar["gated"],
             license=diar["license"], license_url=diar["license_url"], est_gb=diar["est_gb"]))
 
     # Moteurs STT SERVIS : une ligne par moteur déclaré (manifeste) ou backend routé,
@@ -220,6 +226,16 @@ def served_llm_gguf(cfg: dict) -> Path | None:
         return None
     raw = re.sub(r"\$\{MODELS_DIR(?::-[^}]*)?\}", str(resolve_models_dir()), match.group(1))
     return Path(raw)
+
+
+def _served_other_model(served: Path | None, spec: ModelSpec) -> str | None:
+    """Nom du GGUF réellement servi s'il existe sur disque et diffère de celui du palier."""
+    if served is None or served.name == spec.file:
+        return None
+    try:
+        return served.name if served.is_file() else None
+    except OSError:
+        return None
 
 
 def _candidate_hf_hubs(hf_home: Path) -> list[Path]:
@@ -354,6 +370,14 @@ def catalog_with_status(cfg: dict, *, total_vram_mb: int | None = None) -> dict:
     for spec in specs:
         status = model_status(spec, hf_home=hf_home, models_dir=models_dir,
                               served_path=served, extra_roots=extra_roots, ollama_tags=tags)
+        if spec.role == "arbitrage_llm" and spec.kind == "gguf" and not status["present"]:
+            other = _served_other_model(served, spec)
+            if other:
+                # La LLM du palier manque, mais l'installation en SERT une autre (palier dont
+                # le modèle recommandé a changé depuis l'installation, choix manuel…) : ce
+                # n'est pas un manque, c'est une recommandation — l'UI et le bilan de premier
+                # démarrage ne doivent pas crier « absent » sur une LLM qui fonctionne.
+                status["served_instead"] = other
         items.append({"spec": spec, **status})
     return {
         "items": items,

@@ -114,6 +114,8 @@ tête des scripts de lancement).
   (binaire + `COMMIT`) — WARN avec la commande de provisionnement sinon.
 - **Épinglage** : les commits qualifiés vivent dans
   `transcria/installer/{audiocpp,parakeetcpp}_phase.py` — monter de version = changer le
-  SHA, reconstruire (`--force`), **re-qualifier sur le benchmark** avant de pousser.
+  SHA, reconstruire (`--force`), puis un **test de fumée réel** (lancer le moteur,
+  transcrire un fichier) avant de pousser. La requalification sur le banc est réservée
+  à un changement de MODÈLE, pas à un simple bump du runtime.
 - Ces projets évoluent vite (bug de session corrigé en amont le jour de notre
   signalement) : c'est la raison d'être de l'épinglage et du repli natif.

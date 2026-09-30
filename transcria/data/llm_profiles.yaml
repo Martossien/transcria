@@ -12,7 +12,7 @@
 # la MESURE au 1ᵉʳ load (Ollama /api/ps ; logs llama.cpp/vLLM). Ce fichier ne porte donc que
 # l'IDENTIFIANT du modèle + le contexte + la stratégie de placement + le dtype du KV.
 #
-# Modèles ANCRÉS sur le bench llama.cpp (Qwen3.5-9B / Qwen3.6-27B / Qwen3.6-35B-A3B) ;
+# Modèles ANCRÉS sur le bench llama.cpp (Qwen3.5-9B / Qwen3.8-27B / Qwen3.6-35B-A3B) ;
 # tags/fichiers VÉRIFIÉS à la source (registre Ollama / HF) — jamais de mémoire.
 # Surchargeable : `workflow.arbitration_llm.profiles_file` dans config.yaml.
 
@@ -61,8 +61,11 @@ engines:
          model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q6_K.gguf", dir: "Qwen3.5-9B-Q6_K"}}
       - {id: "24", min_vram_mb: 23000, vram_budget_mb: 24000, gpus: 1, context: 262144,
          model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf", dir: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL"}}
+      # Palier 32 Go (2026-09-30) : Qwen3.8-27B remplace le 3.6-27B. Mesuré llama.cpp v0.5.0,
+      # KV q8, 2 cartes : 192K = 28 462 Mio (3.6 : 29 168). L'amont ne publie que des quants
+      # « UD- » pour la 3.8 ; est_gb = taille réelle du fichier (19,8 Go).
       - {id: "32", min_vram_mb: 31000, vram_budget_mb: 32000, gpus: 2, context: 196608,
-         model: {repo: "unsloth/Qwen3.6-27B-GGUF", file: "Qwen3.6-27B-Q5_K_M.gguf", dir: "Qwen3.6-27B-Q5_K_M"}}
+         model: {repo: "unsloth/Qwen3.8-27B-GGUF", file: "Qwen3.8-27B-UD-Q5_K_M.gguf", dir: "Qwen3.8-27B-UD-Q5_K_M", est_gb: 19.8}}
       - {id: "48", min_vram_mb: 46000, vram_budget_mb: 48000, gpus: 2, context: 262144,
          model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-Q6_K.gguf", dir: "Qwen3.6-35B-A3B-UD-Q6_K"}}
       - {id: "64", min_vram_mb: 60000, vram_budget_mb: 60000, gpus: 3, context: 262144,

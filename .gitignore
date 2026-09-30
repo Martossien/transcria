@@ -102,6 +102,7 @@ transcria/web/translations/messages.pot
 transcria/web/translations/**/*.mo
 models/kroko/
 models/parakeet-cpp/
+models/nemotron-3-diarization/
 runtimes/
 docker-compose.legacy-gpu.yml
 /messages.pot

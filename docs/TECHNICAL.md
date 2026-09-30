@@ -120,6 +120,7 @@ transcria/
 │   │   ├── base_diarizer.py       # BaseDiarizer (ABC) — logique partagée cache/clips/embeddings/fingerprint
 │   │   ├── diarization.py         # DiarizerService(BaseDiarizer) — pyannote GPU + exclusive_turns + checkpoints
 │   │   ├── sortformer_diarizer.py # SortformerDiarizer(BaseDiarizer) — NVIDIA NeMo 4spk, fallback NeMo absent
+│   │   ├── nemotron_diarizer.py   # NemotronDiarizer(BaseDiarizer) — Nemotron 3 (≤ 8 loc.) via audiocpp_cli en sous-process, GPU ou CPU
 │   │   ├── diarizer_factory.py    # create_diarizer(), get_diarizer_vram_mb(), list_available_backends()
 │   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping) — utilise diarizer_factory
 │   │   └── summary.py             # SummaryGenerator (VAD Silero + quick transcript)
@@ -874,6 +875,28 @@ validé côté transcription est `workflow.pyannote_chunking.max_chunk_s=45` ave
 n'ont pas amélioré le comptage en mode nombre inconnu ; `diarization.num_speakers`
 reste le seul levier mesuré qui force un comptage parfait quand l'information est
 connue.
+
+**`nemotron_diarizer.py` — `NemotronDiarizer(BaseDiarizer)`** (0.4.6)
+
+Diarisation NVIDIA Nemotron 3 (jusqu'à 8 locuteurs, non gated). Le modèle exige un encodeur
+Transformer RoPE que NeMo 3.0.0 (PyPI) ne sait pas instancier : le backend lance donc le binaire
+`audiocpp_cli` du runtime audio.cpp en **sous-process** (`--task diar --family nemotron_3_diar
+--turns-out`), sur le GPU réservé par la phase (`--device N`) ou sur CPU (`nemotron_diar.backend`).
+Aucun serveur, aucun port, rien à décharger. L'entrée doit être un WAV PCM : le cache
+`speakers/diarization_16k_mono.wav` du préparateur pyannote est réutilisé (forcé actif).
+
+| Fonction pure | Rôle |
+|---|---|
+| `parse_turns(payload)` | tours bruts (`start_sample`/`end_sample` à 16 kHz, `speaker_id`, `confidence`) → secondes, triés, entrées malformées ignorées |
+| `fold_minor_speakers(turns, min_total_s)` | un locuteur qui parle moins que `min_total_s` au total est un fantôme : ses tours prennent la voix du tour majeur le plus proche (rien n'est jeté) |
+| `exclusive_turns(turns, merge_gap_s)` | balayage des bornes : sur chaque intervalle, la voix la plus confiante l'emporte (à égalité celle qui parlait déjà) ; fusion des tours consécutifs du même locuteur séparés d'au plus `merge_gap_s` |
+| `renumber_by_arrival(...)` | `speaker_N` → `SPEAKER_0N` continu, par ordre d'apparition |
+| `build_result(raw, ...)` | dict canonique (`turns` bruts, `exclusive_turns`, `speakers`, `stats`) |
+
+Mesuré sur trois réunions réelles (0.4.6) : 7 locuteurs exacts sur 1 h 52 en ~15 s (GPU), 4/4 sur
+46 min, et sur un extrait de 15 min un troisième locuteur réel que pyannote fusionnait ; la sortie
+brute chevauche sur 6 à 11 % du temps de parole, d'où le post-traitement. Capacité déclarée dans
+`diarizer_factory.BACKEND_MAX_SPEAKERS` (bascule pyannote au-delà, comme Sortformer au-delà de 4).
 
 **`sortformer_diarizer.py` — `SortformerDiarizer(BaseDiarizer)`**
 

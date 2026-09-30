@@ -25,11 +25,12 @@ from typing import Any, Protocol
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
 from transcria.installer.opencode_lib import (
     OPENCODE_INSTALL_URL,
+    OPENCODE_PINNED_VERSION,
     OpencodeDetection,
     _best_effort_chown_tree,
     detect_opencode,
-    ensure_shell_path,
     install_opencode_binary,
+    private_opencode_home,
     render_install_prompt,
     render_setup_log,
 )
@@ -58,10 +59,10 @@ class OpencodePlan:
     profile: str = ""
     needs_llm: bool = True
     interactive: bool = True
-    current_path: str = ""
-    rc_files: tuple[Path, ...] = ()
     venv_python: Path | None = None
     install_url: str = OPENCODE_INSTALL_URL
+    # Copie privée (aucun opencode trouvé) : release épinglée, sous <install>/runtimes/opencode.
+    pinned_version: str = OPENCODE_PINNED_VERSION
 
 
 @dataclass
@@ -123,23 +124,25 @@ def apply_opencode(
         # automatiquement ; en interactif, on demande.
         do_install = True if not plan.interactive else confirm(render_install_prompt(opencode_home=plan.opencode_home))
         if do_install:
-            destination = plan.opencode_home / ".opencode" / "bin" / "opencode"
-            _emit(console, "download-start")
+            # Copie PRIVÉE épinglée (jamais dans ~/.opencode : c'est la place de l'opencode
+            # de l'exploitant, v1 ou v2). Rien n'est ajouté au PATH : le pipeline lit
+            # `workflow.arbitration_llm.opencode_bin`.
+            private_home = private_opencode_home(plan.install_dir)
+            destination = private_home / ".opencode" / "bin" / "opencode"
+            _emit(console, "download-start", value=plan.pinned_version)
             ok = install_opencode_binary(
-                opencode_home=plan.opencode_home,
+                opencode_home=private_home,
                 install_url=plan.install_url,
                 service_user=plan.service_user,
                 run=runner,
+                version=plan.pinned_version,
+                modify_path=False,
             )
             if ok:
                 _emit(console, "installed", value=str(destination))
                 binary = destination
                 set_yaml_file_value(plan.config_path, _OPENCODE_BIN_KEY, str(destination))
                 result.record("installed")
-                updated = ensure_shell_path(destination.parent, list(plan.rc_files), current_path=plan.current_path)
-                if updated is not None:
-                    _emit(console, "path-updated", value=str(updated))
-                    _emit(console, "shell-reload", value=str(destination.parent))
             else:
                 for event in ("download-failed", "manual-title", "manual-curl", "manual-alt"):
                     _emit(console, event)

@@ -23,6 +23,22 @@ RunFn = Callable[..., subprocess.CompletedProcess[str]]
 # ne suit plus (404). Le script gère archive/extraction/arch/musl/baseline/PATH.
 OPENCODE_INSTALL_URL = "https://opencode.ai/install"
 
+# Ligne v1 épinglée pour la COPIE PRIVÉE de TranscrIA (installée seulement quand aucun
+# opencode n'est trouvé). Vérifié au registre le 2026-09-30 (opencode-ai 1.18.33). La v2
+# (@opencode/cli) est SUPPORTÉE à l'exécution (adaptateur transcria/llm_tools/opencode_cli)
+# mais pas installée par nous tant qu'un parcours réel ne l'a pas qualifiée.
+OPENCODE_PINNED_VERSION = "1.18.33"
+
+
+def private_opencode_home(install_dir: Path) -> Path:
+    """HOME sous lequel l'installateur officiel pose NOTRE copie : ``<install>/runtimes/opencode``.
+
+    Elle ne prend jamais la place d'un opencode de l'exploitant (l'installateur officiel
+    écrase ``~/.opencode/bin/opencode``, et v1/v2 partagent ce nom) : un binaire déjà
+    présent est utilisé tel quel, la copie privée ne sert qu'en son absence.
+    """
+    return Path(install_dir) / "runtimes" / "opencode"
+
 
 @dataclass(frozen=True)
 class OpencodeDetection:
@@ -87,28 +103,6 @@ def render_opencode_detection_shell(detection: OpencodeDetection) -> str:
     return "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
 
 
-def ensure_shell_path(opencode_dir: Path, rc_files: list[Path], *, current_path: str = "") -> Path | None:
-    """Ajoute `opencode_dir` au premier fichier rc adapté et retourne le fichier modifié."""
-    opencode_dir = Path(opencode_dir)
-    opencode_dir_s = str(opencode_dir)
-    path_entries = [entry for entry in current_path.split(":") if entry]
-    if opencode_dir_s in path_entries:
-        return None
-
-    export_line = f'export PATH="{opencode_dir_s}:$PATH"'
-    for rc in rc_files:
-        rc = Path(rc)
-        if not rc.is_file():
-            continue
-        content = rc.read_text(encoding="utf-8")
-        if opencode_dir_s in content:
-            return None
-        suffix = "" if content.endswith("\n") or not content else "\n"
-        rc.write_text(f"{content}{suffix}{export_line}\n", encoding="utf-8")
-        return rc
-    return None
-
-
 def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
     """Rend les messages d'installation opencode utilisés par install.sh (FR/EN).
 
@@ -122,10 +116,6 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
         return f"INFO:{t('oc_download_start')}\n"
     if event == "installed":
         return f"OK:{t('oc_installed', value=value)}\n"
-    if event == "path-updated":
-        return f"OK:{t('oc_path_updated', value=value)}\n"
-    if event == "shell-reload":
-        return f"INFO:{t('oc_shell_reload', value=value)}\n"
     if event == "download-failed":
         return f"ERROR:{t('oc_download_failed')}\n"
     if event == "manual-title":
@@ -176,6 +166,8 @@ def install_opencode_binary(
     service_user: str = "",
     run: RunFn = subprocess.run,
     env: dict[str, str] | None = None,
+    version: str = "",
+    modify_path: bool = True,
 ) -> bool:
     """Installe opencode via l'installateur officiel et ajuste le propriétaire si possible.
 
@@ -184,12 +176,20 @@ def install_opencode_binary(
     (x64/arm64), la libc musl et surtout la variante AVX2 *baseline* — sans elle, le binaire
     standard plante en « illegal instruction » sur un CPU/VM sans AVX2. Le script installe dans
     `$HOME/.opencode/bin/opencode` ; on force `HOME=opencode_home` pour cibler le bon répertoire
-    (root ou utilisateur de service), puis chown best-effort vers l'utilisateur de service.
+    (copie privée, root ou utilisateur de service), puis chown best-effort vers l'utilisateur
+    de service. `version` épingle la release (`--version X.Y.Z`) ; `modify_path=False` laisse
+    les fichiers rc du shell intacts (copie privée : rien à mettre sur le PATH).
     """
     opencode_home = Path(opencode_home)
     run_env = dict(os.environ if env is None else env)
     run_env["HOME"] = str(opencode_home)
-    result = run(["bash", "-c", f"curl -fsSL {shlex.quote(install_url)} | bash"], check=False, env=run_env)
+    args = []
+    if version:
+        args += ["--version", version]
+    if not modify_path:
+        args.append("--no-modify-path")
+    script = f"curl -fsSL {shlex.quote(install_url)} | bash" + (" -s -- " + " ".join(args) if args else "")
+    result = run(["bash", "-c", script], check=False, env=run_env)
     if getattr(result, "returncode", 1) != 0:
         return False
 
@@ -204,7 +204,7 @@ def install_opencode_binary(
 
 
 def classify_opencode_install(binary: Path) -> str:
-    """Type d'install d'un binaire opencode : ``'npm'`` | ``'official'`` | ``'brew'`` | ``'unknown'``.
+    """Type d'install : ``'npm'`` (v1, opencode-ai) | ``'npm-v2'`` (@opencode/cli) | ``'official'`` | ``'brew'`` | ``'unknown'``.
 
     Résout d'abord les liens symboliques (l'install npm expose typiquement un symlink PATH
     ``/usr/local/bin/opencode`` → ``…/node_modules/opencode-ai/bin/opencode.exe``), puis reconnaît
@@ -215,6 +215,8 @@ def classify_opencode_install(binary: Path) -> str:
         real = Path(binary).as_posix()
     if "node_modules/opencode-ai" in real:
         return "npm"
+    if "node_modules/@opencode/cli" in real:
+        return "npm-v2"
     if "/.opencode/bin/" in real:
         return "official"
     if "/Cellar/opencode" in real or "/homebrew/" in real:
@@ -228,6 +230,8 @@ def opencode_upgrade_command(kind: str, binary: Path) -> list[str] | None:
         return [str(binary), "upgrade"]  # binaire officiel auto-actualisable en place
     if kind == "npm":
         return ["npm", "install", "-g", "opencode-ai@latest"]
+    if kind == "npm-v2":
+        return ["npm", "install", "-g", "@opencode/cli@latest"]
     if kind == "brew":
         return ["brew", "upgrade", "opencode"]
     return None
@@ -262,7 +266,7 @@ def upgrade_opencode(
         return OpencodeUpgradeResult(
             kind="unknown", ok=False, version_before=before, version_after=before,
             message="type d'install opencode inconnu — mise à jour manuelle requise "
-                    "(npm i -g opencode-ai@latest | opencode upgrade | brew upgrade opencode)",
+                    "(npm i -g opencode-ai@latest | npm i -g @opencode/cli@latest | opencode upgrade | brew upgrade opencode)",
         )
     run_env = dict(os.environ if env is None else env)
     if kind == "official":
@@ -286,17 +290,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="store_true", help="affiche la version opencode")
     parser.add_argument("--find", action="store_true", help="cherche le binaire opencode")
     parser.add_argument("--detect", action="store_true", help="cherche opencode et rend OPENCODE_BIN/OPENCODE_VER")
-    parser.add_argument("--ensure-path", action="store_true", help="ajoute le dossier opencode au shell rc si nécessaire")
     parser.add_argument("--install-binary", action="store_true", help="télécharge et prépare le binaire opencode")
     parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation opencode")
     parser.add_argument("--install-prompt", action="store_true", help="rend la question d'installation opencode")
     parser.add_argument("--bin", default=None, help="chemin du binaire opencode")
-    parser.add_argument("--opencode-dir", default=None)
     parser.add_argument("--opencode-home", default=None)
     parser.add_argument("--user-home", default=None)
     parser.add_argument("--configured-bin", default=None)
-    parser.add_argument("--current-path", default="")
-    parser.add_argument("--rc-file", action="append", default=[])
     parser.add_argument("--event", default="")
     parser.add_argument("--value", default="")
     parser.add_argument("--profile", default="")
@@ -337,16 +337,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
             end="",
         )
-        return 0
-    if args.ensure_path:
-        if not args.opencode_dir:
-            print("--opencode-dir requis avec --ensure-path", file=sys.stderr)
-            return 2
-        rc_files = [Path(path) for path in args.rc_file]
-        updated = ensure_shell_path(Path(args.opencode_dir), rc_files, current_path=args.current_path)
-        if updated is None:
-            return 1
-        print(updated)
         return 0
     if args.install_binary:
         if not args.opencode_home:

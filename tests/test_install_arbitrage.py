@@ -262,9 +262,9 @@ def test_apply_placement_calibration_writes_topology_plan(tmp_path: Path):
 
     cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
     assert placement.feasible is True
-    assert cfg["gpu"]["llm_vram_mb"] == 29200
+    assert cfg["gpu"]["llm_vram_mb"] == 28500
     assert cfg["gpu"]["llm_gpu_indices"] == [0, 1]
-    assert cfg["gpu"]["llm_vram_mb_per_gpu"] == [14600, 14600]
+    assert cfg["gpu"]["llm_vram_mb_per_gpu"] == [14250, 14250]
 
 
 def test_apply_profile_cible_la_plus_grosse_carte_de_la_machine(tmp_path: Path):
@@ -405,3 +405,59 @@ def test_run_llama_detector_is_non_blocking(monkeypatch, tmp_path: Path):
     assert calls == [["/venv/bin/python", str(tmp_path / "scripts" / "detect_llama_server.py"), "--format", "shell"]]
     assert 'LLAMA_SERVER=""' in stdout
     assert stderr == "introuvable\n"
+
+
+# Options llama-server qu'AUCUN profil livré ne doit passer : elles n'existent que sur une
+# partie de la plage de versions supportée (b9630 → semver), et un argument inconnu fait
+# sortir llama-server avant d'ouvrir son port.
+#   --no-mmap / --mmap / --mlock : retirées en v0.5.0 (remplacées par --load-mode) ;
+#   --load-mode                  : absente avant b10105.
+# Le chargement par défaut (mmap) marche partout ; mesuré à +1,5 s sur un 27B, RSS égal.
+_VERSION_BOUND_LLAMA_FLAGS = ("--no-mmap", "--mmap", "--mlock", "--load-mode")
+
+
+def test_shipped_launch_profiles_avoid_version_bound_llama_flags():
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    shipped = sorted((scripts / "arbitrage_profiles").glob("*.sh")) + [
+        scripts / "launch_arbitrage.sh", scripts / "launch_arbitrage.sh.template"]
+    assert len(shipped) >= 9
+    for script in shipped:
+        code = [line for line in script.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+        for flag in _VERSION_BOUND_LLAMA_FLAGS:
+            assert not any(flag in line.split() for line in code), f"{script.name} passe {flag}"
+
+
+def test_each_llamacpp_tier_has_exactly_one_profile_launching_the_catalogue_model():
+    # Le catalogue et les profils livrés ne doivent pas dériver : pour chaque palier, UN
+    # script charge le fichier du catalogue, et c'est celui que rend la recherche — même
+    # quand un ancien profil du même palier est conservé pour les installations existantes.
+    from transcria.installer.tiers import LLM_TIERS, find_tier_profile
+
+    profiles_dir = Path(__file__).resolve().parents[1] / "scripts" / "arbitrage_profiles"
+    for tier_id, meta in LLM_TIERS.items():
+        launching = [p.name for p in sorted(profiles_dir.glob(f"{tier_id}gb_*.sh"))
+                     if meta.file in p.read_text(encoding="utf-8")]
+        assert len(launching) == 1, f"palier {tier_id} : {launching} chargent {meta.file}"
+        found = find_tier_profile(profiles_dir, tier_id)
+        assert found is not None and found.name == launching[0]
+        assert find_tier_profile(profiles_dir, f"{tier_id}gb") == found   # les deux graphies
+
+
+def test_find_tier_profile_prefers_the_catalogue_model_over_alphabetical_order(tmp_path, monkeypatch):
+    import transcria.installer.tiers as tiers_mod
+
+    (tmp_path / "32gb_ancien.sh").write_text('--model "$MODELS_DIR/ancien/ancien.gguf"\n')
+    (tmp_path / "32gb_nouveau.sh").write_text('--model "$MODELS_DIR/nouveau/nouveau.gguf"\n')
+    meta = tiers_mod.LlmTierMetadata(tier="32", repo="r", file="nouveau.gguf", directory="nouveau", label="l")
+    monkeypatch.setattr(tiers_mod, "get_tier_metadata", lambda tier: meta)
+
+    assert tiers_mod.find_tier_profile(tmp_path, "32").name == "32gb_nouveau.sh"
+    assert tiers_mod.find_tier_profile(tmp_path, "99") is None
+
+
+def test_find_tier_profile_falls_back_to_first_match_outside_the_catalogue(tmp_path):
+    from transcria.installer.tiers import find_tier_profile
+
+    (tmp_path / "99gb_b.sh").write_text("x\n")
+    (tmp_path / "99gb_a.sh").write_text("x\n")
+    assert find_tier_profile(tmp_path, "99").name == "99gb_a.sh"

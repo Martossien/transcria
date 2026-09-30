@@ -13,6 +13,11 @@ binaire qui CHARGERA nos modèles » :
    clone superficiel) se déclare ``version: 579`` — le compteur de build est faux.
    La seule source autoritaire est ``git describe`` dans l'arbre source ; le
    self-report ne sert que de signal *mou*.
+   Depuis le 2026-08-17, upstream tague AUSSI en semver (``v0.1.0``, ``v0.5.0``…) et
+   le binaire se déclare ``version: 0.5.0-dev (build 1, commit …)`` : le compteur
+   ``build`` y est encore moins fiable (``1`` sur un clone superficiel), mais le
+   semver vient du ``CMakeLists`` — il fait foi. Tout tag semver descend de b9630
+   (``git merge-base --is-ancestor b9630 v0.1.0``) : un semver satisfait le seuil.
 2. **Bibliothèques** — un build compilé dépend de ses ``.so`` via RPATH (ici un env
    conda ``ik_build``). Si l'env est déplacé/supprimé, ``ldd`` montre « not found »
    et le serveur ne démarre pas — alors que le fichier binaire existe et est
@@ -62,6 +67,8 @@ class RuntimeReport:
     resolved_build: int | None
     build_source: str  # "git" | "self-report" | "unknown"
     has_cuda: bool
+    # Version lisible, tous schémas confondus : « b9632+4 », « v0.5.0 », ou « ? ».
+    resolved_version: str = "?"
     missing_libs: list[str] = field(default_factory=list)
     findings: list[RuntimeFinding] = field(default_factory=list)
 
@@ -74,6 +81,11 @@ def parse_version_output(text: str | None) -> tuple[int | None, str | None]:
     """
     if not text:
         return None, None
+    if parse_semver(text) is not None and re.search(r"version:\s*v?\d+\.\d+", text):
+        # Ère semver : « version: 0.5.0-dev (build 1, commit 7fe450e) » — pas de compteur
+        # comparable au seuil ; la version se lit par `parse_semver`.
+        m = re.search(r"commit\s+([0-9a-fA-F]+)", text)
+        return None, (m.group(1) if m else None)
     m = re.search(r"version:\s*(\d+)\s*\(([^)]+)\)", text)
     if m:
         return int(m.group(1)), m.group(2).strip()
@@ -82,6 +94,18 @@ def parse_version_output(text: str | None) -> tuple[int | None, str | None]:
     if m:
         return int(m.group(1)), None
     return None, None
+
+
+def parse_semver(text: str | None) -> str | None:
+    """Extrait un semver upstream (``0.5.0``) d'un ``--version`` ou d'un ``git describe``.
+
+    Exemples : ``version: 0.5.0-dev (build 1, commit 7fe450e)`` → ``"0.5.0"`` ;
+    ``v0.5.0-12-g81ff93e`` → ``"0.5.0"``. Un tag ``bNNNN`` ou un compteur nu → ``None``.
+    """
+    if not text:
+        return None
+    m = re.search(r"(?:version:\s*|\bv)(\d+\.\d+\.\d+)", text.strip())
+    return m.group(1) if m else None
 
 
 def parse_git_describe(text: str | None) -> tuple[int | None, int, str | None]:
@@ -151,6 +175,8 @@ def evaluate_runtime(
     has_cuda: bool,
     expects_cuda: bool = True,
     min_build: int = MIN_BUILD,
+    semver: str | None = None,
+    semver_source: str = "self-report",
 ) -> RuntimeReport:
     """Rend un verdict sur un binaire à partir des faits déjà collectés.
 
@@ -159,7 +185,8 @@ def evaluate_runtime(
         indépendant du modèle : c'est le signal le plus sûr.
       - **version ⇒ WARN au pire** : le besoin ≥ seuil est RELATIF au modèle chargé
         (les archis gated-delta/gemma4 l'exigent ; un autre modèle marche sur une
-        version plus vieille). L'arbre git fait foi (``describe_build``) ; à défaut, un
+        version plus vieille). L'arbre git fait foi (``describe_build``) ; un semver
+        upstream (``semver``) satisfait toujours le seuil ; à défaut, un
         self-report < seuil reste un WARN (compteur non fiable — un vrai b9632 affiche
         579 ; un fork comme ik_llama numérote en tNNNN). Jamais un rejet sur un numéro.
       - **CUDA** : un build sans CUDA alors qu'on l'attend ⇒ WARN (utilisable mais
@@ -198,9 +225,22 @@ def evaluate_runtime(
             )
         else:
             findings.append(RuntimeFinding("ok", f"version {tag} (arbre git) ≥ b{min_build}."))
+        resolved_version = tag
+    elif semver is not None:
+        resolved_build = None
+        build_source = semver_source
+        resolved_version = f"v{semver}"
+        findings.append(
+            RuntimeFinding(
+                "ok",
+                f"version v{semver} — tag semver upstream, postérieur à b{min_build} "
+                "(tout tag vX.Y.Z en descend).",
+            )
+        )
     elif version_build is not None:
         resolved_build = version_build
         build_source = "self-report"
+        resolved_version = f"b{version_build}"
         if version_build >= min_build:
             findings.append(
                 RuntimeFinding("ok", f"version auto-déclarée {version_build} ≥ b{min_build}.")
@@ -220,6 +260,7 @@ def evaluate_runtime(
     else:
         resolved_build = None
         build_source = "unknown"
+        resolved_version = "?"
         findings.append(
             RuntimeFinding("warn", f"version indéterminée — impossible de garantir ≥ b{min_build}.")
         )
@@ -244,6 +285,7 @@ def evaluate_runtime(
         resolved_build=resolved_build,
         build_source=build_source,
         has_cuda=has_cuda,
+        resolved_version=resolved_version,
         missing_libs=list(missing_libs),
         findings=findings,
     )

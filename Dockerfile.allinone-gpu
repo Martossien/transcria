@@ -30,8 +30,10 @@
 
 ARG CUDA_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
 ARG TORCH_CUDA_TAG=cu130
-# Tag llama.cpp ≥ b9630 (archi gated-delta requise par les paliers, cf. scripts/arbitrage_profiles/).
-ARG LLAMA_CPP_REF=b9816
+# Tag llama.cpp (semver upstream depuis 2026-08 ; tout vX.Y.Z descend de b9630, seuil des archis
+# gated-delta des paliers — cf. scripts/arbitrage_profiles/). Même release que le binaire
+# précompilé épinglé par install.sh.
+ARG LLAMA_CPP_REF=v0.5.0
 
 # ── Étage builder-llama : compile llama-server (CUDA) ───────────────────────────
 FROM ${CUDA_IMAGE} AS llama-builder
@@ -76,8 +78,8 @@ RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/
 # Binaires SEULS (/opt/runtimes) — modèles par VOLUME (snapshot HF pur pour
 # Qwen3-ASR-1.7B-hf : `hf download` suffit ; pointer STT_MODEL sur le chemin monté).
 FROM ${CUDA_IMAGE} AS stt-runtimes-builder
-ARG AUDIOCPP_REF=c6805de83ce44d50ad2731205ecc6e9aae99e517
-ARG PARAKEETCPP_REF=e75de9b6b9b688fd293aa22f7e27aa724ea286f8
+ARG AUDIOCPP_REF=795c45fbde0a7d29c93b22199728ff5caaec02e5
+ARG PARAKEETCPP_REF=2c3bb736a44f2aa2e386ed06a4787122fb952575
 ENV DEBIAN_FRONTEND=noninteractive
 # Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
 RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
@@ -89,9 +91,9 @@ RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
     && cmake -S /tmp/audiocpp -B /tmp/audiocpp/build \
         -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DAUDIOCPP_DEPLOYMENT_BUILD=ON \
         -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90;120" \
-    && cmake --build /tmp/audiocpp/build -j "$(nproc)" --target audiocpp_server \
+    && cmake --build /tmp/audiocpp/build -j "$(nproc)" --target audiocpp_server --target audiocpp_cli \
     && mkdir -p /opt/runtimes/audiocpp/bin \
-    && cp /tmp/audiocpp/build/bin/audiocpp_server /opt/runtimes/audiocpp/bin/ \
+    && cp /tmp/audiocpp/build/bin/audiocpp_server /tmp/audiocpp/build/bin/audiocpp_cli /opt/runtimes/audiocpp/bin/ \
     && echo "${AUDIOCPP_REF}" > /opt/runtimes/audiocpp/COMMIT \
     && rm -rf /tmp/audiocpp
 # Stubs driver CUDA : l'exécutable lie libcuda.so.1 (symboles VMM cuMem* de ggml) absent

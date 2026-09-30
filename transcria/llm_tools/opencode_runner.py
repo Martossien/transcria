@@ -17,6 +17,12 @@ from pathlib import Path
 from transcria.context.meeting_type_prompts import substitute_placeholders
 from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
 from transcria.llm_tools import llm_parsing
+from transcria.llm_tools.opencode_cli import (
+    OpencodeVersion,
+    build_run_command,
+    build_run_env,
+    parse_opencode_version,
+)
 from transcria.llm_tools.opencode_setup import find_opencode_binary
 
 # Politique de langue et résolution des prompts extraites vers gpu/prompt_locator.py
@@ -33,6 +39,9 @@ from transcria.llm_tools.prompt_locator import (  # noqa: F401
 )
 
 logger = logging.getLogger(__name__)
+
+# Versions d'opencode déjà lues, par (chemin, mtime_ns, taille) — cf. OpenCodeRunner.opencode_version.
+_VERSION_CACHE: dict[tuple[str, int, int], OpencodeVersion] = {}
 
 _DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
 
@@ -170,18 +179,57 @@ class OpenCodeRunner:
     _parse_structured_data = staticmethod(llm_parsing.parse_structured_data)
     _parse_structured_summary = staticmethod(llm_parsing.parse_structured_summary)
 
-    def _terminate_proc(self, proc: subprocess.Popen) -> None:
-        """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire."""
-        import signal as _sig
+    @staticmethod
+    def opencode_version(opencode_path: str) -> OpencodeVersion:
+        """Version majeure du binaire — lue par ``--version``, mémorisée par (chemin, mtime, taille).
+
+        opencode se met à jour SEUL (constaté : 1.18.22 → 1.18.30 sans intervention) et la
+        v2 change la ligne de commande : la version est relue dès que le fichier change.
+        Illisible ⇒ ligne v1 (l'historique) avec un avertissement.
+        """
         try:
-            proc.send_signal(_sig.SIGTERM)
+            st = os.stat(opencode_path)
+            key = (opencode_path, st.st_mtime_ns, st.st_size)
+        except OSError:
+            key = (opencode_path, 0, 0)
+        cached = _VERSION_CACHE.get(key)
+        if cached is not None:
+            return cached
+        try:
+            out = subprocess.run([opencode_path, "--version"], capture_output=True, text=True, timeout=30, check=False)
+            version = parse_opencode_version((out.stdout or "") + "\n" + (out.stderr or ""))
+        except Exception as exc:  # noqa: BLE001 — lire la version ne doit jamais empêcher un run
+            logger.warning("opencode --version injoignable (%s) — ligne de commande v1 supposée", exc)
+            version = OpencodeVersion(0, raw=str(exc))
+        if not version.known:
+            logger.warning("Version d'opencode illisible (%r) — ligne de commande v1 supposée", version.raw)
+        _VERSION_CACHE[key] = version
+        return version
+
+    def _terminate_proc(self, proc: subprocess.Popen) -> None:
+        """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire.
+
+        Vise le GROUPE de process (``start_new_session``) : le paquet npm interpose un
+        wrapper Node devant le vrai binaire, et la v2 en ``--standalone`` lance son serveur
+        privé en enfant — un signal au seul PID parent laisserait la session LLM tourner.
+        """
+        import signal as _sig
+
+        def _signal(sig: int) -> None:
+            try:
+                os.killpg(os.getpgid(proc.pid), sig)
+            except (ProcessLookupError, PermissionError, OSError):
+                proc.send_signal(sig)
+
+        try:
+            _signal(_sig.SIGTERM)
         except ProcessLookupError:
             return
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             try:
-                proc.send_signal(_sig.SIGKILL)
+                _signal(_sig.SIGKILL)
                 proc.wait(timeout=5)
             except (ProcessLookupError, subprocess.TimeoutExpired):
                 pass
@@ -528,15 +576,16 @@ class OpenCodeRunner:
         # dans opencode.json par `opencode_setup.ensure_agent_permissions` : external_directory
         # = allow sur l'arbre de scratch, deny ailleurs (jamais `ask`). Les deux ensemble (dir
         # hors dépôt + permission déterministe) rendent l'agent fiable en non-interactif.
-        cmd = [
-            opencode_path, "run", "--format", "json",
-            "--dir", str(self.work_dir),
-            "--model", self.model_ref,
-            instruction,
-            "-f", prompt_file,
-        ]
+        # v1 : --dir ancre la racine de projet. v2 (2026-09) : plus de --dir, la racine vient
+        # de PWD (posé par build_run_env) et --standalone évite le serveur partagé par
+        # utilisateur (qui ignorerait XDG_DATA_HOME et survivrait au kill du client).
+        version = self.opencode_version(opencode_path)
+        cmd = build_run_command(
+            opencode_path, version=version, work_dir=str(self.work_dir),
+            model_ref=self.model_ref, instruction=instruction, prompt_file=prompt_file,
+        )
 
-        logger.info("opencode run --model %s (dir=%s)", self.model_ref, self.work_dir)
+        logger.info("opencode %s run --model %s (dir=%s)", version, self.model_ref, self.work_dir)
         logger.debug("CMD: %s", " ".join(cmd))
 
         pid_file = self.work_dir / ".opencode.pid"
@@ -565,7 +614,8 @@ class OpenCodeRunner:
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(self.work_dir),
-                env={**os.environ, "TMPDIR": str(self.work_dir), "XDG_DATA_HOME": str(data_home)},
+                env=build_run_env(dict(os.environ), work_dir=str(self.work_dir), data_home=str(data_home)),
+                start_new_session=True,   # un groupe à nous : cf. _terminate_proc
             )
             pid_file.write_text(str(proc.pid))
             logger.info("opencode démarré PID=%d (job_dir=%s)", proc.pid, self.work_dir.name)

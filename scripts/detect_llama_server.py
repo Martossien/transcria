@@ -34,6 +34,7 @@ from transcria.llm_tools.llama_runtime import (  # noqa: E402
     evaluate_runtime,
     parse_git_describe,
     parse_ldd_output,
+    parse_semver,
     parse_version_output,
 )
 
@@ -147,9 +148,17 @@ def collect_report(bin_path: str) -> tuple[RuntimeReport, str | None]:
     describe_build = describe_ahead = None
     describe_commit = None
     repo = _find_source_repo(bin_path)
+    semver = parse_semver(version_out)
+    semver_source = "self-report"
     if repo is not None:
-        describe_out = _run(["git", "-C", repo, "describe", "--tags"], timeout=10)
+        # Les tags `bNNNN` d'abord (compteur comparable au seuil) ; sur un clone qui ne les a
+        # pas — `git clone --branch v0.5.0` — le tag semver fait foi.
+        describe_out = _run(["git", "-C", repo, "describe", "--tags", "--match", "b[0-9]*"], timeout=10)
         describe_build, describe_ahead, describe_commit = parse_git_describe(describe_out)
+        if describe_build is None:
+            git_semver = parse_semver(_run(["git", "-C", repo, "describe", "--tags", "--match", "v[0-9]*"], timeout=10))
+            if git_semver is not None:
+                semver, semver_source = git_semver, "git"
     describe_ahead = describe_ahead or 0
 
     ldd_out = _run(["ldd", bin_path], timeout=15)
@@ -165,6 +174,8 @@ def collect_report(bin_path: str) -> tuple[RuntimeReport, str | None]:
         describe_commit=describe_commit,
         missing_libs=missing,
         has_cuda=has_cuda,
+        semver=semver,
+        semver_source=semver_source,
     )
     hint = _suggest_ld_path(missing, resolved)
     return report, hint
@@ -177,8 +188,7 @@ def _icon(level: str) -> str:
 def _print_human(report: RuntimeReport, hint: str | None, others: list[str]) -> None:
     head = _icon(report.level)
     print(f"{head} llama-server : {report.path}")
-    build = f"b{report.resolved_build}" if report.resolved_build is not None else "?"
-    print(f"  version : {build} (source : {report.build_source}) — requis ≥ b{MIN_BUILD}")
+    print(f"  version : {report.resolved_version} (source : {report.build_source}) — requis ≥ b{MIN_BUILD}")
     print(f"  CUDA    : {'oui' if report.has_cuda else 'non'}")
     for f in report.findings:
         print(f"  {_icon(f.level)} {f.message}")
@@ -195,7 +205,8 @@ def _print_shell(report: RuntimeReport, hint: str | None) -> None:
     print(f'LLAMA_SERVER="{report.path}"')
     print(f"LLAMA_OK={1 if report.usable else 0}")
     print(f"LLAMA_LEVEL={report.level}")
-    print(f"LLAMA_BUILD={report.resolved_build if report.resolved_build is not None else ''}")
+    # LLAMA_BUILD = version lisible (« b9632+4 » ou « v0.5.0 ») : install.sh la journalise telle quelle.
+    print(f"LLAMA_BUILD={report.resolved_version if report.resolved_version != '?' else ''}")
     print(f"LLAMA_BUILD_SOURCE={report.build_source}")
     print(f"LLAMA_HAS_CUDA={1 if report.has_cuda else 0}")
     print(f'LLAMA_LD_LIBRARY_PATH="{hint or ""}"')
@@ -207,6 +218,7 @@ def _report_to_dict(report: RuntimeReport, hint: str | None) -> dict:
         "usable": report.usable,
         "level": report.level,
         "build": report.resolved_build,
+        "version": report.resolved_version,
         "build_source": report.build_source,
         "has_cuda": report.has_cuda,
         "missing_libs": report.missing_libs,

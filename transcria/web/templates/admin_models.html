@@ -57,6 +57,10 @@
             {% elif it.progress and it.progress.status == 'error' %}
               <span class="badge bg-danger">{{ _('échec') }}</span>
               <div class="small text-danger">{{ it.progress.message }}</div>
+            {% elif it.get('served_instead') %}
+              <span class="badge bg-info text-dark">{{ _('recommandé') }}</span>
+              <span class="small text-muted">~{{ _('%(n)s Go', n=s.est_gb) }}</span>
+              <div class="small text-muted">{{ _('La LLM servie actuellement (%(name)s) fonctionne. Ce modèle est celui recommandé aujourd\'hui pour votre matériel : téléchargez-le puis « Activer » pour basculer.', name=it.served_instead) }}</div>
             {% else %}
               <span class="badge bg-secondary">{{ _('absent') }}</span>
               {% if s.kind == 'ollama' %}

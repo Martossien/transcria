@@ -5,6 +5,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+from transcria.config.local_dirs import resolve_models_dir
 from transcria.diagnostics.checks.common import (
     FAIL,
     OK,
@@ -13,6 +14,8 @@ from transcria.diagnostics.checks.common import (
     _t,
 )
 from transcria.diagnostics.checks.probes import _dir_writable, _job_files_table_exists
+from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_FILE as NEMOTRON_DIAR_MODEL_FILE
+from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_SUBDIR as NEMOTRON_DIAR_MODEL_SUBDIR
 
 
 def check_storage(
@@ -104,6 +107,12 @@ def expected_model_assets(cfg: dict) -> list[tuple[str, str, str]]:
         if diar == "sortformer":
             ref = str((cfg.get("sortformer") or {}).get("model_id", "nvidia/diar_streaming_sortformer_4spk-v2.1"))
             assets.append(("Diarisation Sortformer", _kind(ref), ref))
+        elif diar == "nemotron_diar":
+            # GGUF du runtime audio.cpp sous MODELS_DIR (chemin, jamais le cache HF) — le
+            # binaire audiocpp_cli, lui, relève de la vérification des runtimes.
+            ref = str((cfg.get("nemotron_diar") or {}).get("model_path") or
+                      resolve_models_dir() / NEMOTRON_DIAR_MODEL_SUBDIR / NEMOTRON_DIAR_MODEL_FILE)
+            assets.append(("Diarisation Nemotron 3", "path", ref))
         else:
             ref = str(models.get("model_id", "pyannote/speaker-diarization-community-1"))
             assets.append(("Diarisation pyannote", _kind(ref), ref))

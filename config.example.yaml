@@ -157,7 +157,8 @@ models:
   #                lanceur scripts/launch_stt_qwen3asr.sh + bloc inference.stt.backends)
   #   "nemotron" → ×13, qualité « aperçu » (runtime servi requis)
   summary_stt_backend: null
-  diarization_backend: "pyannote"   # "pyannote" (défaut, illimité, gated) ou "sortformer" (≤4 loc., non gated)
+  diarization_backend: "pyannote"   # "pyannote" (défaut, illimité, gated), "sortformer" (≤4 loc., non gated)
+                                    # ou "nemotron_diar" (≤8 loc., non gated, runtime audio.cpp — GPU ou CPU)
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"
   # Chemin du modèle Cohere ASR, passé tel quel à transformers `from_pretrained`.
@@ -347,6 +348,21 @@ sortformer:
   model_id: "nvidia/diar_streaming_sortformer_4spk-v2.1"
   vram_mb: 3500
 
+nemotron_diar:
+  # Diarisation NVIDIA Nemotron 3 (jusqu'à 8 locuteurs, non gated, OpenMDW 1.1), servie
+  # par le binaire audiocpp_cli du runtime audio.cpp en sous-process — aucun serveur.
+  # Activer via models.diarization_backend: "nemotron_diar" ; binaire : la phase
+  # `python -m transcria.installer.cli audiocpp` ; poids : page « Modèles ».
+  # Mesuré (0.4.6) : 7 locuteurs exacts sur une réunion de 1 h 52 en ~15 s (GPU), ~57×
+  # le temps réel sur CPU.
+  cli_path: ""                      # vide = <runtimes>/audiocpp/bin/audiocpp_cli
+  model_path: ""                    # vide = <models>/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf
+  backend: "auto"                   # auto (GPU réservé par la phase, sinon CPU) | cuda | cpu (aucune VRAM)
+  threads: 0                        # 0 = min(16, cœurs)
+  timeout_s: 1800
+  min_speaker_total_s: 2.0          # sous ce total de parole, un locuteur est rattaché à son voisin
+  merge_gap_s: 0.35                 # silence maximal fusionné entre deux tours du même locuteur
+
 parakeet:
   # Backend STT experimental NVIDIA Parakeet TDT 0.6B v3 via NeMo.
   # 25 langues europeennes, auto-detection, ponctuation native, timestamps.
@@ -385,6 +401,7 @@ gpu:
   moss_vram_mb: 4000        # backend moss (0,9B une passe) ; kroko = CPU pur, aucune clé
   parakeet_vram_mb: 8000
   sortformer_vram_mb: 3500
+  nemotron_diar_vram_mb: 2000  # Nemotron 3 via audio.cpp (~1 Go annoncé) ; 0 VRAM si nemotron_diar.backend = cpu
   # Marge libre exigée PAR GPU en plus du besoin d'une phase. À RÉDUIRE sur les
   # petites cartes (4-8 Go) : 4000 y interdirait presque toute allocation.
   min_free_vram_mb: 4000

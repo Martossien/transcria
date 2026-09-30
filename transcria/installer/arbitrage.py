@@ -32,6 +32,7 @@ from transcria.installer.tiers import (  # noqa: F401 — ré-exports
     LlmTierMetadata,
     _build_llamacpp_tables,
     _llamacpp_engine,
+    find_tier_profile,
     get_tier_metadata,
     recommend_tier,
 )
@@ -226,14 +227,18 @@ def render_vllm_env_shell(choice: object | None) -> str:
 #
 # Upstream ggml-org ne publie AUCUN binaire llama-server CUDA pour Linux (vérifié :
 # le CUDA n'est publié qu'en Windows). ai-dock/llama.cpp-cuda comble ce manque en suivant
-# les releases upstream (artefacts `llama.cpp-b<ID>-cuda-<CUDA>-<arch>.tar.gz`). C'est une
-# source TIERCE : on l'utilise en OPT-IN, sur un build ÉPINGLÉ, et avec checksum VÉRIFIÉ.
+# les releases upstream (artefacts `llama.cpp-<tag>-cuda-<CUDA>-<arch>.tar.gz`). C'est une
+# source TIERCE : on l'utilise en OPT-IN, sur une release ÉPINGLÉE, et avec checksum VÉRIFIÉ.
 # Elle évite la compilation (donc `nvcc`) sur distro vierge — son intérêt principal.
+#
+# Le TAG suit upstream, qui est passé des compteurs `bNNNN` au semver `vX.Y.Z`
+# (2026-08) : les deux schémas sont acceptés, l'épinglage courant est semver.
 
 AIDOCK_REPO = "ai-dock/llama.cpp-cuda"
 AIDOCK_DEFAULT_CUDA = "12.8"
 _ARCH_MAP = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
-_PREBUILT_RE = re.compile(r"llama\.cpp-b(\d+)-cuda-([0-9.]+)-([a-z0-9]+)\.tar\.gz$")
+_RELEASE_TAG_RE = re.compile(r"^(b\d+|v\d+\.\d+\.\d+)$")
+_PREBUILT_RE = re.compile(r"llama\.cpp-(b\d+|v\d+\.\d+\.\d+)-cuda-([0-9.]+)-([a-z0-9]+)\.tar\.gz$")
 
 
 def normalize_arch(machine: str) -> str:
@@ -241,41 +246,42 @@ def normalize_arch(machine: str) -> str:
     return _ARCH_MAP.get(machine.strip().lower(), "amd64")
 
 
-def prebuilt_artifact_name(build_id: int, *, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64") -> str:
-    return f"llama.cpp-b{build_id}-cuda-{cuda}-{arch}.tar.gz"
+def normalize_release_tag(raw: str | int) -> str | None:
+    """Tag de release upstream : « v0.5.0 » et « b9851 » tels quels, « 9851 » → « b9851 ».
+
+    Renvoie None pour toute autre forme — le tag finit dans une URL, on ne devine pas."""
+    text = str(raw).strip()
+    if text.isdigit():
+        text = f"b{text}"
+    return text if _RELEASE_TAG_RE.match(text) else None
 
 
-def parse_prebuilt_artifact(name: str) -> tuple[int, str, str] | None:
-    """(build_id, cuda, arch) depuis un nom d'artefact, ou None si non conforme."""
+def prebuilt_artifact_name(tag: str | int, *, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64") -> str:
+    return f"llama.cpp-{normalize_release_tag(tag)}-cuda-{cuda}-{arch}.tar.gz"
+
+
+def parse_prebuilt_artifact(name: str) -> tuple[str, str, str] | None:
+    """(tag, cuda, arch) depuis un nom d'artefact, ou None si non conforme."""
     m = _PREBUILT_RE.search(name.strip())
     if not m:
         return None
-    return int(m.group(1)), m.group(2), m.group(3)
+    return m.group(1), m.group(2), m.group(3)
 
 
 def select_prebuilt_artifact(
-    available: list[str], *, wanted_build: int, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64"
+    available: list[str], *, wanted_tag: str | int, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64"
 ) -> str | None:
-    """Choisit l'artefact CUDA le plus adapté (politique « nearest »).
+    """L'artefact du tag demandé pour (cuda, arch), ou None.
 
-    Priorité : build EXACT demandé > plus proche build SUPÉRIEUR (nearest newer) > à défaut
-    le plus récent disponible inférieur. Filtre d'abord sur (cuda, arch) — on ne mélange
-    JAMAIS les versions CUDA ni les architectures.
+    Correspondance EXACTE : le sha256 épinglé ne vaut que pour cette archive — un build
+    « voisin » échouerait de toute façon à la vérification. On ne mélange jamais les
+    versions CUDA ni les architectures.
     """
-    by_build: dict[int, str] = {}
+    tag = normalize_release_tag(wanted_tag)
     for name in available:
-        parsed = parse_prebuilt_artifact(name)
-        if parsed and parsed[1] == cuda and parsed[2] == arch:
-            by_build[parsed[0]] = name
-    if not by_build:
-        return None
-    if wanted_build in by_build:
-        return by_build[wanted_build]
-    newer = sorted(b for b in by_build if b > wanted_build)
-    if newer:
-        return by_build[newer[0]]
-    older = sorted((b for b in by_build if b < wanted_build), reverse=True)
-    return by_build[older[0]] if older else None
+        if parse_prebuilt_artifact(name) == (tag, cuda, arch):
+            return name
+    return None
 
 
 def sha256_of_file(path: Path, *, chunk: int = 1 << 20) -> str:
@@ -298,7 +304,7 @@ def verify_sha256(path: Path, expected: str) -> bool:
 
 def install_prebuilt_llama(
     *,
-    build_id: int,
+    release_tag: str | int,
     dest_dir: Path,
     expected_sha256: str,
     cuda: str = AIDOCK_DEFAULT_CUDA,
@@ -319,13 +325,16 @@ def install_prebuilt_llama(
         print("Refus : binaire tiers sans checksum sha256 à vérifier.", file=sys.stderr)
         return None
     resolved_arch = arch or normalize_arch(platform.machine())
-    tag = f"b{build_id}"
+    tag = normalize_release_tag(release_tag)
+    if tag is None:
+        print(f"Refus : tag de release llama.cpp non reconnu ({release_tag!r}).", file=sys.stderr)
+        return None
     api = f"https://api.github.com/repos/{AIDOCK_REPO}/releases/tags/{tag}"
     try:
         with urllib.request.urlopen(api, timeout=30) as resp:  # noqa: S310 — URL constante (GitHub API)
             release = json.load(resp)
         names = [a.get("name", "") for a in release.get("assets", [])]
-        chosen = select_prebuilt_artifact(names, wanted_build=build_id, cuda=cuda, arch=resolved_arch)
+        chosen = select_prebuilt_artifact(names, wanted_tag=tag, cuda=cuda, arch=resolved_arch)
         if not chosen:
             print(f"Aucun artefact CUDA {cuda}/{resolved_arch} dans la release {tag}.", file=sys.stderr)
             return None
@@ -383,11 +392,12 @@ def _default_per_gpu(vram_mb: int, gpu_indices: list[int]) -> list[int]:
 
 
 def find_profile(repo_root: Path, tier: str) -> Path:
+    """Profil de lancement du palier (cf. `tiers.find_tier_profile` — celui du catalogue)."""
     profiles_dir = repo_root / "scripts" / "arbitrage_profiles"
-    matches = sorted(profiles_dir.glob(f"{tier}_*.sh"))
-    if not matches:
+    profile = find_tier_profile(profiles_dir, tier)
+    if profile is None:
         raise FileNotFoundError(f"aucun profil pour le palier {tier} dans {profiles_dir}")
-    return matches[0]
+    return profile
 
 
 def render_wrapper(
@@ -635,7 +645,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="rend l'env vLLM (modèle/TP/max_len) résolu depuis le catalogue selon le matériel")
     parser.add_argument("--install-llama-prebuilt", action="store_true",
                         help="télécharge un llama-server CUDA précompilé (ai-dock), vérifie le checksum, extrait")
-    parser.add_argument("--llama-build", type=int, default=0, help="build upstream épinglé (bXXXX) pour --install-llama-prebuilt")
+    parser.add_argument("--llama-build", default="",
+                        help="release upstream épinglée (vX.Y.Z ou bNNNN) pour --install-llama-prebuilt")
     parser.add_argument("--dest", default="", help="dossier vendor de destination du binaire précompilé")
     parser.add_argument("--sha256", default="", help="checksum sha256 attendu de l'archive précompilée")
     parser.add_argument("--cuda", default=AIDOCK_DEFAULT_CUDA, help="version CUDA de l'artefact précompilé")
@@ -700,7 +711,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("--llama-build, --dest et --sha256 requis avec --install-llama-prebuilt", file=sys.stderr)
                 return 2
             server = install_prebuilt_llama(
-                build_id=args.llama_build,
+                release_tag=args.llama_build,
                 dest_dir=Path(args.dest),
                 expected_sha256=args.sha256,
                 cuda=args.cuda,

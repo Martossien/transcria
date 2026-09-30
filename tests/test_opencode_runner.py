@@ -1547,8 +1547,13 @@ class TestLlmGpusActive:
 
         assert runner._llm_gpus_active() is False
 
-    def test_sans_indices_configures_le_signal_est_inconnu(self, tmp_path):
-        assert self._runner(tmp_path)._llm_gpus_active() is None
+    def test_sans_indices_configures_le_signal_est_inconnu(self, tmp_path, monkeypatch):
+        # Sans détection (port 8080 muet sur la machine de test) ni indices configurés,
+        # le capteur n'a rien à regarder : signal inconnu. La détection réelle est
+        # neutralisée — sur une machine de dev où une LLM tourne, elle trouverait ses cartes.
+        runner = self._runner(tmp_path)
+        monkeypatch.setattr(runner, "_llm_gpu_indices_detectes", lambda: None)
+        assert runner._llm_gpus_active() is None
 
     def test_arbitrage_distant_rend_le_signal_inconnu(self, tmp_path, monkeypatch):
         """Les cartes LOCALES ne disent rien d'une LLM distante : jamais de corroboration."""

@@ -26,6 +26,7 @@ from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QUEUE_RUNNING, QueueStore
 from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
+from transcria.workflow.agent_workspace import resolve_agent_work_root
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
@@ -347,16 +348,29 @@ _executor_service: JobExecutorService | None = None
 _executor_lock = threading.Lock()
 
 
-def _kill_orphaned_opencode(job_id: str, jobs_dir: str, sl) -> None:
+def _signal_opencode_group(pid: int, sig: int) -> None:
+    """Signal au GROUPE de l'opencode lancé par le runner (``start_new_session``) — le
+    wrapper npm et le serveur privé de la v2 sont des enfants ; repli sur le seul PID."""
+    try:
+        os.killpg(os.getpgid(pid), sig)
+    except (ProcessLookupError, PermissionError, OSError):
+        os.kill(pid, sig)
+
+
+def _kill_orphaned_opencode(job_id: str, jobs_dir: str, sl, agent_work_root: str | None = None) -> None:
     """Tue les processus opencode orphelins de TranscrIA identifiés par .opencode.pid.
 
-    Seuls les processus dont le PID est dans un .opencode.pid du répertoire du job
-    sont ciblés — jamais les opencode lancés par d'autres applications sur la machine.
+    Seuls les processus dont le PID est dans un .opencode.pid du job sont ciblés — jamais
+    les opencode lancés par d'autres applications sur la machine. Le runner écrit ce fichier
+    dans le SCRATCH de la phase (``<agent_work_root>/<job>/<phase>/``, hors du dossier du
+    job depuis l'isolation des agents) : c'est là qu'il faut chercher, le dossier du job ne
+    restant scruté que pour les traces d'anciennes versions.
     """
-    job_path = Path(jobs_dir) / job_id
-    if not job_path.is_dir():
-        return
-    for pid_file in job_path.rglob(".opencode.pid"):
+    roots = [Path(jobs_dir) / job_id]
+    if agent_work_root:
+        roots.append(Path(agent_work_root) / job_id)
+    pid_files = [pf for root in roots if root.is_dir() for pf in root.rglob(".opencode.pid")]
+    for pid_file in pid_files:
         try:
             pid = int(pid_file.read_text().strip())
         except (ValueError, OSError):
@@ -366,14 +380,14 @@ def _kill_orphaned_opencode(job_id: str, jobs_dir: str, sl) -> None:
             pid_file.unlink(missing_ok=True)
             continue
         try:
-            os.kill(pid, _sig.SIGTERM)
+            _signal_opencode_group(pid, _sig.SIGTERM)
             sl.warning(
                 "Réconciliation: SIGTERM opencode orphelin PID=%d (job %s)", pid, job_id
             )
             time.sleep(2)
             try:
                 os.kill(pid, 0)  # Encore vivant ?
-                os.kill(pid, _sig.SIGKILL)
+                _signal_opencode_group(pid, _sig.SIGKILL)
                 sl.warning(
                     "Réconciliation: SIGKILL opencode orphelin PID=%d (job %s)", pid, job_id
                 )
@@ -438,7 +452,7 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
                 transcribed = fs.job_dir / "metadata" / "transcription.srt"
 
                 # Tuer tout opencode zombie appartenant à ce job (et uniquement lui)
-                _kill_orphaned_opencode(job.id, jobs_dir, sl)
+                _kill_orphaned_opencode(job.id, jobs_dir, sl, resolve_agent_work_root(config))
 
                 if corrected.is_file() and corrected.stat().st_size > 0:
                     mark_execution_completed(job.id)

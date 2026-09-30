@@ -4,15 +4,23 @@ from copy import deepcopy
 from transcria.config.loader import default_at
 from transcria.stt.base_diarizer import BaseDiarizer
 from transcria.stt.diarization import DiarizerService
+from transcria.stt.nemotron_diarizer import NEMOTRON_MAX_SPEAKERS, NemotronDiarizer
 from transcria.stt.remote_diarizer import RemoteDiarizer
 from transcria.stt.sortformer_diarizer import SortformerDiarizer
 
 logger = logging.getLogger(__name__)
 
-_DIARIZATION_BACKENDS = ("pyannote", "sortformer", "remote")
+_DIARIZATION_BACKENDS = ("pyannote", "sortformer", "nemotron_diar", "remote")
 
 # Sortformer est un modèle à 4 locuteurs maximum ; au-delà, seul pyannote convient.
 SORTFORMER_MAX_SPEAKERS = 4
+
+# Capacité des backends à nombre de voix BORNÉ par le modèle. Un backend absent de la
+# table (pyannote, remote) n'a pas de plafond connu ici.
+BACKEND_MAX_SPEAKERS: dict[str, int] = {
+    "sortformer": SORTFORMER_MAX_SPEAKERS,
+    "nemotron_diar": NEMOTRON_MAX_SPEAKERS,
+}
 
 
 def _coerce_speaker_bound(value) -> int | None:
@@ -33,9 +41,9 @@ def apply_speaker_hint(config: dict, hint: dict | None) -> dict:
     - ``diarization.num_speakers`` posé quand min == max (comptage exact, seul réglage
       donnant un comptage parfait sur pyannote), et retiré quand une vraie fourchette
       est fournie pour ne pas figer un ancien comptage exact ;
-    - bascule de ``models.diarization_backend`` de ``sortformer`` vers ``pyannote`` quand
-      la borne haute choisie par l'utilisateur dépasse la capacité de Sortformer
-      (``SORTFORMER_MAX_SPEAKERS``).
+    - bascule de ``models.diarization_backend`` vers ``pyannote`` quand la borne haute
+      choisie par l'utilisateur dépasse la capacité du backend configuré
+      (``BACKEND_MAX_SPEAKERS`` : 4 pour Sortformer, 8 pour Nemotron 3).
 
     Si ``hint`` est absent ou invalide, ``config`` est renvoyé inchangé (copie).
     """
@@ -64,12 +72,13 @@ def apply_speaker_hint(config: dict, hint: dict | None) -> dict:
     # Sortformer sur les configurations qui l'emploient sans fourchette saisie).
     user_upper = vmax if vmax is not None else vmin
     backend = cfg.get("models", {}).get("diarization_backend", "pyannote")
-    if backend == "sortformer" and user_upper is not None and user_upper > SORTFORMER_MAX_SPEAKERS:
+    capacity = BACKEND_MAX_SPEAKERS.get(backend)
+    if capacity is not None and user_upper is not None and user_upper > capacity:
         cfg.setdefault("models", {})["diarization_backend"] = "pyannote"
         logger.info(
-            "Diarisation: fourchette utilisateur max=%d > %d (capacité Sortformer), "
-            "bascule du backend Sortformer → pyannote",
-            user_upper, SORTFORMER_MAX_SPEAKERS,
+            "Diarisation: fourchette utilisateur max=%d > %d (capacité de %s), "
+            "bascule du backend %s → pyannote",
+            user_upper, capacity, backend, backend,
         )
 
     return cfg
@@ -110,6 +119,9 @@ def create_diarizer(config: dict, device: str | None = None, progress_callback=N
     if backend == "sortformer":
         return SortformerDiarizer(**kwargs)
 
+    if backend == "nemotron_diar":
+        return NemotronDiarizer(**kwargs)
+
     if progress_callback is not None:
         kwargs["progress_callback"] = progress_callback
     return DiarizerService(**kwargs)
@@ -119,7 +131,7 @@ def get_diarizer_vram_mb(backend: str, config: dict) -> int:
     """Retourne la VRAM requise (Mo) pour le backend de diarisation donné.
 
     Args:
-        backend: ``"pyannote"`` ou ``"sortformer"``.
+        backend: ``"pyannote"``, ``"sortformer"`` ou ``"nemotron_diar"``.
         config:  Configuration complète de l'application.
 
     Returns:
@@ -128,6 +140,11 @@ def get_diarizer_vram_mb(backend: str, config: dict) -> int:
     gpu_cfg = config.get("gpu", {})
     if backend == "sortformer":
         return int(gpu_cfg.get("sortformer_vram_mb", 3500))
+    if backend == "nemotron_diar":
+        # Backend CPU forcé ⇒ aucune VRAM (comme Kroko : la phase saute la réservation).
+        if str((config.get("nemotron_diar") or {}).get("backend") or "auto").lower() == "cpu":
+            return 0
+        return int(gpu_cfg.get("nemotron_diar_vram_mb", default_at("gpu.nemotron_diar_vram_mb")))
     return int(gpu_cfg.get("pyannote_vram_mb", default_at("gpu.pyannote_vram_mb")))
 
 

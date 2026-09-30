@@ -226,7 +226,7 @@ class TestCartesHeterogenes:
         assert any("hétérogènes" in w for w in p.warnings)
 
     def test_12_plus_24_picks_24_mono_not_32_split(self):
-        """12+24 : palier 32 split = 14600/carte > 12 Go → OOM carte 12.
+        """12+24 : palier 32 split = 14250/carte > 12 Go → OOM carte 12.
         recommend doit retomber sur palier 24 mono sur la 24."""
         p = recommend([MB_12, MB_24])
         assert p.feasible

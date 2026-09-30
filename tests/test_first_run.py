@@ -65,6 +65,17 @@ class TestModelsItem:
         assert item.status == "warn"
         assert item.data == {"missing": ["STT Whisper", "LLM d'arbitrage"]}
 
+    def test_llm_recommandee_absente_mais_une_autre_est_servie(self, monkeypatch):
+        # Le modèle du palier a changé depuis l'installation : l'ancienne LLM tourne
+        # toujours — ce n'est pas un modèle manquant, le bilan reste vert.
+        monkeypatch.setattr(first_run, "catalog_with_status", _catalog([
+            {"spec": SimpleNamespace(label="LLM d'arbitrage"), "present": False,
+             "served_instead": "Ancien-Q5.gguf"},
+            {"spec": SimpleNamespace(label="STT Whisper"), "present": True},
+        ]))
+        item = first_run._models_item({}, 32000)
+        assert item.status == "ok" and item.data == {"total": 2}
+
 
 class TestReport:
     def test_needs_attention_filtre_les_verts(self):

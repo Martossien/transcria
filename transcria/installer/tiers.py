@@ -76,3 +76,30 @@ def get_tier_metadata(tier: str) -> LlmTierMetadata:
         return LLM_TIERS[tier]
     except KeyError as exc:
         raise ValueError(f"palier LLM inconnu : {tier}") from exc
+
+
+def find_tier_profile(profiles_dir: Path, tier: str) -> Path | None:
+    """Script de lancement du palier : celui qui charge le modèle du CATALOGUE.
+
+    Un palier peut porter plusieurs scripts (``32gb_*.sh``) : quand son modèle change,
+    l'ancien profil RESTE en place pour les installations qui servent encore l'ancien
+    modèle (leur wrapper généré l'exécute par chemin absolu). Le profil « du palier » est
+    donc celui dont le ``--model`` nomme le fichier du catalogue — pas le premier par ordre
+    alphabétique, qui lancerait l'ancien modèle à côté du nouveau fichier téléchargé.
+    Repli : premier trouvé (catalogue surchargé, palier hors catalogue). ``None`` si aucun.
+    """
+    tier_id = tier.removesuffix("gb")
+    matches = sorted(Path(profiles_dir).glob(f"{tier_id}gb_*.sh"))
+    if not matches:
+        return None
+    try:
+        wanted = get_tier_metadata(tier_id).file
+    except ValueError:
+        return matches[0]
+    for candidate in matches:
+        try:
+            if wanted in candidate.read_text(encoding="utf-8", errors="ignore"):
+                return candidate
+        except OSError:
+            continue
+    return matches[0]

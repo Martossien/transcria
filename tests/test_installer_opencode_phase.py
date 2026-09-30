@@ -130,11 +130,15 @@ def test_missing_binary_non_interactive_auto_installs(tmp_path):
     # confirm non fourni (renverrait False) : ne doit PAS empêcher l'install non-interactive.
     result = apply_opencode(plan, console=_console(), runner=runner, chown=lambda p, u: None, detect=_detect_none())
 
-    dest = home / ".opencode" / "bin" / "opencode"
-    assert any(c[0] == "bash" for c in runner.calls)
+    # Copie PRIVÉE épinglée sous <install>/runtimes/opencode — jamais dans ~/.opencode, la place
+    # de l'opencode de l'exploitant (v1 ou v2) ; sans PATH, sans rc, version fixée.
+    dest = tmp_path / "runtimes" / "opencode" / ".opencode" / "bin" / "opencode"
+    install_cmds = [c for c in runner.calls if c[0] == "bash"]
+    assert install_cmds and "--version 1." in install_cmds[0][2] and "--no-modify-path" in install_cmds[0][2]
     assert "installed" in result.actions
     assert "ignored" not in result.actions
     assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)
+    assert not (home / ".opencode").exists()
 
 
 def test_missing_binary_interactive_declined_skips_install(tmp_path):
@@ -175,7 +179,7 @@ def test_missing_binary_confirmed_installs_then_configures(tmp_path):
         confirm=lambda _p: True, chown=lambda p, u: None, detect=_detect_none(),
     )
 
-    dest = home / ".opencode" / "bin" / "opencode"
+    dest = tmp_path / "runtimes" / "opencode" / ".opencode" / "bin" / "opencode"
     assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)
     assert any(c[0] == "bash" for c in runner.calls)
     assert any(any("setup_opencode.py" in part for part in c) for c in runner.calls)

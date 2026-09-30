@@ -7,6 +7,7 @@ from transcria.llm_tools.llama_runtime import (
     evaluate_runtime,
     parse_git_describe,
     parse_ldd_output,
+    parse_semver,
     parse_version_output,
 )
 
@@ -40,6 +41,63 @@ def test_parse_version_no_commit_and_garbage():
     assert parse_version_output("") == (None, None)
     assert parse_version_output(None) == (None, None)
     assert parse_version_output("llama-server: command not found") == (None, None)
+
+
+# Sorties RÉELLES relevées le 2026-09-30 (binaire précompilé v0.5.0 ; build local d'août).
+_SEMVER_VERSION = "version: 0.5.0-dev (build 1, commit 7fe450e)\nbuilt with GNU 11.4.0 for Linux x86_64\n"
+_SEMVER_VERSION_LOCAL = "version: 0.2.0-dev (build 1523, commit 54ee5ee6)\n"
+
+
+def test_parse_semver_from_version_and_describe():
+    assert parse_semver(_SEMVER_VERSION) == "0.5.0"
+    assert parse_semver(_SEMVER_VERSION_LOCAL) == "0.2.0"
+    assert parse_semver("v0.5.0-12-g81ff93ea1") == "0.5.0"
+    assert parse_semver("v0.5.0") == "0.5.0"
+    # Ni un tag bNNNN, ni l'ancien compteur nu ne sont du semver.
+    assert parse_semver("b9632-4-g8edaca9") is None
+    assert parse_semver(_REAL_VERSION) is None
+    assert parse_semver(None) is None
+
+
+def test_semver_version_output_has_no_comparable_build_counter():
+    # « build 1 » d'un clone superficiel ne doit JAMAIS être lu comme la version 0 ou 1.
+    assert parse_version_output(_SEMVER_VERSION) == (None, "7fe450e")
+    assert parse_version_output(_SEMVER_VERSION_LOCAL) == (None, "54ee5ee6")
+
+
+def test_semver_binary_satisfies_the_minimum():
+    report = evaluate_runtime(
+        path="/opt/vendor/llama-server", version_build=None, version_commit="7fe450e",
+        describe_build=None, describe_ahead=0, describe_commit=None,
+        missing_libs=[], has_cuda=True, semver="0.5.0",
+    )
+    assert report.usable and report.level == "ok"
+    assert report.resolved_version == "v0.5.0"
+    assert report.resolved_build is None and report.build_source == "self-report"
+
+
+def test_git_b_tag_still_wins_over_semver():
+    report = evaluate_runtime(
+        path="/x", version_build=None, version_commit=None,
+        describe_build=11146, describe_ahead=3, describe_commit="abc",
+        missing_libs=[], has_cuda=True, semver="0.5.0",
+    )
+    assert report.resolved_version == "b11146+3" and report.build_source == "git"
+
+
+def test_resolved_version_is_readable_in_the_legacy_cases():
+    old = evaluate_runtime(
+        path="/x", version_build=579, version_commit="8edaca9",
+        describe_build=None, describe_ahead=0, describe_commit=None,
+        missing_libs=[], has_cuda=True,
+    )
+    assert old.resolved_version == "b579" and old.level == "warn"
+    unknown = evaluate_runtime(
+        path="/x", version_build=None, version_commit=None,
+        describe_build=None, describe_ahead=0, describe_commit=None,
+        missing_libs=[], has_cuda=True,
+    )
+    assert unknown.resolved_version == "?"
 
 
 def test_parse_git_describe_variants():

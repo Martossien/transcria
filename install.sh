@@ -1312,9 +1312,6 @@ OPENCODE_CLI_ARGS=(
     --user-home "$HOME"
     --service-user "$SERVICE_USER"
     --profile "$INSTALL_PROFILE"
-    --current-path "$PATH"
-    --rc-file "$HOME/.bashrc"
-    --rc-file "$HOME/.profile"
 )
 [[ "$PROFILE_NEEDS_LLM" = true ]] && OPENCODE_CLI_ARGS+=(--needs-llm)
 [[ "$NON_INTERACTIVE" = true ]] && OPENCODE_CLI_ARGS+=(--non-interactive)
@@ -1483,29 +1480,29 @@ else
 
         # ── Binaire précompilé ai-dock (CUDA) si llama-server absent ──────────────
         # En non-interactif, si aucun llama-server n'est trouvé, on télécharge
-        # automatiquement le binaire précompilé ai-dock/llama.cpp-cuda (build épinglé
-        # ≥ b9630, CUDA 12.8, amd64) — évite d'exiger nvcc sur une distro vierge.
+        # automatiquement le binaire précompilé ai-dock/llama.cpp-cuda (release épinglée,
+        # CUDA 12.8, amd64) — évite d'exiger nvcc sur une distro vierge.
         # En interactif, on propose le téléchargement si aucun binaire n'est trouvé.
         if [[ -z "$LLAMA_SRV" ]]; then
-            _AIDOCK_BUILD=9851
+            _AIDOCK_TAG="v0.5.0"
             _AIDOCK_CUDA="12.8"
-            _AIDOCK_SHA256="a96fed6b2462cad53cb63f4446ae640824ba4c87f960975bbf07850628715f58"
+            _AIDOCK_SHA256="26b46a50c71e6287dfdaf0f2a9ceeaec51040243d6f4b9e90b4038b0cf347002"
             _AIDOCK_DEST="$INSTALL_DIR/vendor/llama"
             _DO_PREBUILT=false
             if [[ "$NON_INTERACTIVE" = true ]]; then
                 _DO_PREBUILT=true
-            elif ask_yn "Aucun llama-server trouvé. Télécharger le binaire précompilé ai-dock (build b$_AIDOCK_BUILD, CUDA $_AIDOCK_CUDA, ~157 Mo) ?"; then
+            elif ask_yn "Aucun llama-server trouvé. Télécharger le binaire précompilé ai-dock (llama.cpp $_AIDOCK_TAG, CUDA $_AIDOCK_CUDA, ~150 Mo) ?"; then
                 _DO_PREBUILT=true
             fi
             if [[ "$_DO_PREBUILT" = true ]]; then
-                log_llm_setup_event download-start "llama-server (ai-dock b$_AIDOCK_BUILD)" "" "" "" "install_arbitrage" "$_AIDOCK_DEST"
+                log_llm_setup_event download-start "llama-server (ai-dock $_AIDOCK_TAG)" "" "" "" "install_arbitrage" "$_AIDOCK_DEST"
                 _PREBUILT_ERR=$(mktemp 2>/dev/null || echo "/tmp/transcria_prebuilt.$$")
                 # `|| true` OBLIGATOIRE (même classe que le check ffmpeg, issue #9) : le
                 # helper sort en 1 si le téléchargement échoue (réseau, SHA, artefact
                 # introuvable) — sans la garde, set -e tuerait install.sh ICI, avant le
                 # bloc d'échec ci-dessous, et le stderr capté ne serait jamais affiché.
                 _PREBUILT_OUT=$(arbitrage_helper --install-llama-prebuilt \
-                    --llama-build "$_AIDOCK_BUILD" \
+                    --llama-build "$_AIDOCK_TAG" \
                     --dest "$_AIDOCK_DEST" \
                     --sha256 "$_AIDOCK_SHA256" \
                     --cuda "$_AIDOCK_CUDA" 2>"$_PREBUILT_ERR") || true

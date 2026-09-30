@@ -144,7 +144,7 @@ sort proprement **avant toute mutation**.
 | Base de données | PostgreSQL si `psql` + droits + serveur qui répond ; **sinon l'installateur propose de l'installer ou de le démarrer** (une question, jamais en douce) ; refus ⇒ SQLite, dont le schéma est créé sur place (`alembic upgrade head`) |
 | Modèles IA | Vérifie Cohere ASR (répertoire local **ou cache HF** par repo id), cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
-| opencode | Détecte dans PATH / `~/.opencode/bin/` ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** + génère `opencode.json` |
+| opencode | Détecte dans PATH / `~/.opencode/bin/` (v1 **ou v2**, jamais écrasé) ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** d'une **copie privée épinglée** sous `<install>/runtimes/opencode/` (rien sur le PATH) + génère `opencode.json` |
 | **LLM d'arbitrage** | **Détecte les GPU, recommande le palier plaçable (12/16/24/32/48/64 Go, placement par carte), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
@@ -662,6 +662,12 @@ $HOME/.opencode/bin/opencode --version
 
 > opencode peut aussi être installé autrement (`npm i -g opencode-ai`, `bun add -g opencode-ai`,
 > `brew install anomalyco/tap/opencode`, `paru -S opencode`). Voir <https://opencode.ai/download>.
+> **Deux lignes coexistent depuis 2026-09** : la v1 (`opencode-ai`) et la v2 (`@opencode/cli`,
+> `curl -fsSL https://opencode.ai/v2/install | bash`), sous le même nom de binaire et non
+> installables côte à côte. TranscrIA s'adapte à celle qu'il trouve (`opencode --version` lu à
+> chaque lancement : la v2 est appelée en `--standalone`, sans `--dir`) ; le doctor affiche la
+> ligne détectée. Sa propre copie, installée seulement en l'absence de tout opencode, reste une
+> v1 épinglée.
 > `install.sh` et `scripts/setup_opencode.py` cherchent le binaire dans PATH, `~/.opencode/bin`,
 > les emplacements npm-global et brew — quel que soit le mode d'install. Si introuvable,
 > renseignez `workflow.arbitration_llm.opencode_bin` dans `config.yaml`.

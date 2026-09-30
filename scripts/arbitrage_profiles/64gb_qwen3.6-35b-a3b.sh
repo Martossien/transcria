@@ -66,7 +66,6 @@ fi
 --host 0.0.0.0 --port 8080 \
 --ctx-size 262144 \
 --n-predict 81920 \
---no-mmap \
 --threads 44 --threads-batch 88 \
 --batch-size 2048 --ubatch-size 1024 \
 --parallel 1 \

@@ -225,15 +225,17 @@ def test_served_stt_runtimes_ok_when_provisioned_at_pinned_commit(monkeypatch, t
     from transcria.installer.parakeetcpp_phase import PARAKEETCPP_PINNED_COMMIT
 
     monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
-    for sub, binname, commit in (
-        ("audiocpp", "audiocpp_server", AUDIOCPP_PINNED_COMMIT),
-        ("parakeetcpp", "parakeet-server", PARAKEETCPP_PINNED_COMMIT),
+    for sub, binnames, commit in (
+        # audio.cpp livre le serveur ET le CLI (diarisation Nemotron 3) depuis 0.4.6.
+        ("audiocpp", ("audiocpp_server", "audiocpp_cli"), AUDIOCPP_PINNED_COMMIT),
+        ("parakeetcpp", ("parakeet-server",), PARAKEETCPP_PINNED_COMMIT),
     ):
         home = tmp_path / sub
         (home / "bin").mkdir(parents=True)
-        binary = home / "bin" / binname
-        binary.write_text("#!/bin/sh\n")
-        binary.chmod(0o755)
+        for binname in binnames:
+            binary = home / "bin" / binname
+            binary.write_text("#!/bin/sh\n")
+            binary.chmod(0o755)
         (home / "COMMIT").write_text(commit + "\n")
     cfg = {"resource_node": {"engines": [
         {"name": "qwen3asr", "script": "s.sh", "gpu": 5, "port": 8021},
@@ -539,9 +541,21 @@ def test_check_opencode_fail_when_enabled_and_missing():
 
 def test_check_opencode_ok_when_found():
     cfg = {"workflow": {"arbitration_llm": {"enabled": True, "opencode_bin": "oc"}}}
-    res = doc.check_opencode(cfg, finder=lambda **kw: "/usr/bin/opencode")
+    res = doc.check_opencode(cfg, finder=lambda **kw: "/usr/bin/opencode", version_reader=lambda p: "1.18.33")
     assert res.status == doc.OK
-    assert "/usr/bin/opencode" in res.detail
+    assert "/usr/bin/opencode" in res.detail and "1.18.33" in res.detail and "v1" in res.detail
+
+
+def test_check_opencode_reports_the_v2_line():
+    cfg = {"workflow": {"arbitration_llm": {"enabled": True}}}
+    res = doc.check_opencode(cfg, finder=lambda **kw: "/opt/oc/opencode", version_reader=lambda p: "opencode v2.0.19")
+    assert res.status == doc.OK and "2.0.19" in res.detail and "v2" in res.detail
+
+
+def test_check_opencode_warns_on_unreadable_version():
+    cfg = {"workflow": {"arbitration_llm": {"enabled": True}}}
+    res = doc.check_opencode(cfg, finder=lambda **kw: "/opt/oc/opencode", version_reader=lambda p: "version inconnue")
+    assert res.status == doc.WARN and res.hint
 
 
 # ── check_inference_nodes ─────────────────────────────────────────────────

@@ -18,13 +18,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé = tag v0.5.0 (bump 2026-08-06 depuis 1da85342) : expose les
-# log-probs CTC via la C-API (#57), beam N-best opt-in (#56), libération des poids
-# hôte après upload GPU (#53). Aucune rupture d'API serveur constatée ; Nemotron
-# re-qualifié par le gate moteurs après le bump.
+# Commit épinglé = amont du 2026-09-30 (11 commits après le tag v0.5.0) : diarisation
+# Nemotron 3 et ASR attribué aux locuteurs (#71, #73), fuite mémoire du tampon mel en
+# streaming corrigée (#69), build GCC 16 (#74). Le dépôt tire désormais des
+# sous-modules (ced.cpp, voice-detect.cpp) — le clone est `--recursive`. Aucune rupture
+# d'API serveur ; validé par test de fumée réel après le bump (même règle qu'audio.cpp).
 PARAKEETCPP_REPO = "https://github.com/mudler/parakeet.cpp"
 # SHA COMPLET requis : `git fetch origin <sha>` refuse les SHA courts (exit 128).
-PARAKEETCPP_PINNED_COMMIT = "e75de9b6b9b688fd293aa22f7e27aa724ea286f8"
+PARAKEETCPP_PINNED_COMMIT = "2c3bb736a44f2aa2e386ed06a4787122fb952575"
 
 
 class Runner(Protocol):

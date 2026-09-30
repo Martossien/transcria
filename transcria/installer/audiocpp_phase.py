@@ -4,7 +4,7 @@ Provisionne, dans ``<runtimes_dir>/audiocpp/`` :
   - ``src/``  : checkout git ÉPINGLÉ (commit précis — jamais un main flottant :
     audio.cpp est jeune et bouge vite, on a vu un bug de session corrigé en un
     jour ; l'épinglage rend l'install reproductible) ;
-  - ``bin/audiocpp_server`` : compilé CUDA (cmake) ;
+  - ``bin/audiocpp_server`` et ``bin/audiocpp_cli`` : compilés CUDA (cmake) ;
   - ``venv/`` : venv dédié aux outils (tools/model_manager.py — torch CPU),
     isolé du venv projet ;
   - ``etc/``  : configs serveur générées par le lanceur (voir
@@ -24,16 +24,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé = tag release-0.5.1 (2026-08-03, bump du 2026-08-06 depuis edbdf586).
-# Nouveautés embarquées : endpoint live PCM + deltas streaming (#127/#144), chemin
-# streaming Qwen3-ASR, durcissement des allocations (#143), fusion Q8 CUDA (#154).
-# RUPTURES absorbées ici : tools/model_manager.py → model_manager_v2.py (spec v1),
+# Commit épinglé = tag v0.9.0 (2026-09-30). Monter de version = nouveau SHA, rebuild
+# `--force`, puis un test de fumée RÉEL (lancer le moteur, transcrire un fichier) — la
+# requalification sur le banc n'est plus exigée à chaque bump : elle n'a jamais rien
+# attrapé que le test de fumée n'attrape pas. Apports utiles depuis le dernier bump :
+# diarisation Nemotron 3 (`nemotron_3_diar`), ASR Nemotron étiqueté par locuteur,
+# noyaux CUDA natifs Turing. Un GGUF Qwen3-ASR antérieur embarque une spec de modèle
+# « legacy » : le serveur l'accepte avec un avertissement (constaté au test de fumée).
+# RUPTURES absorbées lors des bumps précédents : tools/model_manager.py → model_manager_v2.py (spec v1),
 # paquet qwen3 `qwen3_asr_1_7b_hf` (snapshot HF f16) → `qwen3_asr_1_7b_q8_0`
 # (GGUF Q8, ~1,9 Go au lieu de 3,9) — le serveur sert TOUJOURS un répertoire HF
 # fourni directement : les installs antérieures restent servables (le lanceur
 # préfère le GGUF s'il existe, sinon retombe sur le répertoire HF).
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
-AUDIOCPP_PINNED_COMMIT = "c6805de83ce44d50ad2731205ecc6e9aae99e517"
+AUDIOCPP_PINNED_COMMIT = "795c45fbde0a7d29c93b22199728ff5caaec02e5"
 # Modèle recommandé (Apache-2.0) — id du paquet dans LEUR model_manager_v2 (spec v1).
 AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_q8_0"
 AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-GGUF"
@@ -69,12 +73,16 @@ def audiocpp_home(runtimes_dir: Path) -> Path:
     return runtimes_dir / "audiocpp"
 
 
+# Binaires livrés : le serveur (moteurs STT servis) et le CLI (diarisation Nemotron 3,
+# lancée en sous-process par transcria/stt/nemotron_diarizer.py — aucun port).
+AUDIOCPP_BINARIES = ("audiocpp_server", "audiocpp_cli")
+
+
 def audiocpp_is_complete(home: Path, commit: str) -> bool:
-    binary = home / "bin" / "audiocpp_server"
     marker = home / "COMMIT"
     return (
-        binary.is_file()
-        and os.access(binary, os.X_OK)
+        all((home / "bin" / name).is_file() and os.access(home / "bin" / name, os.X_OK)
+            for name in AUDIOCPP_BINARIES)
         and marker.is_file()
         and marker.read_text(encoding="utf-8").strip() == commit
     )
@@ -159,9 +167,9 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
         shutil.rmtree(models_keep, ignore_errors=True)
         console.ok("Modèles préservés à travers --force (src/models restauré)")
 
-    # 2) Compilation CUDA (audiocpp_server uniquement).
+    # 2) Compilation CUDA (serveur + CLI — les deux seules cibles utiles ici).
     jobs = plan.jobs or (os.cpu_count() or 4)
-    console.info(f"Compilation audiocpp_server (CUDA, -j{jobs}) — plusieurs minutes…")
+    console.info(f"Compilation audio.cpp ({', '.join(AUDIOCPP_BINARIES)} ; CUDA, -j{jobs}) — plusieurs minutes…")
     try:
         # DEPLOYMENT_BUILD=ON : embarque les model_specs/*.json DANS le binaire.
         # Depuis edbdf586, le serveur résout le « spec » par famille ; comme on
@@ -173,13 +181,14 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
                 "-DAUDIOCPP_DEPLOYMENT_BUILD=ON",
                 f"-DCMAKE_CUDA_ARCHITECTURES={plan.cuda_archs}"])
         runner(["cmake", "--build", str(src / "build"), "-j", str(jobs),
-                "--target", "audiocpp_server"])
+                *[arg for name in AUDIOCPP_BINARIES for arg in ("--target", name)]])
     except Exception as exc:  # noqa: BLE001
         raise AudiocppPhaseError(f"compilation audio.cpp échouée : {exc}") from exc
-    built = src / "build" / "bin" / "audiocpp_server"
-    if not built.is_file():
-        raise AudiocppPhaseError(f"binaire absent après compilation : {built}")
-    shutil.copy2(built, bin_dir / "audiocpp_server")
+    for name in AUDIOCPP_BINARIES:
+        built = src / "build" / "bin" / name
+        if not built.is_file():
+            raise AudiocppPhaseError(f"binaire absent après compilation : {built}")
+        shutil.copy2(built, bin_dir / name)
 
     # 3) Venv outils (model_manager — torch CPU, jamais le venv projet).
     if not (venv_dir / "bin" / "python").exists():

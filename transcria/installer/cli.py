@@ -126,8 +126,6 @@ def _add_opencode_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--profile", default="")
     p.add_argument("--needs-llm", action="store_true", help="Le profil requiert le LLM (sinon phase sautée)")
     p.add_argument("--non-interactive", action="store_true")
-    p.add_argument("--current-path", default="")
-    p.add_argument("--rc-file", action="append", default=[])
 
 
 def _add_ollama_parser(sub: argparse._SubParsersAction) -> None:
@@ -315,8 +313,6 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         profile=args.profile,
         needs_llm=args.needs_llm,
         interactive=not args.non_interactive,
-        current_path=args.current_path,
-        rc_files=tuple(Path(p) for p in args.rc_file),
     )
     opencode_phase.apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0

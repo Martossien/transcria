@@ -42,7 +42,6 @@ export CUDA_VISIBLE_DEVICES="${ARBITRAGE_GPU:-0}"
 --host 0.0.0.0 --port 8080 \
 --ctx-size 196608 \
 --n-predict 81920 \
---no-mmap \
 --threads 44 --threads-batch 88 \
 --batch-size 512 --ubatch-size 512 \
 --parallel 1 \

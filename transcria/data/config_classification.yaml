@@ -157,6 +157,7 @@ deferred:
 - gpu.parakeet_vram_mb
 - gpu.pyannote_vram_mb
 - gpu.sortformer_vram_mb
+- gpu.nemotron_diar_vram_mb
 - gpu.moss_vram_mb
 - gpu.voxtral_vram_mb
 - granite.chunk_length_s
@@ -273,6 +274,13 @@ deferred:
 - services.stop_script
 - sortformer.model_id
 - sortformer.vram_mb
+- nemotron_diar.cli_path
+- nemotron_diar.model_path
+- nemotron_diar.backend
+- nemotron_diar.threads
+- nemotron_diar.timeout_s
+- nemotron_diar.min_speaker_total_s
+- nemotron_diar.merge_gap_s
 - storage.database_url
 - storage.jobs_dir
 - voice_enrollment.allow_global_profiles

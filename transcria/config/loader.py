@@ -98,6 +98,9 @@ _DEFAULT_CONFIG = {
         "moss_vram_mb": 4000,
         "parakeet_vram_mb": 8000,
         "sortformer_vram_mb": 3500,
+        # Nemotron 3 (audio.cpp, BF16) : ~1 Go annoncé par l'amont ; 2 000 laisse la marge
+        # des longues réunions. Ignoré quand nemotron_diar.backend = cpu (aucune VRAM).
+        "nemotron_diar_vram_mb": 2000,
         "min_free_vram_mb": 4000,
         # Politique de récupération VRAM à l'admission d'un job bloqué :
         #   own-only  (défaut) : n'arrête QUE nos propres process gérés inactifs (LLM
@@ -346,6 +349,20 @@ _DEFAULT_CONFIG = {
     "sortformer": {
         "model_id": "nvidia/diar_streaming_sortformer_4spk-v2.1",
         "vram_mb": 3500,
+    },
+    # Diarisation Nemotron 3 (8 locuteurs, non gated) servie par le binaire audiocpp_cli
+    # en sous-process — cf. transcria/stt/nemotron_diarizer.py.
+    "nemotron_diar": {
+        "cli_path": "",              # vide = <runtimes>/audiocpp/bin/audiocpp_cli
+        "model_path": "",            # vide = <models>/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf
+        "backend": "auto",           # auto (GPU réservé par la phase, sinon CPU) | cuda | cpu
+        "threads": 0,                # 0 = min(16, cœurs de la machine)
+        "timeout_s": 1800,
+        # Un locuteur qui parle moins que cela au total est un fantôme du modèle : ses
+        # tours sont rattachés à la voix voisine (rien n'est jeté).
+        "min_speaker_total_s": 2.0,
+        # Deux tours consécutifs du même locuteur séparés d'au plus ce silence sont fusionnés.
+        "merge_gap_s": 0.35,
     },
     "parakeet": {
         "enabled": False,

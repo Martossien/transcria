@@ -23,7 +23,6 @@ numactl --interleave=all "$LLAMA_SERVER_BIN" \
   --host "$LLM_HOST" --port "$LLM_PORT" \
   --ctx-size 32768 \
   --n-predict 4096 \
-  --no-mmap \
   --threads 8 --threads-batch 16 \
   --batch-size 512 --ubatch-size 256 \
   --parallel 1 \

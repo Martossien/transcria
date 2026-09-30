@@ -17,10 +17,20 @@ from transcria.installer.audiocpp_phase import (
 
 def _make_complete(home: Path, commit: str) -> None:
     (home / "bin").mkdir(parents=True)
-    binary = home / "bin" / "audiocpp_server"
-    binary.write_bytes(b"#!/bin/sh\n")
-    binary.chmod(0o755)
+    for name in ("audiocpp_server", "audiocpp_cli"):
+        binary = home / "bin" / name
+        binary.write_bytes(b"#!/bin/sh\n")
+        binary.chmod(0o755)
     (home / "COMMIT").write_text(commit + "\n")
+
+
+def _fake_build(home: Path) -> None:
+    """Ce que produit `cmake --build` : les deux binaires livrés (serveur + CLI)."""
+    for name in ("audiocpp_server", "audiocpp_cli"):
+        built = home / "src" / "build" / "bin" / name
+        built.parent.mkdir(parents=True, exist_ok=True)
+        built.write_bytes(b"bin")
+        built.chmod(0o755)
 
 
 def test_noop_si_complet(tmp_path):
@@ -40,10 +50,7 @@ def test_commit_different_reconstruit(tmp_path):
     def runner(cmd, cwd=None):
         calls.append(cmd)
         if cmd[0] == "cmake" and "--build" in cmd:
-            built = home / "src" / "build" / "bin" / "audiocpp_server"
-            built.parent.mkdir(parents=True, exist_ok=True)
-            built.write_bytes(b"bin")
-            built.chmod(0o755)
+            _fake_build(home)
         if cmd[:2] == ["python3", "-m"]:
             (home / "venv" / "bin").mkdir(parents=True, exist_ok=True)
             (home / "venv" / "bin" / "python").write_bytes(b"")
@@ -55,6 +62,8 @@ def test_commit_different_reconstruit(tmp_path):
     assert any(c.startswith("git clone") for c in joined)
     assert any(AUDIOCPP_PINNED_COMMIT in c and "checkout" in c for c in joined)
     assert sum(1 for c in joined if c.startswith("cmake")) == 2
+    assert any("--target audiocpp_server --target audiocpp_cli" in c for c in joined)
+    assert (home / "bin" / "audiocpp_cli").is_file()             # le CLI de diarisation est livré
     assert any("CMAKE_CUDA_ARCHITECTURES=native" in c for c in joined)  # piège arch 75 vécu
     assert (home / "COMMIT").read_text().strip() == AUDIOCPP_PINNED_COMMIT
 
@@ -76,10 +85,7 @@ def test_with_model_delegue_au_model_manager(tmp_path):
     def runner(cmd, cwd=None):
         calls.append((cmd, cwd))
         if cmd[0] == "cmake" and "--build" in cmd:
-            built = home / "src" / "build" / "bin" / "audiocpp_server"
-            built.parent.mkdir(parents=True, exist_ok=True)
-            built.write_bytes(b"bin")
-            built.chmod(0o755)
+            _fake_build(home)
         if cmd[:2] == ["python3", "-m"]:
             (home / "venv" / "bin").mkdir(parents=True, exist_ok=True)
             (home / "venv" / "bin" / "python").write_bytes(b"")
@@ -135,10 +141,7 @@ def test_issue_7_runtimes_dir_relatif_donne_des_chemins_absolus(tmp_path, monkey
     def runner(cmd, cwd=None):
         calls.append((cmd, cwd))
         if cmd[0] == "cmake" and "--build" in cmd:
-            built = home / "src" / "build" / "bin" / "audiocpp_server"
-            built.parent.mkdir(parents=True, exist_ok=True)
-            built.write_bytes(b"bin")
-            built.chmod(0o755)
+            _fake_build(home)
         if cmd[:2] == ["python3", "-m"]:
             (home / "venv" / "bin").mkdir(parents=True, exist_ok=True)
             (home / "venv" / "bin" / "python").write_bytes(b"")

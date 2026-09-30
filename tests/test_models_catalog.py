@@ -111,6 +111,43 @@ def test_model_status_finds_served_llm_anywhere(tmp_path: Path):
     assert status["present"] and status["path"] == str(served) and status["size_bytes"] == 100
 
 
+def _launch_script(tmp_path: Path, gguf: Path) -> dict:
+    script = tmp_path / "launch.sh"
+    script.write_text(f'llama-server --model "{gguf}" --alias arbitrage\n', encoding="utf-8")
+    return {"services": {"arbitrage_script": str(script)}, "models": {"stt_backend": "aucun", "diarization_backend": "aucun"}}
+
+
+def test_catalog_flags_a_working_older_llm_as_a_recommendation_not_a_gap(tmp_path: Path, monkeypatch):
+    # Palier dont le modèle recommandé a changé : le GGUF servi existe, celui du palier non.
+    import transcria.models_catalog as mc
+
+    served = tmp_path / "anciens" / "Ancien-27B-Q5_K_M.gguf"
+    served.parent.mkdir(parents=True)
+    served.write_bytes(b"x" * 10)
+    monkeypatch.setattr(mc, "resolve_models_dir", lambda: tmp_path / "vide")
+    monkeypatch.setattr(mc, "resolve_hf_home", lambda: tmp_path / "hf")
+    # Racines de recherche bornées au bac à sable : ~/models de l'hôte peut contenir le vrai modèle.
+    monkeypatch.setattr(mc, "_candidate_model_roots", lambda models_dir, extra: [models_dir, *extra])
+
+    view = mc.catalog_with_status(_launch_script(tmp_path, served), total_vram_mb=32000)
+    llm = next(it for it in view["items"] if it["spec"].role == "arbitrage_llm")
+    assert llm["present"] is False
+    assert llm["served_instead"] == "Ancien-27B-Q5_K_M.gguf"
+
+
+def test_catalog_keeps_a_truly_missing_llm_missing(tmp_path: Path, monkeypatch):
+    # Script de lancement pointant sur un fichier qui n'existe pas : rien n'est servi.
+    import transcria.models_catalog as mc
+
+    monkeypatch.setattr(mc, "resolve_models_dir", lambda: tmp_path / "vide")
+    monkeypatch.setattr(mc, "resolve_hf_home", lambda: tmp_path / "hf")
+    # Racines de recherche bornées au bac à sable : ~/models de l'hôte peut contenir le vrai modèle.
+    monkeypatch.setattr(mc, "_candidate_model_roots", lambda models_dir, extra: [models_dir, *extra])
+    view = mc.catalog_with_status(_launch_script(tmp_path, tmp_path / "absent.gguf"), total_vram_mb=32000)
+    llm = next(it for it in view["items"] if it["spec"].role == "arbitrage_llm")
+    assert llm["present"] is False and "served_instead" not in llm
+
+
 def test_model_status_gguf_glob_finds_file_in_other_subdir(tmp_path: Path):
     actual = tmp_path / "weird-name" / "Model.gguf"   # sous-dossier ≠ target_subdir attendu
     actual.parent.mkdir(parents=True)

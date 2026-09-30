@@ -354,7 +354,7 @@ def provision_arbitrage_model(
     try:
         # Différés §8.3(c) : point d'entrée best-effort — l'ImportError est un cas géré.
         from transcria.config import load_config
-        from transcria.installer.tiers import get_tier_metadata
+        from transcria.installer.tiers import find_tier_profile, get_tier_metadata
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort
         print(f"[WARN] provisioning modèle d'arbitrage ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
         return False
@@ -389,10 +389,10 @@ def provision_arbitrage_model(
     # (transcria/deploy/entrypoint.py → racine), donc corrects hors /app aussi (tests).
     if not env.get("TRANSCRIA_ARBITRAGE_SCRIPT"):
         profiles_dir = Path(__file__).resolve().parents[2] / "scripts" / "arbitrage_profiles"
-        matches = sorted(profiles_dir.glob(f"{tier}gb_*.sh"))
-        if matches:
-            os.environ["TRANSCRIA_ARBITRAGE_SCRIPT"] = str(matches[0])
-            print(f"[INFO] script d'arbitrage (palier {tier}) → {matches[0]}", file=sys.stderr, flush=True)
+        profile = find_tier_profile(profiles_dir, tier)
+        if profile is not None:
+            os.environ["TRANSCRIA_ARBITRAGE_SCRIPT"] = str(profile)
+            print(f"[INFO] script d'arbitrage (palier {tier}) → {profile}", file=sys.stderr, flush=True)
 
     dest_dir = Path(env.get("MODELS_DIR", "/app/models")) / meta.directory
     target = dest_dir / meta.file

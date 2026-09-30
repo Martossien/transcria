@@ -6,15 +6,16 @@ from pathlib import Path
 import pytest
 
 from transcria.installer.opencode_lib import (
+    OPENCODE_PINNED_VERSION,
     OpencodeDetection,
     classify_opencode_install,
     detect_opencode,
-    ensure_shell_path,
     find_opencode_binary,
     install_opencode_binary,
     main,
     opencode_upgrade_command,
     opencode_version,
+    private_opencode_home,
     render_install_prompt,
     render_opencode_detection_shell,
     render_setup_log,
@@ -243,57 +244,6 @@ def test_install_opencode_cli_detects_binary(capsys, monkeypatch, tmp_path: Path
     assert capsys.readouterr().out == f"OPENCODE_BIN={candidate}\nOPENCODE_VER='opencode 1.2.3'\n"
 
 
-def test_ensure_shell_path_skips_when_already_in_current_path(tmp_path: Path):
-    rc = tmp_path / ".bashrc"
-    rc.write_text("# rc\n", encoding="utf-8")
-
-    updated = ensure_shell_path(tmp_path / "bin", [rc], current_path=f"/usr/bin:{tmp_path / 'bin'}")
-
-    assert updated is None
-    assert rc.read_text(encoding="utf-8") == "# rc\n"
-
-
-def test_ensure_shell_path_updates_first_existing_rc(tmp_path: Path):
-    missing = tmp_path / ".missing"
-    rc = tmp_path / ".profile"
-    rc.write_text("# profile", encoding="utf-8")
-
-    updated = ensure_shell_path(tmp_path / ".opencode" / "bin", [missing, rc], current_path="/usr/bin")
-
-    assert updated == rc
-    assert rc.read_text(encoding="utf-8") == f"# profile\nexport PATH=\"{tmp_path / '.opencode' / 'bin'}:$PATH\"\n"
-
-
-def test_ensure_shell_path_does_not_duplicate_existing_rc_entry(tmp_path: Path):
-    opencode_dir = tmp_path / ".opencode" / "bin"
-    rc = tmp_path / ".bashrc"
-    rc.write_text(f"export PATH=\"{opencode_dir}:$PATH\"\n", encoding="utf-8")
-
-    updated = ensure_shell_path(opencode_dir, [rc], current_path="/usr/bin")
-
-    assert updated is None
-    assert rc.read_text(encoding="utf-8") == f"export PATH=\"{opencode_dir}:$PATH\"\n"
-
-
-def test_install_opencode_cli_ensure_path_prints_updated_file(capsys, tmp_path: Path):
-    rc = tmp_path / ".bashrc"
-    rc.write_text("", encoding="utf-8")
-    opencode_dir = tmp_path / ".opencode" / "bin"
-
-    assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", "/usr/bin", "--rc-file", str(rc)]) == 0
-
-    assert capsys.readouterr().out == f"{rc}\n"
-    assert rc.read_text(encoding="utf-8") == f"export PATH=\"{opencode_dir}:$PATH\"\n"
-
-
-def test_install_opencode_cli_ensure_path_returns_one_when_unchanged(tmp_path: Path):
-    rc = tmp_path / ".bashrc"
-    rc.write_text("", encoding="utf-8")
-    opencode_dir = tmp_path / ".opencode" / "bin"
-
-    assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", str(opencode_dir), "--rc-file", str(rc)]) == 1
-
-
 def test_install_opencode_binary_runs_official_installer_under_target_home(tmp_path: Path):
     home = tmp_path / "home"
     binary = home / ".opencode" / "bin" / "opencode"
@@ -314,6 +264,39 @@ def test_install_opencode_binary_runs_official_installer_under_target_home(tmp_p
     assert calls == [["bash", "-c", "curl -fsSL https://opencode.ai/install | bash"]]
     assert seen_env["HOME"] == str(home)  # installé sous le HOME ciblé, pas celui de l'appelant
     assert binary.is_file()
+
+
+def test_install_opencode_binary_pins_the_release_and_leaves_the_shell_alone(tmp_path: Path):
+    # Copie privée : release épinglée (--version) et AUCUNE écriture dans les rc du shell
+    # (--no-modify-path) — le pipeline lit opencode_bin dans config.yaml, pas le PATH.
+    home = tmp_path / "runtimes" / "opencode"
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append(cmd)
+        binary = home / ".opencode" / "bin" / "opencode"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    assert install_opencode_binary(opencode_home=home, run=fake_run, version="1.18.33", modify_path=False)
+    assert calls == [["bash", "-c", "curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.33 --no-modify-path"]]
+
+
+def test_private_home_lives_under_the_install_runtimes():
+    assert private_opencode_home(Path("/srv/transcria")) == Path("/srv/transcria/runtimes/opencode")
+    assert OPENCODE_PINNED_VERSION.count(".") == 2 and OPENCODE_PINNED_VERSION.startswith("1.")
+
+
+def test_classify_recognizes_the_v2_npm_package(tmp_path: Path):
+    real = tmp_path / "lib" / "node_modules" / "@opencode" / "cli" / "bin" / "opencode.exe"
+    real.parent.mkdir(parents=True)
+    real.write_text("")
+    link = tmp_path / "bin" / "opencode"
+    link.parent.mkdir()
+    link.symlink_to(real)
+    assert classify_opencode_install(link) == "npm-v2"
+    assert opencode_upgrade_command("npm-v2", link) == ["npm", "install", "-g", "@opencode/cli@latest"]
 
 
 def test_install_opencode_binary_reports_installer_failure(tmp_path: Path):
@@ -360,10 +343,6 @@ def test_render_setup_log_for_known_events():
     )
     assert render_setup_log(event="installed", value="/srv/.opencode/bin/opencode") == (
         "OK:opencode installé : /srv/.opencode/bin/opencode\n"
-    )
-    assert render_setup_log(event="path-updated", value="/home/app/.bashrc") == "OK:PATH mis à jour dans /home/app/.bashrc\n"
-    assert render_setup_log(event="shell-reload", value="/home/app/.opencode/bin") == (
-        'INFO:Relancez votre shell ou : export PATH="/home/app/.opencode/bin:$PATH"\n'
     )
     assert render_setup_log(event="download-failed") == "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
     assert render_setup_log(event="manual-title") == (

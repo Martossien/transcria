@@ -54,7 +54,9 @@ TIERS: tuple[Tier, ...] = (
     Tier(12, 10400, 1, CTX_192K, "Qwen3.5-9B Q5_K_M"),
     Tier(16, 12700, 1, CTX_256K, "Qwen3.5-9B Q6_K"),
     Tier(24, 22300, 1, CTX_256K, "Qwen3.6-35B-A3B UD-IQ4_NL_XL"),
-    Tier(32, 29200, 2, CTX_192K, "Qwen3.6-27B Q5_K_M"),
+    # Palier 32 Go (2026-09-30) : Qwen3.8-27B UD-Q5_K_M mesuré 28 462 Mio @196 608 KV q8
+    # sur 2× RTX 3090 (llama.cpp v0.5.0) — arrondi 28 500 (le 3.6-27B pesait 29 168).
+    Tier(32, 28500, 2, CTX_192K, "Qwen3.8-27B UD-Q5_K_M"),
     Tier(48, 36000, 2, CTX_256K, "Qwen3.6-35B-A3B UD-Q6_K"),
     Tier(64, 49000, 3, CTX_256K, "Qwen3.6-35B-A3B UD-Q8_K_XL"),
 )

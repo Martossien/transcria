@@ -238,3 +238,13 @@ class TestDockerArtifactsAreDocumented:
         inventaire = docker_artifacts(_ROOT)
         assert "docker/zoom_sdk_entrypoint.sh" in inventaire
         assert any(n.startswith("Dockerfile") for n in inventaire)
+
+
+class TestOpencodePin:
+    def test_base_image_installs_the_pinned_opencode_release(self):
+        from transcria.installer.opencode_lib import OPENCODE_PINNED_VERSION
+
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        m = re.search(r"^ARG\s+OPENCODE_VERSION=(?P<value>\S+)\s*$", text, re.MULTILINE)
+        assert m and m.group("value") == OPENCODE_PINNED_VERSION, "Dockerfile et installateur divergent sur opencode"
+        assert '--version "${OPENCODE_VERSION}"' in text

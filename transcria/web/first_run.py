@@ -52,7 +52,9 @@ def _compute_item(cfg: dict) -> FirstRunItem:
 def _models_item(cfg: dict, total_vram_mb: int | None) -> FirstRunItem:
     """Modèles requis par CETTE config — même catalogue que la page Modèles."""
     view = catalog_with_status(cfg, total_vram_mb=total_vram_mb)
-    missing = [it["spec"].label for it in view["items"] if not it["present"]]
+    # `served_instead` : la LLM du palier manque mais une autre est servie — pas un manque.
+    missing = [it["spec"].label for it in view["items"]
+               if not it["present"] and not it.get("served_instead")]
     if not missing:
         return FirstRunItem("models", OK, {"total": len(view["items"])})
     return FirstRunItem("models", WARN, {"missing": missing})
