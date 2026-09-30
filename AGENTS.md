@@ -981,6 +981,27 @@ if not summary_text or summary_text.strip() == "Résumé indisponible.":
 ```
 Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
 
+### opencode — deux lignes (v1 et v2) supportées, jamais choisies pour l'exploitant
+Depuis 2026-09, opencode vit en deux lignes maintenues en parallèle : v1 (`opencode-ai`,
+binaire autonome) et v2 (`@opencode/cli`, clients + serveur partagé). Même nom de binaire,
+non installables côte à côte, mises à jour automatiques. Règles (lu au source v2.0.19) :
+- **L'invocation dépend de la version MAJEURE**, lue par `opencode --version` à chaque lancement
+  (`transcria/llm_tools/opencode_cli.py`, pur, testé) : v1 = `run --dir <scratch>` ; v2 =
+  `run --standalone` (JAMAIS le serveur partagé : il ignore `XDG_DATA_HOME` par run et survit au
+  kill du client) + `PWD=<scratch>` (la v2 lit sa racine de projet dans `PWD` avant le cwd réel ;
+  `--dir` n'existe plus et fait échouer le run). Version illisible ⇒ ligne v1.
+- **Tuer = le groupe de process** (`start_new_session` + `killpg`) : wrapper npm et serveur privé
+  v2 sont des enfants. Les `.opencode.pid` vivent dans le SCRATCH d'agent (`<agent_work_root>/<job>/`),
+  c'est là que la réconciliation les cherche.
+- **L'installeur n'écrase jamais un opencode existant** (v1 ou v2, utilisé tel quel) ; en son
+  absence il pose une **copie privée épinglée** (`OPENCODE_PINNED_VERSION`, v1) sous
+  `<install>/runtimes/opencode/` avec `--no-modify-path` — rien sur le PATH, le pipeline lit
+  `workflow.arbitration_llm.opencode_bin`. Le Dockerfile de base épingle la même version (garde
+  `test_docker_sync.py`).
+- Les clés v1 de `opencode.json` (`provider`, `permission`) sont lues et traduites par la v2 :
+  un seul fichier sert les deux. Format des événements `--format json` (`text`/`tool_use` avec
+  `part.text`/`part.tool`) vérifié identique en v2 sur un run réel.
+
 ### opencode — provider `local` requis dans `~/.config/opencode/opencode.json`
 `OpenCodeRunner` invoque opencode avec `--model <provider>/<model>` depuis `workflow.summary_llm.model_id` ou `workflow.arbitration_llm.model_id` (exemple : `local/arbitrage`). Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.config/opencode/opencode.json` pointant sur le serveur llama.cpp (port 8080 par défaut, ou `NODE_IP:8080` en topologie distribuée). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder.
 

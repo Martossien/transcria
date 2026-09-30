@@ -266,7 +266,7 @@ Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et
 | ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
 | ≥ 16 Go | 16 | Qwen3.5-9B Q6_K | `unsloth/Qwen3.5-9B-GGUF` | 256K |
 | ≥ 24 Go | 24 | Qwen3.6-35B-A3B **UD-IQ4_NL_XL** | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
-| ≥ 32 Go | 32 | Qwen3.6-27B **Q5_K_M** | `unsloth/Qwen3.6-27B-GGUF` | 192K |
+| ≥ 32 Go | 32 | Qwen3.8-27B **UD-Q5_K_M** | `unsloth/Qwen3.8-27B-GGUF` | 192K |
 | ≥ 48 Go | 48 | Qwen3.6-35B-A3B UD-Q6_K | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 | ≥ 64 Go | 64 | Qwen3.6-35B-A3B UD-Q8_K_XL | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 

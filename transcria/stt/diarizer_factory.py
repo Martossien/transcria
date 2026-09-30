@@ -142,7 +142,8 @@ def get_diarizer_vram_mb(backend: str, config: dict) -> int:
         return int(gpu_cfg.get("sortformer_vram_mb", 3500))
     if backend == "nemotron_diar":
         # Backend CPU forcé ⇒ aucune VRAM (comme Kroko : la phase saute la réservation).
-        if str((config.get("nemotron_diar") or {}).get("backend") or "auto").lower() == "cpu":
+        section = config.get("nemotron_diar") or {}
+        if str(section.get("backend") or "auto").lower() == "cpu":
             return 0
         return int(gpu_cfg.get("nemotron_diar_vram_mb", default_at("gpu.nemotron_diar_vram_mb")))
     return int(gpu_cfg.get("pyannote_vram_mb", default_at("gpu.pyannote_vram_mb")))

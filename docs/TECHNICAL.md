@@ -1601,6 +1601,25 @@ opencode run --format json --model local/arbitrage <instruction> -f <prompt_file
 
 Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements de type `text` fournissent le texte généré, les événements `tool_use` les appels d'outils.
 
+### 8.0 Deux lignes d'opencode, une ligne de commande par version (`llm_tools/opencode_cli.py`)
+
+opencode vit depuis 2026-09 en deux lignes maintenues en parallèle — v1 (`opencode-ai`, binaire
+autonome) et v2 (`@opencode/cli`, clients + serveur partagé) — sous le **même** nom de binaire,
+non installables côte à côte, et qui se mettent à jour seules. `OpenCodeRunner.opencode_version`
+lit `opencode --version` (mémorisé par chemin + mtime + taille : relu dès que le fichier change) et
+`build_run_command`/`build_run_env` (module pur, testé sans binaire) rendent l'appel adapté :
+
+| | v1 | v2 (lu au source v2.0.19, confirmé par un run réel) |
+|---|---|---|
+| racine de projet | `run --dir <scratch>` | `--dir` n'existe plus (drapeau inconnu = échec) ; lue dans **`PWD`** avant le cwd réel → `PWD=<scratch>` dans l'env |
+| serveur | dans le process | **partagé par utilisateur** par défaut (port fixe, survit à la commande, ignore `XDG_DATA_HOME` par run, tuer le client laisse la session tourner) → **`--standalone`** : serveur privé qui meurt avec le client |
+| `--format json` | `text`/`tool_use` avec `part.text`/`part.tool` | identique |
+| arrêt | SIGTERM sur le PID | **groupe de process** (`start_new_session` + `killpg`) : le wrapper npm et le serveur privé sont des enfants |
+
+Version illisible ⇒ ligne v1 (l'historique) avec avertissement ; une majeure > 2 est lancée
+comme la v2. Les `.opencode.pid` sont écrits dans le scratch d'agent : la réconciliation des
+orphelins (`job_executor._kill_orphaned_opencode`) les cherche là ET sous `jobs/<id>/`.
+
 ### 8.1 Watchdog d'inactivité (`_communicate_with_watchdog`)
 
 opencode a un **bug amont connu** (anomalyco/opencode#17516 : « run hangs after completing tool calls — process never exits ») et n'expose **pas** de timeout de commande (issue #3950). `OpenCodeRunner` lit donc la sortie en **streaming** (deux threads, anti-deadlock stdout/stderr) et applique un watchdog d'**inactivité** — **jamais** un timeout total agressif : un gros job légitime peut durer 30+ min tant que la LLM travaille.

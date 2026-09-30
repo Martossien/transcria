@@ -99,8 +99,9 @@ accepter avant usage :
 | CohereLabs `cohere-transcribe-03-2026` | STT principal | *gated* — licence de la carte de modèle Cohere (acceptation requise) |
 | `pyannote/speaker-diarization-community-1` (+ segmentation/embeddings) | Diarisation | *gated* — MIT, conditions d'accès pyannote |
 | `faster-whisper large-v3` | STT de repli | MIT |
-| Qwen3.6 (LLM d'arbitrage, ex. `Qwen/Qwen3.6-27B-FP8`) | Résumé/correction LLM | licence de la carte de modèle Qwen (cf. Hugging Face) — servie hors image (endpoint externe) |
+| Qwen3.6 / Qwen3.8 (LLM d'arbitrage, ex. `unsloth/Qwen3.8-27B-GGUF`, `Qwen/Qwen3.6-27B-FP8`) | Résumé/correction LLM | licence de la carte de modèle Qwen (cf. Hugging Face) — servie hors image (endpoint externe) |
 | `Qwen/Qwen3-ASR-1.7B-hf` | STT servi `qwen3asr` (audio.cpp) | **Apache-2.0** |
+| `audio-cpp/Nemotron-3-Diarization-GGUF` (GGUF de `nvidia/Nemotron-3-Diarization`) | Diarisation `nemotron_diar` (audio.cpp, opt-in) | **OpenMDW License 1.1** (poids NVIDIA, usage commercial permis, non gated) — téléchargé sur demande, jamais dans l'image |
 | `mudler/parakeet-cpp-gguf` (GGUF Nemotron 3.5 ASR) | STT servi `nemotron` (parakeet.cpp) | conversion MIT ; **poids sous NVIDIA Open Model License** (carte du modèle NVIDIA à respecter) |
 | `Banafo/Kroko-ASR` (modèles community, un par langue) | STT `kroko` (CPU pur) | **CC-BY-SA** (community) — attribution : Banafo (<https://kroko.ai/>) ; des variantes commerciales existent chez l'éditeur |
 

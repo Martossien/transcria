@@ -8,6 +8,8 @@ from typing import Any
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 from transcria.diagnostics.checks.probes import _probe_openai_models
+from transcria.installer.opencode_lib import opencode_version
+from transcria.llm_tools.opencode_cli import parse_opencode_version
 
 
 def check_arbitrage_script(
@@ -159,14 +161,9 @@ def check_opencode(
             hint=_t("oc_missing_hint"),
         )
     if version_reader is None:
-        # Différé §8.3(c) : lecture de `opencode --version` (sous-process) seulement ici.
-        from transcria.installer.opencode_lib import opencode_version
-
         version_reader = lambda path: opencode_version(Path(path))  # noqa: E731
     # v1 et v2 coexistent (même binaire `opencode`) : le doctor dit laquelle tourne — la
     # ligne de commande diffère (adaptateur transcria/llm_tools/opencode_cli).
-    from transcria.llm_tools.opencode_cli import parse_opencode_version
-
     version = parse_opencode_version(version_reader(resolved))
     if not version.known:
         return CheckResult(name, WARN, _t("oc_found_unknown_version", resolved=resolved, raw=version.raw),

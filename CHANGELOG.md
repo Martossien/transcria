@@ -6,6 +6,91 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.6] — non publiée
+
+La version des moteurs à jour : audio.cpp, parakeet.cpp, llama.cpp et opencode remontés à
+l'amont, Qwen 3.8 sur le palier 32 Go, une diarisation à huit locuteurs sans token, et
+opencode v1 comme v2 reconnus — chaque mise à niveau validée par un essai réel, et
+quelques pièges d'amont absorbés au passage.
+
+### Ajouté
+
+#### Diarisation Nemotron 3 : huit locuteurs, sans token, GPU ou CPU
+
+- **Backend `nemotron_diar`** (`models.diarization_backend`, opt-in) : NVIDIA Nemotron 3
+  Diarization, jusqu'à **8 locuteurs** en ordre d'arrivée, licence OpenMDW 1.1, **non
+  gated** — là où pyannote exige un token et où Sortformer plafonne à 4. Mesuré sur trois
+  réunions réelles : **7 locuteurs exacts** sur une réunion de 1 h 52 en ~15 s (pyannote met
+  des minutes), 4/4 sur 46 min, et sur un extrait de 15 min un troisième locuteur réel que
+  pyannote fusionnait. Tourne aussi sur **CPU** (~57× le temps réel) : aucune VRAM réservée
+  quand `nemotron_diar.backend = cpu`.
+- Servi par le binaire `audiocpp_cli` du runtime audio.cpp en **sous-process** — aucun
+  serveur, aucun port : NeMo 3.0.0 (PyPI) ne sait pas instancier ce modèle (encodeur RoPE),
+  et parakeet.cpp aborte à la fermeture sur GPU. La sortie brute chevauche (6 à 11 % du
+  temps de parole) : post-traitement pur et testé — tours exclusifs (la voix la plus
+  confiante l'emporte, à égalité celle qui parlait déjà), locuteurs fantômes rattachés à
+  leur voisin (rien n'est jeté), renumérotation par ordre d'arrivée.
+- Page « Modèles », doctor, formulaire de configuration et fourchette de locuteurs (bascule
+  pyannote au-delà de 8, comme Sortformer au-delà de 4) connaissent le nouveau backend.
+
+#### Qwen 3.8-27B sur le palier 32 Go
+
+- **Nouveau modèle recommandé du palier 32 Go** (`unsloth/Qwen3.8-27B-GGUF`, UD-Q5_K_M,
+  Apache-2.0), validé par l'E2E réel 17/17 sur llama.cpp v0.5.0 ; 28 462 Mio mesurés à
+  192K de contexte (moins que le 3.6). Les autres paliers restent en Qwen3.6 : la famille
+  3.8 n'a pas de 35B-A3B. Le profil 3.6-27B **reste livré** pour les installations qui le
+  servent — la recherche du profil d'un palier suit désormais le modèle du catalogue, pas
+  l'ordre alphabétique.
+- Qwen 3.8 réfléchit beaucoup par défaut (`reasoning_effort` xhigh : 37 min de LLM pour
+  73 s d'audio). Le profil règle **`medium`** par la variable `LLAMA_ARG_REASONING_EFFORT`
+  (résumé 8,7 → 2,6 min, relecture finale 13 → 5 min, mêmes 17/17) — variable et non
+  drapeau, car `--reasoning-effort` n'existe que depuis llama.cpp b10434 et ferait échouer
+  un binaire plus ancien.
+- **Page « Modèles » honnête après une montée de version** : quand la LLM recommandée du
+  palier manque mais qu'une autre est servie et fonctionne, elle est affichée
+  « recommandé » (avec la LLM en service nommée), plus « absent » — et le bilan de premier
+  démarrage ne la compte plus comme manquante.
+
+#### opencode v1 et v2, tous deux supportés
+
+- opencode vit en deux lignes depuis septembre : v1 (`opencode-ai`) et v2 (`@opencode/cli`,
+  serveur partagé), même binaire, non installables côte à côte, mises à jour automatiques.
+  TranscrIA **lit la version à chaque lancement** et adapte sa ligne de commande : la v2 est
+  appelée en `--standalone` (jamais le serveur partagé, qui ignorerait l'isolation par run et
+  survivrait au kill) avec `PWD` posé sur le scratch, `--dir` n'existant plus. Vérifié par un
+  run réel v2.0.19 ; le doctor affiche la ligne détectée.
+- **L'installeur n'écrase plus jamais votre opencode** : un binaire présent (v1 ou v2) est
+  utilisé tel quel ; en son absence, une **copie privée épinglée** est posée sous
+  `runtimes/opencode/` (rien sur le PATH, `--no-modify-path`). Le Dockerfile de base épingle
+  la même version (garde en test).
+
+### Modifié
+
+- **audio.cpp v0.9.0** (342 commits) et **parakeet.cpp** du 2026-09-30 : nouveaux
+  épinglages, images Docker synchronisées, `audiocpp_cli` livré à côté du serveur. La règle
+  « requalification sur le banc à chaque bump » devient « **test de fumée réel** » (lancer le
+  moteur, transcrire un fichier) — la requalification est réservée à un changement de modèle.
+- **llama.cpp v0.5.0** : l'amont numérote désormais en semver ; le détecteur de version lit
+  les deux schémas (`bNNNN` et `vX.Y.Z`, tout semver descendant de b9630), le binaire
+  précompilé d'`install.sh` est épinglé par tag (`v0.5.0`, sha256 vérifié, correspondance
+  exacte — plus de « build voisin »), les images Docker compilent la même release.
+
+### Corrigé
+
+- **`--no-mmap` a disparu de llama.cpp v0.5.0** (remplacé par `--load-mode`, lui-même absent
+  avant b10105) : aucun des deux drapeaux ne couvre la plage de versions supportée, les neuf
+  profils de lancement ne le passent plus (chargement par défaut, +1,5 s mesuré, mémoire
+  égale) et un test refuse tout drapeau lié à une version.
+- **Politique de permission opencode dans le bon ordre** : opencode applique la dernière
+  règle qui correspond, dans l'ordre des clés — le `"*": "deny"` final écrasait l'`allow` de
+  l'arbre de travail (en v1 comme en v2). Inversé, réparé sur les configs existantes.
+- **Récupération des opencode orphelins** : les `.opencode.pid` vivent dans le scratch
+  d'agent depuis l'isolation des agents, pas sous `jobs/<id>/` — la réconciliation ne les
+  trouvait plus. Cherchés au bon endroit, et le signal vise le groupe de process (wrapper
+  npm, serveur privé v2).
+- Le profil de lancement d'un palier est celui qui charge le modèle du catalogue, dans
+  l'installeur comme dans l'entrypoint Docker.
+
 ## [0.4.5] — 2026-08-26
 
 La version du banc des règles : une campagne de ~35 parcours complets sur des réunions

@@ -175,6 +175,28 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.5 → 0.4.6
+
+Aucune migration de base. Quatre moteurs externes montent de version ; rien ne casse
+une installation existante, mais trois choses sont à savoir :
+
+- **Palier 32 Go : nouveau modèle recommandé (Qwen3.8-27B)**. Votre Qwen3.6-27B reste
+  servi tel quel — son profil est conservé et le script généré le lance toujours. La page
+  « Modèles » affiche le 3.8 comme **recommandé** (pas « absent ») : téléchargez-le puis
+  « Activer (servir) » quand vous voulez basculer. Les autres paliers ne changent pas.
+- **llama.cpp v0.5.0** : l'amont a retiré l'option `--no-mmap`. Les profils livrés ne la
+  passent plus (chargement par défaut, +1,5 s mesuré). **Si vous avez copié un profil ou écrit
+  votre propre script de lancement**, retirez-y `--no-mmap` avant de mettre `llama-server`
+  à jour, sinon il ne démarre plus (« invalid argument »). Le binaire précompilé proposé par
+  `install.sh` est désormais la release `v0.5.0` (l'amont numérote en semver).
+- **Runtimes STT servis** (audio.cpp v0.9.0, parakeet.cpp) : les épinglages changent — les
+  reconstruire (`python -m transcria.installer.cli audiocpp --force`, idem `parakeetcpp`) ;
+  audio.cpp livre maintenant aussi `audiocpp_cli`, requis par la nouvelle diarisation
+  `nemotron_diar` (8 locuteurs, non gated, opt-in via `models.diarization_backend`).
+- **opencode** : si vous utilisez la v2 (`@opencode/cli`), elle est désormais reconnue et
+  appelée correctement (`--standalone`) ; rien à faire. Sans opencode, `install.sh` en pose
+  une copie privée épinglée sous `runtimes/opencode/` au lieu de `~/.opencode`.
+
 ### Notes spécifiques 0.4.3 → 0.4.4
 
 Aucune migration de base. Pour une installation **existante** (des comptes en base),

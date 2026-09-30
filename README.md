@@ -35,7 +35,7 @@ Pick the language from the navbar; default French, French fallback everywhere. S
 
 ## Project status
 
-**Current release: 0.4.5** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.4.6** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -47,6 +47,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.4.6** | **The engines-up-to-date release** — audio.cpp v0.9.0, parakeet.cpp, llama.cpp v0.5.0 and opencode brought to upstream; **Qwen 3.8-27B** on the 32 GB tier (`medium` reasoning effort, E2E 17/17); **Nemotron 3 diarization**: 8 speakers, no token, GPU or CPU (7 exact speakers on a 1h52 meeting in 15 s); **opencode v1 and v2** both recognized, your own opencode is never overwritten; upstream traps absorbed (`--no-mmap` removed from llama.cpp, semver) |
 | **0.4.5** | **The rules-bench release** — a campaign of ~35 full runs on real meetings turned lessons into code: **correction prompt rebuilt (v4)** to speak to the agents that actually correct, **human-validated facilitator** structuring the summary, **length anchored to duration**, deterministic guards (ambiguous forms, acronym expansions, SRT structure, repaired markers), a **factual diff appended** to every correction report, a **two-sensor watchdog** (7 false kills avoided, measured), **audio.cpp/parakeet.cpp/opencode** brought up to date |
 | **0.4.4** | **The first-external-feedback release** — the **portal's first visit now creates the admin account** (no more password hunting: two real tester installs surfaced two real bugs, fixed at the root with drift tests, and the install gate now plays this exact journey); `install.sh` **offers to install ffmpeg** when missing; **native RTX 50xx (Blackwell)** in the GPU images (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 required); the Spanish catalog got a **native-speaker review** (thanks @AlexMnrs, first external contribution) |
 | **0.4.3** | **Three beta languages, and Windows 11 joins in** — full German / Spanish / Italian support (UI, LLM prompts, Word minutes, quality reports, voice-consent form) behind a **beta badge** until native speakers review the translations (enforced glossaries, formal register, contract tests on every machine-parsed marker; validated by a real-GPU E2E on German audio). And a **guided Windows 11 install**: one PowerShell script checks the machine, asks two questions (target drive C:/D:/E:, bundled or slim image) and drives WSL2 + Docker Desktop end to end, re-runnable after each reboot |

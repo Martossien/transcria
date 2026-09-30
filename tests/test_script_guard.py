@@ -413,6 +413,8 @@ _HORS_POLITIQUE = {
     "maintenance.backup_dir": "écrit par la maintenance seule ; une sauvegarde restaurée est "
                               "déjà un acte d'administration système",
     "services.arbitrage_log_path": "fichier de journal, pas un répertoire d'accueil",
+    "nemotron_diar.cli_path": "binaire du runtime audio.cpp posé par l'installateur, jamais un upload",
+    "nemotron_diar.model_path": "poids GGUF téléchargés par l'admin depuis le catalogue, pas un upload",
 }
 
 

@@ -38,7 +38,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.4.5** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.4.6** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -48,6 +48,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.4.6** | **La version des moteurs à jour** — audio.cpp v0.9.0, parakeet.cpp, llama.cpp v0.5.0 et opencode remontés à l'amont ; **Qwen 3.8-27B** sur le palier 32 Go (effort de réflexion `medium`, E2E 17/17) ; **diarisation Nemotron 3** : 8 locuteurs, sans token, GPU ou CPU (7 locuteurs exacts sur 1 h 52 en 15 s) ; **opencode v1 et v2** reconnus, votre opencode n'est jamais écrasé ; pièges d'amont absorbés (`--no-mmap` retiré de llama.cpp, semver) |
 | **0.4.5** | **La version du banc des règles** — une campagne de ~35 parcours complets sur réunions réelles transforme les leçons en code : **prompt de correction refondu (v4)** pour parler à ceux qui corrigent, **animateur validé** structurant la synthèse, **longueur ancrée sur la durée**, gardes déterministes (formes ambiguës, expansions de sigles, structure SRT, marqueurs réparés), **diff factuel annexé** à chaque rapport, watchdog à **deux capteurs** (7 faux arrêts évités mesurés), moteurs **audio.cpp/parakeet.cpp/opencode** à jour |
 | **0.4.4** | **La version des premiers retours externes** — la **première visite du portail crée le compte administrateur** (fini le mot de passe à chercher : deux vraies installations de testeurs ont trouvé deux vrais bugs, corrigés à la racine avec tests de dérive, et la gate d'installation joue désormais ce parcours réel) ; `install.sh` **propose d'installer ffmpeg** quand il manque ; **RTX 50xx (Blackwell) natif** dans les images GPU (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 requis) ; catalogue espagnol **relu par un natif** (merci @AlexMnrs, première contribution externe) |
 | **0.4.3** | **Trois langues en bêta, et Windows 11 entre dans la danse** — allemand / espagnol / italien complets (interface, prompts LLM, compte-rendu Word, rapports qualité, formulaire de consentement) derrière un **badge bêta** en attendant la relecture par des natifs (glossaires imposés, registre de politesse, tests de contrat sur chaque marqueur parsé ; validé par un E2E GPU réel sur audio allemand). Et une **installation Windows 11 guidée** : un script PowerShell vérifie la machine, pose deux questions (disque cible C:/D:/E:, image bundled ou slim) et déroule WSL2 + Docker Desktop de bout en bout, relançable après chaque redémarrage |

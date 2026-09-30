@@ -23,16 +23,16 @@ deliverable. So every tier was judged against a fixed human reading grid, with
 | 12 GB | **Qwen3.5-9B** | Q5_K_M | 192K ¹ | ✅ validated (replaces LFM2.5-8B, which failed the agentic workflow) |
 | 16 GB | Qwen3.5-9B | Q6_K | 256K | ✅ validated |
 | 24 GB | **Qwen3.6-35B-A3B** | UD-IQ4_NL_XL | 256K | ✅ validated (replaces Gemma 4 12B: 5× slower, regressions) |
-| 32 GB | **Qwen3.6-27B** | Q5_K_M | 192K ² | ✅ validated (reference-level output) |
+| 32 GB | **Qwen3.8-27B** | UD-Q5_K_M | 192K ² | ✅ validated (real E2E 17/17 on llama.cpp v0.5.0; replaces Qwen3.6-27B — the 3.6 profile stays for existing installs) |
 | 48 GB | Qwen3.6-35B-A3B | UD-Q6_K | 256K | ⭐ reference — cleanest emission, finest summary |
 | 64 GB | Qwen3.6-35B-A3B | UD-Q8_K_XL | 256K | reference |
 
 ⁰ 8 GB (gaming cards, 2026-08): 6 378 MiB measured at 131,072 context (Q8 KV) → ~1.8 GB headroom (native 262K = 9 194 MiB, does not fit). Same gated-delta family as the 12 GB reference. The express install pairs this tier with **Kroko (CPU STT)** so the whole GPU stays free for the LLM.
 ¹ 12 GB: 192K context = 10 401 MiB measured → ~1.9 GB headroom; 256K would leave ~0.5 GB (not recommended).
-² 32 GB: 192K = 29 168 MiB measured → ~3.6 GB headroom on one 32 GB card, ~1.4 GB on the most-loaded card of a 2×16 GB split.
+² 32 GB: 192K = 28 462 MiB measured for Qwen3.8-27B UD-Q5_K_M (29 168 for the former 3.6) → ~3.5 GB headroom on one 32 GB card, ≥ 1 GB on the most-loaded card of a 2×16 GB split. Qwen3.8 thinks a lot by default (`reasoning_effort` xhigh): the profile sets `medium` through the `LLAMA_ARG_REASONING_EFFORT` variable (an unknown variable is ignored by older llama.cpp builds, unlike the `--reasoning-effort` flag, which only exists since b10434) — measured on the E2E: summary 8.7 → 2.6 min, final review 13 → 5 min, same 17/17.
 
 One profile script per tier (`scripts/arbitrage_profiles/<tier>.sh`) carries the model's
-**official sampling parameters** (Qwen ≈ temp 0.6; never reuse another model's settings).
+**official sampling parameters** (Qwen3.5/3.6 ≈ temp 0.6, Qwen3.8 thinking = temp 1.0; never reuse another model's settings).
 Switching models = switching the profile script — the app always talks to a generic
 `arbitrage` alias, so `config.yaml` never changes.
 

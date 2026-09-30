@@ -272,7 +272,8 @@ class NemotronDiarizer(BaseDiarizer):
         return DiarizationPcmPreparer(config).prepare(fs, audio_path)
 
     def diarize(self, job: Job, audio_path: Path) -> dict:
-        fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+        storage = self.config.get("storage") or {}
+        fs = JobFilesystem(storage.get("jobs_dir", "./jobs"), job.id)
         cached = self._load_cached_result(fs, audio_path)
         if cached is not None:
             logger.info("Nemotron 3 : checkpoint réutilisé (%d locuteurs)", len(cached.get("speakers", [])))
