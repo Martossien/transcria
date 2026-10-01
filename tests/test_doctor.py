@@ -1109,3 +1109,36 @@ def test_sans_visio_aucun_signalement(app, monkeypatch):
     """Contre-épreuve : ne pas fatiguer les installations qui n'utilisent pas Visio."""
     monkeypatch.delenv("VISIO_ALLOWED_HOSTS", raising=False)
     assert doc.check_outbound_allowlist({}).status == "ok"
+
+
+def test_check_arbitrage_script_warns_on_version_bound_llama_flags(tmp_path):
+    # Un script personnalisé qui passe --no-mmap ne démarre plus sur llama.cpp v0.5.0.
+    wrapper = tmp_path / "launch.local.sh"
+    profile = tmp_path / "profil.sh"
+    profile.write_text("#!/bin/bash\n# --no-mmap en commentaire ne compte pas\nllama-server --model x.gguf \\\n--no-mmap \\\n--port 8080\n")
+    wrapper.write_text(f"#!/bin/bash\nexec '{profile}' \"$@\"\n")
+    cfg = {"services": {"arbitrage_script": str(wrapper)}}
+    res = doc.check_arbitrage_script(cfg, is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.WARN and "--no-mmap" in res.detail and res.hint
+
+
+def test_check_arbitrage_script_ok_without_such_flags(tmp_path):
+    script = tmp_path / "launch.sh"
+    script.write_text("#!/bin/bash\nllama-server --model x.gguf --port 8080\n")
+    res = doc.check_arbitrage_script({"services": {"arbitrage_script": str(script)}},
+                                     is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.OK
+
+
+def test_check_nemotron_diar_runtime(tmp_path, monkeypatch):
+    assert doc.check_nemotron_diar_runtime({"models": {"diarization_backend": "pyannote"}}).status == doc.OK
+    cfg = {"models": {"diarization_backend": "nemotron_diar"},
+           "nemotron_diar": {"cli_path": str(tmp_path / "absent"), "model_path": str(tmp_path / "absent.gguf")}}
+    res = doc.check_nemotron_diar_runtime(cfg)
+    assert res.status == doc.WARN and "audiocpp_cli" in res.detail and "GGUF" in res.detail and res.hint
+    cli = tmp_path / "audiocpp_cli"
+    cli.write_text("#!/bin/sh\n")
+    cli.chmod(0o755)
+    (tmp_path / "m.gguf").write_bytes(b"x")
+    cfg["nemotron_diar"] = {"cli_path": str(cli), "model_path": str(tmp_path / "m.gguf")}
+    assert doc.check_nemotron_diar_runtime(cfg).status == doc.OK

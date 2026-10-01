@@ -64,6 +64,15 @@ quelques pièges d'amont absorbés au passage.
   `~/.transcria/opencode/` (rien sur le PATH, `--no-modify-path`). Le Dockerfile de base épingle
   la même version (garde en test).
 
+#### Le doctor suit
+
+- **Deux vérifications de plus** : la diarisation `nemotron_diar` (binaire `audiocpp_cli` ET
+  GGUF présents — le backend tourne en sous-process, rien ne le découvrirait avant le premier
+  job) et les **options liées à une version** dans le script de lancement de la LLM
+  (`--no-mmap`, `--mmap`, `--mlock`, `--load-mode` — lues aussi dans le profil qu'un wrapper
+  généré exécute) : exactement ce qu'une mise à niveau de llama.cpp casse en silence. Le
+  doctor affiche aussi la ligne d'opencode détectée (v1/v2).
+
 ### Modifié
 
 - **audio.cpp v0.9.0** (342 commits) et **parakeet.cpp** du 2026-09-30 : nouveaux

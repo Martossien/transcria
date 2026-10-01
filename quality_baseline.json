@@ -78,7 +78,7 @@
   "transcria.diagnostics.checks.deployment": 2,
   "transcria.diagnostics.checks.identity": 4,
   "transcria.diagnostics.checks.llm": 6,
-  "transcria.diagnostics.checks.remote": 7,
+  "transcria.diagnostics.checks.remote": 8,
   "transcria.diagnostics.checks.storage": 4,
   "transcria.diagnostics.doctor": 9,
   "transcria.diagnostics.system_status": 1,

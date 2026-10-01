@@ -11,12 +11,33 @@ from transcria.diagnostics.checks.probes import _probe_openai_models
 from transcria.installer.opencode_lib import opencode_version
 from transcria.llm_tools.opencode_cli import parse_opencode_version
 
+# Options de llama-server qui n'existent QUE sur une partie des versions supportées : un
+# argument inconnu fait sortir le serveur avant d'ouvrir son port, en silence pour le job.
+# `--no-mmap`/`--mmap`/`--mlock` : retirés en v0.5.0 (2026-09) ; `--load-mode` : absent
+# avant b10105. Les profils livrés n'en passent aucun ; un script PERSONNALISÉ, si.
+VERSION_BOUND_LLAMA_FLAGS = ("--no-mmap", "--mmap", "--mlock", "--load-mode")
+
+
+def _version_bound_flags_in(script_text: str) -> list[str]:
+    code = [line for line in script_text.splitlines() if not line.lstrip().startswith("#")]
+    found = [f for f in VERSION_BOUND_LLAMA_FLAGS if any(f in line.split() for line in code)]
+    return found
+
+
+def _wrapped_profile(script_text: str) -> str | None:
+    """Profil exécuté par un wrapper généré (`exec '<profil>' "$@"`), ou None."""
+    import re
+
+    m = re.search(r"^exec '([^']+)'", script_text, re.MULTILINE)
+    return m.group(1) if m else None
+
 
 def check_arbitrage_script(
     cfg: dict,
     *,
     is_file: Callable[[str], bool] = os.path.isfile,
     is_executable: Callable[[str], bool] = lambda p: os.access(p, os.X_OK),
+    read_text: Callable[[str], str] | None = None,
 ) -> CheckResult:
     name = _t("chk_arb_script")
     services = cfg.get("services", {})
@@ -32,6 +53,20 @@ def check_arbitrage_script(
     if not is_executable(script):
         return CheckResult(name, WARN, _t("arbs_not_exec", script=script),
                            hint=f"chmod +x {script}")
+    # Drapeaux liés à une version (script ET profil qu'il exécute) — mise à niveau 0.4.6.
+    if read_text is None:
+        read_text = lambda path: Path(path).read_text(encoding="utf-8", errors="ignore")  # noqa: E731
+    try:
+        text = read_text(script)
+        profile = _wrapped_profile(text)
+        if profile and is_file(profile):
+            text += "\n" + read_text(profile)
+    except OSError:
+        text = ""
+    flags = _version_bound_flags_in(text)
+    if flags:
+        return CheckResult(name, WARN, _t("arbs_version_bound", script=script, flags=", ".join(flags)),
+                           hint=_t("arbs_version_bound_hint"))
     return CheckResult(name, OK, _t("arbs_ok", script=script))
 
 def _tensor_split_card_count(script_text: str) -> int | None:

@@ -27,6 +27,9 @@ GOLDEN_ALL_CHECKS = [
     "check_inference_nodes",
     "check_remote_stt_control_plane",
     "check_served_stt_runtimes",
+    # Ajout 2026-10-01 (0.4.6) : backend nemotron_diar = binaire audiocpp_cli + GGUF, en
+    # sous-process — sans ce check, l'absence se découvre au premier job.
+    "check_nemotron_diar_runtime",
     "check_meeting_scheduling",
     "check_stt_instances_vram",
     "check_identity_backend",
@@ -62,6 +65,7 @@ GOLDEN_PROFILES = {
         "check_resource_node_auth",
         "check_resource_node_engines",
         "check_served_stt_runtimes",
+        "check_nemotron_diar_runtime",
         "check_resource_node_ports",
         "check_local_models",
     ],

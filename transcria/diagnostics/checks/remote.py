@@ -29,6 +29,7 @@ from transcria.installer.parakeetcpp_phase import (
     parakeetcpp_home,
     parakeetcpp_is_complete,
 )
+from transcria.stt.nemotron_diarizer import NemotronDiarizer
 
 
 def check_inference_nodes(
@@ -145,6 +146,28 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
             hint=_t("served_rt_hint", cli=cli_names),
         )
     return CheckResult(name, OK, _t("served_rt_ok", engines=", ".join(concerned)))
+
+def check_nemotron_diar_runtime(cfg: dict) -> CheckResult:
+    """Diarisation `nemotron_diar` : le binaire `audiocpp_cli` ET le GGUF doivent être là.
+
+    Le backend tourne en sous-process : rien ne le réserve ni ne le lance avant le premier
+    job — sans cette vérification, l'absence se découvre à la première diarisation (job en
+    `available=False`). Hors backend `nemotron_diar` : non concerné."""
+    name = _t("chk_nemotron_diar")
+    backend = str((cfg.get("models", {}) or {}).get("diarization_backend", "pyannote")).strip().lower()
+    if backend != "nemotron_diar":
+        return CheckResult(name, OK, _t("nd_not_configured"))
+    diarizer = NemotronDiarizer(cfg)
+    missing: list[str] = []
+    cli = diarizer._cli
+    if not (cli.is_file() and os.access(cli, os.X_OK)):
+        missing.append(f"audiocpp_cli ({cli})")
+    if not diarizer._model.is_file():
+        missing.append(f"GGUF ({diarizer._model})")
+    if missing:
+        return CheckResult(name, WARN, _t("nd_missing", items="; ".join(missing)), hint=_t("nd_hint"))
+    return CheckResult(name, OK, _t("nd_ok", cli=str(cli), model=diarizer._model.name))
+
 
 def _caps_reports_gpu(capabilities: dict) -> bool:
     """True si `/capabilities` énumère au moins un GPU avec un `free_mb` lisible."""

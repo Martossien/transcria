@@ -68,6 +68,18 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "arbs_missing_hint": "Adapter services.arbitrage_script au chemin réel (le script livré est un EXEMPLE machine-spécifique).",
         "arbs_not_exec": "présent mais non exécutable : {script}",
         "arbs_ok": "présent et exécutable : {script}",
+        "arbs_version_bound": "{script} passe {flags} — option(s) liée(s) à une version de llama.cpp "
+                              "(--no-mmap/--mmap/--mlock retirés en v0.5.0 ; --load-mode absent avant b10105) : "
+                              "le serveur ne démarrerait pas sur l'autre côté de la plage",
+        "arbs_version_bound_hint": "retirez l'option du script (chargement par défaut, +1,5 s mesuré, mémoire égale) — "
+                                   "les profils livrés ne la passent plus depuis 0.4.6",
+        # check_nemotron_diar_runtime
+        "chk_nemotron_diar": "Diarisation Nemotron 3 (runtime audio.cpp)",
+        "nd_not_configured": "non concerné (models.diarization_backend ≠ nemotron_diar)",
+        "nd_missing": "manquant : {items}",
+        "nd_hint": "binaire : `python -m transcria.installer.cli audiocpp` (--force après un bump) ; poids : page « Modèles » "
+                   "ou `nemotron_diar.model_path`",
+        "nd_ok": "prêt — {cli}, modèle {model}",
         # check_arbitrage_llm
         "arbl_down": "aucun serveur ne répond sur le port {port} (lancé à la demande)",
         "arbl_down_hint": "S'il reste « down » après lancement, lire {log} et ./scripts/check_arbitrage_llm.sh.",
@@ -360,6 +372,18 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "arbs_missing_hint": "Point services.arbitrage_script at the real path (the shipped script is a machine-specific EXAMPLE).",
         "arbs_not_exec": "present but not executable: {script}",
         "arbs_ok": "present and executable: {script}",
+        "arbs_version_bound": "{script} passes {flags} — option(s) tied to a llama.cpp version "
+                              "(--no-mmap/--mmap/--mlock removed in v0.5.0; --load-mode absent before b10105): "
+                              "the server would not start on the other side of the range",
+        "arbs_version_bound_hint": "remove the option from the script (default loading, +1.5 s measured, same memory) — "
+                                   "shipped profiles no longer pass it since 0.4.6",
+        # check_nemotron_diar_runtime
+        "chk_nemotron_diar": "Nemotron 3 diarization (audio.cpp runtime)",
+        "nd_not_configured": "not applicable (models.diarization_backend ≠ nemotron_diar)",
+        "nd_missing": "missing: {items}",
+        "nd_hint": "binary: `python -m transcria.installer.cli audiocpp` (--force after a bump); weights: the Models page "
+                   "or `nemotron_diar.model_path`",
+        "nd_ok": "ready — {cli}, model {model}",
         "arbl_down": "no server responds on port {port} (launched on demand)",
         "arbl_down_hint": "If it stays down after launch, read {log} and ./scripts/check_arbitrage_llm.sh.",
         "arbl_mismatch": "active on port {port} but model “{active}” ≠ services.arbitrage_api_model_id “{expected}”",
