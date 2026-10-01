@@ -71,13 +71,22 @@ def find_pyannote_cache(hf_cache: Path) -> Path | None:
     return None
 
 
+# Sous-dossiers de MODELS_DIR qui portent des GGUF qui ne sont PAS une LLM d'arbitrage
+# (poids des runtimes STT/diarisation) : sans cette liste, « LLM arbitrage : OK » pouvait
+# désigner un modèle de diarisation (attrapé par la gate d'installation, 2026-10-01).
+NON_LLM_GGUF_DIRS = ("parakeet-cpp", "nemotron-3-diarization", "kroko")
+
+
 def find_first_gguf(models_dir: Path) -> Path | None:
-    """Retourne le premier fichier GGUF trouvé dans l'arborescence des modèles."""
+    """Premier GGUF de LLM trouvé dans l'arborescence des modèles (runtimes STT/diar exclus)."""
     models_dir = Path(models_dir)
     matches = sorted(models_dir.rglob("*.gguf")) if models_dir.exists() else []
     for match in matches:
-        if match.is_file():
-            return match
+        if not match.is_file():
+            continue
+        if any(part in NON_LLM_GGUF_DIRS for part in match.relative_to(models_dir).parts[:-1]):
+            continue
+        return match
     return None
 
 

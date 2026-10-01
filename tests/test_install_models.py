@@ -535,3 +535,18 @@ def test_render_model_detection_table_backend_cohere_reste_requis():
 
     assert "Cohere ASR (STT ~6 Go): MANQUANT" in rendered
     assert "pyannote diarization (~2 Go): MANQUANT" in rendered
+
+
+def test_find_first_gguf_ignores_runtime_weights(tmp_path):
+    # Les GGUF des runtimes STT/diarisation ne sont pas une LLM d'arbitrage : la gate
+    # d'installation a vu « LLM arbitrage : OK » pointer le modèle de diarisation Nemotron 3.
+    from transcria.installer.models import find_first_gguf
+
+    for sub in ("nemotron-3-diarization", "parakeet-cpp", "kroko"):
+        (tmp_path / sub).mkdir()
+        (tmp_path / sub / "poids.gguf").write_bytes(b"x")
+    assert find_first_gguf(tmp_path) is None
+    llm = tmp_path / "Qwen-Q5" / "llm.gguf"
+    llm.parent.mkdir()
+    llm.write_bytes(b"x")
+    assert find_first_gguf(tmp_path) == llm

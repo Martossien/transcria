@@ -30,14 +30,16 @@ OPENCODE_INSTALL_URL = "https://opencode.ai/install"
 OPENCODE_PINNED_VERSION = "1.18.33"
 
 
-def private_opencode_home(install_dir: Path) -> Path:
-    """HOME sous lequel l'installateur officiel pose NOTRE copie : ``<install>/runtimes/opencode``.
+def private_opencode_home(service_home: Path) -> Path:
+    """HOME sous lequel l'installateur officiel pose NOTRE copie : ``<home>/.transcria/opencode``.
 
     Elle ne prend jamais la place d'un opencode de l'exploitant (l'installateur officiel
     écrase ``~/.opencode/bin/opencode``, et v1/v2 partagent ce nom) : un binaire déjà
-    présent est utilisé tel quel, la copie privée ne sert qu'en son absence.
+    présent est utilisé tel quel, la copie privée ne sert qu'en son absence. Sous le HOME
+    du service, pas sous ``<install>/runtimes`` : ce dossier est baké en lecture seule dans
+    les images et monté tel quel par la gate d'installation (vécu : « Read-only file system »).
     """
-    return Path(install_dir) / "runtimes" / "opencode"
+    return Path(service_home) / ".transcria" / "opencode"
 
 
 @dataclass(frozen=True)

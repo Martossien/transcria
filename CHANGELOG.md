@@ -61,7 +61,7 @@ quelques pièges d'amont absorbés au passage.
   run réel v2.0.19 ; le doctor affiche la ligne détectée.
 - **L'installeur n'écrase plus jamais votre opencode** : un binaire présent (v1 ou v2) est
   utilisé tel quel ; en son absence, une **copie privée épinglée** est posée sous
-  `runtimes/opencode/` (rien sur le PATH, `--no-modify-path`). Le Dockerfile de base épingle
+  `~/.transcria/opencode/` (rien sur le PATH, `--no-modify-path`). Le Dockerfile de base épingle
   la même version (garde en test).
 
 ### Modifié

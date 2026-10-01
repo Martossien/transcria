@@ -995,7 +995,7 @@ non installables côte à côte, mises à jour automatiques. Règles (lu au sour
   c'est là que la réconciliation les cherche.
 - **L'installeur n'écrase jamais un opencode existant** (v1 ou v2, utilisé tel quel) ; en son
   absence il pose une **copie privée épinglée** (`OPENCODE_PINNED_VERSION`, v1) sous
-  `<install>/runtimes/opencode/` avec `--no-modify-path` — rien sur le PATH, le pipeline lit
+  `~/.transcria/opencode/` (HOME du service) avec `--no-modify-path` — rien sur le PATH, le pipeline lit
   `workflow.arbitration_llm.opencode_bin`. Le Dockerfile de base épingle la même version (garde
   `test_docker_sync.py`).
 - Les clés v1 de `opencode.json` (`provider`, `permission`) sont lues et traduites par la v2 :

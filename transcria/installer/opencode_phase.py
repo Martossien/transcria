@@ -61,7 +61,7 @@ class OpencodePlan:
     interactive: bool = True
     venv_python: Path | None = None
     install_url: str = OPENCODE_INSTALL_URL
-    # Copie privée (aucun opencode trouvé) : release épinglée, sous <install>/runtimes/opencode.
+    # Copie privée (aucun opencode trouvé) : release épinglée, sous <home du service>/.transcria/opencode.
     pinned_version: str = OPENCODE_PINNED_VERSION
 
 
@@ -127,7 +127,7 @@ def apply_opencode(
             # Copie PRIVÉE épinglée (jamais dans ~/.opencode : c'est la place de l'opencode
             # de l'exploitant, v1 ou v2). Rien n'est ajouté au PATH : le pipeline lit
             # `workflow.arbitration_llm.opencode_bin`.
-            private_home = private_opencode_home(plan.install_dir)
+            private_home = private_opencode_home(plan.opencode_home)
             destination = private_home / ".opencode" / "bin" / "opencode"
             _emit(console, "download-start", value=plan.pinned_version)
             ok = install_opencode_binary(

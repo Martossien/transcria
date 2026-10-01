@@ -144,7 +144,7 @@ sort proprement **avant toute mutation**.
 | Base de données | PostgreSQL si `psql` + droits + serveur qui répond ; **sinon l'installateur propose de l'installer ou de le démarrer** (une question, jamais en douce) ; refus ⇒ SQLite, dont le schéma est créé sur place (`alembic upgrade head`) |
 | Modèles IA | Vérifie Cohere ASR (répertoire local **ou cache HF** par repo id), cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
-| opencode | Détecte dans PATH / `~/.opencode/bin/` (v1 **ou v2**, jamais écrasé) ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** d'une **copie privée épinglée** sous `<install>/runtimes/opencode/` (rien sur le PATH) + génère `opencode.json` |
+| opencode | Détecte dans PATH / `~/.opencode/bin/` (v1 **ou v2**, jamais écrasé) ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** d'une **copie privée épinglée** sous `~/.transcria/opencode/` (HOME du service) (rien sur le PATH) + génère `opencode.json` |
 | **LLM d'arbitrage** | **Détecte les GPU, recommande le palier plaçable (12/16/24/32/48/64 Go, placement par carte), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |

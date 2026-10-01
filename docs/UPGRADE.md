@@ -195,7 +195,7 @@ une installation existante, mais trois choses sont à savoir :
   `nemotron_diar` (8 locuteurs, non gated, opt-in via `models.diarization_backend`).
 - **opencode** : si vous utilisez la v2 (`@opencode/cli`), elle est désormais reconnue et
   appelée correctement (`--standalone`) ; rien à faire. Sans opencode, `install.sh` en pose
-  une copie privée épinglée sous `runtimes/opencode/` au lieu de `~/.opencode`.
+  une copie privée épinglée sous `~/.transcria/opencode/` au lieu de `~/.opencode`.
 
 ### Notes spécifiques 0.4.3 → 0.4.4
 

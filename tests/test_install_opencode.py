@@ -283,8 +283,8 @@ def test_install_opencode_binary_pins_the_release_and_leaves_the_shell_alone(tmp
     assert calls == [["bash", "-c", "curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.33 --no-modify-path"]]
 
 
-def test_private_home_lives_under_the_install_runtimes():
-    assert private_opencode_home(Path("/srv/transcria")) == Path("/srv/transcria/runtimes/opencode")
+def test_private_home_lives_under_the_service_home():
+    assert private_opencode_home(Path("/root")) == Path("/root/.transcria/opencode")
     assert OPENCODE_PINNED_VERSION.count(".") == 2 and OPENCODE_PINNED_VERSION.startswith("1.")
 
 
