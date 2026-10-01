@@ -96,8 +96,10 @@ engines:
       - {id: "16", min_vram_mb: 15500, context: 262144, model: "qwen3.5:9b"}
       # 24 Go : llama.cpp sert le 35B-A3B en IQ4 (~19 Go) ; le 35B Q4 d'Ollama (~24 Go) NE rentre
       # PAS dans 24 Go → on descend au 27B (17 Go), qui reste le meilleur en raisonnement à ce palier.
-      - {id: "24", min_vram_mb: 23000, context: 262144, model: "qwen3.6:27b"}
-      - {id: "32", min_vram_mb: 31000, context: 196608, model: "qwen3.6:27b"}
+      # 2026-10-01 : qwen3.8:27b (18 Go Q4, 256K) remplace qwen3.6:27b — Ollama 0.35, E2E réel
+      # 17/17 ; le démon charge le modèle avec son contexte natif (262144) sans réglage.
+      - {id: "24", min_vram_mb: 23000, context: 262144, model: "qwen3.8:27b"}
+      - {id: "32", min_vram_mb: 31000, context: 196608, model: "qwen3.8:27b"}
       - {id: "48", min_vram_mb: 46000, context: 262144, model: "qwen3.6:35b"}
       - {id: "64", min_vram_mb: 60000, context: 262144, model: "qwen3.6:35b"}
 
@@ -110,5 +112,8 @@ engines:
     download: hf                  # vllm serve <repo id> → cache HF au démarrage
     tp: {auto_from_gpu_count: true, valid: [1, 2, 4, 8]}
     tiers:
-      - {id: "48", min_vram_mb: 46000, tp: 2, context: 131072, model: "Qwen/Qwen3.6-27B-FP8"}
-      - {id: "96", min_vram_mb: 92000, tp: 4, context: 262144, model: "Qwen/Qwen3.6-27B-FP8"}
+      # 2026-10-01 : Qwen3.8-27B-FP8 — vLLM 0.23 (TP=4, FP8 Marlin sur Ampere), parser d'outils
+      # `qwen3_xml` (recette Qwen 3.8), E2E réel 17/17. L'effort de réflexion reste celui du
+      # modèle (xhigh) : vLLM l'applique par requête et le client ne l'envoie pas.
+      - {id: "48", min_vram_mb: 46000, tp: 2, context: 131072, model: "Qwen/Qwen3.8-27B-FP8"}
+      - {id: "96", min_vram_mb: 92000, tp: 4, context: 262144, model: "Qwen/Qwen3.8-27B-FP8"}

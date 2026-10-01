@@ -576,7 +576,7 @@ Specifics vs the minimal `docker run` above:
   official installer (it is built by `pip install`, not by `install.sh`): the roles that
   execute the LLM phases have it whatever the topology.
 - **Cohere STT** served by vLLM in the node (`/engines/ensure` launches `launch_stt_cohere.sh`,
-  `STT_BIN` = vLLM venv); **arbitration LLM** = the `vllm-arbitrage` service (Qwen3.6-27B-FP8, TP=4,
+  `STT_BIN` = vLLM venv); **arbitration LLM** = the `vllm-arbitrage` service (Qwen3.8-27B-FP8, TP=4,
   FP8 Marlin on Ampere) via `scripts/launch_arbitrage_vllm.sh`.
 - All **8 GPUs** are exposed (`nvidia.com/gpu=all`): the VRAM autonomy code places arbitration
   (TP=4) + STT + diarization (`device: auto`).

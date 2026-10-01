@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #   • FRONTALE (CPU)  : web (UI) + scheduler (orchestration, phases LLM via opencode)
 #   • NŒUD GPU        : resource-node (diarisation pyannote + STT Cohere via vLLM :8003)
-#   • LLM arbitrage   : vllm-arbitrage (Qwen3.6-27B-FP8 via vLLM :8080, TP=4)
+#   • LLM arbitrage   : vllm-arbitrage (Qwen3.8-27B-FP8 via vLLM :8080, TP=4)
 #   • PostgreSQL partagé ; fichiers de job via volume partagé (transport file_ref)
 #
 # Fichier compose DÉDIÉ et isolé : il n'entremêle PAS les profils du docker-compose.yml
@@ -131,13 +131,13 @@ services:
       - "nvidia.com/gpu=all"
     restart: unless-stopped
 
-  # Serveur LLM d'arbitrage : Qwen3.6-27B-FP8 via vLLM (TP=4, FP8 Marlin sur Ampere).
+  # Serveur LLM d'arbitrage : Qwen3.8-27B-FP8 via vLLM (TP=4, FP8 Marlin sur Ampere).
   # Résident, OpenAI-compatible :8080. opencode (côté scheduler) pointe ici.
   vllm-arbitrage:
     image: transcria-resource-node:latest
     entrypoint: ["bash", "/app/scripts/launch_arbitrage_vllm.sh"]
     environment:
-      ARBITRAGE_MODEL: ${ARBITRAGE_MODEL:-Qwen/Qwen3.6-27B-FP8}
+      ARBITRAGE_MODEL: ${ARBITRAGE_MODEL:-Qwen/Qwen3.8-27B-FP8}
       ARBITRAGE_ALIAS: arbitrage
       ARBITRAGE_GPUS: ${ARBITRAGE_GPUS:-0,1,2,3}
       ARBITRAGE_TP: ${ARBITRAGE_TP:-4}

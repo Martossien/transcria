@@ -109,9 +109,9 @@ Pourquoi un même palier n'accueille pas le même modèle selon le moteur (compr
 
 Modèles par palier (ancrés bench llama.cpp ; voir le YAML pour la table exacte) : famille
 **Qwen3.5-4B/9B** (palier 8 Go — llama.cpp uniquement — et petits paliers) /
-**Qwen3.8-27B** (palier 32 Go, llama.cpp) + **Qwen3.6-35B-A3B** (paliers 24/48/64 — la famille 3.8
-n'a pas de 35B-A3B). Ollama et vLLM restent sur `qwen3.6:27b` / `Qwen3.6-27B-FP8` tant qu'un essai
-réel n'a pas validé leurs équivalents 3.8.
+**Qwen3.8-27B** (palier 32 Go llama.cpp, `qwen3.8:27b` Ollama, `Qwen3.8-27B-FP8` vLLM — chacun
+validé par un E2E réel le 2026-10-01) + **Qwen3.6-35B-A3B** (paliers llama.cpp 24/48/64 — la
+famille 3.8 n'a pas de 35B-A3B).
 Un point mesuré de référence : `qwen3.5:9b` Ollama ≈ **14,7 Go** (poids 6,6 + KV 256K ~8).
 
 ### Réduire l'empreinte (lever la contrainte du KV grand contexte)

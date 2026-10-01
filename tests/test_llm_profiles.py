@@ -84,7 +84,7 @@ class TestSelectOllama:
     def test_mono_gpu_uses_per_card(self):
         # 1 carte 24 Go → palier 24 (27b), pas de spread.
         c = select_profile(_P, "ollama", gpu_count=1, per_card_vram_mb=24000, total_vram_mb=24000)
-        assert c.tier_id == "24" and c.model == "qwen3.6:27b"
+        assert c.tier_id == "24" and c.model == "qwen3.8:27b"
         assert c.engine_env == {} and c.multi_gpu is False
 
     def test_multi_gpu_uses_total_and_enables_spread(self):
@@ -124,7 +124,7 @@ class TestVllmEnvResolver:
 
         c = select_profile(_P, "vllm", gpu_count=4, per_card_vram_mb=24000, total_vram_mb=96000)
         rendered = render_vllm_env_shell(c)
-        assert "ARBITRAGE_MODEL='Qwen/Qwen3.6-27B-FP8'" in rendered
+        assert "ARBITRAGE_MODEL='Qwen/Qwen3.8-27B-FP8'" in rendered
         assert "ARBITRAGE_TP=4" in rendered
         assert "ARBITRAGE_MAX_LEN=262144" in rendered
 

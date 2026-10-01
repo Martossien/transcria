@@ -13,18 +13,21 @@
 # par variable d'environnement, avec des défauts adaptés au nœud de ressources
 # containerisé (cf. Dockerfile.resource-node, docs/archive/PLAN_TEST_SPLIT_VLLM.md).
 #
-# CIBLE DE RÉFÉRENCE : Qwen3.6-27B-FP8 en tensor-parallel sur 4× RTX 3090.
+# CIBLE DE RÉFÉRENCE : Qwen3.8-27B-FP8 en tensor-parallel sur 4× RTX 3090 (vLLM 0.23,
+#   E2E réel 17/17 le 2026-10-01 ; remplace Qwen3.6-27B-FP8).
 #   - Quantization FP8 (block-128) : sur Ampere (sm_86, pas de FP8 natif), vLLM
 #     sélectionne AUTOMATIQUEMENT le kernel **FP8 Marlin** (W8A16, poids FP8 dé-
 #     quantifiés à la volée → gain mémoire). NE PAS forcer --quantization : vLLM
 #     détecte le schéma depuis la config du modèle (laisser ARBITRAGE_QUANT vide).
 #   - ~27 Go de poids ÷ TP=4 ≈ 6,8 Go/carte → large marge KV-cache sur 4×24 Go.
 #
-# ÉCHANTILLONNAGE (profil « tâches précises » Qwen, thinking) :
-#   temp 0.6 · top_p 0.95 · top_k 20 · min_p 0.0 · presence 0.0
+# ÉCHANTILLONNAGE (carte Qwen3.8, mode réflexion) :
+#   temp 1.0 · top_p 0.95 · top_k 20 · min_p 0.0 · presence 0.0
 #   Ces paramètres sont appliqués **par requête** (vLLM ne les fige pas côté serveur) :
-#   c'est le client (opencode/TranscrIA) qui les envoie. Le modèle embarque ses
-#   défauts dans generation_config.json. Source : https://huggingface.co/Qwen/Qwen3.6-27B-FP8
+#   c'est le client (opencode/TranscrIA) qui les envoie, sinon le modèle embarque ses
+#   défauts dans generation_config.json. Idem pour `reasoning_effort` (xhigh par défaut :
+#   opencode ne l'envoie pas — attendre des phases LLM plus longues qu'en llama.cpp où le
+#   profil règle `medium`). Source : https://huggingface.co/Qwen/Qwen3.8-27B
 #
 # USAGE
 #   source /opt/vllm-venv/bin/activate            # ou VLLM_BIN=/opt/vllm-venv/bin/vllm
@@ -71,7 +74,7 @@ if [[ -z "${ARBITRAGE_MODEL:-}" ]]; then
     fi
 fi
 
-ARBITRAGE_MODEL="${ARBITRAGE_MODEL:-Qwen/Qwen3.6-27B-FP8}"
+ARBITRAGE_MODEL="${ARBITRAGE_MODEL:-Qwen/Qwen3.8-27B-FP8}"
 ARBITRAGE_ALIAS="${ARBITRAGE_ALIAS:-arbitrage}"
 ARBITRAGE_GPUS="${ARBITRAGE_GPUS:-0,1,2,3}"
 ARBITRAGE_TP="${ARBITRAGE_TP:-4}"
@@ -84,11 +87,11 @@ ARBITRAGE_PORT="${ARBITRAGE_PORT:-8080}"
 ARBITRAGE_MAX_LEN="${ARBITRAGE_MAX_LEN:-262144}"
 ARBITRAGE_GPU_MEM="${ARBITRAGE_GPU_MEM:-0.90}"
 ARBITRAGE_QUANT="${ARBITRAGE_QUANT:-}"
-# Tool calling + reasoning : REQUIS par opencode (agent à outils). Valeurs officielles
-# Qwen3.6 (model card + recipes vLLM), confirmées dans vLLM 0.23 (vllm/tool_parsers,
-# vllm/reasoning). Sans --enable-auto-tool-choice + --tool-call-parser, vLLM rejette les
+# Tool calling + reasoning : REQUIS par opencode (agent à outils). Valeurs de la recette
+# vLLM Qwen 3.8 (`qwen3_xml` — la 3.6 utilisait `qwen3_coder`), présentes dans vLLM 0.23
+# (vllm/tool_parsers, vllm/reasoning) ; appels d'outils vérifiés en réel. Sans --enable-auto-tool-choice + --tool-call-parser, vLLM rejette les
 # requêtes d'opencode (« "auto" tool choice requires --enable-auto-tool-choice … »).
-ARBITRAGE_TOOL_PARSER="${ARBITRAGE_TOOL_PARSER:-qwen3_coder}"
+ARBITRAGE_TOOL_PARSER="${ARBITRAGE_TOOL_PARSER:-qwen3_xml}"
 ARBITRAGE_REASONING_PARSER="${ARBITRAGE_REASONING_PARSER:-qwen3}"
 ARBITRAGE_TRUST_REMOTE="${ARBITRAGE_TRUST_REMOTE:-1}"
 LABEL="arbitrage-vllm"

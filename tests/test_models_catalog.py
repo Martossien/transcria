@@ -321,7 +321,7 @@ class TestOllamaModelChoices:
     def test_paliers_dedupliques_et_recommandation(self):
         # 24,5 Go mono-GPU : paliers 12/16 (même modèle 9b, UNE ligne) + 24 (27b, recommandé).
         choices = self._choices()
-        assert [c["model"] for c in choices] == ["qwen3.5:9b", "qwen3.6:27b"]
+        assert [c["model"] for c in choices] == ["qwen3.5:9b", "qwen3.8:27b"]
         assert [c["recommended"] for c in choices] == [False, True]
         assert choices[0]["active"] is True          # modèle configuré
 

@@ -12,7 +12,7 @@
 > **Prérequis de lecture :** [`MIGRATION_API_SERVEUR_GPU.md`](MIGRATION_API_SERVEUR_GPU.md) (plan de migration global).
 >
 > **Banc containerisé (vLLM) :** un déploiement split entièrement Docker — nœud GPU servant
-> diarisation + **STT Cohere via vLLM** + **LLM d'arbitrage Qwen3.6-27B-FP8 via vLLM** — est décrit
+> diarisation + **STT Cohere via vLLM** + **LLM d'arbitrage Qwen3.8-27B-FP8 via vLLM** — est décrit
 > dans [`PLAN_TEST_SPLIT_VLLM.md`](archive/PLAN_TEST_SPLIT_VLLM.md) (`docker-compose.split-gpu.yml`,
 > `Dockerfile.resource-node`) et résumé dans [`DOCKER.md`](DOCKER.md).
 
@@ -41,7 +41,7 @@
 | **Capacité d'admission du nœud configurable + concurrence validée sous charge** | `resource_node.max_concurrent_jobs` annoncé dans `/capabilities` ; `available_remote_slots = min(node_max, stt_slots)` (moteurs sérialisés exclus) ; verrou LLM no-op si distant. Split robuste jusqu'à 8 jobs, sweet spot ≈4 — cf. `PLAN_TEST_CHARGE.md` | ✅ (2026-06-23) |
 
 > **Validation E2E (2026-06-23, 8× RTX 3090) :** frontale CPU → STT Cohere (vLLM) + diarisation
-> (pyannote, auto-placée) + LLM Qwen3.6-27B-FP8 (vLLM, TP=4, FP8 Marlin) tout en distant, pipeline
+> (pyannote, auto-placée) + LLM Qwen3.8-27B-FP8 (vLLM, TP=4, FP8 Marlin) tout en distant, pipeline
 > complet produisant SRT/ZIP/DOCX. 14 correctifs (cf. `PLAN_TEST_SPLIT_VLLM.md` § journal).
 
 ---

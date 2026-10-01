@@ -578,7 +578,7 @@ Particularités vs le `docker run` minimal ci-dessus :
   l'installateur officiel (elle est construite par `pip install`, pas par `install.sh`) : les rôles
   qui exécutent les phases LLM en disposent quelle que soit la topologie.
 - **STT Cohere** servi par vLLM dans le nœud (`/engines/ensure` lance `launch_stt_cohere.sh`,
-  `STT_BIN` = venv vLLM) ; **LLM d'arbitrage** = service `vllm-arbitrage` (Qwen3.6-27B-FP8, TP=4,
+  `STT_BIN` = venv vLLM) ; **LLM d'arbitrage** = service `vllm-arbitrage` (Qwen3.8-27B-FP8, TP=4,
   FP8 Marlin sur Ampere) via `scripts/launch_arbitrage_vllm.sh`.
 - Les **8 GPU** sont exposés (`nvidia.com/gpu=all`) : le code d'autonomie VRAM place arbitrage
   (TP=4) + STT + diarisation (`device: auto`).
