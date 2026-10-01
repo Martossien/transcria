@@ -6,7 +6,7 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [0.4.6] — non publiée
+## [0.4.6] — 2026-10-01
 
 La version des moteurs à jour : audio.cpp, parakeet.cpp, llama.cpp et opencode remontés à
 l'amont, Qwen 3.8 sur le palier 32 Go, une diarisation à huit locuteurs sans token, et
