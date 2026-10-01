@@ -383,7 +383,7 @@ class QueueStore:
         rows = db.session.execute(
             db.select(JobQueueEntry.status, func.count(JobQueueEntry.id)).group_by(JobQueueEntry.status)
         ).all()
-        return {status: count for status, count in rows}
+        return {str(row[0]): int(row[1]) for row in rows}
 
     @staticmethod
     def estimate_wait_time(job_id: str, average_job_duration_s: int = 1800) -> float | None:

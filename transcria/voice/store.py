@@ -255,7 +255,7 @@ class VoiceStore:
             metadata["scope"] = "global"
         else:
             return [], metadata
-        profiles = list(db.session.execute(query).scalars().all())
+        profiles: list[VoiceProfile] = list(db.session.execute(query).scalars())
         return profiles, metadata
 
     @staticmethod
@@ -314,7 +314,7 @@ class VoiceStore:
     @staticmethod
     def complete_profile(profile: VoiceProfile, embedding: VoiceEmbedding, actor: User) -> VoiceProfile:
         blob = serialize_embedding(embedding.vector)
-        for old in db.session.execute(
+        superseded: list[VoiceProfile] = list(db.session.execute(
             db.select(VoiceProfile).filter(
                 VoiceProfile.subject_id == profile.subject_id,
                 VoiceProfile.status == VoiceProfileStatus.ACTIVE.value,
@@ -323,7 +323,8 @@ class VoiceStore:
                 VoiceProfile.embedding_model_revision == embedding.model_revision,
                 VoiceProfile.normalization == embedding.normalization,
             )
-        ).scalars().all():
+        ).scalars())
+        for old in superseded:
             old.status = VoiceProfileStatus.ARCHIVED.value
             old.embedding_blob = None
             old.disabled_at = datetime.now(UTC)

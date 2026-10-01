@@ -419,9 +419,7 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
 
     try:
         with app.app_context():
-            all_jobs = list(
-                db.session.execute(db.select(Job)).scalars().all()
-            )
+            all_jobs: list[Job] = list(db.session.execute(db.select(Job)).scalars())
             recovered, failed_count = 0, 0
             for job in all_jobs:
                 exec_status = job.get_extra_data().get("execution", {}).get("status")

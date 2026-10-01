@@ -121,7 +121,8 @@ class MeetingSessionStore:
         if supportees is not None:
             stmt = stmt.where(MeetingSession.provider.in_(supportees))
         claimed: list[dict] = []
-        for session in db.session.execute(stmt).scalars():
+        sessions: list[MeetingSession] = list(db.session.execute(stmt).scalars())
+        for session in sessions:
             if (session.scheduled_at is not None
                     and now - session.scheduled_at > timedelta(seconds=late_max_s)):
                 session.state = st.FAILED_FINAL
@@ -165,7 +166,8 @@ class MeetingSessionStore:
                                                  st.IN_MEETING)),
                        MeetingSession.claimed_at.isnot(None))
                 .with_for_update(skip_locked=True))
-        for session in db.session.execute(stmt).scalars():
+        stale: list[MeetingSession] = list(db.session.execute(stmt).scalars())
+        for session in stale:
             age = (now - session.claimed_at).total_seconds()
             if session.state == st.IN_MEETING:
                 if age > in_meeting_lease_s:
@@ -192,7 +194,8 @@ class MeetingSessionStore:
             MeetingSession.state == st.CANCELLED,
             MeetingSession.claimed_by == runner,
             MeetingSession.ended_at.isnot(None))
-        return [s.id for s in db.session.execute(stmt).scalars()]
+        ended: list[MeetingSession] = list(db.session.execute(stmt).scalars())
+        return [s.id for s in ended]
 
     @staticmethod
     def apply_event(session_id: str, runner: str, event: str) -> tuple[bool, str]:

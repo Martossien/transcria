@@ -159,7 +159,7 @@ class JobStore:
             JobState.FAILED.value,
             JobState.CANCELLED.value,
         }
-        jobs = db.session.execute(db.select(Job).filter(Job.state.in_(terminal_states))).scalars().all()
+        jobs: list[Job] = list(db.session.execute(db.select(Job).filter(Job.state.in_(terminal_states))).scalars())
         purged = 0
         for job in jobs:
             updated_at = job.updated_at

@@ -336,9 +336,9 @@ class CentralLexiconStore:
         if not entry_ids:
             return
         now = datetime.now(UTC)
-        entries = db.session.execute(
+        entries: list[GroupLexiconEntry] = list(db.session.execute(
             db.select(GroupLexiconEntry).filter(GroupLexiconEntry.id.in_(entry_ids))
-        ).scalars().all()
+        ).scalars())
         for entry in entries:
             entry.usage_count += 1
             entry.last_used_at = now

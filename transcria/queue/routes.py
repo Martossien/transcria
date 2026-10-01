@@ -308,7 +308,7 @@ def api_purge_e2e_test_jobs() -> ResponseReturnValue:
         return jsonify({"error": "Accès refusé"}), 403
     cfg = get_config()
     jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
-    jobs = list(
+    jobs: list[Job] = list(
         db.session.execute(
             db.select(Job)
             .filter(Job.title.like(f"{E2E_TEST_JOB_TITLE_PREFIX}%"))

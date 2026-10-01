@@ -91,9 +91,9 @@ class MeetingTypeStore:
         """Vue de la GALERIE : les visibles (actifs) + MES types inactifs (imports
         « à relire ») — un import invisible de son propre auteur serait introuvable."""
         templates = {t.id: t for t in MeetingTypeStore.visible_templates_for_user(user)}
-        own = db.session.execute(
+        own: list[MeetingTypeTemplate] = list(db.session.execute(
             db.select(MeetingTypeTemplate).filter_by(created_by=user.id)
-        ).scalars().all()
+        ).scalars())
         for template in own:
             templates.setdefault(template.id, template)
         return sorted(templates.values(), key=lambda t: t.name)
@@ -176,9 +176,9 @@ class MeetingTypeStore:
 
     @staticmethod
     def _check_quota(creator: User, max_per_user: int) -> None:
-        count = db.session.execute(
+        count: int = int(db.session.execute(
             db.select(db.func.count()).select_from(MeetingTypeTemplate).filter_by(created_by=creator.id)
-        ).scalar_one()
+        ).scalar_one())
         if count >= max_per_user:
             raise MeetingTypeValidationError(
                 f"Quota atteint ({max_per_user} types par utilisateur) — supprimez un type inutilisé."

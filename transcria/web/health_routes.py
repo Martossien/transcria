@@ -55,7 +55,7 @@ def _collect_job_state_counts() -> dict[str, int]:
     rows = db.session.execute(
         db.select(Job.state, func.count(Job.id)).group_by(Job.state)
     ).all()
-    return {state: count for state, count in rows}
+    return {str(row[0]): int(row[1]) for row in rows}
 
 
 def _render_prometheus_metrics() -> str:
