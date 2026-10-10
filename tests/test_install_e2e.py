@@ -96,7 +96,7 @@ def _run_install(sandbox: Path, profile: str, pg: "PgParams", *extra: str) -> su
         "--profile", profile,
         "--non-interactive",
         "--skip-deps",
-        "--no-service",
+        "--no-service", "--no-nemotron-diar",
         "--postgres",
         "--pg-existing",
         "--pg-host", pg.host,
@@ -256,7 +256,7 @@ def test_install_ffmpeg_manquant_message_visible(tmp_path: Path):
     }
     result = subprocess.run(
         ["bash", str(_INSTALL), "--install-dir", str(sandbox),
-         "--non-interactive", "--skip-deps", "--no-service"],
+         "--non-interactive", "--skip-deps", "--no-service", "--no-nemotron-diar"],
         capture_output=True, text=True, timeout=180, cwd=str(sandbox), env=env,
     )
     output = result.stdout + result.stderr
@@ -320,7 +320,7 @@ def test_install_resource_node_profile_e2e(tmp_path: Path):
         "bash", str(_INSTALL),
         "--install-dir", str(sandbox),
         "--profile", "resource-node", "--inference-service",
-        "--non-interactive", "--skip-deps", "--no-service",
+        "--non-interactive", "--skip-deps", "--no-service", "--no-nemotron-diar",
         "--no-postgres", "--skip-doctor",
     ]
     env = {

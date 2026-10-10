@@ -38,6 +38,7 @@ exposed:
 - connectors.meetings.meet_spaces
 - live.facade.enabled
 - models.diarization_backend
+- models.diarization_suggest_auto
 - models.live_stt_backend
 - models.stt_backend
 - models.summary_stt_backend

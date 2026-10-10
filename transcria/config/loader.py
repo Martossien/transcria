@@ -130,7 +130,13 @@ _DEFAULT_CONFIG = {
         # pipeline (docs/TEMPS_REEL_REUNIONS.md, couture 3). Moteurs *conçus*
         # streaming : nemotron-streaming, kyutai, voxtralrt — jamais un batch.
         "live_stt_backend": None,
-        "diarization_backend": "pyannote",
+        # « auto » (0.4.7) : Nemotron 3 de 1 à 8 voix (sans token, secondes), pyannote au-delà
+        # ou pour un comptage exact — cf. diarizer_factory.resolve_auto_backend. Les
+        # configurations existantes gardent leur valeur explicite.
+        "diarization_backend": "auto",
+        # Mise à niveau : proposer « auto » aux configs antérieures (pyannote/sortformer
+        # explicites) sur la page Modèles, l'accueil et le doctor — false = ne plus proposer.
+        "diarization_suggest_auto": True,
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",
         # Repo HF (auto-résolu/téléchargé) ou chemin local d'un modèle pré-téléchargé.

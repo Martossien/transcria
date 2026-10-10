@@ -109,6 +109,9 @@ DEFAULT_GOLDENS = {
     ),
     SttView: dataclasses.replace(
         EMPTY_GOLDENS[SttView],
+        # Divergence CONNUE (0.4.7) : le loader pose « auto » (Nemotron 3 ≤ 8 voix, pyannote
+        # au-delà) ; le repli consommateur sur une config VIDE reste pyannote (historique).
+        diarization_backend="auto",
         default_stt_model="cohere-transcribe-03-2026",
         fallback_stt_model="large-v3",
         cohere_model_path="CohereLabs/cohere-transcribe-03-2026",

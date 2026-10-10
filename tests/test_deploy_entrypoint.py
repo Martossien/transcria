@@ -479,3 +479,44 @@ class TestProvisionMossSiteLink:
         default.symlink_to(old)
         provision_moss_site_link(baked=baked, default=default)
         assert default.resolve() == baked.resolve()
+
+
+def test_provision_diarization_model_downloads_for_auto(tmp_path, monkeypatch):
+    from transcria import config as cfgmod
+
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: {"models": {"diarization_backend": "auto"}})
+    calls = []
+
+    def dl(repo, filename, local_dir):
+        calls.append((repo, filename))
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        (Path(local_dir) / filename).write_text("gguf", encoding="utf-8")
+
+    ok = ep.provision_diarization_model(_plan(tmp_path, "all"), {"MODELS_DIR": str(tmp_path / "models")}, downloader=dl)
+    assert ok is True and calls == [("audio-cpp/Nemotron-3-Diarization-GGUF", "nemotron-3-diarization-bf16.gguf")]
+    # Idempotent : déjà présent ⇒ aucun téléchargement.
+    ok = ep.provision_diarization_model(_plan(tmp_path, "all"), {"MODELS_DIR": str(tmp_path / "models")},
+                                        downloader=lambda *a: calls.append("again"))
+    assert ok is True and "again" not in calls
+
+
+def test_provision_diarization_model_only_when_configured_and_for_diarizing_roles(tmp_path, monkeypatch):
+    from transcria import config as cfgmod
+
+    calls = []
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: {"models": {"diarization_backend": "pyannote"}})
+    assert ep.provision_diarization_model(_plan(tmp_path, "all"), {}, downloader=lambda *a: calls.append(a)) is True
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: {"models": {"diarization_backend": "auto"}})
+    assert ep.provision_diarization_model(_plan(tmp_path, "web"), {}, downloader=lambda *a: calls.append(a)) is True
+    assert calls == []
+
+
+def test_provision_diarization_model_failure_is_non_blocking(tmp_path, monkeypatch):
+    from transcria import config as cfgmod
+
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: {"models": {"diarization_backend": "nemotron_diar"}})
+
+    def boom(*a):
+        raise OSError("proxy")
+
+    assert ep.provision_diarization_model(_plan(tmp_path, "scheduler"), {"MODELS_DIR": str(tmp_path)}, downloader=boom) is False

@@ -116,13 +116,16 @@ décisions propres à l'express :
   c'est la **sonde rejouée** (`psql` + `pg_isready`) qui tranche, jamais le code retour
   du gestionnaire de paquets.
 
-- **Sans token HF, sur une config fraîche**, les backends passent au duo non-gated
-  choisi selon le matériel : **whisper + Sortformer** avec un GPU ≥ 12 Go (même choix
-  que le quickstart Docker) ; **Kroko (STT CPU) + Sortformer** sur un GPU < 12 Go — le
-  GPU entier reste à la LLM du palier 8 — ainsi que **sans GPU** (Kroko et Sortformer
-  tournent alors tous deux sur CPU, validé E2E). La qualité de référence Cohere +
-  pyannote reste activable ensuite depuis *Administration → Modèles* avec un token.
-  Une `config.yaml` existante n'est **jamais** retouchée.
+- **Sans token HF, sur une config fraîche**, le STT passe au moteur non-gated choisi
+  selon le matériel : **whisper** avec un GPU ≥ 12 Go (même choix que le quickstart
+  Docker) ; **Kroko (STT CPU)** sur un GPU < 12 Go — le GPU entier reste à la LLM du
+  palier 8 — ainsi que **sans GPU**. La diarisation est **« auto »** dans tous les cas
+  (défaut depuis 0.4.7) : Nemotron 3 de 1 à 8 voix, non gated, sur CPU dès l'upload —
+  `install.sh` pose son binaire précompilé (55 Mo) et ses poids (199 Mo) sur les profils qui
+  diarisent localement (all-in-one, scheduler ; `--no-nemotron-diar` pour s'en passer) ; pyannote n'intervient qu'au-delà de 8 voix ou pour
+  un comptage exact saisi. Le STT de référence Cohere reste activable ensuite depuis
+  *Administration → Modèles* avec un token. Une `config.yaml` existante n'est **jamais**
+  retouchée.
 - Aucun mot de passe admin n'est demandé en express : à la **première visite du
   portail**, une page vous demandera de créer le compte administrateur (identifiant +
   mot de passe de votre choix) — le résumé final le rappelle.
@@ -968,6 +971,11 @@ venv/bin/python -m transcria.installer.cli parakeetcpp             # nemotron (p
 ```
 
 Ou en une fois à l'installation : `./install.sh … --with-stt-runtimes` (opt-in, profils GPU).
+
+Le seul **`audiocpp_cli`** (diarisation Nemotron 3, sans serveur) n'exige pas ce build : la
+phase `nemotron-diar` (jouée par défaut par `install.sh`) pose le **précompilé CPU** de la même
+release sous `runtimes/audiocpp/prebuilt/` (55 Mo, sha256 vérifié, `installer.cli audiocpp
+--prebuilt` pour le binaire seul) ; un build CUDA présent dans `bin/` lui est préféré.
 
 Builds **épinglés** et idempotents (`--force` pour reconstruire), binaires sous
 `runtimes/` (`TRANSCRIA_RUNTIMES_DIR`). Configuration complète (backends, manifeste

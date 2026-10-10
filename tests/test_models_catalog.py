@@ -19,7 +19,7 @@ def _cfg(stt="cohere", diar="pyannote") -> dict:
 
 def test_build_catalog_stt_and_diar_without_vram():
     specs = build_catalog(_cfg())
-    roles = {s.role for s in specs}
+    roles = {s.role for s in specs if not s.role.endswith("_candidate")}
     assert roles == {"stt", "diarization"}  # pas de LLM sans VRAM fourni
 
 
@@ -343,3 +343,70 @@ class TestOllamaModelChoices:
 
     def test_tags_none_demon_injoignable_rien_de_tire(self):
         assert all(c["pulled"] is False for c in self._choices(None))
+
+
+# ── Diarisation « auto » (0.4.7) : deux lignes (runtime + GGUF), recommandation aux anciens ──
+
+from transcria import models_catalog as mc  # noqa: E402 — bloc 0.4.7
+
+
+def _exe(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n")
+    path.chmod(0o755)
+    return path
+
+
+class TestAutoDiarizationCatalog:
+    def test_auto_liste_runtime_puis_gguf(self):
+        specs = [s for s in build_catalog(_cfg("whisper", "auto")) if s.role.startswith("diarization")]
+        assert [(s.role, s.kind) for s in specs] == [("diarization_runtime", "prebuilt"), ("diarization", "gguf")]
+        assert specs[0].gated is False and specs[1].gated is False
+        assert specs[0].file == mc.prebuilt_asset_name() and specs[1].file == mc.NEMOTRON_DIAR_MODEL_FILE
+
+    def test_nemotron_explicite_memes_lignes(self):
+        roles = [s.role for s in build_catalog(_cfg("whisper", "nemotron_diar"))]
+        assert roles[-2:] == ["diarization_runtime", "diarization"]
+
+    def test_pyannote_explicite_recoit_la_recommandation(self):
+        specs = build_catalog(_cfg("whisper", "pyannote"))
+        assert [s.role for s in specs] == ["stt", "diarization", "diarization_runtime_candidate", "diarization_candidate"]
+
+    def test_recommandation_ecartee(self):
+        cfg = _cfg("whisper", "pyannote")
+        cfg["models"]["diarization_suggest_auto"] = False
+        assert [s.role for s in build_catalog(cfg)] == ["stt", "diarization"]
+        assert mc.diarization_auto_recommendation(cfg) is None
+
+    def test_recommandation_ni_pour_auto_ni_pour_remote(self):
+        assert mc.diarization_auto_recommendation(_cfg("whisper", "auto")) is None
+        assert mc.diarization_auto_recommendation(_cfg("whisper", "remote")) is None
+
+    def test_recommandation_porte_l_etat_des_deux_pieces(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path / "rt"))
+        monkeypatch.setenv("MODELS_DIR", str(tmp_path / "models"))
+        reco = mc.diarization_auto_recommendation(_cfg("whisper", "sortformer"))
+        assert reco == {"configured": "sortformer", "runtime_present": False, "model_present": False}
+        _exe(tmp_path / "rt" / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        gguf = tmp_path / "models" / mc.NEMOTRON_DIAR_MODEL_SUBDIR / mc.NEMOTRON_DIAR_MODEL_FILE
+        gguf.parent.mkdir(parents=True)
+        gguf.write_bytes(b"x")
+        reco = mc.diarization_auto_recommendation(_cfg("whisper", "sortformer"))
+        assert reco["runtime_present"] and reco["model_present"]
+
+    def test_statut_prebuilt_sonde_les_deux_emplacements(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        spec = mc.nemotron_diar_specs()[0]
+        assert mc.model_status(spec, hf_home=tmp_path, models_dir=tmp_path)["present"] is False
+        cli = _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        st = mc.model_status(spec, hf_home=tmp_path, models_dir=tmp_path)
+        assert st["present"] is True and st["path"] == str(cli) and st["size_bytes"] == cli.stat().st_size
+
+    def test_lignes_candidates_marquees_optionnelles(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path / "rt"))
+        monkeypatch.setenv("MODELS_DIR", str(tmp_path / "models"))
+        monkeypatch.setattr(mc, "served_llm_gguf", lambda cfg: None)
+        view = mc.catalog_with_status(_cfg("whisper", "pyannote"))
+        flags = {it["spec"].role: it.get("optional") for it in view["items"]}
+        assert flags["diarization_runtime_candidate"] is True and flags["diarization_candidate"] is True
+        assert flags["diarization"] is None

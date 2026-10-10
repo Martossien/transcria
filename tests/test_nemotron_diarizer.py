@@ -239,3 +239,136 @@ class TestFactory:
     def test_sortformer_still_falls_back_beyond_four(self):
         cfg = apply_speaker_hint({"models": {"diarization_backend": "sortformer"}}, {"max": 5})
         assert cfg["models"]["diarization_backend"] == "pyannote"
+
+
+# ── Localisation du binaire : build CUDA (bin/) avant précompilé (prebuilt/) ──
+
+from transcria.stt import nemotron_diarizer as nd  # noqa: E402 — bloc 0.4.7
+
+
+def _exe(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n")
+    path.chmod(0o755)
+    return path
+
+
+class TestFindAudiocppCli:
+    def test_candidats_dans_l_ordre(self, tmp_path):
+        first, second = nd.audiocpp_cli_candidates(tmp_path)
+        assert first == tmp_path / "audiocpp" / "bin" / "audiocpp_cli"
+        assert second == tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli"
+
+    def test_aucun_binaire(self, tmp_path):
+        assert nd.find_audiocpp_cli(tmp_path) is None
+
+    def test_precompile_seul(self, tmp_path):
+        cli = _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        assert nd.find_audiocpp_cli(tmp_path) == cli
+
+    def test_build_cuda_prefere(self, tmp_path):
+        _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        cuda = _exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli")
+        assert nd.find_audiocpp_cli(tmp_path) == cuda
+
+    def test_non_executable_ignore(self, tmp_path):
+        cli = tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli"
+        cli.parent.mkdir(parents=True)
+        cli.write_text("x")
+        cli.chmod(0o644)
+        assert nd.find_audiocpp_cli(tmp_path) is None
+
+    def test_le_diariseur_suit_le_localisateur(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        cli = _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        d = nd.NemotronDiarizer({"nemotron_diar": {"model_path": str(tmp_path / "m.gguf")}})
+        assert d._cli == cli
+        assert d.available is False                          # GGUF absent
+        (tmp_path / "m.gguf").write_bytes(b"x")
+        assert nd.nemotron_diar_available({"nemotron_diar": {"model_path": str(tmp_path / "m.gguf")}}) is True
+
+    def test_sans_binaire_le_message_nomme_la_page_modeles(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        d = nd.NemotronDiarizer({"nemotron_diar": {"model_path": str(tmp_path / "m.gguf")}})
+        assert d._cli == tmp_path / "audiocpp" / "bin" / "audiocpp_cli"
+        assert "Modèles" in d._unavailable()["message"] and "nemotron-diar" in d._unavailable()["message"]
+
+
+class TestPrebuiltIsCpuOnly:
+    """Gate d'installation 2026-10-10 : le précompilé refuse `--backend cuda`."""
+
+    def _prebuilt(self, tmp_path):
+        cli = _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        (cli.parent / nd.PREBUILT_MARKER).write_text("v0.9.0\n")
+        return cli
+
+    def test_detection_par_marqueur(self, tmp_path):
+        cli = self._prebuilt(tmp_path)
+        assert nd.cli_is_cpu_only(cli) is True
+        assert nd.cli_is_cpu_only(_exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli")) is False
+
+    def test_reste_sur_cpu_meme_avec_un_gpu_reserve(self, tmp_path):
+        cli = self._prebuilt(tmp_path)
+        d = nd.NemotronDiarizer({"nemotron_diar": {"cli_path": str(cli), "backend": "auto"}}, device="cuda:3")
+        assert d._backend_args() == ["--backend", "cpu"]
+        d = nd.NemotronDiarizer({"nemotron_diar": {"cli_path": str(cli), "backend": "cuda"}}, device="cuda:3")
+        assert d._backend_args() == ["--backend", "cpu"]
+
+    def test_build_cuda_garde_le_gpu(self, tmp_path):
+        cli = _exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli")
+        d = nd.NemotronDiarizer({"nemotron_diar": {"cli_path": str(cli), "backend": "auto"}}, device="cuda:3")
+        assert d._backend_args() == ["--backend", "cuda", "--device", "3"]
+
+    def test_aucune_vram_reservee_pour_le_precompile(self, tmp_path):
+        from transcria.stt.diarizer_factory import get_diarizer_vram_mb
+
+        cli = self._prebuilt(tmp_path)
+        cfg = {"nemotron_diar": {"cli_path": str(cli)}, "gpu": {"nemotron_diar_vram_mb": 2000}}
+        assert get_diarizer_vram_mb("nemotron_diar", cfg) == 0
+        cfg["nemotron_diar"]["cli_path"] = str(_exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli"))
+        assert get_diarizer_vram_mb("nemotron_diar", cfg) == 2000
+
+
+class TestLoaderFailureFallsBackToPrebuilt:
+    """Gate 2026-10-10 : build CUDA présent mais « error while loading shared libraries »."""
+
+    def _layout(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        cuda = _exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli")
+        pre = _exe(tmp_path / "audiocpp" / "prebuilt" / "audiocpp_cli")
+        (pre.parent / nd.PREBUILT_MARKER).write_text("v0.9.0\n")
+        (tmp_path / "m.gguf").write_bytes(b"x")
+        return cuda, pre
+
+    def test_code_127_puis_precompile_cpu(self, tmp_path, monkeypatch):
+        import json
+        from types import SimpleNamespace
+
+        cuda, pre = self._layout(tmp_path, monkeypatch)
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            if cmd[0] == str(cuda):
+                return SimpleNamespace(returncode=127, stderr="error while loading shared libraries: libcublas.so.13", stdout="")
+            out = Path(cmd[cmd.index("--turns-out") + 1])
+            out.write_text(json.dumps([{"start_sample": 0, "end_sample": 16000, "speaker_id": "speaker_0", "confidence": 0.9}]))
+            return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+        d = nd.NemotronDiarizer({"nemotron_diar": {"model_path": str(tmp_path / "m.gguf")}}, device="cuda:0", runner=run)
+        res = d.diarize_audio(tmp_path / "a.wav")
+        assert res["available"] is True and res["speakers"] == ["SPEAKER_00"]
+        assert [c[0] for c in calls] == [str(cuda), str(pre)]
+        assert calls[1][calls[1].index("--backend") + 1] == "cpu"
+        assert d._cli == pre                                  # les appels suivants vont droit au précompilé
+
+    def test_sans_precompile_l_echec_est_remonte(self, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        cuda = _exe(tmp_path / "audiocpp" / "bin" / "audiocpp_cli")
+        (tmp_path / "m.gguf").write_bytes(b"x")
+        run = lambda cmd, **kw: SimpleNamespace(returncode=127, stderr="loading shared libraries", stdout="")  # noqa: E731
+        d = nd.NemotronDiarizer({"nemotron_diar": {"model_path": str(tmp_path / "m.gguf")}}, runner=run)
+        res = d.diarize_audio(tmp_path / "a.wav")
+        assert res["available"] is False and "code 127" in res["error"] and d._cli == cuda

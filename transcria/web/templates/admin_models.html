@@ -57,6 +57,9 @@
             {% elif it.progress and it.progress.status == 'error' %}
               <span class="badge bg-danger">{{ _('échec') }}</span>
               <div class="small text-danger">{{ it.progress.message }}</div>
+            {% elif it.get('optional') %}
+              <span class="badge bg-info text-dark">{{ _('recommandé') }}</span>
+              <span class="small text-muted">~{{ _('%(n)s Go', n=s.est_gb) }}</span>
             {% elif it.get('served_instead') %}
               <span class="badge bg-info text-dark">{{ _('recommandé') }}</span>
               <span class="small text-muted">~{{ _('%(n)s Go', n=s.est_gb) }}</span>
@@ -106,6 +109,36 @@
     </table>
   </div>
 </div>
+
+{% if diar_reco %}
+{# Recommandation aux installations antérieures à 0.4.7 : leur config porte pyannote ou
+   Sortformer en clair, rien n'y change sans ce clic. Deux lignes « recommandé » dans le
+   tableau (runtime + poids), puis « Activer » — ou « Garder » pour ne plus le voir. #}
+{% set diar_ready = diar_reco.runtime_present and diar_reco.model_present %}
+<div class="card mt-4 border-info">
+  <div class="card-header">
+    <i class="bi bi-people me-2"></i>{{ _('Diarisation — une détection des locuteurs plus rapide, sans token') }}
+  </div>
+  <div class="card-body small">
+    <p class="mb-2">
+      {% trans backend=diar_reco.configured %}Cette installation détecte les locuteurs avec <strong>{{ backend }}</strong>. Depuis la 0.4.7, le réglage « auto » retient <strong>Nemotron 3</strong> de 1 à 8 voix (non gated, quelques secondes, sur CPU dès l'upload — aucune attente de carte graphique, la LLM n'est jamais interrompue) et garde pyannote au-delà de 8 voix ou pour un comptage exact saisi.{% endtrans %}
+    </p>
+    <ol class="mb-3">
+      <li>{% trans %}Téléchargez les deux lignes « recommandé » du tableau : le runtime audio.cpp (précompilé, 55 Mo) et les poids Nemotron 3 (199 Mo).{% endtrans %}
+        {% if diar_ready %}<span class="badge bg-success ms-1">{{ _('fait') }}</span>{% endif %}</li>
+      <li>{% trans %}Activez « auto » — sans redémarrage, le backend est choisi à chaque traitement.{% endtrans %}</li>
+    </ol>
+    <form method="post" action="{{ url_for('web.admin_models_diarization_activate') }}" class="d-inline">
+      <button type="submit" class="btn btn-success btn-sm" {% if not diar_ready %}disabled title="{{ _('Téléchargez d\'abord les deux lignes recommandées') }}"{% endif %}>
+        <i class="bi bi-play-circle"></i> {{ _('Activer la diarisation « auto »') }}
+      </button>
+    </form>
+    <form method="post" action="{{ url_for('web.admin_models_diarization_keep') }}" class="d-inline ms-2">
+      <button type="submit" class="btn btn-outline-secondary btn-sm">{{ _('Garder mon réglage actuel') }}</button>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 {% if ollama_choices %}
 {# Bascule de modèle Ollama — symétrique du « Activer (servir) » des GGUF : paliers

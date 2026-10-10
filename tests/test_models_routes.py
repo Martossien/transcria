@@ -227,3 +227,70 @@ class TestOllamaSwitch:
         assert "Utiliser ce modèle" in body
         assert "recommandé pour cette machine" in body
         assert "qwen3.6:27b" in body
+
+
+# ── Diarisation « auto » proposée aux installations antérieures (0.4.7) ──
+
+class TestDiarizationActivate:
+    _RECO = "transcria.web.admin_routes.diarization_auto_recommendation"
+    _SAVE = "transcria.services.config_service.ConfigService.save_if_valid"
+
+    def _setup(self, monkeypatch, saved: dict, ready: bool):
+        _no_detect(monkeypatch)
+        monkeypatch.setattr(self._RECO, lambda cfg: {"configured": "pyannote",
+                                                     "runtime_present": ready, "model_present": ready})
+
+        def fake_save(cfg, config_path=None):
+            saved.update(cfg)
+            return True, [], []
+        monkeypatch.setattr(self._SAVE, staticmethod(fake_save))
+
+    def test_activation_ecrit_auto_sans_redemarrage(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, ready=True)
+        resp = admin_client.post("/admin/models/diarization-activate")
+        assert resp.status_code == 302
+        assert saved["models"]["diarization_backend"] == "auto"
+        assert "diarization_suggest_auto" not in saved["models"]
+
+    def test_refus_tant_que_les_deux_pieces_manquent(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, ready=False)
+        admin_client.post("/admin/models/diarization-activate")
+        assert saved == {}                                   # « auto » retomberait sur pyannote en silence
+
+    def test_rien_a_activer_sans_recommandation(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, ready=True)
+        monkeypatch.setattr(self._RECO, lambda cfg: None)
+        admin_client.post("/admin/models/diarization-activate")
+        assert saved == {}
+
+    def test_garder_ecarte_la_recommandation(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, ready=False)
+        resp = admin_client.post("/admin/models/diarization-keep")
+        assert resp.status_code == 302
+        assert saved["models"]["diarization_suggest_auto"] is False
+
+    def test_config_invalide_refusee(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, ready=True)
+        monkeypatch.setattr(self._SAVE, staticmethod(lambda cfg, config_path=None: (False, ["x"], [])))
+        admin_client.post("/admin/models/diarization-activate")
+        assert saved == {}
+
+    def test_carte_rendue_avec_les_deux_boutons(self, admin_client, monkeypatch):
+        self._setup(monkeypatch, {}, ready=True)
+        html = admin_client.get("/admin/models").get_data(as_text=True)
+        assert "/admin/models/diarization-activate" in html and "/admin/models/diarization-keep" in html
+        assert "Nemotron 3" in html
+
+    def test_bouton_inactif_tant_que_rien_n_est_telecharge(self, admin_client, monkeypatch):
+        self._setup(monkeypatch, {}, ready=False)
+        html = admin_client.get("/admin/models").get_data(as_text=True)
+        assert "diarization-activate" in html and "disabled" in html
+
+    def test_interdit_aux_non_admins(self, viewer_client):
+        assert viewer_client.post("/admin/models/diarization-activate").status_code == 403
+        assert viewer_client.post("/admin/models/diarization-keep").status_code == 403

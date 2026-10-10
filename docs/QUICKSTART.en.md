@@ -54,9 +54,9 @@ Express mode detects everything (GPU → LLM tier, psql → PostgreSQL, HF token
 and shows "here is what I am going to do" before acting. If PostgreSQL is missing, it
 offers to install it (or to start it when it is merely stopped) — one question, never
 silently; declining keeps SQLite, which is fine for single-user use; `./install.sh --expert` brings
-back the step-by-step questions. Without an HF token, the install picks **whisper +
-Sortformer** (no account required) — reference quality (Cohere + pyannote) can be
-enabled later from **Administration → Models** with a token.
+back the step-by-step questions. Without an HF token, the install picks **whisper** and
+**"auto"** diarization (Nemotron 3, 1 to 8 voices, no account required) — the reference
+Cohere STT can be enabled later from **Administration → Models** with a token.
 
 After login, the **first-run checklist** on the home page points out what is missing
 (absent models, GPU not seen…) with a link to fix each item, and disappears once

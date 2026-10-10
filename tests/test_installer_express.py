@@ -1,6 +1,6 @@
 """Mode express d'install.sh (transcria/installer/express) : décisions + récapitulatif.
 
-Le module décide les défauts (PostgreSQL si faisable, whisper/sortformer sans token
+Le module décide les défauts (PostgreSQL si faisable, whisper + diarisation « auto » sans token
 sur config fraîche) et rédige le récapitulatif affiché avant l'UNIQUE confirmation.
 Pré-venv : stdlib seulement — l'enrichissement palier LLM est best-effort.
 """
@@ -49,14 +49,14 @@ class TestDecisions:
 class TestRecap:
     def test_sans_token_annonce_whisper_et_la_page_modeles(self):
         recap = "\n".join(_plan().recap)
-        assert "whisper + Sortformer" in recap and "page Modèles" in recap
+        assert "whisper + diarisation « auto »" in recap and "page Modèles" in recap
         assert "PostgreSQL local" in recap
         assert "PREMIÈRE visite du portail" in recap  # issue #11 v2 : plus de mot de passe pré-annoncé
         assert "alice" in recap
 
     def test_avec_token_annonce_la_reference(self):
         recap = "\n".join(_plan(has_hf_token=True).recap)
-        assert "Cohere + pyannote" in recap
+        assert "Cohere" in recap and "diarisation « auto »" in recap
 
     def test_config_existante_conservee(self):
         recap = "\n".join(_plan(config_exists=True).recap)
@@ -96,7 +96,7 @@ class TestShellRendering:
         out = render_shell(_plan())
         assert out.splitlines() == [
             "EXPRESS_SETUP_PG=true", "EXPRESS_OPEN_MODELS=true",
-            "EXPRESS_STT_BACKEND=whisper", "EXPRESS_DIAR_BACKEND=sortformer",
+            "EXPRESS_STT_BACKEND=whisper", "EXPRESS_DIAR_BACKEND=auto",
         ]
         out = render_shell(_plan(psql_available=False, has_hf_token=True))
         assert out.splitlines() == [
@@ -110,16 +110,16 @@ class TestBackendsSansToken:
 
     def test_gpu_confortable_whisper(self):
         p = _plan()  # 2× 24 Go
-        assert (p.stt_backend, p.diarization_backend) == ("whisper", "sortformer")
+        assert (p.stt_backend, p.diarization_backend) == ("whisper", "auto")
 
     def test_petit_gpu_kroko_pour_laisser_le_gpu_a_la_llm(self):
         p = _plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192")
-        assert p.stt_backend == "kroko" and p.diarization_backend == "sortformer"
+        assert p.stt_backend == "kroko" and p.diarization_backend == "auto"
         assert "Kroko" in "\n".join(p.recap)
 
     def test_sans_gpu_kroko_cpu(self):
         p = _plan(gpu_count=0, total_vram_mb=0, gpu_sizes_csv="")
-        assert p.stt_backend == "kroko" and p.diarization_backend == "sortformer"
+        assert p.stt_backend == "kroko" and p.diarization_backend == "auto"
 
     def test_avec_token_ou_config_existante_aucune_bascule(self):
         assert _plan(has_hf_token=True).stt_backend == ""
@@ -156,7 +156,7 @@ class TestCli:
         out = capsys.readouterr().out
         assert rc == 0
         assert "EXPRESS_SETUP_PG=true" in out and "EXPRESS_OPEN_MODELS=true" in out
-        assert "whisper + Sortformer" in out
+        assert "whisper + diarisation « auto »" in out
 
     def test_express_config_existante(self, tmp_path: Path, capsys, monkeypatch):
         from transcria.installer import cli

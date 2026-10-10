@@ -75,11 +75,28 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                                    "les profils livrés ne la passent plus depuis 0.4.6",
         # check_nemotron_diar_runtime
         "chk_nemotron_diar": "Diarisation Nemotron 3 (runtime audio.cpp)",
-        "nd_not_configured": "non concerné (models.diarization_backend ≠ nemotron_diar)",
+        "nd_not_configured": "non concerné (models.diarization_backend ni auto ni nemotron_diar)",
         "nd_missing": "manquant : {items}",
-        "nd_hint": "binaire : `python -m transcria.installer.cli audiocpp` (--force après un bump) ; poids : page « Modèles » "
-                   "ou `nemotron_diar.model_path`",
+        "nd_missing_auto": "« auto » retombe sur pyannote (gated, plusieurs minutes de GPU) — manquant : {items}",
+        "nd_hint": "page « Modèles » (runtime précompilé 55 Mo + poids 199 Mo) ou "
+                   "`python -m transcria.installer.cli nemotron-diar` ; build CUDA : `… audiocpp` (--force après un bump)",
         "nd_ok": "prêt — {cli}, modèle {model}",
+        "nd_ok_auto": "auto → Nemotron 3 de 1 à {n} voix (pyannote au-delà ou comptage exact) — {cli}, modèle {model}",
+        "nd_cpu_only": "précompilé, CPU seul",
+        "nd_not_loading": "{cli} est présent mais ne démarre pas (`--help` en échec : bibliothèque CUDA manquante ?) — "
+                          "auto retomberait sur pyannote",
+        # check_diarization_auto_suggestion
+        "chk_diar_suggestion": "Diarisation (recommandation 0.4.7)",
+        "ds_none": "rien à proposer (auto actif, backend distant/nemotron, ou recommandation écartée)",
+        "ds_missing": "backend « {backend} » explicite : Nemotron 3 (1 à 8 voix, sans token, secondes) est disponible "
+                      "— runtime et/ou poids à télécharger",
+        "ds_ready": "backend « {backend} » explicite alors que Nemotron 3 est installé — passer en « auto » "
+                    "(1 à 8 voix sans token ; pyannote conservé au-delà et pour un comptage exact)",
+        "ds_hint_missing": "page « Modèles » → lignes « recommandé » puis « Activer », ou "
+                           "`python -m transcria.installer.cli nemotron-diar` + models.diarization_backend: auto ; "
+                           "pour ne plus le voir : models.diarization_suggest_auto: false",
+        "ds_hint_ready": "page « Modèles » → « Activer la diarisation auto », ou models.diarization_backend: auto ; "
+                         "pour ne plus le voir : models.diarization_suggest_auto: false",
         # check_arbitrage_llm
         "arbl_down": "aucun serveur ne répond sur le port {port} (lancé à la demande)",
         "arbl_down_hint": "S'il reste « down » après lancement, lire {log} et ./scripts/check_arbitrage_llm.sh.",
@@ -379,11 +396,28 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                                    "shipped profiles no longer pass it since 0.4.6",
         # check_nemotron_diar_runtime
         "chk_nemotron_diar": "Nemotron 3 diarization (audio.cpp runtime)",
-        "nd_not_configured": "not applicable (models.diarization_backend ≠ nemotron_diar)",
+        "nd_not_configured": "not applicable (models.diarization_backend is neither auto nor nemotron_diar)",
         "nd_missing": "missing: {items}",
-        "nd_hint": "binary: `python -m transcria.installer.cli audiocpp` (--force after a bump); weights: the Models page "
-                   "or `nemotron_diar.model_path`",
+        "nd_missing_auto": "“auto” falls back to pyannote (gated, minutes of GPU) — missing: {items}",
+        "nd_hint": "Models page (prebuilt runtime 55 MB + weights 199 MB) or "
+                   "`python -m transcria.installer.cli nemotron-diar`; CUDA build: `… audiocpp` (--force after a bump)",
         "nd_ok": "ready — {cli}, model {model}",
+        "nd_ok_auto": "auto → Nemotron 3 for 1 to {n} voices (pyannote above, or for an exact count) — {cli}, model {model}",
+        "nd_cpu_only": "prebuilt, CPU only",
+        "nd_not_loading": "{cli} exists but does not start (`--help` fails: missing CUDA library?) — "
+                          "auto would fall back to pyannote",
+        # check_diarization_auto_suggestion
+        "chk_diar_suggestion": "Diarization (0.4.7 recommendation)",
+        "ds_none": "nothing to suggest (auto active, remote/nemotron backend, or recommendation dismissed)",
+        "ds_missing": "explicit “{backend}” backend: Nemotron 3 (1 to 8 voices, no token, seconds) is available "
+                      "— runtime and/or weights to download",
+        "ds_ready": "explicit “{backend}” backend while Nemotron 3 is installed — switch to “auto” "
+                    "(1 to 8 voices without a token; pyannote kept above and for an exact count)",
+        "ds_hint_missing": "Models page → “recommended” rows then “Activate”, or "
+                           "`python -m transcria.installer.cli nemotron-diar` + models.diarization_backend: auto; "
+                           "to hide this: models.diarization_suggest_auto: false",
+        "ds_hint_ready": "Models page → “Activate auto diarization”, or models.diarization_backend: auto; "
+                         "to hide this: models.diarization_suggest_auto: false",
         "arbl_down": "no server responds on port {port} (launched on demand)",
         "arbl_down_hint": "If it stays down after launch, read {log} and ./scripts/check_arbitrage_llm.sh.",
         "arbl_mismatch": "active on port {port} but model “{active}” ≠ services.arbitrage_api_model_id “{expected}”",

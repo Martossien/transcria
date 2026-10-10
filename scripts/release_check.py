@@ -34,7 +34,8 @@ RESTE_A_LA_MAIN = [
     ("Gate d'installation en distro vierge",
      "sudo systemctl stop transcria transcria-arbitrage-llm && venv/bin/python scripts/verify_install_matrix.py "
      "--distro ubuntu2404 --topology all-in-one --audio tests/test2.mp3 "
-     "--stt-backend whisper --diarization-backend sortformer  (~35 min)"),
+     "--stt-backend whisper --diarization-backend auto  (~35 min ; auto = défaut 0.4.7, "
+     "la gate joue la phase nemotron-diar d'install.sh)"),
     ("Images Docker — avant le tag",
      "tout Dockerfile modifié doit être BUILDÉ (règle C7) : la CI n'en construit que "
      "quatre sur sept, le bundled et le resource-node ne se cassent qu'ici. "

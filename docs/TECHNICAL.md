@@ -121,7 +121,7 @@ transcria/
 │   │   ├── diarization.py         # DiarizerService(BaseDiarizer) — pyannote GPU + exclusive_turns + checkpoints
 │   │   ├── sortformer_diarizer.py # SortformerDiarizer(BaseDiarizer) — NVIDIA NeMo 4spk, fallback NeMo absent
 │   │   ├── nemotron_diarizer.py   # NemotronDiarizer(BaseDiarizer) — Nemotron 3 (≤ 8 loc.) via audiocpp_cli en sous-process, GPU ou CPU
-│   │   ├── diarizer_factory.py    # create_diarizer(), get_diarizer_vram_mb(), list_available_backends()
+│   │   ├── diarizer_factory.py    # create_diarizer(), get_diarizer_vram_mb(), resolve_auto_backend() (« auto » : Nemotron 3 ≤ 8 voix, pyannote au-delà/exact)
 │   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping) — utilise diarizer_factory
 │   │   └── summary.py             # SummaryGenerator (VAD Silero + quick transcript)
 │   │
@@ -884,6 +884,24 @@ Transformer RoPE que NeMo 3.0.0 (PyPI) ne sait pas instancier : le backend lance
 --turns-out`), sur le GPU réservé par la phase (`--device N`) ou sur CPU (`nemotron_diar.backend`).
 Aucun serveur, aucun port, rien à décharger. L'entrée doit être un WAV PCM : le cache
 `speakers/diarization_16k_mono.wav` du préparateur pyannote est réutilisé (forcé actif).
+
+Le binaire est résolu par `find_audiocpp_cli()` : `nemotron_diar.cli_path` explicite, sinon le
+build CUDA `runtimes/audiocpp/bin/audiocpp_cli`, sinon le **précompilé CPU**
+`runtimes/audiocpp/prebuilt/audiocpp_cli` (archive « portable » de la release épinglée, posée par
+`installer.cli audiocpp --prebuilt` / `nemotron-diar`, sha256 vérifié ; dossier séparé car ses
+`libggml*.so` à RUNPATH `$ORIGIN` seraient chargées par un build CUDA voisin). Ce précompilé est
+**CPU seul** (`cli_is_cpu_only`, marqueur `PREBUILT`) : il refuse `--backend cuda`, donc le
+diariseur reste sur CPU avec lui et `get_diarizer_vram_mb` rend 0 — vécu à la gate d'installation
+(job en échec au pipeline final, qui réservait un GPU).
+
+**Backend « auto » (0.4.7, défaut)** — `diarizer_factory.resolve_auto_backend()` (pur) : Nemotron
+absent → pyannote ; pas de token HF → Nemotron quoi qu'il arrive ; comptage exact saisi → pyannote
+(seul backend qui honore `num_speakers`) ; borne haute > 8 → pyannote ; sinon Nemotron 3. Résolu
+PAR JOB dans `apply_speaker_hint` (les deux sites de diarisation), et sans fourchette par
+`create_diarizer`/`get_diarizer_vram_mb` (admission). La passe lancée dès l'upload
+(`run_speaker_detection`) réserve selon le backend résolu ; Nemotron en `nemotron_diar.backend:
+auto` y tourne sur **CPU** (0 Mo, `get_diarizer_vram_mb(..., at_upload=True)`) et le pipeline
+final réutilise le checkpoint (`model_name` + empreinte + paramètres identiques).
 
 | Fonction pure | Rôle |
 |---|---|

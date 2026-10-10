@@ -36,6 +36,10 @@ torch>=2.1,<3.0
 transformers>=4.52.1,<5.0
 accelerate>=0.24,<2.0
 faster-whisper>=1.2,<2.0
+# PyAV 19.0 (2026-09-29) retire l'argument `metadata_errors` de av.open() que faster-whisper
+# 1.2.1 passe encore (decode_audio) → TypeError à la première transcription d'un venv NEUF.
+# Attrapé par la gate d'installation vierge 0.4.7 ; à lever quand faster-whisper suivra.
+av>=11,<19
 nemo_toolkit[asr]>=2.7,<3.0
 # Tokenizer audio du backend STT expérimental Voxtral (Mistral, Apache-2.0).
 mistral-common[audio]>=1.8,<2.0

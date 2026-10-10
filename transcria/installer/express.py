@@ -32,13 +32,14 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "db_sqlite_no_admin": "Base de données : SQLite (ni root ni sudo : impossible de créer le rôle PostgreSQL)",
         "db_sqlite_no_server": ("Base de données : SQLite (PostgreSQL installé mais serveur injoignable — "
                                 "démarrez le service postgresql puis relancez avec --postgres pour l'utiliser)"),
-        "models_token": "Modèles : Cohere + pyannote (qualité de référence — token HF fourni)",
-        "models_open": ("Modèles : whisper + Sortformer, sans token HF — la qualité de référence "
-                        "(Cohere + pyannote) restera activable depuis la page Modèles"),
-        "models_open_small_gpu": ("Modèles : Kroko (transcription CPU, sans token) + Sortformer — "
-                                  "le GPU entier reste à la LLM d'arbitrage (palier 8 Go)"),
-        "models_open_cpu": ("Modèles : Kroko (transcription CPU pure, sans token) + Sortformer sur "
-                            "CPU — machine sans GPU"),
+        "models_token": ("Modèles : Cohere (STT de référence — token HF fourni) + diarisation « auto » "
+                         "(Nemotron 3 de 1 à 8 voix, pyannote au-delà ou pour un comptage exact)"),
+        "models_open": ("Modèles : whisper + diarisation « auto » (Nemotron 3, 1 à 8 voix), sans token HF — "
+                        "le STT de référence (Cohere) restera activable depuis la page Modèles"),
+        "models_open_small_gpu": ("Modèles : Kroko (transcription CPU, sans token) + diarisation « auto » "
+                                  "(Nemotron 3, CPU) — le GPU entier reste à la LLM d'arbitrage (palier 8 Go)"),
+        "models_open_cpu": ("Modèles : Kroko (transcription CPU pure, sans token) + diarisation « auto » "
+                            "(Nemotron 3) sur CPU — machine sans GPU"),
         "models_kept": "Modèles : configuration existante conservée (config.yaml déjà présent)",
         "llm_tier": "LLM d'arbitrage : llama.cpp, palier {tier} Go — {label}, téléchargé automatiquement",
         "llm_generic": "LLM d'arbitrage : llama.cpp, palier choisi selon la VRAM ({gb} Go), modèle téléchargé automatiquement",
@@ -56,13 +57,14 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
         "db_sqlite_no_admin": "Database: SQLite (neither root nor sudo: cannot create the PostgreSQL role)",
         "db_sqlite_no_server": ("Database: SQLite (PostgreSQL installed but the server is unreachable — "
                                 "start the postgresql service, then re-run with --postgres to use it)"),
-        "models_token": "Models: Cohere + pyannote (reference quality — HF token provided)",
-        "models_open": ("Models: whisper + Sortformer, no HF token — reference quality "
-                        "(Cohere + pyannote) stays available later from the Models page"),
-        "models_open_small_gpu": ("Models: Kroko (CPU transcription, no token) + Sortformer — "
-                                  "the whole GPU stays free for the arbitration LLM (8 GB tier)"),
-        "models_open_cpu": ("Models: Kroko (pure-CPU transcription, no token) + Sortformer on "
-                            "CPU — machine without GPU"),
+        "models_token": ("Models: Cohere (reference quality STT — HF token provided) + “auto” diarization "
+                         "(Nemotron 3 for 1 to 8 voices, pyannote above or for an exact count)"),
+        "models_open": ("Models: whisper + “auto” diarization (Nemotron 3, 1 to 8 voices), no HF token — "
+                        "the reference STT (Cohere) stays available later from the Models page"),
+        "models_open_small_gpu": ("Models: Kroko (CPU transcription, no token) + “auto” diarization "
+                                  "(Nemotron 3, CPU) — the whole GPU stays free for the arbitration LLM (8 GB tier)"),
+        "models_open_cpu": ("Models: Kroko (pure-CPU transcription, no token) + “auto” diarization "
+                            "(Nemotron 3) on CPU — machine without GPU"),
         "models_kept": "Models: existing configuration kept (config.yaml already present)",
         "llm_tier": "Arbitration LLM: llama.cpp, {tier} GB tier — {label}, downloaded automatically",
         "llm_generic": "Arbitration LLM: llama.cpp, tier picked from VRAM ({gb} GB), model downloaded automatically",
@@ -131,15 +133,17 @@ def build_express_plan(
     open_models = (not has_hf_token) and (not config_exists)
 
     # Backends du duo sans token, selon le matériel (jamais en dur dans install.sh) :
-    # - GPU ≥ 12 Go : whisper (GPU) + Sortformer — le confort classique ;
-    # - GPU < 12 Go (palier 8) : Kroko (CPU) + Sortformer — whisper (~3 Go GPU)
-    #   étoufferait la LLM d'arbitrage résidente (4,6 Go) sur une carte de 8 Go ;
-    # - sans GPU : Kroko + Sortformer, tous deux sur CPU (E2E validé 2026-08-06).
+    # - GPU ≥ 12 Go : whisper (GPU) — le confort classique ;
+    # - GPU < 12 Go (palier 8) : Kroko (CPU) — whisper (~3 Go GPU) étoufferait la LLM
+    #   d'arbitrage résidente (4,6 Go) sur une carte de 8 Go ;
+    # - sans GPU : Kroko sur CPU (E2E validé 2026-08-06).
+    # Diarisation : « auto » partout depuis 0.4.7 — Nemotron 3 (non gated, CPU à l'upload)
+    # de 1 à 8 voix, pyannote au-delà ; Sortformer (≤ 4) n'est plus le défaut sans token.
     stt_backend, diar_backend = "", ""
     if open_models:
         small_gpu = 0 < total_vram_mb < 11500
         stt_backend = "kroko" if (gpu_count == 0 or small_gpu) else "whisper"
-        diar_backend = "sortformer"
+        diar_backend = "auto"
 
     lines: list[str] = [t("profile")]
     if gpu_count > 0:

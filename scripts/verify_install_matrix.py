@@ -184,14 +184,18 @@ def docker_run_argv(
     return argv
 
 
-# Dossiers montés en lecture seule au lieu d'être copiés (poids de modèles, runtimes C++
-# compilés) : le conteneur les LIT pour l'E2E, l'installation ne les régénère pas.
-DOSSIERS_LOURDS_MONTES = ("models", "runtimes")
+# Dossier monté en lecture seule au lieu d'être copié : les POIDS de modèles (dizaines de Go
+# sur une machine de dev). Les runtimes C++ (`runtimes/`), eux, ne sont NI montés NI copiés
+# depuis 0.4.7 : un utilisateur n'en a pas, et le build CUDA de l'hôte — lié aux libs CUDA de
+# l'hôte — ne se charge pas dans le conteneur (vécu 2026-10-10 : code 127, masquant le
+# précompilé que `install.sh` doit poser lui-même, dans un dossier qu'un montage :ro interdit).
+DOSSIERS_LOURDS_MONTES = ("models",)
 # Dossiers jamais transmis au conteneur : venv de l'hôte (invalide ici, install.sh recrée le
 # sien), historique git, données d'exécution locales. Les DOSSIERS_LOURDS_MONTES en font
 # partie — ils arrivent par montage, la copie les écraserait.
 DOSSIERS_NON_COPIES = (
     "venv", ".git", "backup", "node_modules", "jobs", "bench_results", "archives", "voices",
+    "runtimes",   # jamais transmis : le conteneur pose/compile les siens (cf. ci-dessus)
     *DOSSIERS_LOURDS_MONTES,
 )
 

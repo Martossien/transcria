@@ -79,6 +79,7 @@ from transcria.diagnostics.checks.probes import (  # noqa: F401 — façade
     _tcp_port_open,
 )
 from transcria.diagnostics.checks.remote import (  # noqa: F401 — façade
+    check_diarization_auto_suggestion,
     check_inference_node_gpus,
     check_inference_nodes,
     check_meeting_scheduling,
@@ -125,6 +126,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
     check_nemotron_diar_runtime,
+    check_diarization_auto_suggestion,
     check_meeting_scheduling,
     check_stt_instances_vram,
     check_identity_backend,

@@ -175,6 +175,33 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.6 → 0.4.7
+
+Aucune migration de base. **Rien ne change tout seul** dans une installation existante :
+votre `config.yaml` porte `diarization_backend: "pyannote"` (ou `sortformer`) en clair, et
+cette valeur est respectée. Ce qui change, c'est ce qu'on vous **propose** :
+
+- **Diarisation « auto »** (défaut des configurations neuves) : Nemotron 3 de 1 à 8 voix
+  (non gated, quelques secondes, **sur CPU dès l'upload** — plus d'attente de carte graphique ni
+  d'interruption de la LLM pour la détection des locuteurs), pyannote conservé au-delà de 8 voix
+  ou pour un comptage exact saisi. Pour l'adopter : *Administration → Modèles* → télécharger les
+  deux lignes « recommandé » (runtime audio.cpp précompilé 55 Mo + poids 199 Mo) → **« Activer la
+  diarisation auto »**, sans redémarrage. En ligne de commande :
+  `venv/bin/python -m transcria.installer.cli nemotron-diar` puis
+  `models.diarization_backend: auto`. Un `./install.sh` rejoué le pose aussi (`--no-nemotron-diar`
+  pour s'en passer). Le bilan d'accueil et `scripts/doctor.py` vous le rappellent jusqu'à ce que
+  vous activiez « auto » ou cliquiez « Garder mon réglage actuel »
+  (`models.diarization_suggest_auto: false`).
+- **Docker** : l'image GPU slim télécharge le GGUF Nemotron 3 au premier démarrage (le binaire est
+  dans l'image) ; la bundled l'embarque. Le quickstart ne bascule plus la diarisation sur Sortformer
+  sans token : « auto » n'en a jamais besoin.
+- Un build CUDA d'audio.cpp existant (`runtimes/audiocpp/bin`) est préféré au précompilé ; rien à
+  reconstruire. S'il ne se charge plus (bibliothèque CUDA de l'hôte changée), le diariseur bascule
+  de lui-même sur le précompilé et le doctor le signale.
+- **PyAV épinglé `< 19`** dans `requirements.txt` : PyAV 19 casse faster-whisper 1.2.1
+  (`TypeError … metadata_errors`). Un venv existant garde son PyAV 17/18 et n'est pas concerné ;
+  si vous aviez mis PyAV à jour à la main, `venv/bin/pip install 'av<19'`.
+
 ### Notes spécifiques 0.4.5 → 0.4.6
 
 Aucune migration de base. Quatre moteurs externes montent de version ; rien ne casse

@@ -62,9 +62,13 @@ CONFIG_FORM_SECTIONS: list[dict] = [
                         "streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch "
                         "(cf. docs/TEMPS_REEL_REUNIONS.md).")},
             {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
-             "options": ["pyannote", "sortformer", "nemotron_diar", "remote"],
-             "help": _l("Détection des locuteurs : pyannote (illimité, token HF), sortformer (≤ 4, non gated), "
+             "options": ["auto", "pyannote", "sortformer", "nemotron_diar", "remote"],
+             "help": _l("Détection des locuteurs : auto (Nemotron 3 de 1 à 8 voix, pyannote au-delà ou pour un "
+                        "comptage exact — recommandé), pyannote (illimité, token HF), sortformer (≤ 4, non gated), "
                         "nemotron_diar (≤ 8, non gated, runtime audio.cpp, GPU ou CPU).")},
+            {"path": "models.diarization_suggest_auto", "label": _l("Proposer la diarisation « auto »"), "type": "bool",
+             "help": _l("Tant que le backend reste pyannote/sortformer explicite, la page Modèles, l'accueil et le "
+                        "doctor proposent de passer en « auto ». Décocher pour ne plus le voir.")},
         ],
     },
     {

@@ -18,6 +18,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from transcria.installer.audiocpp_phase import install_prebuilt_audiocpp
+from transcria.installer.console import Console
 from transcria.models_catalog import ModelSpec, disk_free_bytes, resolve_hf_home, resolve_models_dir, resolve_runtimes_dir
 
 STATUS_DIRNAME = ".downloads"
@@ -31,7 +33,7 @@ def target_dir_for(spec: ModelSpec, *, hf_home: Path, models_dir: Path) -> Path:
     """Dossier qui GROSSIT pendant le téléchargement (base du calcul de progression)."""
     if spec.kind == "gguf":
         return models_dir / spec.target_subdir
-    if spec.kind == "runtime":
+    if spec.kind in ("runtime", "prebuilt"):
         return resolve_runtimes_dir() / spec.target_subdir
     return hf_home / "hub" / ("models--" + spec.repo_id.replace("/", "--"))
 
@@ -138,7 +140,7 @@ def run_download(
         return {"role": spec.role, "repo": spec.repo_id, "kind": spec.kind,
                 "subdir": spec.target_subdir, "file": spec.file, "started_at": started, **extra}
 
-    if spec.kind == "ollama":
+    if spec.kind in ("ollama", "prebuilt"):
         total = 0  # le repo n'est pas sur HF : progression indéterminée, pas d'appel réseau inutile
     else:
         try:
@@ -156,6 +158,10 @@ def run_download(
             # workflow ne pull JAMAIS au runtime (cf. OllamaLLMBackend.ensure_available)
             # — cette page est justement l'endroit prévu pour le faire.
             subprocess.run(["ollama", "pull", spec.repo_id], check=True)
+        elif spec.kind == "prebuilt":
+            # Binaire audio.cpp précompilé (diarisation Nemotron 3) : même chemin que
+            # `installer.cli audiocpp --prebuilt` — sha256 vérifié avant extraction.
+            install_prebuilt_audiocpp(runtimes_dir=resolve_runtimes_dir(), console=Console())
         elif spec.kind == "runtime":
             # Poids gérés par le runtime servi (audio.cpp) : téléchargement DÉLÉGUÉ à
             # SON model_manager_v2 (spec v1 depuis release-0.5.1 — l'historique est
@@ -205,6 +211,8 @@ def run_download(
 def _target_from_status(data: dict, hf_home: Path, models_dir: Path) -> Path:
     if data.get("kind") == "gguf":
         return models_dir / (data.get("subdir") or "")
+    if data.get("kind") in ("runtime", "prebuilt"):
+        return resolve_runtimes_dir() / (data.get("subdir") or "")
     return hf_home / "hub" / ("models--" + str(data.get("repo", "")).replace("/", "--"))
 
 

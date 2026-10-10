@@ -28,10 +28,12 @@ from transcria.gpu.arbitrage_endpoint import (
     ollama_name_matches,
     resolve_arbitrage_endpoint,
 )
+from transcria.installer.audiocpp_phase import AUDIOCPP_REPO, prebuilt_asset_name
 from transcria.installer.models_lib import PYANNOTE_MODEL_ID, find_hf_cache_model
 from transcria.installer.tiers import get_tier_metadata, recommend_tier
 from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_FILE as NEMOTRON_DIAR_MODEL_FILE
 from transcria.stt.nemotron_diarizer import DEFAULT_MODEL_SUBDIR as NEMOTRON_DIAR_MODEL_SUBDIR
+from transcria.stt.nemotron_diarizer import find_audiocpp_cli
 from transcria.stt.registry import backends as _stt_backends
 
 
@@ -111,6 +113,62 @@ _DIAR_SOURCES: dict[str, dict] = {
                       "license_url": "https://huggingface.co/nvidia/Nemotron-3-Diarization",
                       "est_gb": 0.2},
 }
+# « auto » (défaut 0.4.7) = Nemotron 3 de 1 à 8 voix : ce sont SES poids que l'installation
+# requiert (pyannote n'y est qu'un repli, gated, jamais exigé).
+_DIAR_SOURCES["auto"] = _DIAR_SOURCES["nemotron_diar"]
+_NEMOTRON_BACKENDS = ("auto", "nemotron_diar")
+
+# Le binaire qui sert Nemotron 3 : précompilé CPU de l'amont (sha256 vérifié par
+# installer.audiocpp_phase), ou le build CUDA de la phase `audiocpp` s'il existe.
+_AUDIOCPP_RUNTIME_SOURCE = {
+    "repo": "0xShug0/audio.cpp", "file": prebuilt_asset_name(), "kind": "prebuilt",
+    "target_subdir": "audiocpp/prebuilt", "gated": False, "license": "Apache-2.0",
+    "license_url": AUDIOCPP_REPO, "est_gb": 0.06,
+}
+
+
+def _spec_from_source(role: str, label: str, src: dict) -> ModelSpec:
+    return ModelSpec(
+        role=role, label=label, repo_id=src["repo"], file=src.get("file"),
+        kind=src.get("kind", "hf_cache"), target_subdir=src.get("target_subdir", ""),
+        gated=src["gated"], license=src["license"], license_url=src["license_url"],
+        est_gb=src["est_gb"])
+
+
+def nemotron_diar_specs(*, candidate: bool = False) -> list[ModelSpec]:
+    """Les DEUX lignes de la diarisation Nemotron 3 : binaire audio.cpp + GGUF.
+
+    ``candidate=True`` : l'installation n'a pas (encore) choisi ce backend — rôles distincts
+    pour ne pas se confondre avec la ligne « diarisation » configurée (fichiers de statut
+    de téléchargement séparés), et l'UI les montre comme une recommandation, pas un manque.
+    """
+    suffix = "_candidate" if candidate else ""
+    return [
+        _spec_from_source(f"diarization_runtime{suffix}", "Runtime audio.cpp (audiocpp_cli, précompilé CPU)",
+                          _AUDIOCPP_RUNTIME_SOURCE),
+        _spec_from_source(f"diarization{suffix}",
+                          "Diarisation — auto → Nemotron 3 (1 à 8 voix)" if not candidate
+                          else "Diarisation — Nemotron 3 (1 à 8 voix, sans token)",
+                          _DIAR_SOURCES["nemotron_diar"]),
+    ]
+
+
+def diarization_auto_recommendation(cfg: dict) -> dict | None:
+    """Faut-il proposer la diarisation « auto » à CETTE installation (mise à niveau) ?
+
+    Une configuration antérieure à 0.4.7 porte ``pyannote`` ou ``sortformer`` en clair :
+    rien ne change chez elle tant que l'admin ne décide pas. On le lui propose (page
+    Modèles, bilan d'accueil, doctor) jusqu'à ce qu'il active « auto » ou décline
+    (``models.diarization_suggest_auto: false``). Retourne les faits, ou None.
+    """
+    models = cfg.get("models") or {}
+    configured = str(models.get("diarization_backend") or "pyannote").strip().lower()
+    if configured not in ("pyannote", "sortformer"):
+        return None
+    if not bool(models.get("diarization_suggest_auto", True)):
+        return None
+    return {"configured": configured, "runtime_present": find_audiocpp_cli() is not None,
+            "model_present": (resolve_models_dir() / NEMOTRON_DIAR_MODEL_SUBDIR / NEMOTRON_DIAR_MODEL_FILE).is_file()}
 
 
 @dataclass(frozen=True)
@@ -120,6 +178,7 @@ class ModelSpec:
     repo_id: str
     file: str | None     # fichier unique (GGUF) ou None = snapshot complet
     kind: str            # gguf (→ models_dir) | hf_cache (→ HF_HOME) | runtime (→ runtimes/) | ollama (→ démon)
+                         # | prebuilt (binaire audio.cpp précompilé → runtimes/audiocpp/prebuilt/)
     target_subdir: str   # gguf : sous-dossier de models_dir
     gated: bool
     license: str
@@ -177,13 +236,15 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
             file=None, kind="hf_cache", target_subdir="", gated=stt["gated"],
             license=stt["license"], license_url=stt["license_url"], est_gb=stt["est_gb"]))
 
-    diar = _DIAR_SOURCES.get(str(models.get("diarization_backend") or "pyannote"))
-    if diar:
-        specs.append(ModelSpec(
-            role="diarization", label=f"Diarisation — {models.get('diarization_backend')}",
-            repo_id=diar["repo"], file=diar.get("file"), kind=diar.get("kind", "hf_cache"),
-            target_subdir=diar.get("target_subdir", ""), gated=diar["gated"],
-            license=diar["license"], license_url=diar["license_url"], est_gb=diar["est_gb"]))
+    diar_backend = str(models.get("diarization_backend") or "pyannote").strip().lower()
+    if diar_backend in _NEMOTRON_BACKENDS:
+        specs.extend(nemotron_diar_specs())
+    else:
+        diar = _DIAR_SOURCES.get(diar_backend)
+        if diar:
+            specs.append(_spec_from_source("diarization", f"Diarisation — {diar_backend}", diar))
+        if diarization_auto_recommendation(cfg):
+            specs.extend(nemotron_diar_specs(candidate=True))
 
     # Moteurs STT SERVIS : une ligne par moteur déclaré (manifeste) ou backend routé,
     # dont le modèle est connu du catalogue — dédupliqué, sans doubler le backend principal.
@@ -293,6 +354,16 @@ def model_status(
                 return {"present": True, "path": None,
                         "size_bytes": int(m.get("size") or 0), "daemon_up": True}
         return {"present": False, "path": None, "size_bytes": 0, "daemon_up": True}
+    if spec.kind == "prebuilt":
+        # Binaire audiocpp_cli : build CUDA (bin/) OU précompilé (prebuilt/) — l'un ou l'autre
+        # suffit, le diariseur préfère le premier (cf. nemotron_diarizer.find_audiocpp_cli).
+        cli = find_audiocpp_cli()
+        if cli is not None:
+            try:
+                return {"present": True, "path": str(cli), "size_bytes": cli.stat().st_size}
+            except OSError:
+                pass
+        return {"present": False, "path": None, "size_bytes": 0}
     if spec.kind == "runtime":
         # Poids gérés par un runtime servi (audio.cpp…) : présence = dossier non vide
         # sous runtimes/<target_subdir> (aucun réseau, comme le reste du statut).
@@ -378,6 +449,10 @@ def catalog_with_status(cfg: dict, *, total_vram_mb: int | None = None) -> dict:
                 # n'est pas un manque, c'est une recommandation — l'UI et le bilan de premier
                 # démarrage ne doivent pas crier « absent » sur une LLM qui fonctionne.
                 status["served_instead"] = other
+        if spec.role.endswith("_candidate"):
+            # Recommandation (diarisation « auto » proposée à une install antérieure) :
+            # jamais un manque pour le bilan d'accueil, un badge « recommandé » dans l'UI.
+            status["optional"] = True
         items.append({"spec": spec, **status})
     return {
         "items": items,

@@ -171,3 +171,129 @@ def test_emit_config_family_selectionne_le_loader():
                                  model_path="/x/nemotron-3.5", family="nemotron_asr")
     assert cfg["models"][0]["family"] == "nemotron_asr"
     assert audiocpp_server_config(port=8021, model_path="/x/q")["models"][0]["family"] == "qwen3_asr"
+
+
+# ── Précompilé CPU (0.4.7) : sélection PURE des membres, sha256, extraction à plat ──
+
+import hashlib  # noqa: E402 — bloc 0.4.7
+import io  # noqa: E402
+import tarfile  # noqa: E402
+
+from transcria.installer.audiocpp_phase import (  # noqa: E402
+    AUDIOCPP_PREBUILT_MARKER,
+    AUDIOCPP_PREBUILT_SHA256,
+    AUDIOCPP_PREBUILT_TAG,
+    install_prebuilt_audiocpp,
+    prebuilt_asset_name,
+    prebuilt_asset_url,
+    prebuilt_home,
+    prebuilt_is_complete,
+    select_prebuilt_members,
+)
+
+
+def test_asset_name_et_url_suivent_la_convention_amont():
+    assert prebuilt_asset_name() == f"audio-{AUDIOCPP_PREBUILT_TAG}-bin-ubuntu-x64-cpu-portable.tar.gz"
+    assert prebuilt_asset_url().endswith(f"/releases/download/{AUDIOCPP_PREBUILT_TAG}/{prebuilt_asset_name()}")
+    assert len(AUDIOCPP_PREBUILT_SHA256) == 64
+
+
+def test_select_members_cli_et_libggml_seulement():
+    names = ["./", "./audiocpp_cli", "./audiocpp_server", "./audiocpp_gguf", "./libggml.so", "./libggml.so.0",
+             "./libggml-cpu-haswell.so", "./libggml-base.so.0.12.0", "./LICENSE", "./tools/model_manager_v2.py",
+             "./model_specs/x.json", "../evil", "sub/libggml.so", "libggml-cpu-zen4.so"]
+    assert select_prebuilt_members(names) == [
+        "./audiocpp_cli", "./libggml.so", "./libggml.so.0", "./libggml-cpu-haswell.so",
+        "./libggml-base.so.0.12.0", "libggml-cpu-zen4.so",
+    ]
+
+
+def _archive(tmp_path: Path) -> tuple[Path, str]:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        def add(name, data):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        add("./audiocpp_cli", b"#!/bin/sh\necho cli\n")
+        add("./audiocpp_server", b"srv")
+        add("./libggml.so.0.12.0", b"lib")
+        link = tarfile.TarInfo("./libggml.so.0")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "./libggml.so.0.12.0"
+        tf.addfile(link)
+        add("./LICENSE", b"Apache")
+        add("./tools/x.py", b"py")
+    archive = tmp_path / "a.tar.gz"
+    archive.write_bytes(buf.getvalue())
+    return archive, hashlib.sha256(buf.getvalue()).hexdigest()
+
+
+def _fetch_from(archive: Path):
+    def fetch(url, dest):
+        assert url == prebuilt_asset_url()
+        dest.write_bytes(archive.read_bytes())
+    return fetch
+
+
+def test_install_prebuilt_extrait_a_plat_et_marque(tmp_path):
+    archive, sha = _archive(tmp_path)
+    rt = tmp_path / "rt"
+    cli = install_prebuilt_audiocpp(runtimes_dir=rt, console=FakeConsole(), fetch=_fetch_from(archive),
+                                    expected_sha256=sha)
+    home = prebuilt_home(rt)
+    assert cli == home / "audiocpp_cli" and cli.stat().st_mode & 0o111
+    assert sorted(p.name for p in home.iterdir()) == [AUDIOCPP_PREBUILT_MARKER, "audiocpp_cli", "libggml.so.0", "libggml.so.0.12.0"]
+    assert (home / "libggml.so.0").is_symlink() and (home / "libggml.so.0").resolve() == (home / "libggml.so.0.12.0").resolve()
+    assert prebuilt_is_complete(home)
+    assert not (home / "audiocpp_server").exists() and not (home / "tools").exists()
+
+
+def test_install_prebuilt_idempotent_puis_force(tmp_path):
+    archive, sha = _archive(tmp_path)
+    rt = tmp_path / "rt"
+    calls = []
+
+    def fetch(url, dest):
+        calls.append(url)
+        dest.write_bytes(archive.read_bytes())
+
+    install_prebuilt_audiocpp(runtimes_dir=rt, console=FakeConsole(), fetch=fetch, expected_sha256=sha)
+    install_prebuilt_audiocpp(runtimes_dir=rt, console=FakeConsole(), fetch=fetch, expected_sha256=sha)
+    assert len(calls) == 1                                   # déjà en place : aucun téléchargement
+    install_prebuilt_audiocpp(runtimes_dir=rt, console=FakeConsole(), fetch=fetch, expected_sha256=sha, force=True)
+    assert len(calls) == 2
+
+
+def test_install_prebuilt_refuse_un_sha_divergent(tmp_path):
+    archive, _sha = _archive(tmp_path)
+    rt = tmp_path / "rt"
+    with pytest.raises(AudiocppPhaseError, match="sha256 INVALIDE"):
+        install_prebuilt_audiocpp(runtimes_dir=rt, console=FakeConsole(), fetch=_fetch_from(archive),
+                                  expected_sha256="0" * 64)
+    assert not prebuilt_home(rt).exists()                   # rien n'est posé après un refus
+
+
+def test_install_prebuilt_refuse_sans_sha_et_remonte_le_reseau(tmp_path):
+    with pytest.raises(AudiocppPhaseError, match="sans sha256"):
+        install_prebuilt_audiocpp(runtimes_dir=tmp_path, console=FakeConsole(), fetch=lambda u, d: None,
+                                  expected_sha256="  ")
+
+    def boom(url, dest):
+        raise OSError("réseau coupé")
+
+    with pytest.raises(AudiocppPhaseError, match="réseau coupé"):
+        install_prebuilt_audiocpp(runtimes_dir=tmp_path, console=FakeConsole(), fetch=boom)
+
+
+def test_le_marqueur_doit_porter_le_tag(tmp_path):
+    home = tmp_path / "audiocpp" / "prebuilt"
+    home.mkdir(parents=True)
+    cli = home / "audiocpp_cli"
+    cli.write_text("x")
+    cli.chmod(0o755)
+    assert not prebuilt_is_complete(home)
+    (home / AUDIOCPP_PREBUILT_MARKER).write_text("v0.0.1\n")
+    assert not prebuilt_is_complete(home)
+    (home / AUDIOCPP_PREBUILT_MARKER).write_text(AUDIOCPP_PREBUILT_TAG + "\n")
+    assert prebuilt_is_complete(home)

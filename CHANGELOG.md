@@ -6,6 +6,75 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.4.7] — 2026-10-10
+
+La détection des locuteurs change de défaut : « auto » retient Nemotron 3 de 1 à 8 voix
+(sans token, en quelques secondes, sur CPU dès l'upload) et garde pyannote au-delà — avec
+un binaire précompilé pour que rien ne se compile, une page Modèles qui le propose aux
+installations existantes, et un doctor qui le dit.
+
+### Ajouté
+
+#### Diarisation « auto » : Nemotron 3 de 1 à 8 voix, pyannote au-delà
+
+- **`models.diarization_backend: auto`** (défaut des configurations neuves) — règle pure et
+  résolue **par job** (`diarizer_factory.resolve_auto_backend`) : fourchette absente ou
+  ≤ 8 voix → Nemotron 3 ; > 8 voix → pyannote ; comptage **exact** saisi → pyannote (seul
+  backend qui honore `num_speakers`) ; Nemotron non installé → pyannote (comportement
+  historique) ; aucun token HF → Nemotron quoi qu'il arrive plutôt qu'un échec. Les
+  configurations existantes gardent leur valeur explicite.
+- **La passe lancée dès l'upload ne touche plus la carte graphique** : `run_speaker_detection`
+  réserve selon le backend résolu (plus un « pyannote » figé), et Nemotron 3 y tourne sur CPU —
+  zéro VRAM, jamais de préemption de la LLM d'arbitrage ; la diarisation finale du pipeline
+  réutilise le checkpoint. C'est le remède au « traitement qui attend la VRAM dès le
+  téléversement » remonté par des utilisateurs.
+- **Binaire audio.cpp précompilé** (`installer.cli audiocpp --prebuilt`, 55 Mo, archive CPU
+  « portable » de la release épinglée, **sha256 vérifié** avant extraction, posé sous
+  `runtimes/audiocpp/prebuilt/` à part du build CUDA) : aucune chaîne de compilation. Vérifié :
+  tours **identiques** au build CUDA local, 73 s d'audio en 2 s. Ce binaire est **CPU seul**
+  (il refuse `--backend cuda`) : le diariseur le sait et ne réserve alors aucun GPU, à aucune
+  phase. Un build CUDA existant reste préféré.
+- **Phase `nemotron-diar`** (`installer.cli nemotron-diar`) : binaire (CUDA s'il existe, sinon
+  précompilé) + GGUF 199 Mo — ce que `install.sh` fait désormais **par défaut**
+  (`--no-nemotron-diar` pour s'en passer).
+- **Page Modèles** : deux lignes (runtime + poids) pour `auto`/`nemotron_diar` ; pour une
+  installation en `pyannote`/`sortformer`, une carte « recommandé » avec **« Activer la
+  diarisation auto »** (refusé tant que les deux pièces manquent) et « Garder mon réglage
+  actuel » (`models.diarization_suggest_auto: false`). Bilan d'accueil et doctor
+  (`check_diarization_auto_suggestion`, et `check_nemotron_diar_runtime` qui nomme le repli
+  pyannote d'un `auto` incomplet) relaient la même recommandation, depuis la même source.
+- **Docker** : l'image GPU slim tire le GGUF au premier démarrage (`provision_diarization_model`,
+  best-effort) ; la bundled l'embarque avec sa licence (`licenses/OpenMDW-1.1.txt`, NOTICE §3 bis)
+  et `release_bundled.sh` le vérifie ; le quickstart n'impose plus Sortformer sans token.
+
+### Modifié
+
+- **Qwen 3.8-27B sur Ollama et vLLM aussi** : la 0.4.6 ne l'avait validé qu'en llama.cpp.
+  Deux essais réels de plus — `qwen3.8:27b` sur Ollama 0.35 (le démon charge le modèle avec
+  son contexte natif de 262 144 jetons, 700 lignes correctement comptées sur 18 k jetons) et
+  `Qwen/Qwen3.8-27B-FP8` sur vLLM 0.23 (TP=4, FP8 Marlin sur Ampere, parser d'outils
+  `qwen3_xml` de la recette Qwen 3.8), E2E 17/17 chacun. Les paliers Ollama 24/32 et vLLM
+  48/96 basculent ; vLLM n'a pas eu besoin de monter de version. Limite connue de la voie
+  vLLM : l'effort de réflexion reste celui du modèle (xhigh, appliqué par requête) — les
+  phases LLM y sont nettement plus longues qu'en llama.cpp, où le profil règle `medium`.
+- **Mode express** : le duo sans token devient whisper (ou Kroko) + diarisation « auto »
+  (Sortformer n'est plus le défaut sans token ; il reste sélectionnable).
+
+### Corrigé
+
+- **PyAV épinglé `< 19`** : PyAV 19.0 (29 septembre) retire l'argument `metadata_errors` de
+  `av.open()` que faster-whisper 1.2.1 passe encore — toute transcription whisper d'un venv
+  **neuf** échouait (`TypeError`) ; les venv existants gardent leur PyAV 17/18 et n'étaient pas
+  touchés. Attrapé par la gate d'installation vierge, même classe de panne que SQLAlchemy 2.1
+  en 0.4.6 (la CI et les installations neuves résolvent les dépendances fraîches).
+- **Build CUDA d'audio.cpp qui ne se charge plus** (bibliothèque CUDA de l'hôte changée) : le
+  diariseur Nemotron 3 bascule sur le précompilé CPU s'il est posé (signalé dans le journal),
+  la phase `nemotron-diar` ne fait confiance à un build CUDA que s'il démarre, et le doctor
+  nomme un binaire présent mais qui ne démarre pas.
+- **`install.sh`** : les blocs opt-in runtimes STT servis et meeting-runner appelaient des
+  fonctions de journal inexistantes (`log`, `warn`) — code 127 sous `set -e` dès qu'on les
+  activait.
+
 ## [0.4.6] — 2026-10-01
 
 La version des moteurs à jour : audio.cpp, parakeet.cpp, llama.cpp et opencode remontés à

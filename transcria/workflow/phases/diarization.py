@@ -12,7 +12,12 @@ from transcria.gpu.gpu_session import GPUSessionError
 from transcria.ingestion.manifest import parse_participants_manifest
 from transcria.jobs.models import Job, JobState
 from transcria.llm_tools.opencode_runner import resolve_output_language
-from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
+from transcria.stt.diarizer_factory import (
+    apply_speaker_hint,
+    configured_diarization_backend,
+    create_diarizer,
+    get_diarizer_vram_mb,
+)
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.workflow.progress import progress_msg
 
@@ -41,39 +46,53 @@ def pyannote_progress_callback(runner, job: Job, step: str):
 def run_speaker_detection(
     runner, job: Job, audio_path: str, config: dict, update_state: bool = True
 ) -> dict:
-    """Détecte les locuteurs via pyannote.
+    """Détecte les locuteurs avec le backend de diarisation RÉSOLU pour ce job.
 
     `update_state=True` (étape wizard autonome) publie les états globaux
     `SPEAKER_DETECTION_RUNNING`/`DONE`/`FAILED`. `update_state=False` (sous-phase
     de `run_summary`) ne touche pas à l'état du job : le résumé reste `SUMMARY_RUNNING`
     jusqu'à `SUMMARY_DONE`, et la diarisation y est best-effort (échec → résumé
     poursuit sans écraser l'état). Le résultat est toujours retourné via le dict.
+
+    La réservation VRAM suit le backend (plus un « pyannote » figé) : c'est cette passe,
+    lancée dès l'upload, que les utilisateurs voyaient attendre la carte. Nemotron 3 en
+    mode ``auto`` y tourne sur CPU — zéro VRAM réclamée, jamais de préemption de la LLM —
+    et la diarisation finale du pipeline réutilise son checkpoint.
     """
     if update_state:
         runner.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
+    diar_vram_mb = 0
     try:
         config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
+        diar_backend = configured_diarization_backend(config)
+        diar_vram_mb = get_diarizer_vram_mb(diar_backend, config, at_upload=True)
         detector = SpeakerDetector(config)
         progress_callback = runner._pyannote_progress_callback(
             job, "summary" if not update_state else "speakers"
         )
-        if runner._cuda_available():
+        if diar_vram_mb <= 0:
+            logger.info("[speaker_detection] %s sur CPU — aucune réservation VRAM", diar_backend)
+            device = "cpu"
+            result = runner._detect_speakers(
+                detector, job, Path(audio_path), device=device, progress_callback=progress_callback
+            )
+        elif runner._cuda_available():
             with runner._gpu_session(
                 job,
-                "pyannote",
-                runner.vram.pyannote_vram_mb,
+                diar_backend,
+                diar_vram_mb,
                 "speaker_detection",
             ) as gpu:
                 device = f"cuda:{gpu.gpu_index}"
                 logger.info(
-                    "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
-                    device, runner.vram.pyannote_vram_mb,
+                    "[speaker_detection] backend=%s, GPU sélectionné: %s (%d Mo réservés)",
+                    diar_backend, device, diar_vram_mb,
                 )
                 result = runner._detect_speakers(
                     detector, job, Path(audio_path), device=device, progress_callback=progress_callback
                 )
         else:
-            logger.info("[speaker_detection] CUDA indisponible — pyannote sur CPU")
+            logger.info("[speaker_detection] CUDA indisponible — %s sur CPU", diar_backend)
             device = "cpu"
             result = runner._detect_speakers(
                 detector, job, Path(audio_path), device=device, progress_callback=progress_callback
@@ -83,11 +102,11 @@ def run_speaker_detection(
         return result
     except GPUSessionError as exc:
         # VRAM transitoire : on n'échoue pas, on remonte `vram_wait` (mise en attente
-        # + alerte admin par l'appelant). vram_mb pyannote = runner.vram.pyannote_vram_mb.
+        # + alerte admin par l'appelant), avec la VRAM du backend résolu.
         logger.error("[speaker_detection] VRAM insuffisante: %s", exc)
         return {
             "vram_wait": True,
-            "required_mb": int(runner.vram.pyannote_vram_mb),
+            "required_mb": int(diar_vram_mb),
             "phase": "speaker_detection",
             "reason": str(exc),
             "error": str(exc),

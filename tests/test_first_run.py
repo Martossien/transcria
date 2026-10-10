@@ -91,8 +91,9 @@ class TestReport:
         monkeypatch.setattr(first_run, "catalog_with_status", _catalog([]))
         monkeypatch.setattr(first_run, "check_opencode",
                             lambda cfg: SimpleNamespace(status="ok", detail="trouvé"))
+        monkeypatch.setattr(first_run, "diarization_auto_recommendation", lambda cfg: None)
         report = first_run.first_run_report({}, total_vram_mb=24000)
-        assert [it.key for it in report] == ["compute", "models", "opencode"]
+        assert [it.key for it in report] == ["compute", "models", "opencode", "diarization"]
         assert first_run.needs_attention(report) == []
 
 
@@ -131,3 +132,32 @@ class TestRoute:
     def test_accueil_viewer_sans_conteneur(self, viewer_client):
         body = viewer_client.get("/").get_data(as_text=True)
         assert 'id="first-run-checklist"' not in body
+
+
+class TestDiarizationItem:
+    def test_recommandation_en_warn_avec_les_faits(self, monkeypatch):
+        reco = {"configured": "pyannote", "runtime_present": False, "model_present": True}
+        monkeypatch.setattr(first_run, "diarization_auto_recommendation", lambda cfg: reco)
+        item = first_run._diarization_item({})
+        assert item.status == "warn" and item.key == "diarization" and item.data == reco
+
+    def test_rien_a_proposer_ok(self, monkeypatch):
+        monkeypatch.setattr(first_run, "diarization_auto_recommendation", lambda cfg: None)
+        assert first_run._diarization_item({}).status == "ok"
+
+    def test_lignes_optionnelles_jamais_un_manque(self, monkeypatch):
+        items = [{"spec": SimpleNamespace(label="Diarisation — Nemotron 3"), "present": False, "optional": True}]
+        monkeypatch.setattr(first_run, "catalog_with_status", _catalog(items))
+        assert first_run._models_item({}, None).status == "ok"
+
+    def test_rendu_pointe_vers_la_page_modeles(self, admin_client, monkeypatch):
+        monkeypatch.setattr(TestRoute._VRAM, lambda: {"total_vram_mb": 24000})
+        monkeypatch.setattr(first_run.inventory, "snapshot", lambda: [_gpu()])
+        monkeypatch.setattr(first_run, "catalog_with_status", _catalog([]))
+        monkeypatch.setattr(first_run, "check_opencode", lambda cfg: SimpleNamespace(status="ok", detail="ok"))
+        monkeypatch.setattr(first_run, "diarization_auto_recommendation",
+                            lambda cfg: {"configured": "pyannote", "runtime_present": False, "model_present": False})
+        resp = admin_client.get("/admin/first-run-status")
+        html = resp.get_data(as_text=True)
+        assert resp.status_code == 200
+        assert "Nemotron 3" in html and "pyannote" in html and "/admin/models" in html

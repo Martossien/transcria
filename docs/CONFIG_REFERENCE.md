@@ -199,7 +199,8 @@ construction). Le doctor REFUSE un backend fédéré sans admin local actif.
 | `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko` — CPU pur — ou `moss`) |
 | `summary_stt_backend` | string \| null | `null` | Backend dédié à la transcription rapide de la PHASE RÉSUMÉ (`null` = même backend que `stt_backend`). Mêmes valeurs acceptées que `stt_backend` (backends servis routés inclus). `kroko` rend la phase résumé 100 % CPU : zéro réservation VRAM, plus de reclaim du LLM d'arbitrage par le résumé |
 | `live_stt_backend` | string \| null | `null` | Backend STT **streaming** dédié à la chaîne live (`null` = la façade utilise la chaîne historique). Moteurs *conçus* streaming uniquement (`nemotron-streaming`, `kyutai`, `voxtralrt`) — jamais un batch. Distinct du STT de référence du pipeline (cf. `docs/TEMPS_REEL_REUNIONS.md`, couture 3) |
-| `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote`, `sortformer`, `nemotron_diar` ou `remote`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
+| `diarization_backend` | string | `"auto"` | Backend de diarisation. **`auto`** (défaut depuis 0.4.7) = Nemotron 3 de 1 à 8 voix (non gated, CPU dès l'upload), pyannote au-delà de 8 voix ou pour un comptage exact saisi — résolu PAR JOB par `diarizer_factory.resolve_auto_backend()` ; sans binaire/GGUF Nemotron, `auto` = pyannote ; sans token HF, Nemotron quoi qu'il arrive. Valeurs explicites : `pyannote`, `sortformer`, `nemotron_diar`, `remote` |
+| `diarization_suggest_auto` | bool | `true` | Tant que le backend reste `pyannote`/`sortformer` explicite (installation antérieure à 0.4.7), la page Modèles, l'accueil admin et le doctor proposent de passer en `auto`. `false` = ne plus proposer (bouton « Garder mon réglage actuel ») |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
@@ -212,7 +213,7 @@ construction). Le doctor REFUSE un backend fédéré sans admin local actif.
 - `cohere_model_path` : si le chemin est invalide, `CohereTranscriber.load()` échoue avec un avertissement. Le chemin est résolu en absolu si c'est un répertoire local (`os.path.abspath`). Si le chemin commence par `CohereLabs/` ou `cohere/`, HuggingFace download est utilisé.
 - `pyannote_model` : doit être un modèle HuggingFace valide. Nécessite d'accepter les conditions sur huggingface.co et configurer `HF_TOKEN` pour les modèles gated.
 - `stt_backend` pilote la sélection du backend via `TranscriberFactory`.
-- `diarization_backend` pilote la sélection via `create_diarizer()`. Un backend inconnu déclenche un warning et bascule sur `pyannote`. La VRAM réservée est lue via `get_diarizer_vram_mb(backend, config)`.
+- `diarization_backend` pilote la sélection via `create_diarizer()`. Un backend inconnu déclenche un warning et bascule sur `pyannote`. La VRAM réservée est lue via `get_diarizer_vram_mb(backend, config)` ; `auto` y est résolu sans fourchette (admission estimée avant la lecture du job). La passe de détection lancée dès l'upload (`run_speaker_detection`) réserve selon le backend **résolu** — Nemotron 3 en `nemotron_diar.backend: auto` y tourne sur CPU, 0 Mo : aucune attente de carte, la LLM n'est jamais préemptée, et la diarisation finale du pipeline réutilise le checkpoint.
 
 ### `cohere`
 
@@ -464,11 +465,13 @@ Fichier : `metadata/parakeet.json`.
 ### `nemotron_diar`
 
 Diarisation NVIDIA **Nemotron 3** (jusqu'à **8 locuteurs**, ordre d'arrivée, non gated,
-licence OpenMDW 1.1), activée via `models.diarization_backend=nemotron_diar`. Elle ne
-passe **pas** par NeMo (la version publiée sur PyPI ne sait pas instancier ce modèle) mais
-par le binaire `audiocpp_cli` du runtime audio.cpp, lancé en **sous-process** — aucun
-serveur, aucun port, GPU ou CPU. Binaire : phase `python -m transcria.installer.cli
-audiocpp` (livré dans les images GPU) ; poids GGUF : page « Modèles ».
+licence OpenMDW 1.1), retenue par `models.diarization_backend=auto` (défaut, 1 à 8 voix)
+ou forcée par `nemotron_diar`. Elle ne passe **pas** par NeMo (la version publiée sur PyPI
+ne sait pas instancier ce modèle) mais par le binaire `audiocpp_cli` du runtime audio.cpp,
+lancé en **sous-process** — aucun serveur, aucun port, GPU ou CPU. Binaire + poids : page
+« Modèles » (précompilé CPU 55 Mo, sha256 vérifié + GGUF 199 Mo) ou `python -m
+transcria.installer.cli nemotron-diar` (ce que `install.sh` fait par défaut) ; le build CUDA
+de la phase `audiocpp` (runtimes STT servis, livré dans les images GPU) est préféré s'il existe.
 
 Mesuré (0.4.6, trois réunions réelles) : 7 locuteurs exacts sur 1 h 52 en ~15 s sur GPU,
 ~57× le temps réel sur CPU ; distribution des temps de parole alignée sur pyannote. La
@@ -480,9 +483,9 @@ bascule sur pyannote (comme Sortformer au-delà de 4).
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `cli_path` | string | `""` | Binaire `audiocpp_cli` ; vide = `<runtimes>/audiocpp/bin/audiocpp_cli` |
+| `cli_path` | string | `""` | Binaire `audiocpp_cli` ; vide = `<runtimes>/audiocpp/bin/audiocpp_cli` (build CUDA) sinon `<runtimes>/audiocpp/prebuilt/audiocpp_cli` (précompilé CPU) |
 | `model_path` | string | `""` | GGUF ; vide = `<models>/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf` |
-| `backend` | string | `"auto"` | `auto` (le GPU réservé par la phase, sinon CPU), `cuda`, `cpu` (aucune VRAM réservée) |
+| `backend` | string | `"auto"` | `auto` (CPU pour la passe lancée à l'upload, GPU réservé par le pipeline final), `cuda` (GPU partout), `cpu` (aucune VRAM réservée). Avec le binaire **précompilé** (marqueur `PREBUILT`, CPU seul — il refuse `--backend cuda`), tout tourne sur CPU et rien n'est réservé, quelle que soit cette valeur |
 | `threads` | int | `0` | Threads du runtime ; `0` = min(16, cœurs) |
 | `timeout_s` | int | `1800` | Délai maximal du sous-process |
 | `min_speaker_total_s` | float | `2.0` | Sous ce total de parole, un locuteur est rattaché à son voisin |
@@ -1035,7 +1038,7 @@ n'ont pas changé.
 | `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
 | `device` | string | `"cuda:0"` | GPU de chargement pyannote. **`"auto"`/`"cuda"`** → carte la **plus libre** ≥ VRAM requise (`gpu.pyannote_vram_mb`, défaut 3000), résolue au chargement (contourne le GPU du LLM/STT en multi-GPU) ; un index explicite (`cuda:2`) est respecté ; repli CPU si rien d'éligible. **Recommandé `auto` en multi-GPU / nœud de ressources** (sinon `cuda:0` peut tomber sur le GPU du LLM d'arbitrage → OOM). |
 
-**Override par job (fourchette UI) :** ces valeurs globales peuvent être surchargées par job. L'étape Résumé du wizard propose un champ optionnel min/max locuteurs, stocké dans `jobs.extra_data_json["speaker_hint"]`. À la diarisation, `diarizer_factory.apply_speaker_hint()` écrit `min_speakers`/`max_speakers` (et `num_speakers` si min == max) depuis ce hint, et bascule `models.diarization_backend` de `sortformer` vers `pyannote` si la borne haute saisie dépasse 4 (capacité Sortformer). Le hint ne s'applique qu'au job concerné ; la config globale reste inchangée.
+**Override par job (fourchette UI) :** ces valeurs globales peuvent être surchargées par job. L'étape Résumé du wizard propose un champ optionnel min/max locuteurs, stocké dans `jobs.extra_data_json["speaker_hint"]`. À la diarisation, `diarizer_factory.apply_speaker_hint()` écrit `min_speakers`/`max_speakers` (et `num_speakers` si min == max) depuis ce hint, et bascule `models.diarization_backend` de `sortformer` (resp. `nemotron_diar`) vers `pyannote` si la borne haute saisie dépasse 4 (resp. 8). En `auto`, c'est la fourchette qui décide : max ≤ 8 → Nemotron 3, au-delà ou comptage exact (min = max) → pyannote. Le hint ne s'applique qu'au job concerné ; la config globale reste inchangée.
 
 **Performance pyannote :** sur les longues réunions, le coût principal observé est `embeddings`, pas `segmentation`. `preload_audio=true` réduit les recoupes/décodages audio répétés. `prepare_pcm_audio=true` ajoute un cache WAV 16 kHz mono uniquement pour pyannote ; il conserve la timeline et refuse le fichier préparé si la durée ne correspond pas. `embedding_batch_size` réduit le nombre de lots pyannote, mais une valeur trop haute peut augmenter la VRAM et provoquer un OOM ; valider `96` ou `128` par bench avant d'en faire un réglage de production.
 

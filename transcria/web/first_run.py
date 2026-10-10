@@ -24,14 +24,14 @@ from transcria.diagnostics.checks.common import OK, WARN
 from transcria.diagnostics.checks.llm import check_opencode
 from transcria.diagnostics.checks.remote import check_inference_nodes
 from transcria.gpu import inventory
-from transcria.models_catalog import catalog_with_status
+from transcria.models_catalog import catalog_with_status, diarization_auto_recommendation
 
 
 @dataclass
 class FirstRunItem:
     """Un point du bilan. ``status`` reprend les statuts doctor (ok/warn/fail)."""
 
-    key: str                                  # compute | models | opencode
+    key: str                                  # compute | models | opencode | diarization
     status: str
     data: dict = field(default_factory=dict)  # faits structurés — le template rédige
 
@@ -53,8 +53,9 @@ def _models_item(cfg: dict, total_vram_mb: int | None) -> FirstRunItem:
     """Modèles requis par CETTE config — même catalogue que la page Modèles."""
     view = catalog_with_status(cfg, total_vram_mb=total_vram_mb)
     # `served_instead` : la LLM du palier manque mais une autre est servie — pas un manque.
+    # `optional` : lignes d'une recommandation (diarisation « auto ») — jamais un manque.
     missing = [it["spec"].label for it in view["items"]
-               if not it["present"] and not it.get("served_instead")]
+               if not it["present"] and not it.get("served_instead") and not it.get("optional")]
     if not missing:
         return FirstRunItem("models", OK, {"total": len(view["items"])})
     return FirstRunItem("models", WARN, {"missing": missing})
@@ -66,11 +67,24 @@ def _opencode_item(cfg: dict) -> FirstRunItem:
     return FirstRunItem("opencode", res.status, {"detail": res.detail})
 
 
+def _diarization_item(cfg: dict) -> FirstRunItem:
+    """Mise à niveau : proposer la diarisation « auto » aux configs antérieures à 0.4.7.
+
+    OK dès que l'admin a activé « auto » (ou gardé son réglage via la page Modèles) —
+    la recommandation vit dans le catalogue, même source que la page qui l'applique.
+    """
+    reco = diarization_auto_recommendation(cfg)
+    if reco is None:
+        return FirstRunItem("diarization", OK)
+    return FirstRunItem("diarization", WARN, dict(reco))
+
+
 def first_run_report(cfg: dict, *, total_vram_mb: int | None = None) -> list[FirstRunItem]:
     return [
         _compute_item(cfg),
         _models_item(cfg, total_vram_mb),
         _opencode_item(cfg),
+        _diarization_item(cfg),
     ]
 
 

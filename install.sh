@@ -33,6 +33,9 @@
 #                      audio.cpp (backend qwen3asr, + modèle Qwen3-ASR-1.7B) et
 #                      parakeet.cpp (backend nemotron) — builds CUDA épinglés,
 #                      profils GPU uniquement (cf. docs/EXTERNAL_STT_RUNTIMES.md)
+#   --no-nemotron-diar Ne pas poser la diarisation Nemotron 3 (binaire audio.cpp précompilé
+#                      55 Mo + poids 199 Mo, non gated) — retenue par défaut par
+#                      models.diarization_backend "auto" ; sans elle, auto = pyannote
 #   --skip-doctor      Ne pas lancer scripts/doctor.py en fin d'installation
 #   --strict-doctor    Lancer doctor.py en mode strict (warnings = échec)
 #   --postgres         Configurer PostgreSQL (local : crée rôle/base ; distant : utilise une base existante)
@@ -192,6 +195,7 @@ NON_INTERACTIVE=false
 EXPERT_MODE=false      # --expert : pas-à-pas historique (sinon, TTY all-in-one = express)
 SKIP_DOCTOR=false
 WITH_STT_RUNTIMES=false   # --with-stt-runtimes : phases audiocpp+parakeetcpp (opt-in, GPU)
+WITH_NEMOTRON_DIAR=true   # --no-nemotron-diar : diarisation Nemotron 3 (défaut 0.4.7, CPU, sans token)
 WITH_MEETING_BOTS=false   # --with-meeting-bots : phase connectors (meeting-runner, opt-in)
 STRICT_DOCTOR=false
 INSTALL_STARTED_AT=$(date +%s)   # métrique time-to-first-job, affichée au résumé final
@@ -242,6 +246,7 @@ while [[ $# -gt 0 ]]; do
         --expert)          EXPERT_MODE=true; shift ;;
         --skip-doctor)     SKIP_DOCTOR=true; shift ;;
         --with-stt-runtimes) WITH_STT_RUNTIMES=true; shift ;;
+        --no-nemotron-diar) WITH_NEMOTRON_DIAR=false; shift ;;
         --with-meeting-bots) WITH_MEETING_BOTS=true; shift ;;
         --strict-doctor)   STRICT_DOCTOR=true; shift ;;
         --postgres)        SETUP_PG=true; shift ;;
@@ -1655,13 +1660,26 @@ fi
 # Délégation pure aux phases épinglées (transcria/installer/{audiocpp,parakeetcpp}_phase.py).
 # Jamais dans le flux par défaut : builds CUDA de plusieurs minutes + ~4 Go de modèle.
 if [[ "$WITH_STT_RUNTIMES" = true ]]; then
-    log "Runtimes STT servis : provisionnement audio.cpp (qwen3asr) + parakeet.cpp (nemotron)…"
+    log_info "Runtimes STT servis : provisionnement audio.cpp (qwen3asr) + parakeet.cpp (nemotron)…"
     python_module transcria.installer.cli audiocpp --runtimes-dir "$INSTALL_DIR/runtimes" --with-model \
-        || warn "Provisionnement audio.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli audiocpp --with-model)"
+        || log_warn "Provisionnement audio.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli audiocpp --with-model)"
     python_module transcria.installer.cli parakeetcpp --runtimes-dir "$INSTALL_DIR/runtimes" \
-        || warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
-    log "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
-    log "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."
+        || log_warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
+    log_info "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
+    log_info "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."
+fi
+
+# ── Diarisation Nemotron 3 (défaut 0.4.7 — models.diarization_backend "auto") ──────────
+# Binaire audiocpp_cli PRÉCOMPILÉ CPU (55 Mo, sha256 vérifié — ou le build CUDA ci-dessus
+# s'il existe) + GGUF 199 Mo non gated. Sans ces deux pièces, « auto » retombe sur pyannote
+# (gated, minutes de GPU à l'upload) — le doctor le dit. Opt-out : --no-nemotron-diar.
+# Profils qui diarisent LOCALEMENT seulement : all-in-one et scheduler (web = frontal sans
+# pipeline ; resource-node = diarisation servie par inference_service, pyannote/sortformer).
+if [[ "$WITH_NEMOTRON_DIAR" = true && ( "$INSTALL_PROFILE" = "all-in-one" || "$INSTALL_PROFILE" = "scheduler" ) ]]; then
+    log_info "Diarisation Nemotron 3 (1 à 8 voix, sans token) : binaire précompilé + poids…"
+    python_module transcria.installer.cli nemotron-diar --runtimes-dir "$INSTALL_DIR/runtimes" \
+        --models-dir "${MODELS_DIR_CHOICE:-$INSTALL_DIR/models}" \
+        || log_warn "Diarisation Nemotron 3 non posée (relancer : venv/bin/python -m transcria.installer.cli nemotron-diar) — « auto » utilisera pyannote en attendant"
 fi
 
 # ── Runner de réunion DORMANT (TOUJOURS posé — l'activation se fait dans l'UI admin) ────────
@@ -1672,20 +1690,20 @@ fi
 CONNECTORS_ARGS=(--no-deps --config-dir "$INSTALL_DIR")
 [[ "$INSTALL_SYSTEMD" = true && "$HAVE_SYSTEMCTL" = true ]] && CONNECTORS_ARGS+=(--systemd)
 python_module transcria.installer.cli connectors "${CONNECTORS_ARGS[@]}" \
-    || warn "Pose du runner dormant échouée (relancer : venv/bin/python -m transcria.installer.cli connectors --no-deps --systemd)"
+    || log_warn "Pose du runner dormant échouée (relancer : venv/bin/python -m transcria.installer.cli connectors --no-deps --systemd)"
 
 # ── Réunions planifiées (opt-in --with-meeting-bots) ─────────────────────────
 # Délégation pure à la phase transcria/installer/connectors_phase.py (vague 4 du plan
 # docs/archive/UI_REUNIONS_WORKFLOW.md). Jamais dans le flux par défaut : Playwright/aiortc lourds.
 if [[ "$WITH_MEETING_BOTS" = true ]]; then
-    log "Réunions planifiées : dépendances connecteurs + config du meeting-runner…"
+    log_info "Réunions planifiées : dépendances connecteurs + config du meeting-runner…"
     python_module transcria.installer.cli connectors --config-dir "$INSTALL_DIR" \
-        || warn "Phase connecteurs échouée (relancer : venv/bin/python -m transcria.installer.cli connectors)"
-    log "Ensuite : 1) activer connectors.meetings.enabled + live.facade.enabled (Administration → Configuration) ;"
-    log "          2) poser TRANSCRIA_MEETING_REF_KEY dans .env (cf. .env.example) ;"
-    log "          3) venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner --out runner_token.txt ;"
-    log "          4) ajouter svc-runner à connectors.meetings.runner_usernames ;"
-    log "          5) démarrer le runner (unité systemd via --systemd, ou TRANSCRIA_RUNNER_CONFIG=runner.yaml python -m connector_service.runner)."
+        || log_warn "Phase connecteurs échouée (relancer : venv/bin/python -m transcria.installer.cli connectors)"
+    log_info "Ensuite : 1) activer connectors.meetings.enabled + live.facade.enabled (Administration → Configuration) ;"
+    log_info "          2) poser TRANSCRIA_MEETING_REF_KEY dans .env (cf. .env.example) ;"
+    log_info "          3) venv/bin/python -m transcria.maintenance.cli create-runner-token svc-runner --out runner_token.txt ;"
+    log_info "          4) ajouter svc-runner à connectors.meetings.runner_usernames ;"
+    log_info "          5) démarrer le runner (unité systemd via --systemd, ou TRANSCRIA_RUNNER_CONFIG=runner.yaml python -m connector_service.runner)."
 fi
 
 # ============================================================================

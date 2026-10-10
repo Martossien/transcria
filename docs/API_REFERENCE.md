@@ -159,6 +159,8 @@
 | `/admin/maintenance/upgrade/status` | GET | connexion + Permission.MANAGE_CONFIG | Progression de la mise à niveau (sondée par la page — lecture du fichier d'état). | `transcria.web.admin_routes` |
 | `/admin/models` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/models/activate` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
+| `/admin/models/diarization-activate` | POST | connexion + Permission.MANAGE_CONFIG | Passe la diarisation en « auto » (Nemotron 3 de 1 à 8 voix, pyannote au-delà). | `transcria.web.admin_routes` |
+| `/admin/models/diarization-keep` | POST | connexion + Permission.MANAGE_CONFIG | Écarte la recommandation « auto » : l'admin garde son backend de diarisation. | `transcria.web.admin_routes` |
 | `/admin/models/download` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/models/ollama-activate` | POST | connexion + Permission.MANAGE_CONFIG | Bascule le modèle Ollama servi — symétrique du « Activer (servir) » des GGUF. | `transcria.web.admin_routes` |
 | `/admin/models/progress/<role>` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -221,7 +223,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 155 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 157 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

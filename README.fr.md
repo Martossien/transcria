@@ -38,7 +38,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.4.6** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.4.7** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -48,6 +48,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.4.7** | **La version de la détection des locuteurs par défaut** — diarisation `auto` : **Nemotron 3** de 1 à 8 voix (sans token, en secondes, sur CPU dès l'upload — plus d'attente de VRAM au téléversement), pyannote au-delà de 8 ou pour un comptage exact ; binaire audio.cpp précompilé (55 Mo, sha256 vérifié, rien à compiler) posé par défaut ; les installations existantes se voient **proposer** la bascule (page Modèles, checklist d'accueil, doctor), jamais basculées en silence ; Qwen 3.8-27B validé aussi sur Ollama et vLLM |
 | **0.4.6** | **La version des moteurs à jour** — audio.cpp v0.9.0, parakeet.cpp, llama.cpp v0.5.0 et opencode remontés à l'amont ; **Qwen 3.8-27B** sur le palier 32 Go (effort de réflexion `medium`, E2E 17/17) ; **diarisation Nemotron 3** : 8 locuteurs, sans token, GPU ou CPU (7 locuteurs exacts sur 1 h 52 en 15 s) ; **opencode v1 et v2** reconnus, votre opencode n'est jamais écrasé ; pièges d'amont absorbés (`--no-mmap` retiré de llama.cpp, semver) |
 | **0.4.5** | **La version du banc des règles** — une campagne de ~35 parcours complets sur réunions réelles transforme les leçons en code : **prompt de correction refondu (v4)** pour parler à ceux qui corrigent, **animateur validé** structurant la synthèse, **longueur ancrée sur la durée**, gardes déterministes (formes ambiguës, expansions de sigles, structure SRT, marqueurs réparés), **diff factuel annexé** à chaque rapport, watchdog à **deux capteurs** (7 faux arrêts évités mesurés), moteurs **audio.cpp/parakeet.cpp/opencode** à jour |
 | **0.4.4** | **La version des premiers retours externes** — la **première visite du portail crée le compte administrateur** (fini le mot de passe à chercher : deux vraies installations de testeurs ont trouvé deux vrais bugs, corrigés à la racine avec tests de dérive, et la gate d'installation joue désormais ce parcours réel) ; `install.sh` **propose d'installer ffmpeg** quand il manque ; **RTX 50xx (Blackwell) natif** dans les images GPU (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 requis) ; catalogue espagnol **relu par un natif** (merci @AlexMnrs, première contribution externe) |

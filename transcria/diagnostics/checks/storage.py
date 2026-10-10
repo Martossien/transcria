@@ -107,7 +107,7 @@ def expected_model_assets(cfg: dict) -> list[tuple[str, str, str]]:
         if diar == "sortformer":
             ref = str((cfg.get("sortformer") or {}).get("model_id", "nvidia/diar_streaming_sortformer_4spk-v2.1"))
             assets.append(("Diarisation Sortformer", _kind(ref), ref))
-        elif diar == "nemotron_diar":
+        elif diar in ("nemotron_diar", "auto"):
             # GGUF du runtime audio.cpp sous MODELS_DIR (chemin, jamais le cache HF) — le
             # binaire audiocpp_cli, lui, relève de la vérification des runtimes.
             ref = str((cfg.get("nemotron_diar") or {}).get("model_path") or

@@ -1323,7 +1323,9 @@ class TestSpeakerDetector:
             from transcria.jobs.store import JobStore
             from transcria.stt.diarization import DiarizerService
 
-            cfg = get_config()
+            # Backend EXPLICITE : le défaut « auto » se résout selon le disque/l'env de la
+            # machine (Nemotron présent ou non) — le test cible pyannote (DiarizerService).
+            cfg = {**get_config(), "models": {**get_config()["models"], "diarization_backend": "pyannote"}}
             job = JobStore.create_job(owner_id, "Speaker Clips")
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_json(

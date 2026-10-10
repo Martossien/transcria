@@ -41,8 +41,69 @@ DEFAULT_MODEL_FILE = "nemotron-3-diarization-bf16.gguf"
 DEFAULT_MODEL_SUBDIR = "nemotron-3-diarization"
 _SAMPLE_RATE = 16000
 _SPEAKER_ID_PREFIX = "SPEAKER_"
+# Code de sortie du chargeur dynamique quand une bibliothèque manque (« error while loading
+# shared libraries ») — le binaire n'a même pas démarré.
+_LOADER_EXIT = 127
 
 RunFn = Callable[..., Any]
+
+
+def audiocpp_cli_candidates(runtimes_dir: Path) -> tuple[Path, Path]:
+    """Emplacements du binaire, par ordre de préférence — fonction PURE.
+
+    1. ``bin/audiocpp_cli`` : le build CUDA de la phase ``audiocpp`` (GPU, serveur STT
+       inclus) ; 2. ``prebuilt/audiocpp_cli`` : l'archive CPU précompilée de l'amont
+       (``installer.cli audiocpp --prebuilt``, 55 Mo, aucune chaîne de compilation). Les
+       deux vivent dans des dossiers SÉPARÉS : le précompilé embarque ses ``libggml*.so``
+       (RUNPATH ``$ORIGIN``) — à côté d'un build CUDA, elles lui seraient chargées à la
+       place des siennes.
+    """
+    home = runtimes_dir / "audiocpp"
+    return (home / "bin" / "audiocpp_cli", home / "prebuilt" / "audiocpp_cli")
+
+
+def _executable(path: Path) -> bool:
+    return path.is_file() and os.access(path, os.X_OK)
+
+
+def find_audiocpp_cli(runtimes_dir: Path | None = None) -> Path | None:
+    """Premier ``audiocpp_cli`` exécutable (build CUDA, sinon précompilé), ou None."""
+    for candidate in audiocpp_cli_candidates(runtimes_dir or resolve_runtimes_dir()):
+        if _executable(candidate):
+            return candidate
+    return None
+
+
+def default_model_path() -> Path:
+    return resolve_models_dir() / DEFAULT_MODEL_SUBDIR / DEFAULT_MODEL_FILE
+
+
+# Marqueur posé par installer.audiocpp_phase.install_prebuilt_audiocpp à côté du binaire
+# précompilé — même valeur, dupliquée ici pour garder ce module hors de l'installeur.
+PREBUILT_MARKER = "PREBUILT"
+
+
+def cli_is_cpu_only(cli: Path) -> bool:
+    """Le binaire est-il le précompilé CPU de l'amont (marqueur ``PREBUILT`` à côté) ?
+
+    Piège vécu à la gate d'installation (2026-10-10) : l'archive CPU « portable » refuse
+    ``--backend cuda`` (« CUDA backend requested but it is not registered in this build »).
+    Le pipeline final, qui réserve un GPU, doit donc rester sur CPU avec ce binaire — et ne
+    rien réserver du tout (cf. diarizer_factory.get_diarizer_vram_mb).
+    """
+    return (cli.parent / PREBUILT_MARKER).is_file()
+
+
+def effective_cli(config: dict) -> Path:
+    """Le binaire que ``NemotronDiarizer`` utilisera pour cette config (sans l'instancier)."""
+    cfg = config.get("nemotron_diar", {}) or {}
+    return Path(str(cfg.get("cli_path") or find_audiocpp_cli()
+                    or audiocpp_cli_candidates(resolve_runtimes_dir())[0]))
+
+
+def nemotron_diar_available(config: dict) -> bool:
+    """Le backend peut-il tourner ICI (binaire exécutable ET GGUF présent) ? Aucun réseau."""
+    return NemotronDiarizer(config).available
 
 
 # ── Post-traitement PUR ────────────────────────────────────────────────────────
@@ -186,9 +247,10 @@ class NemotronDiarizer(BaseDiarizer):
     def __init__(self, config: dict, device: str = "cuda:0", *, runner: RunFn = subprocess.run):
         super().__init__(config, device)
         cfg = config.get("nemotron_diar", {}) or {}
-        self._cli = Path(str(cfg.get("cli_path") or resolve_runtimes_dir() / "audiocpp" / "bin" / "audiocpp_cli"))
-        self._model = Path(str(cfg.get("model_path")
-                               or resolve_models_dir() / DEFAULT_MODEL_SUBDIR / DEFAULT_MODEL_FILE))
+        # `cli_path` explicite > build CUDA (bin/) > précompilé CPU (prebuilt/). Sans aucun
+        # binaire, on garde le premier candidat : le message d'indisponibilité le nomme.
+        self._cli = effective_cli(config)
+        self._model = Path(str(cfg.get("model_path") or default_model_path()))
 
         def _value(key: str):
             return cfg[key] if key in cfg else default_at(f"nemotron_diar.{key}")
@@ -213,12 +275,18 @@ class NemotronDiarizer(BaseDiarizer):
         return {
             "available": False, "turns": [], "speakers": [],
             "message": (f"Détection locuteurs indisponible : {missing} introuvable "
-                        "(binaire : `python -m transcria.installer.cli audiocpp` ; modèle : page « Modèles »)."),
+                        "(binaire et modèle : page « Modèles », ou "
+                        "`python -m transcria.installer.cli nemotron-diar`)."),
         }
 
     def _backend_args(self) -> list[str]:
-        """``--backend``/``--device`` : le GPU réservé par la phase, sinon le CPU."""
+        """``--backend``/``--device`` : le GPU réservé par la phase, sinon le CPU.
+
+        Un binaire précompilé (CPU seul) reste sur CPU quoi qu'on lui réserve."""
         wants_cuda = self._backend == "cuda" or (self._backend == "auto" and self.device.startswith("cuda"))
+        if wants_cuda and cli_is_cpu_only(self._cli):
+            logger.info("Nemotron 3 : binaire précompilé CPU (%s) — backend cpu malgré %s", self._cli, self.device)
+            wants_cuda = False
         if not wants_cuda:
             return ["--backend", "cpu"]
         index = self.device.partition(":")[2]
@@ -234,19 +302,19 @@ class NemotronDiarizer(BaseDiarizer):
             return self._unavailable()
         with tempfile.TemporaryDirectory(prefix="transcria-nemotron-") as tmp:
             turns_path = Path(tmp) / "turns.json"
-            cmd = [
-                str(self._cli), "--task", "diar", "--family", _FAMILY, "--model", str(self._model),
-                *self._backend_args(), "--threads", str(self._threads),
-                "--audio", str(audio_path), "--turns-out", str(turns_path),
-            ]
-            logger.info("Nemotron 3 : %s (%s)", Path(audio_path).name, " ".join(self._backend_args()))
-            try:
-                proc = self._run(cmd, capture_output=True, text=True, timeout=self._timeout_s, check=False)
-            except subprocess.TimeoutExpired:
-                return {"available": False, "turns": [], "speakers": [],
-                        "error": f"audiocpp_cli : délai de {self._timeout_s} s dépassé"}
-            except OSError as exc:
-                return {"available": False, "turns": [], "speakers": [], "error": f"audiocpp_cli : {exc}"}
+            proc = self._invoke(self._cli, self._backend_args(), audio_path, turns_path)
+            if isinstance(proc, dict):
+                return proc
+            if getattr(proc, "returncode", 1) == _LOADER_EXIT and (fallback := self._prebuilt_fallback()) is not None:
+                # Build CUDA qui ne se CHARGE pas (libs CUDA de l'hôte changées — vécu à la gate
+                # d'installation 2026-10-10 : « error while loading shared libraries ») : le
+                # précompilé CPU, autonome, prend le relais. Signalé, jamais silencieux.
+                logger.warning("Nemotron 3 : %s ne se charge pas (code %d) — repli sur le précompilé CPU %s",
+                               self._cli, _LOADER_EXIT, fallback)
+                self._cli = fallback
+                proc = self._invoke(fallback, ["--backend", "cpu"], audio_path, turns_path)
+                if isinstance(proc, dict):
+                    return proc
             if getattr(proc, "returncode", 1) != 0 or not turns_path.is_file():
                 # audiocpp_cli écrit son diagnostic en fin de sortie (« audiocpp_cli failed: … »).
                 tail = ((getattr(proc, "stderr", "") or "") + (getattr(proc, "stdout", "") or "")).strip()[-400:]
@@ -259,6 +327,29 @@ class NemotronDiarizer(BaseDiarizer):
         if not raw:
             return {"available": True, "turns": [], "exclusive_turns": [], "speakers": [], "stats": {}}
         return build_result(raw, min_speaker_total_s=self._min_speaker_total_s, merge_gap_s=self._merge_gap_s)
+
+    def _invoke(self, cli: Path, backend_args: list[str], audio_path: Path, turns_path: Path):
+        """Un appel du binaire ; renvoie le process, ou le dict d'indisponibilité en cas d'E/S."""
+        cmd = [
+            str(cli), "--task", "diar", "--family", _FAMILY, "--model", str(self._model),
+            *backend_args, "--threads", str(self._threads),
+            "--audio", str(audio_path), "--turns-out", str(turns_path),
+        ]
+        logger.info("Nemotron 3 : %s (%s)", Path(audio_path).name, " ".join(backend_args))
+        try:
+            return self._run(cmd, capture_output=True, text=True, timeout=self._timeout_s, check=False)
+        except subprocess.TimeoutExpired:
+            return {"available": False, "turns": [], "speakers": [],
+                    "error": f"audiocpp_cli : délai de {self._timeout_s} s dépassé"}
+        except OSError as exc:
+            return {"available": False, "turns": [], "speakers": [], "error": f"audiocpp_cli : {exc}"}
+
+    def _prebuilt_fallback(self) -> Path | None:
+        """Le précompilé CPU, s'il existe et n'est pas déjà le binaire courant."""
+        prebuilt = audiocpp_cli_candidates(resolve_runtimes_dir())[1]
+        if prebuilt != self._cli and _executable(prebuilt) and cli_is_cpu_only(prebuilt):
+            return prebuilt
+        return None
 
     def _wav_for(self, fs: JobFilesystem, audio_path: Path) -> Path:
         """WAV PCM 16 kHz mono exigé par ``audiocpp_cli`` — cache de diarisation du job.

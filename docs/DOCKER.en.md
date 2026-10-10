@@ -9,12 +9,12 @@
 > - **Distributed CPU roles** (`web`, `scheduler`, `migrate`): a single lightweight image built
 >   by the root `Dockerfile` (CPU torch) and orchestrated by `docker-compose.yml` (`split` profile).
 > - **All-in-one GPU** (`all`): a **dedicated** image `Dockerfile.allinone-gpu` (CUDA 12.8 base — native sm_120/RTX 50xx,
->   **compiled llama.cpp** = embedded arbitration LLM, **NeMo/Sortformer** for non-gated
->   diarization), `gpu` profile. It delivers the **complete GPU workflow in one command, no token
+>   **compiled llama.cpp** = embedded arbitration LLM, **audio.cpp/Nemotron 3** (and NeMo/Sortformer)
+>   for non-gated diarization), `gpu` profile. It delivers the **complete GPU workflow in one command, no token
 >   required** — see "All-in-one GPU" below. **No model weights embedded** (downloaded at
 >   runtime) → the image is **publishable** (see § Publishing).
-> - **All-in-one GPU bundled** (`Dockerfile.allinone-bundled`): the same, plus **three NON-gated
->   models baked in** (whisper + Sortformer + Qwen) → zero download, offline; local build
+> - **All-in-one GPU bundled** (`Dockerfile.allinone-bundled`): the same, plus the **NON-gated
+>   models baked in** (whisper + Nemotron 3 + Sortformer + Qwen) → zero download, offline; local build
 >   ~31 GB, published by `scripts/release_bundled.sh` only — see § slim vs bundled.
 >
 > All of them ship opencode (the agent for LLM phases). On top of these come the split bench
@@ -47,7 +47,7 @@ scripts/docker_quickstart.sh --down
 ```
 
 > **Two GPU images.** `:latest` (**slim**) downloads the models on first run into the host HF
-> cache. `:bundled` (`--bundled`) **embeds** whisper + Sortformer + Voxtral + MOSS-TD (one-pass
+> cache. `:bundled` (`--bundled`) **embeds** whisper + Nemotron 3 + Sortformer + Voxtral + MOSS-TD (one-pass
 > ASR+speakers, opt-in) + the 9B LLM → no download, HF cache in a **named volume** seeded
 > from the image (eliminates the `[Errno 17] File exists` below). In both cases,
 > pyannote/Cohere remain opt-in via `HF_TOKEN` (and Kroko-ASR via the "Models" page).
@@ -114,8 +114,8 @@ only buys **reference quality**:
 
 | Need | STT | Diarization | HF token |
 |---|---|---|---|
-| **Quick test, zero friction** | `whisper` (openai/whisper-large-v3, non-gated) | `sortformer` (NVIDIA, non-gated, **≤4 speakers**, experimental) | ❌ none |
-| **Reference quality (prod)** | `cohere` (CohereLabs, **gated**) | `pyannote` (**gated**, unlimited speakers) | ✅ required |
+| **Quick test, zero friction** | `whisper` (openai/whisper-large-v3, non-gated) | `auto` → Nemotron 3 (NVIDIA, non-gated, **1 to 8 speakers**) | ❌ none |
+| **Reference quality (prod)** | `cohere` (CohereLabs, **gated**) | `auto` → Nemotron 3 ≤ 8 voices, `pyannote` (**gated**) above or for an exact count | ✅ required |
 
 The quickstart automatically picks the first row without `HF_TOKEN`, the second with it. For
 reference quality: (a) accept the terms of **BOTH** models on
@@ -313,16 +313,17 @@ curl -fsS http://localhost:7870/health     # → 200
 **What runs inside the container, on the GPU** (sequenced by the VRAM autonomy):
 
 - **STT**: `whisper` (no token) or `cohere` (with token, reference quality);
-- **Diarization**: `sortformer` (NVIDIA, no token, ≤4 speakers, experimental) or `pyannote`
-  (with token, unlimited speakers);
+- **Diarization**: `auto` = Nemotron 3 (NVIDIA, no token, 1 to 8 speakers, `audiocpp_cli`
+  binary in the image, GGUF pulled on first start into the `models` volume) and `pyannote`
+  (with token) above 8 voices or for an exact count; `sortformer` stays selectable;
 - **Arbitration LLM** (summary / correction / final review): **`llama-server` compiled in the
   image**, serving a small GGUF (`TRANSCRIA_LLM_TIER` tier, default 12 GB = Qwen3.5-9B Q5_K_M,
   **non-gated**) downloaded at runtime into the `models` volume. opencode (the agent) is included;
   its `provider.local` is pointed at `127.0.0.1:8080` at startup.
 
-→ **Without any token**, all 7 profiles work (speakers via Sortformer ≤4). A **free HF
-token** (+ the terms of both models) switches to **reference quality** (Cohere +
-pyannote, unlimited speakers). No weights are in the image (hermetic build).
+→ **Without any token**, all 7 profiles work (speakers via Nemotron 3, 1 to 8). A **free HF
+token** (+ the terms of both models) brings the **reference STT** (Cohere) and pyannote
+above 8 voices. No weights are in the image (hermetic build).
 
 > The `all` role launches the built-in Flask server: suitable for **test/demo**, not for
 > high-traffic production (prefer then the `web` gunicorn + `scheduler` split, where the
@@ -337,7 +338,7 @@ pyannote, unlimited speakers). No weights are in the image (hermetic build).
 #### `:bundled` image — embedded models (zero-download, offline)
 
 Variant of the all-in-one GPU that **embeds the non-gated default models** instead of
-downloading them at runtime: whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondary of the targeted multi-STT, **enabled by default** since 0.3.4), MOSS-Transcribe-Diarize (Apache-2.0 — opt-in "one-pass ASR+speakers" backend, weights **and** isolated Transformers 5 site baked into `/opt/transcria-moss-site`, symlinked at startup onto the config default), the
+downloading them at runtime: whisper large-v3 (MIT), Nemotron 3 Diarization (OpenMDW 1.1, "auto" default), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondary of the targeted multi-STT, **enabled by default** since 0.3.4), MOSS-Transcribe-Diarize (Apache-2.0 — opt-in "one-pass ASR+speakers" backend, weights **and** isolated Transformers 5 site baked into `/opt/transcria-moss-site`, symlinked at startup onto the config default), the
 Qwen3.5-9B Q5_K_M arbitration LLM (Apache-2.0) **and** the **SQUIM** audio qualification model
 (torchaudio, ~29 MB) — the only model the pipeline still downloaded at runtime (DNSMOS is already
 an `.onnx` versioned in the repository). Result: **no download on first run** (validated E2E).
@@ -401,7 +402,8 @@ Real footprints (zero-token path, measured):
 | **9B LLM** (12 GB tier, Q5_K_M) | **~10.6 GB** | sizing link (≥ 12 GB) |
 | **4B LLM** (8 GB tier, Q5_K_M) | **~6.4 GB** | sizing link (8-11 GB cards) |
 | Whisper large-v3 (fp16) | < 5 GB | STT |
-| Sortformer | ~3.5 GB | diarization |
+| Nemotron 3 ("auto" default) | CPU (0) or ~2 GB | diarization (1 to 8 voices) |
+| Sortformer | ~3.5 GB | diarization (if selected) |
 | pyannote (reference) | ~2 GB | diarization (with token) |
 
 → **A single ~12 GB GPU** (Turing 7.5+) is enough for the complete workflow: the 9B (heaviest

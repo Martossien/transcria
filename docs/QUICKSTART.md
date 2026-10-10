@@ -53,9 +53,9 @@ Le mode express détecte tout (GPU → palier LLM, psql → PostgreSQL, token HF
 et affiche « voilà ce que je vais faire » avant d'agir. Si PostgreSQL manque, il propose
 de l'installer (ou de le démarrer s'il est juste arrêté) — une question, jamais en douce ;
 refuser laisse SQLite, parfait en mono-utilisateur ; `./install.sh --expert` redonne
-le pas-à-pas question par question. Sans token HF, l'install choisit **whisper +
-Sortformer** (aucun compte requis) — la qualité de référence (Cohere + pyannote) s'active
-plus tard depuis **Administration → Modèles** avec un token.
+le pas-à-pas question par question. Sans token HF, l'install choisit **whisper** et la
+diarisation **« auto »** (Nemotron 3 de 1 à 8 voix, aucun compte requis) — le STT de
+référence Cohere s'active plus tard depuis **Administration → Modèles** avec un token.
 
 Après connexion, la **checklist de premier démarrage** sur l'accueil signale ce qui
 manque (modèles absents, GPU non vu…) avec un lien pour corriger, et disparaît quand

@@ -19,7 +19,10 @@ runtimes servis sont **additifs, jamais une dépendance dure**.
 
 ```bash
 # audio.cpp : clone épinglé + build CUDA + venv outils (+ modèle recommandé qwen3)
-venv/bin/python -m transcria.installer.cli audiocpp --with-model
+venv/bin/python -m transcria.installer.cli audiocpp --with-model   # build CUDA (serveur + CLI)
+# Diarisation Nemotron 3 seule (audiocpp_cli, sans serveur) : pas besoin de ce build —
+#   `installer.cli nemotron-diar` (défaut d'install.sh) pose le PRÉCOMPILÉ CPU de la même
+#   release sous runtimes/audiocpp/prebuilt/ ; un build CUDA présent dans bin/ est préféré.
 # GGUF Voxtral (facultatif, backend voxtralrt) via le model_manager V2 d'audio.cpp
 # (spec v1 depuis release-0.5.1 — l'historique model_manager.py est déprécié) :
 #   runtimes/audiocpp/venv/bin/python runtimes/audiocpp/src/tools/model_manager_v2.py \

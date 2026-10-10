@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -38,6 +39,15 @@ from typing import Protocol
 # préfère le GGUF s'il existe, sinon retombe sur le répertoire HF).
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
 AUDIOCPP_PINNED_COMMIT = "795c45fbde0a7d29c93b22199728ff5caaec02e5"
+# Archive PRÉCOMPILÉE de la même release (tag du commit épinglé) : `audiocpp_cli` CPU
+# « portable » (libggml par génération de processeur, RUNPATH $ORIGIN), 55 Mo, aucune
+# chaîne de compilation. C'est la voie par défaut de la diarisation Nemotron 3 (0.4.7) :
+# vérifié sur la machine de dev = 31 tours IDENTIQUES au build CUDA local, 73 s d'audio
+# en 2 s. Monter de version = nouveau tag + nouveau sha256 (toujours vérifié avant
+# extraction — binaire tiers). L'archive CUDA de l'amont ne contient que le serveur.
+AUDIOCPP_PREBUILT_TAG = "v0.9.0"
+AUDIOCPP_PREBUILT_SHA256 = "cf87b6baa46cf45fc8a2816b8f04f0f3f3fce32cca297231a4da56543f19fe87"
+AUDIOCPP_PREBUILT_MARKER = "PREBUILT"
 # Modèle recommandé (Apache-2.0) — id du paquet dans LEUR model_manager_v2 (spec v1).
 AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_q8_0"
 AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-GGUF"
@@ -76,6 +86,125 @@ def audiocpp_home(runtimes_dir: Path) -> Path:
 # Binaires livrés : le serveur (moteurs STT servis) et le CLI (diarisation Nemotron 3,
 # lancée en sous-process par transcria/stt/nemotron_diarizer.py — aucun port).
 AUDIOCPP_BINARIES = ("audiocpp_server", "audiocpp_cli")
+
+
+def prebuilt_asset_name(tag: str = AUDIOCPP_PREBUILT_TAG) -> str:
+    """Nom de l'archive Linux CPU portable d'une release audio.cpp (convention amont)."""
+    return f"audio-{tag}-bin-ubuntu-x64-cpu-portable.tar.gz"
+
+
+def prebuilt_asset_url(tag: str = AUDIOCPP_PREBUILT_TAG) -> str:
+    return f"{AUDIOCPP_REPO}/releases/download/{tag}/{prebuilt_asset_name(tag)}"
+
+
+def prebuilt_home(runtimes_dir: Path) -> Path:
+    """Dossier du précompilé — SÉPARÉ de ``bin/`` (build CUDA), cf. nemotron_diarizer."""
+    return audiocpp_home(runtimes_dir) / "prebuilt"
+
+
+def select_prebuilt_members(names: list[str]) -> list[str]:
+    """Membres de l'archive à extraire — PUR : ``audiocpp_cli`` et ses ``libggml*.so*``.
+
+    Tout le reste (serveur, outils Python, sources) est ignoré ; un membre hors racine
+    (sous-dossier, ``..``) n'est jamais retenu : l'extraction reste à plat.
+    """
+    kept: list[str] = []
+    for name in names:
+        base = name[2:] if name.startswith("./") else name
+        if "/" in base or base in ("", ".", ".."):
+            continue
+        if base == "audiocpp_cli" or (base.startswith("libggml") and ".so" in base):
+            kept.append(name)
+    return kept
+
+
+def prebuilt_is_complete(home: Path, tag: str = AUDIOCPP_PREBUILT_TAG) -> bool:
+    cli = home / "audiocpp_cli"
+    marker = home / AUDIOCPP_PREBUILT_MARKER
+    return (cli.is_file() and os.access(cli, os.X_OK) and marker.is_file()
+            and marker.read_text(encoding="utf-8").strip() == tag)
+
+
+def sha256_of_file(path: Path, *, chunk: int = 1 << 20) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _urlretrieve(url: str, dest: Path) -> None:
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=60) as resp, open(dest, "wb") as out:  # noqa: S310 — URL de release GitHub
+        shutil.copyfileobj(resp, out)
+
+
+def install_prebuilt_audiocpp(
+    *,
+    runtimes_dir: Path,
+    console,
+    fetch: Callable[[str, Path], None] = _urlretrieve,
+    tag: str = AUDIOCPP_PREBUILT_TAG,
+    expected_sha256: str = AUDIOCPP_PREBUILT_SHA256,
+    force: bool = False,
+) -> Path:
+    """Télécharge, VÉRIFIE (sha256) et pose ``audiocpp_cli`` précompilé sous ``prebuilt/``.
+
+    Idempotent (marqueur ``PREBUILT`` = tag). ``fetch(url, dest)`` est injectable (tests
+    sans réseau). Refuse toute archive dont l'empreinte diffère : binaire tiers.
+    Retourne le chemin du binaire.
+    """
+    import tarfile
+    import tempfile
+
+    home = prebuilt_home(runtimes_dir.expanduser().resolve())
+    if not force and prebuilt_is_complete(home, tag):
+        console.ok(f"audio.cpp précompilé déjà en place : {home} ({tag})")
+        return home / "audiocpp_cli"
+    if not expected_sha256.strip():
+        raise AudiocppPhaseError("refus : archive précompilée sans sha256 à vérifier")
+
+    url = prebuilt_asset_url(tag)
+    console.info(f"Téléchargement de {prebuilt_asset_name(tag)} (~55 Mo)…")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / prebuilt_asset_name(tag)
+        try:
+            fetch(url, archive)
+        except Exception as exc:  # noqa: BLE001 — remonté en erreur typée, lisible par l'installeur
+            raise AudiocppPhaseError(f"téléchargement de {url} échoué : {exc}") from exc
+        actual = sha256_of_file(archive)
+        if actual.lower() != expected_sha256.strip().lower():
+            raise AudiocppPhaseError(
+                f"sha256 INVALIDE pour {archive.name} (attendu {expected_sha256[:12]}…, "
+                f"obtenu {actual[:12]}…) — archive rejetée")
+        if home.exists():
+            shutil.rmtree(home)
+        home.mkdir(parents=True)
+        with tarfile.open(archive, "r:gz") as tf:
+            wanted = set(select_prebuilt_members([m.name for m in tf.getmembers()]))
+            for member in tf.getmembers():
+                if member.name not in wanted or not (member.isfile() or member.issym()):
+                    continue
+                base = member.name[2:] if member.name.startswith("./") else member.name
+                if member.issym():
+                    # Liens entre versions de libggml (so → so.0 → so.0.12.0) : recréés à plat.
+                    (home / base).symlink_to(os.path.basename(member.linkname))
+                    continue
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    continue
+                with open(home / base, "wb") as out:
+                    shutil.copyfileobj(extracted, out)
+    cli = home / "audiocpp_cli"
+    if not cli.is_file():
+        raise AudiocppPhaseError(f"audiocpp_cli absent de l'archive {prebuilt_asset_name(tag)}")
+    cli.chmod(cli.stat().st_mode | 0o755)
+    (home / AUDIOCPP_PREBUILT_MARKER).write_text(tag + "\n", encoding="utf-8")
+    console.ok(f"audio.cpp précompilé prêt : {cli} ({tag}, CPU)")
+    return cli
 
 
 def audiocpp_is_complete(home: Path, commit: str) -> bool:

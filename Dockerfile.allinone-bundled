@@ -66,6 +66,12 @@ from huggingface_hub import snapshot_download, hf_hub_download
 # STT (MIT) et diarisation (NVIDIA Open Model License) → cache HF baké (HF_HOME=/baked/hf).
 snapshot_download("Systran/faster-whisper-large-v3")
 snapshot_download("nvidia/diar_streaming_sortformer_4spk-v2.1")
+# Diarisation « auto » (défaut 0.4.7) : Nemotron 3 (OpenMDW 1.1, ~199 Mo) au chemin par
+# défaut du diariseur (<MODELS_DIR>/nemotron-3-diarization) — le binaire audiocpp_cli est
+# baké dans /opt/runtimes par l'étage stt-runtimes-builder. Sortformer reste baké (choix
+# explicite possible). Attribution : licenses/NOTICE.md §3 bis + OpenMDW-1.1.txt.
+hf_hub_download("audio-cpp/Nemotron-3-Diarization-GGUF", "nemotron-3-diarization-bf16.gguf",
+                local_dir="/baked/models/nemotron-3-diarization")
 # STT secondaire du multi-STT ciblé (0.3.4) : Voxtral Mini 3B (Apache-2.0, non gated, ~9,3 Go).
 # Le VoxtralTranscriber replie sur cet identifiant HF (cache) quand son chemin local est absent.
 snapshot_download("mistralai/Voxtral-Mini-3B-2507")

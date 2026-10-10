@@ -56,11 +56,14 @@ Three express-specific decisions:
   (neither root nor sudo) or non-interactive mode all keep SQLite. The verdict then comes
   from **re-probing** (`psql` + `pg_isready`), never from the package manager's exit code.
 
-- **Without an HF token on a fresh config**, the backends switch to the non-gated duo
-  picked for your hardware: **whisper + Sortformer** with a ≥ 12 GB GPU; **Kroko (CPU
-  STT) + Sortformer** below 12 GB (the whole GPU stays with the tier-8 LLM); Kroko +
-  Sortformer both on CPU without a GPU. The reference-quality **Cohere + pyannote**
-  stack stays one click away in *Administration → Models* once you have a token.
+- **Without an HF token on a fresh config**, the STT switches to the non-gated engine
+  picked for your hardware: **whisper** with a ≥ 12 GB GPU; **Kroko (CPU STT)** below
+  12 GB (the whole GPU stays with the tier-8 LLM) and without a GPU. Diarization is
+  **"auto"** in every case (default since 0.4.7): Nemotron 3 for 1 to 8 voices, non-gated,
+  on CPU right at upload — `install.sh` installs its prebuilt binary (55 MB) and weights
+  (199 MB) (`--no-nemotron-diar` to skip); pyannote only steps in above 8 voices or for an
+  exact count. The reference-quality **Cohere** STT stays one click away in
+  *Administration → Models* once you have a token.
 - **No admin password is asked during install**: on the portal's **first visit**, a
   page asks you to create the administrator account (username + password of your
   choice) — the final summary reminds you.
@@ -126,8 +129,9 @@ database), each item with a link to fix it.
 Everything can be driven from *Administration → Models* in the UI (download LLM/STT/
 diarization from a config-driven catalog, with disk-space checks and progress).
 
-- **Non-gated default** (no token): whisper (STT) + Sortformer (diarization, NVIDIA,
-  ≤ 4 speakers) + a Qwen GGUF for the LLM tier — this is what express installs.
+- **Non-gated default** (no token): whisper (STT) + "auto" diarization (Nemotron 3,
+  NVIDIA, 1 to 8 speakers; pyannote above) + a Qwen GGUF for the LLM tier — this is
+  what express installs.
 - **Reference quality** (recommended): Cohere ASR + pyannote diarization (unlimited
   speakers). Both are **gated**: set `HF_TOKEN` and accept both models' terms on
   huggingface.co, then switch backends from the Models page.

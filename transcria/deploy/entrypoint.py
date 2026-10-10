@@ -416,6 +416,56 @@ def provision_arbitrage_model(
     return False
 
 
+def provision_diarization_model(
+    plan: EntrypointPlan,
+    env: dict[str, str],
+    *,
+    downloader: ModelDownloader = _default_model_downloader,
+) -> bool:
+    """Garantit le GGUF de diarisation Nemotron 3 quand la config le retient (`auto`/`nemotron_diar`).
+
+    L'image GPU slim bake le binaire `audiocpp_cli` (/opt/runtimes) mais aucun poids ; la
+    bundled bake aussi ce GGUF (199 Mo, OpenMDW 1.1). Sans lui, « auto » retomberait sur
+    pyannote (gated) en silence — on le tire une fois dans `MODELS_DIR` (volume persistant),
+    au même chemin que la page « Modèles ». Rôles qui diarisent : `all` et `scheduler`.
+    Best-effort : jamais bloquant, False = absent (le doctor et la page Modèles le disent).
+    """
+    if plan.role not in ("all", "scheduler"):
+        return True
+    try:
+        # Différés §8.3(c) : point d'entrée best-effort — l'ImportError est un cas géré.
+        from transcria.config import load_config
+        from transcria.installer import nemotron_diar_phase as ndp
+    except Exception as exc:  # noqa: BLE001 — provisioning best-effort
+        print(f"[WARN] provisioning diarisation ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+        return False
+
+    models = (load_config().get("models") or {})
+    backend = str(models.get("diarization_backend") or "pyannote").strip().lower()
+    if backend not in ("auto", "nemotron_diar"):
+        return True
+    dest_dir = Path(env.get("MODELS_DIR", "/app/models")) / ndp.NEMOTRON_DIAR_MODEL_SUBDIR
+    target = dest_dir / ndp.NEMOTRON_DIAR_MODEL_FILE
+    if target.is_file():
+        print(f"[INFO] modèle de diarisation Nemotron 3 déjà présent : {target}", file=sys.stderr, flush=True)
+        return True
+    print(f"[INFO] téléchargement du modèle de diarisation Nemotron 3 → {dest_dir} "
+          f"(une fois ; {ndp.NEMOTRON_DIAR_REPO}, ~199 Mo, non gated)…", file=sys.stderr, flush=True)
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        downloader(ndp.NEMOTRON_DIAR_REPO, ndp.NEMOTRON_DIAR_MODEL_FILE, str(dest_dir))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] téléchargement du modèle de diarisation échoué ({type(exc).__name__}: {exc}) — "
+              "la diarisation « auto » utilisera pyannote (token HF requis) tant qu'il est absent.",
+              file=sys.stderr, flush=True)
+        return False
+    if target.is_file():
+        print(f"[INFO] modèle de diarisation prêt : {target}", file=sys.stderr, flush=True)
+        return True
+    print(f"[WARN] modèle de diarisation introuvable après téléchargement : {target}", file=sys.stderr, flush=True)
+    return False
+
+
 def _plan_from_env(role: str, env: dict[str, str]) -> EntrypointPlan:
     config_path = Path(env.get("TRANSCRIA_CONFIG", "/app/config.yaml"))
     return EntrypointPlan(
@@ -441,6 +491,7 @@ def main(
     sleep_fn: Callable[[float], None] = time.sleep,
     opencode_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_opencode,
     model_provisioner: Callable[[EntrypointPlan, dict[str, str]], bool] = provision_arbitrage_model,
+    diarization_provisioner: Callable[[EntrypointPlan, dict[str, str]], bool] = provision_diarization_model,
     translations_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_translations,
 ) -> int:
     env = dict(os.environ if env is None else env)
@@ -474,7 +525,9 @@ def main(
     # Pré-téléchargement seul : on ne touche ni la base ni le serveur (le gros GGUF est tiré
     # par le quickstart AVANT `up`, pour un démarrage rapide et une progression visible).
     if args.provision_only:
-        return 0 if model_provisioner(plan, env) else 1
+        ok = model_provisioner(plan, env)
+        diarization_provisioner(plan, env)   # 199 Mo, best-effort : n'altère pas le verdict LLM
+        return 0 if ok else 1
 
     if needs_database(plan.role) and not args.no_wait_db:
         print(f"[INFO] Attente de la base PostgreSQL (rôle {plan.role})…", file=sys.stderr, flush=True)
@@ -495,6 +548,8 @@ def main(
     # Provisionne le modèle d'arbitrage (rôle all : télécharge le GGUF si absent, résout le
     # script de palier). Best-effort — la valeur de retour n'interrompt pas le démarrage.
     model_provisioner(plan, env)
+    # GGUF de diarisation Nemotron 3 (config auto/nemotron_diar) — même logique, best-effort.
+    diarization_provisioner(plan, env)
 
     cmd = build_role_command(plan)
     print(f"[INFO] Démarrage du rôle {plan.role} : {' '.join(cmd)}", file=sys.stderr, flush=True)

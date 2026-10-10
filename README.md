@@ -35,7 +35,7 @@ Pick the language from the navbar; default French, French fallback everywhere. S
 
 ## Project status
 
-**Current release: 0.4.6** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.4.7** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -47,6 +47,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.4.7** | **The speaker-detection-by-default release** — `auto` diarization: **Nemotron 3** for 1 to 8 speakers (no token, seconds, on CPU right at upload — no more waiting for VRAM when a file is uploaded), pyannote above 8 or for an exact count; prebuilt audio.cpp binary (55 MB, sha256-verified, nothing to compile) installed by default; existing installs are **offered** the switch (Models page, home checklist, doctor) and never switched silently; Qwen 3.8-27B validated on Ollama and vLLM too |
 | **0.4.6** | **The engines-up-to-date release** — audio.cpp v0.9.0, parakeet.cpp, llama.cpp v0.5.0 and opencode brought to upstream; **Qwen 3.8-27B** on the 32 GB tier (`medium` reasoning effort, E2E 17/17); **Nemotron 3 diarization**: 8 speakers, no token, GPU or CPU (7 exact speakers on a 1h52 meeting in 15 s); **opencode v1 and v2** both recognized, your own opencode is never overwritten; upstream traps absorbed (`--no-mmap` removed from llama.cpp, semver) |
 | **0.4.5** | **The rules-bench release** — a campaign of ~35 full runs on real meetings turned lessons into code: **correction prompt rebuilt (v4)** to speak to the agents that actually correct, **human-validated facilitator** structuring the summary, **length anchored to duration**, deterministic guards (ambiguous forms, acronym expansions, SRT structure, repaired markers), a **factual diff appended** to every correction report, a **two-sensor watchdog** (7 false kills avoided, measured), **audio.cpp/parakeet.cpp/opencode** brought up to date |
 | **0.4.4** | **The first-external-feedback release** — the **portal's first visit now creates the admin account** (no more password hunting: two real tester installs surfaced two real bugs, fixed at the root with drift tests, and the install gate now plays this exact journey); `install.sh` **offers to install ffmpeg** when missing; **native RTX 50xx (Blackwell)** in the GPU images (CUDA 12.8 + torch cu130, sm_120 — driver ≥ 580 required); the Spanish catalog got a **native-speaker review** (thanks @AlexMnrs, first external contribution) |
@@ -206,7 +207,9 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
   professional human transcript — WER, an English-drift detector, a multi-run LLM judge
   and human reading of the failure modes:
   [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (English).
-- **Diarization backends**: pyannote.audio (default) or NVIDIA Sortformer via NeMo.
+- **Diarization backends**: "auto" (default) = NVIDIA Nemotron 3 via audio.cpp for 1 to 8
+  speakers (no token, seconds, CPU at upload) with pyannote.audio above 8 or for an exact
+  count; pyannote, Sortformer (NeMo) and Nemotron 3 also selectable explicitly.
 - **Arbitration LLM**: a local OpenAI-compatible server (Ollama / llama.cpp / vLLM),
   selected per hardware from a benchmarked VRAM tier catalog (12 → 64 GB, one validated
   model + quant + context per tier) — see [docs/LLM_TIERS.md](docs/LLM_TIERS.md) (English).
@@ -339,7 +342,7 @@ We keep this list honest and current.
 |---|---|---|
 | Meeting length | Tested to about 4h30 (~3,000 segments) | Editor and pipeline stay responsive; beyond that is not guaranteed |
 | Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
-| Speakers (Sortformer diarization) | Up to 4 | Use pyannote (gated) for more |
+| Speakers (default "auto" diarization) | Up to 8 without a token (Nemotron 3) | pyannote (gated) takes over above 8 or for an exact count |
 | Interface language | French / English + German / Spanish / Italian (beta) | UI, deliverables and prompts localized; de/es/it are machine-translated with enforced glossaries, flagged **beta** until a native speaker reviews them — [native reviews welcome](https://github.com/Martossien/transcria/discussions) |
 | Below 8 GB VRAM | No summary/correction LLM | Falls back to raw transcription (8-11 GB cards get the 4B tier automatically) |
 | Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
@@ -351,7 +354,7 @@ We keep this list honest and current.
 - PostgreSQL in production (SQLite is supported for development and tests).
 - Reference quality uses gated models — Cohere STT and pyannote — which require a Hugging
   Face token and accepting each model's conditions. Without a token, TranscrIA still runs
-  the full workflow using non-gated engines (Whisper, NVIDIA Sortformer, a small
+  the full workflow using non-gated engines (Whisper, NVIDIA Nemotron 3 diarization, a small
   non-gated arbitration LLM).
 
 ## Tech stack
@@ -360,7 +363,7 @@ We keep this list honest and current.
 |---|---|
 | Backend | Python 3.11+, Flask 3, SQLAlchemy + Alembic (PostgreSQL in production, SQLite for dev) |
 | STT serving | vLLM / SGLang / any OpenAI-compatible server; local engines |
-| Diarization and voice | pyannote.audio, NVIDIA NeMo (Sortformer), local voice embeddings |
+| Diarization and voice | NVIDIA Nemotron 3 (audio.cpp), pyannote.audio, NVIDIA NeMo (Sortformer), local voice embeddings |
 | LLM phases | [opencode](https://github.com/sst/opencode) driving a local OpenAI-compatible LLM — selectable backend (Ollama / llama.cpp / vLLM), chosen per hardware from a benchmarked VRAM tier catalog ([docs/LLM_TIERS.md](docs/LLM_TIERS.md), English) |
 | Audio | ffmpeg/ffprobe, Demucs, Silero VAD, SQUIM / DNSMOS quality metrics |
 | Frontend | Server-rendered Jinja2 + Bootstrap 5, vanilla JS |

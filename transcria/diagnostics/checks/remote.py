@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from pathlib import Path
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 from transcria.diagnostics.checks.probes import (
@@ -24,12 +25,15 @@ from transcria.installer.audiocpp_phase import (
     audiocpp_is_complete,
     resolve_runtimes_dir,
 )
+from transcria.installer.nemotron_diar_phase import _cli_loads
 from transcria.installer.parakeetcpp_phase import (
     PARAKEETCPP_PINNED_COMMIT,
     parakeetcpp_home,
     parakeetcpp_is_complete,
 )
-from transcria.stt.nemotron_diarizer import NemotronDiarizer
+from transcria.models_catalog import diarization_auto_recommendation
+from transcria.stt.diarizer_factory import DIARIZATION_AUTO, configured_diarization_backend
+from transcria.stt.nemotron_diarizer import NEMOTRON_MAX_SPEAKERS, NemotronDiarizer, cli_is_cpu_only
 
 
 def check_inference_nodes(
@@ -147,15 +151,17 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
         )
     return CheckResult(name, OK, _t("served_rt_ok", engines=", ".join(concerned)))
 
-def check_nemotron_diar_runtime(cfg: dict) -> CheckResult:
-    """Diarisation `nemotron_diar` : le binaire `audiocpp_cli` ET le GGUF doivent être là.
+def check_nemotron_diar_runtime(cfg: dict, *, cli_loads: Callable[[Path], bool] | None = None) -> CheckResult:
+    """Diarisation Nemotron 3 (`auto` ou `nemotron_diar`) : binaire `audiocpp_cli` ET GGUF.
 
     Le backend tourne en sous-process : rien ne le réserve ni ne le lance avant le premier
-    job — sans cette vérification, l'absence se découvre à la première diarisation (job en
-    `available=False`). Hors backend `nemotron_diar` : non concerné."""
+    job — sans cette vérification, l'absence se découvre à la première diarisation. En
+    `auto`, une pièce manquante n'est pas un échec mais un REPLI silencieux sur pyannote
+    (gated, plusieurs minutes de GPU) : c'est précisément ce que le doctor doit nommer.
+    Hors de ces deux backends : non concerné."""
     name = _t("chk_nemotron_diar")
-    backend = str((cfg.get("models", {}) or {}).get("diarization_backend", "pyannote")).strip().lower()
-    if backend != "nemotron_diar":
+    backend = configured_diarization_backend(cfg)
+    if backend not in ("nemotron_diar", DIARIZATION_AUTO):
         return CheckResult(name, OK, _t("nd_not_configured"))
     diarizer = NemotronDiarizer(cfg)
     missing: list[str] = []
@@ -165,8 +171,36 @@ def check_nemotron_diar_runtime(cfg: dict) -> CheckResult:
     if not diarizer._model.is_file():
         missing.append(f"GGUF ({diarizer._model})")
     if missing:
-        return CheckResult(name, WARN, _t("nd_missing", items="; ".join(missing)), hint=_t("nd_hint"))
-    return CheckResult(name, OK, _t("nd_ok", cli=str(cli), model=diarizer._model.name))
+        key = "nd_missing_auto" if backend == DIARIZATION_AUTO else "nd_missing"
+        return CheckResult(name, WARN, _t(key, items="; ".join(missing)), hint=_t("nd_hint"))
+    if not (cli_loads or _cli_loads)(cli):
+        # Trouvé mais ne démarre pas (lib CUDA absente après une mise à jour de l'hôte…) :
+        # nommé ici plutôt que découvert à la première diarisation.
+        return CheckResult(name, WARN, _t("nd_not_loading", cli=str(cli)), hint=_t("nd_hint"))
+    where = f"{cli} ({_t('nd_cpu_only')})" if cli_is_cpu_only(cli) else str(cli)
+    if backend == DIARIZATION_AUTO:
+        return CheckResult(name, OK, _t("nd_ok_auto", cli=where, model=diarizer._model.name,
+                                        n=NEMOTRON_MAX_SPEAKERS))
+    return CheckResult(name, OK, _t("nd_ok", cli=where, model=diarizer._model.name))
+
+
+def check_diarization_auto_suggestion(cfg: dict) -> CheckResult:
+    """Mise à niveau : une config antérieure à 0.4.7 garde `pyannote`/`sortformer` en clair.
+
+    Rien n'y change tout seul (c'est voulu) ; on le DIT, avec la commande et la page qui
+    l'appliquent, jusqu'à ce que l'admin active `auto` ou l'écarte
+    (`models.diarization_suggest_auto: false`). Même source que la page Modèles et le
+    bilan d'accueil (`models_catalog.diarization_auto_recommendation`)."""
+    name = _t("chk_diar_suggestion")
+    reco = diarization_auto_recommendation(cfg)
+    if reco is None:
+        return CheckResult(name, OK, _t("ds_none"))
+    ready = reco["runtime_present"] and reco["model_present"]
+    return CheckResult(
+        name, WARN,
+        _t("ds_ready" if ready else "ds_missing", backend=reco["configured"]),
+        hint=_t("ds_hint_ready" if ready else "ds_hint_missing"),
+    )
 
 
 def _caps_reports_gpu(capabilities: dict) -> bool:

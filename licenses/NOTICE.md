@@ -68,6 +68,22 @@ L'usage de ce modèle doit rester conforme aux *Trustworthy AI terms* de NVIDIA
 
 ---
 
+## 3 bis. Diarisation par défaut (« auto ») — NVIDIA Nemotron 3 Diarization
+
+- **Dépôt** : `nvidia/Nemotron-3-Diarization` (poids d'origine) ; fichier embarqué :
+  `nemotron-3-diarization-bf16.gguf` depuis `audio-cpp/Nemotron-3-Diarization-GGUF`
+  (conversion GGUF pour le runtime audio.cpp, même licence)
+- **Licence** : **OpenMDW License Agreement, version 1.1** (Linux Foundation) — permissive ;
+  texte intégral : `OpenMDW-1.1.txt` (ce répertoire), joint conformément à sa clause de
+  redistribution (« retain … a copy of this agreement, and all copyright notices and other
+  notices of origin »).
+- **Notice d'origine** : © NVIDIA Corporation. Modèle non modifié ; seul le format de stockage
+  (GGUF bf16) diffère des poids d'origine.
+- **Runtime** : `audiocpp_cli` (audio.cpp, © ShugoAI LLC, Apache-2.0), binaire compilé dans
+  l'image (`/opt/runtimes/audiocpp/bin`).
+
+---
+
 ## Composants logiciels (rappel)
 
 - TranscrIA : Apache-2.0 (`/app/LICENSE`) — llama.cpp : MIT — NeMo : Apache-2.0 —

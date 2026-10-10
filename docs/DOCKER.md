@@ -10,12 +10,12 @@
 > - **Rôles CPU distribués** (`web`, `scheduler`, `migrate`) : une seule image légère construite
 >   par le `Dockerfile` racine (torch CPU) et orchestrée par `docker-compose.yml` (profil `split`).
 > - **All-in-one GPU** (`all`) : image **dédiée** `Dockerfile.allinone-gpu` (base CUDA 12.8 — sm_120/RTX 50xx natif,
->   **llama.cpp compilé** = LLM d'arbitrage embarquée, **NeMo/Sortformer** pour la diarisation
->   non gated), profil `gpu`. Elle livre le **workflow complet GPU en une commande, sans token**
+>   **llama.cpp compilé** = LLM d'arbitrage embarquée, **audio.cpp/Nemotron 3** (et NeMo/Sortformer)
+>   pour la diarisation non gated), profil `gpu`. Elle livre le **workflow complet GPU en une commande, sans token**
 >   — voir « All-in-one GPU » ci-dessous. **Aucun poids de modèle embarqué** (téléchargés au
 >   runtime) → image **publiable** (cf. § Publication).
-> - **All-in-one GPU bundled** (`Dockerfile.allinone-bundled`) : la même, plus **trois modèles
->   NON gated bakés** (whisper + Sortformer + Qwen) → zéro téléchargement, hors-ligne ; build
+> - **All-in-one GPU bundled** (`Dockerfile.allinone-bundled`) : la même, plus les **modèles
+>   NON gated bakés** (whisper + Nemotron 3 + Sortformer + Qwen) → zéro téléchargement, hors-ligne ; build
 >   local ~31 Go, publiée par `scripts/release_bundled.sh` uniquement — voir § slim vs bundled.
 >
 > Toutes embarquent opencode (agent des phases LLM). S'y ajoutent les images d'infrastructure
@@ -48,7 +48,7 @@ scripts/docker_quickstart.sh --down
 ```
 
 > **Deux images GPU.** `:latest` (**slim**) télécharge les modèles au 1ᵉ run dans le cache HF
-> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + Voxtral + MOSS-TD (une passe
+> hôte. `:bundled` (`--bundled`) **embarque** whisper + Nemotron 3 + Sortformer + Voxtral + MOSS-TD (une passe
 > ASR+locuteurs, opt-in) + la LLM 9B → aucun téléchargement, cache HF en **volume nommé** seedé
 > depuis l'image (élimine le `[Errno 17] File exists` ci-dessous). Dans les deux cas,
 > pyannote/Cohere restent en opt-in `HF_TOKEN` (et Kroko-ASR via la page « Modèles »).
@@ -115,8 +115,8 @@ ne sert qu'à la **qualité de référence** :
 
 | Besoin | STT | Diarisation | Token HF |
 |---|---|---|---|
-| **Test rapide, zéro friction** | `whisper` (openai/whisper-large-v3, non gated) | `sortformer` (NVIDIA, non gated, **≤4 locuteurs**, expérimental) | ❌ aucun |
-| **Qualité de référence (prod)** | `cohere` (CohereLabs, **gated**) | `pyannote` (**gated**, locuteurs illimités) | ✅ requis |
+| **Test rapide, zéro friction** | `whisper` (openai/whisper-large-v3, non gated) | `auto` → Nemotron 3 (NVIDIA, non gated, **1 à 8 locuteurs**) | ❌ aucun |
+| **Qualité de référence (prod)** | `cohere` (CohereLabs, **gated**) | `auto` → Nemotron 3 ≤ 8 voix, `pyannote` (**gated**) au-delà ou comptage exact | ✅ requis |
 
 Le quickstart choisit automatiquement la 1re ligne sans `HF_TOKEN`, la 2e avec. Pour la qualité
 de référence : (a) accepter les conditions des **DEUX** modèles sur
@@ -314,16 +314,18 @@ curl -fsS http://localhost:7870/health     # → 200
 **Ce qui tourne dans le conteneur, sur le GPU** (séquencé par l'autonomie VRAM) :
 
 - **STT** : `whisper` (sans token) ou `cohere` (avec token, qualité de référence) ;
-- **Diarisation** : `sortformer` (NVIDIA, sans token, ≤4 locuteurs, expérimental) ou `pyannote`
-  (avec token, locuteurs illimités) ;
+- **Diarisation** : `auto` = Nemotron 3 (NVIDIA, sans token, 1 à 8 locuteurs, binaire
+  `audiocpp_cli` de l'image, GGUF tiré au premier démarrage dans le volume `models`) et
+  `pyannote` (avec token) au-delà de 8 voix ou pour un comptage exact ; `sortformer` reste
+  sélectionnable ;
 - **LLM d'arbitrage** (résumé / correction / relecture) : **`llama-server` compilé dans l'image**,
   servant un petit GGUF (palier `TRANSCRIA_LLM_TIER`, défaut 12 Go = Qwen3.5-9B Q5_K_M, **non
   gated**) téléchargé au runtime dans le volume `models`. opencode (agent) est inclus ; son
   `provider.local` est pointé sur `127.0.0.1:8080` au démarrage.
 
-→ **Sans aucun token**, les 7 profils fonctionnent (locuteurs via Sortformer ≤4). Un **token HF
-gratuit** (+ conditions des deux modèles) bascule sur la **qualité de référence** (Cohere +
-pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétique).
+→ **Sans aucun token**, les 7 profils fonctionnent (locuteurs via Nemotron 3, 1 à 8). Un **token HF
+gratuit** (+ conditions des deux modèles) apporte le **STT de référence** (Cohere) et pyannote
+au-delà de 8 voix. Aucun poids n'est dans l'image (build hermétique).
 
 > Le rôle `all` lance le serveur Flask intégré : adapté au **test/démo**, pas à une production à
 > fort trafic (préférer alors le split `web` gunicorn + `scheduler`, où la LLM d'arbitrage reste
@@ -338,7 +340,7 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 #### Image `:bundled` — modèles embarqués (zéro-download, hors-ligne)
 
 Variante de l'all-in-one GPU qui **embarque les modèles par défaut non gated** au lieu de les
-télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, **activé par défaut** depuis 0.3.4), MOSS-Transcribe-Diarize (Apache-2.0 — backend opt-in « une passe ASR+locuteurs », poids **et** site Transformers 5 isolé bakés dans `/opt/transcria-moss-site`, symlinké au démarrage sur le défaut de config), la
+télécharger au runtime : whisper large-v3 (MIT), Nemotron 3 Diarization (OpenMDW 1.1, défaut « auto »), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, **activé par défaut** depuis 0.3.4), MOSS-Transcribe-Diarize (Apache-2.0 — backend opt-in « une passe ASR+locuteurs », poids **et** site Transformers 5 isolé bakés dans `/opt/transcria-moss-site`, symlinké au démarrage sur le défaut de config), la
 LLM d'arbitrage Qwen3.5-9B Q5_K_M (Apache-2.0) **et** le modèle de qualification audio **SQUIM**
 (torchaudio, ~29 Mo) — seul modèle que le pipeline téléchargeait encore au runtime (DNSMOS est déjà
 un `.onnx` versionné dans le dépôt). Résultat : **aucun téléchargement au 1ᵉ run** (validé E2E).
@@ -402,7 +404,8 @@ Empreintes réelles (chemin zéro-token mesuré) :
 | **LLM 9B** (palier 12 Go, Q5_K_M) | **~10,6 Go** | maillon dimensionnant (≥ 12 Go) |
 | **LLM 4B** (palier 8 Go, Q5_K_M) | **~6,4 Go** | maillon dimensionnant (cartes 8-11 Go) |
 | Whisper large-v3 (fp16) | < 5 Go | STT |
-| Sortformer | ~3,5 Go | diarisation |
+| Nemotron 3 (défaut « auto ») | CPU (0) ou ~2 Go | diarisation (1 à 8 voix) |
+| Sortformer | ~3,5 Go | diarisation (si sélectionné) |
 | pyannote (référence) | ~2 Go | diarisation (avec token) |
 
 → **Un seul GPU ~12 Go** (Turing 7.5+) suffit pour le workflow complet : le 9B (phase la plus

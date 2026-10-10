@@ -22,6 +22,7 @@ from transcria.installer.audiocpp_phase import (
     AudiocppPhaseError,
     AudiocppPlan,
     apply_audiocpp,
+    install_prebuilt_audiocpp,
     resolve_runtimes_dir,
 )
 from transcria.installer.connectors_phase import (
@@ -32,6 +33,7 @@ from transcria.installer.connectors_phase import (
 from transcria.installer.console import Console
 from transcria.installer.i18n_phase import I18nError, I18nPlan, apply_i18n
 from transcria.installer.moss_site_phase import MossSiteError, MossSitePlan, apply_moss_site
+from transcria.installer.nemotron_diar_phase import NemotronDiarPhaseError, NemotronDiarPlan, apply_nemotron_diar
 from transcria.installer.parakeetcpp_phase import (
     PARAKEETCPP_PINNED_COMMIT,
     ParakeetcppPhaseError,
@@ -706,12 +708,56 @@ def _add_audiocpp_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--with-model", action="store_true",
                    help="Télécharge aussi le modèle recommandé Qwen3-ASR-1.7B GGUF Q8 (~1,9 Go)")
     p.add_argument("--force", action="store_true", help="Reconstruire même si le runtime semble complet")
+    p.add_argument("--prebuilt", action="store_true",
+                   help="Poser SEULEMENT audiocpp_cli précompilé (CPU, 55 Mo, sha256 vérifié) sous "
+                        "runtimes/audiocpp/prebuilt/ — aucune compilation (diarisation Nemotron 3)")
+
+
+def _add_nemotron_diar_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "nemotron-diar",
+        help="Diarisation Nemotron 3 prête à l'emploi : audiocpp_cli (build CUDA s'il existe, "
+             "sinon précompilé CPU) + GGUF ~199 Mo (non gated) — ce que fait install.sh par défaut.",
+    )
+    p.add_argument("--runtimes-dir", default="./runtimes",
+                   help="Racine des runtimes (défaut ./runtimes, surchargeable TRANSCRIA_RUNTIMES_DIR)")
+    p.add_argument("--models-dir", default=None,
+                   help="Dossier des poids (défaut : MODELS_DIR sinon ./models)")
+    p.add_argument("--no-model", action="store_true", help="Binaire seulement, sans télécharger le GGUF")
+    p.add_argument("--force", action="store_true", help="Re-télécharger même si tout semble en place")
+
+
+def _cmd_nemotron_diar(args: argparse.Namespace) -> int:
+    import os
+
+    console = Console()
+    plan = NemotronDiarPlan(
+        runtimes_dir=resolve_runtimes_dir(args.runtimes_dir),
+        models_dir=Path(args.models_dir or os.environ.get("MODELS_DIR") or "./models"),
+        with_model=not args.no_model,
+        force=bool(args.force),
+    )
+    try:
+        apply_nemotron_diar(plan, console=console)
+    except NemotronDiarPhaseError as exc:
+        console.error(str(exc))
+        return 1
+    return 0
 
 
 def _cmd_audiocpp(args: argparse.Namespace) -> int:
     import subprocess
 
     console = Console()
+
+    if args.prebuilt:
+        try:
+            install_prebuilt_audiocpp(runtimes_dir=resolve_runtimes_dir(args.runtimes_dir),
+                                      console=console, force=bool(args.force))
+        except AudiocppPhaseError as exc:
+            console.error(str(exc))
+            return 1
+        return 0
 
     def _runner(cmd: list[str], *, cwd: str | None = None) -> None:
         subprocess.run(cmd, check=True, cwd=cwd)
@@ -816,6 +862,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_express_parser(sub)
     _add_moss_site_parser(sub)
     _add_audiocpp_parser(sub)
+    _add_nemotron_diar_parser(sub)
     _add_parakeetcpp_parser(sub)
     args = parser.parse_args(argv)
 
@@ -855,6 +902,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_moss_site(args)
     if args.command == "audiocpp":
         return _cmd_audiocpp(args)
+    if args.command == "nemotron-diar":
+        return _cmd_nemotron_diar(args)
     if args.command == "parakeetcpp":
         return _cmd_parakeetcpp(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité

@@ -115,7 +115,7 @@ set -a; . "./$ENV_FILE"; set +a
 if [[ "$BUNDLED" == "1" ]]; then
     export TRANSCRIA_ALLINONE_IMAGE="${TRANSCRIA_ALLINONE_IMAGE:-ghcr.io/martossien/transcria-allinone:bundled}"
     export TRANSCRIA_HF_SOURCE="hfcache"
-    ok "Mode BUNDLED : modèles embarqués (whisper + Sortformer + LLM), zéro-download, cache HF = volume nommé."
+    ok "Mode BUNDLED : modèles embarqués (whisper + Nemotron 3 + Sortformer + LLM), zéro-download, cache HF = volume nommé."
 fi
 
 # ── 3. config.yaml (généré depuis l'exemple si absent) ────────────────────────
@@ -128,16 +128,16 @@ if [[ ! -f "config.yaml" ]]; then
     # Mot de passe admin : AUCUN à générer (issue #11 v2) — la clé reste vide et le
     # portail impose la page de création du compte administrateur à la première
     # visite. L'utilisateur choisit son mot de passe là où il ne peut pas le rater.
-    # STT + diarisation : sans token, défauts NON gated (whisper + Sortformer) → zéro friction.
+    # STT : sans token, défaut NON gated (whisper) → zéro friction. Diarisation : "auto"
+    # (défaut de la config) = Nemotron 3 de 1 à 8 voix, non gated — jamais besoin du token ;
+    # pyannote (gated) n'y sert qu'au-delà de 8 voix ou pour un comptage exact saisi.
     if [[ -z "${HF_TOKEN:-}" ]]; then
-        warn "HF_TOKEN absent → STT 'whisper' + diarisation 'sortformer' (NON gated, sans token)."
-        warn "  Sortformer (NVIDIA) est plafonné à 4 locuteurs et expérimental. Pour la qualité de"
-        warn "  référence (Cohere + pyannote, locuteurs ILLIMITÉS) : fournir HF_TOKEN ET accepter les"
-        warn "  conditions des DEUX modèles sur huggingface.co."
+        warn "HF_TOKEN absent → STT 'whisper' (NON gated). Diarisation 'auto' : Nemotron 3 (1 à 8 voix, sans token)."
+        warn "  Pour le STT de référence (Cohere) et pyannote au-delà de 8 voix : fournir HF_TOKEN ET"
+        warn "  accepter les conditions des DEUX modèles sur huggingface.co."
         sed -i 's/^\(\s*stt_backend:\s*\).*/\1"whisper"/' config.yaml
-        sed -i 's/^\(\s*diarization_backend:\s*\).*/\1"sortformer"/' config.yaml
     else
-        ok "HF_TOKEN présent → STT 'cohere' + diarisation 'pyannote' (qualité de référence, locuteurs illimités)."
+        ok "HF_TOKEN présent → STT 'cohere' (qualité de référence) ; diarisation 'auto' (Nemotron 3 ≤ 8 voix, pyannote au-delà)."
     fi
     # LLM d'arbitrage : l'image GPU (mode gpu) l'EMBARQUE (llama.cpp + petit GGUF tiré au runtime).
     # En mode cpu/split, l'image n'en embarque pas → sans endpoint externe on désactive résumé +
@@ -275,8 +275,8 @@ for i in $(seq 1 60); do
                 ok "Image BUNDLED : modèles embarqués → aucun téléchargement, cache HF en volume nommé."
             fi
             if [[ -z "${HF_TOKEN:-}" ]]; then
-                warn "Mode sans token : diarisation = Sortformer (≤4 locuteurs, expérimental). Pour la"
-                warn "  qualité de référence (Cohere + pyannote, illimité) : HF_TOKEN + conditions HF des 2 modèles."
+                warn "Mode sans token : STT whisper ; diarisation 'auto' = Nemotron 3 (1 à 8 voix, sans token)."
+                warn "  Pour le STT de référence (Cohere) et pyannote au-delà de 8 voix : HF_TOKEN + conditions HF des 2 modèles."
             fi
         fi
         exit 0

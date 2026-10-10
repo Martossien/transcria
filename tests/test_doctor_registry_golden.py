@@ -30,6 +30,9 @@ GOLDEN_ALL_CHECKS = [
     # Ajout 2026-10-01 (0.4.6) : backend nemotron_diar = binaire audiocpp_cli + GGUF, en
     # sous-process — sans ce check, l'absence se découvre au premier job.
     "check_nemotron_diar_runtime",
+    # Ajout 2026-10-10 (0.4.7) : diarisation « auto » proposée aux configs antérieures
+    # (pyannote/sortformer explicites) — rien n'y change seul, le doctor le dit.
+    "check_diarization_auto_suggestion",
     "check_meeting_scheduling",
     "check_stt_instances_vram",
     "check_identity_backend",

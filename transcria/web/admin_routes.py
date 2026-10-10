@@ -62,11 +62,13 @@ from transcria.maintenance.schedule import BackupSchedule
 from transcria.models_catalog import (
     ModelSpec,
     catalog_with_status,
+    diarization_auto_recommendation,
     ollama_model_choices,
     resolve_hf_home,
     resolve_models_dir,
 )
 from transcria.services.config_service import ConfigService
+from transcria.stt.diarizer_factory import configured_diarization_backend
 from transcria.web import first_run, prompt_files
 from transcria.web.blueprint import web_bp
 from transcria.web.config_form import (
@@ -476,8 +478,64 @@ def admin_models():
     hf_home, models_dir = resolve_hf_home(), resolve_models_dir()
     for item in view["items"]:
         item["progress"] = models_download.read_progress(item["spec"], hf_home=hf_home, models_dir=models_dir)
+    cfg = ConfigService.get_singleton()
     return render_template("admin_models.html", view=view, ollama_choices=_ollama_choices(view),
-                           has_token=bool(os.environ.get("HF_TOKEN")))
+                           has_token=bool(os.environ.get("HF_TOKEN")),
+                           diar_reco=diarization_auto_recommendation(cfg),
+                           diar_backend=configured_diarization_backend(cfg))
+
+
+@web_bp.route("/admin/models/diarization-activate", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_diarization_activate():
+    """Passe la diarisation en « auto » (Nemotron 3 de 1 à 8 voix, pyannote au-delà).
+
+    Proposé aux installations antérieures à 0.4.7 (leur config porte ``pyannote`` ou
+    ``sortformer`` en clair — rien n'y change sans ce clic). Refusé tant que le binaire
+    ET les poids ne sont pas en place : « auto » retomberait sur pyannote en silence.
+    Aucun redémarrage : le backend est résolu à chaque job.
+    """
+    reco = diarization_auto_recommendation(ConfigService.get_singleton())
+    if reco is None:
+        flash(_("La diarisation « auto » est déjà active (ou la recommandation a été écartée)."), "info")
+        return redirect(url_for("web.admin_models"))
+    if not (reco["runtime_present"] and reco["model_present"]):
+        flash(_("Téléchargez d'abord le runtime audio.cpp et les poids Nemotron 3 (lignes « recommandé » "
+                "ci-dessus) avant d'activer la diarisation automatique."), "error")
+        return redirect(url_for("web.admin_models"))
+    cfg = copy.deepcopy(ConfigService.get_singleton())
+    models = cfg.setdefault("models", {})
+    models["diarization_backend"] = "auto"
+    models.pop("diarization_suggest_auto", None)
+    ok, errors, _warnings = ConfigService.save_if_valid(cfg)
+    if not ok:
+        flash(_("Bascule refusée — configuration invalide : ") + "; ".join(errors)[:300], "error")
+        return redirect(url_for("web.admin_models"))
+    audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label="models.diarization_backend=auto")
+    flash(_("Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), "
+            "pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."), "success")
+    return redirect(url_for("web.admin_models"))
+
+
+@web_bp.route("/admin/models/diarization-keep", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_diarization_keep():
+    """Écarte la recommandation « auto » : l'admin garde son backend de diarisation.
+
+    Écrit ``models.diarization_suggest_auto: false`` — la carte, le bilan d'accueil et
+    le doctor cessent de la proposer. Réversible depuis /admin/config.
+    """
+    cfg = copy.deepcopy(ConfigService.get_singleton())
+    cfg.setdefault("models", {})["diarization_suggest_auto"] = False
+    ok, errors, _warnings = ConfigService.save_if_valid(cfg)
+    if not ok:
+        flash(_("Choix non enregistré — configuration invalide : ") + "; ".join(errors)[:300], "error")
+        return redirect(url_for("web.admin_models"))
+    audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label="models.diarization_suggest_auto=false")
+    flash(_("Réglage conservé : la diarisation « auto » ne sera plus proposée."), "info")
+    return redirect(url_for("web.admin_models"))
 
 
 @web_bp.route("/admin/first-run-status")

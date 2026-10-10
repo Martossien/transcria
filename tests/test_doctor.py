@@ -1142,3 +1142,48 @@ def test_check_nemotron_diar_runtime(tmp_path, monkeypatch):
     (tmp_path / "m.gguf").write_bytes(b"x")
     cfg["nemotron_diar"] = {"cli_path": str(cli), "model_path": str(tmp_path / "m.gguf")}
     assert doc.check_nemotron_diar_runtime(cfg).status == doc.OK
+
+
+def test_check_nemotron_diar_runtime_auto(tmp_path):
+    cfg = {"models": {"diarization_backend": "auto"},
+           "nemotron_diar": {"cli_path": str(tmp_path / "absent"), "model_path": str(tmp_path / "absent.gguf")}}
+    res = doc.check_nemotron_diar_runtime(cfg)
+    assert res.status == doc.WARN and "pyannote" in res.detail and "nemotron-diar" in res.hint
+    cli = tmp_path / "audiocpp_cli"
+    cli.write_text("#!/bin/sh\n")
+    cli.chmod(0o755)
+    (tmp_path / "m.gguf").write_bytes(b"x")
+    cfg["nemotron_diar"] = {"cli_path": str(cli), "model_path": str(tmp_path / "m.gguf")}
+    res = doc.check_nemotron_diar_runtime(cfg)
+    assert res.status == doc.OK and "auto" in res.detail and "8" in res.detail
+
+
+def test_check_diarization_auto_suggestion(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path / "rt"))
+    monkeypatch.setenv("MODELS_DIR", str(tmp_path / "models"))
+    assert doc.check_diarization_auto_suggestion({"models": {"diarization_backend": "auto"}}).status == doc.OK
+    res = doc.check_diarization_auto_suggestion({"models": {"diarization_backend": "pyannote"}})
+    assert res.status == doc.WARN and "télécharger" in res.detail and "nemotron-diar" in res.hint
+    cli = tmp_path / "rt" / "audiocpp" / "prebuilt" / "audiocpp_cli"
+    cli.parent.mkdir(parents=True)
+    cli.write_text("#!/bin/sh\n")
+    cli.chmod(0o755)
+    gguf = tmp_path / "models" / "nemotron-3-diarization" / "nemotron-3-diarization-bf16.gguf"
+    gguf.parent.mkdir(parents=True)
+    gguf.write_bytes(b"x")
+    res = doc.check_diarization_auto_suggestion({"models": {"diarization_backend": "sortformer"}})
+    assert res.status == doc.WARN and "installé" in res.detail and "Activer" in res.hint
+    off = {"models": {"diarization_backend": "sortformer", "diarization_suggest_auto": False}}
+    assert doc.check_diarization_auto_suggestion(off).status == doc.OK
+
+
+def test_check_nemotron_diar_runtime_binaire_present_mais_ne_demarre_pas(tmp_path):
+    cli = tmp_path / "audiocpp_cli"
+    cli.write_text("#!/bin/sh\n")
+    cli.chmod(0o755)
+    (tmp_path / "m.gguf").write_bytes(b"x")
+    cfg = {"models": {"diarization_backend": "auto"},
+           "nemotron_diar": {"cli_path": str(cli), "model_path": str(tmp_path / "m.gguf")}}
+    res = doc.check_nemotron_diar_runtime(cfg, cli_loads=lambda c: False)
+    assert res.status == doc.WARN and "ne démarre pas" in res.detail
+    assert doc.check_nemotron_diar_runtime(cfg, cli_loads=lambda c: True).status == doc.OK

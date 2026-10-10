@@ -91,6 +91,14 @@ in_image "ls /app/models/*/*.gguf >/dev/null && test -d /hf/hub && test -n \"\$(
     || { echo "ÉCHEC : poids /app/models ou cache HF /hf/hub manquants" >&2; exit 1; }
 echo "OK"
 
+# Diarisation « auto » (0.4.7) : GGUF Nemotron 3 ET binaire audiocpp_cli, sinon l'image
+# retomberait sur pyannote (gated) en silence — exactement ce que la bundled promet d'éviter.
+echo -n "   diarisation Nemotron 3 (GGUF + audiocpp_cli + licence OpenMDW)… "
+in_image "test -f /app/models/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf \
+    && test -x /opt/runtimes/audiocpp/bin/audiocpp_cli && test -f /licenses/OpenMDW-1.1.txt" \
+    || { echo "ÉCHEC : GGUF Nemotron 3, audiocpp_cli ou OpenMDW-1.1.txt manquant" >&2; exit 1; }
+echo "OK"
+
 echo -n "   poids Qwen3-ASR au chemin du lanceur audio.cpp… "
 in_image "test -n \"\$(ls -A /opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf)\"" \
     || { echo "ÉCHEC : /opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf vide ou absent" >&2; exit 1; }
