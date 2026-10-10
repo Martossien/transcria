@@ -361,7 +361,9 @@ def split_label_function(label: str) -> tuple[str, str]:
     parts = _NAME_FUNCTION_DASH_RE.split(text, maxsplit=1)
     if len(parts) == 2 and parts[0].strip() and parts[1].strip():
         return parts[0].strip(), parts[1].strip()
-    match = re.match(r"^(.+?)\s*\(([^()]+)\)\s*$", text)
+    # Parenthèse PRÉCÉDÉE d'un espace seulement : « Pharmacien(ne) », « Participant(e) » sont
+    # un seul mot, pas un nom suivi de sa fonction (vu sur le banc d'attribution 2026-10).
+    match = re.match(r"^(.+?\S)\s+\(([^()]+)\)\s*$", text)
     if match and match.group(1).strip():
         return match.group(1).strip(), match.group(2).strip()
     if "," in text:

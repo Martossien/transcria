@@ -368,6 +368,11 @@ def build_labeled_segments(segments_data: list, speakers_result: dict) -> list[t
         s_start, s_end = seg.get("start", 0.0), seg.get("end", 0.0)
         if s_end <= s_start:
             continue
+        if seg.get("speaker"):
+            # Transcription rapide par tours (summary_by_turns) : l'attribution est
+            # acoustique, par construction — pas de règle de chevauchement à appliquer.
+            result.append((str(seg["speaker"]), truncate_at_word(text, 200)))
+            continue
 
         # Chevauchement par locuteur
         overlap: dict[str, float] = {}

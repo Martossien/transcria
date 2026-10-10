@@ -9,11 +9,24 @@ from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.logging_setup import get_structured_logger
 from transcria.stt.transcriber_factory import create_transcriber, summary_backend
+from transcria.stt.transcription import chunk_by_turns
 
 logger = logging.getLogger(__name__)
 
 _SR = 16000
 _NON_LATIN_RE = re.compile(r"[\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]")
+
+
+def _label_segments_by_chunk(segments: list[dict], chunks: list[dict]) -> None:
+    """Voie batchée : rattache chaque segment (temps ABSOLUS) au chunk qui le contient."""
+    for seg in segments:
+        if seg.get("speaker"):
+            continue
+        mid = (float(seg.get("start", 0)) + float(seg.get("end", 0))) / 2
+        for chunk in chunks:
+            if chunk["start"] <= mid <= chunk["end"]:
+                seg["speaker"] = chunk["speaker"]
+                break
 
 
 class SummaryGenerator:
@@ -42,14 +55,33 @@ class SummaryGenerator:
         total_duration = len(audio) / sr
         sl.info("[summary] Audio chargé: %.1fs (%.1f min)", total_duration, total_duration / 60)
 
-        vad_cfg = self.config.get("workflow", {}).get("vad", {})
+        workflow_cfg = self.config.get("workflow", {}) or {}
+        vad_cfg = workflow_cfg.get("vad", {})
         audio_quality = fs.load_json("metadata/audio_quality_decision.json") or {}
         vad_cfg = AdaptiveVADConfig.resolve(vad_cfg, audio_quality)
         vad_enabled = vad_cfg.get(
             "enabled_summary",
-            self.config.get("workflow", {}).get("enable_vad", True),
+            workflow_cfg.get("enable_vad", True),
         )
-        if vad_enabled:
+        # Mode « diariser d'abord » : les tours exclusifs (écrits par la détection lancée
+        # AVANT cette passe) découpent l'audio — un chunk = un locuteur, la transcription
+        # naît étiquetée (cf. docs/ATTRIBUTION_LOCUTEURS_RESUME.md, option A). Sans tours
+        # (détection indisponible), repli sur le chemin historique.
+        turn_chunks = None
+        if workflow_cfg.get("summary_by_turns"):
+            speaker_turns = fs.load_json("speakers/speaker_turns.json") or {}
+            turn_chunks = chunk_by_turns(
+                audio, total_duration, speaker_turns,
+                chunk_cfg=workflow_cfg.get("pyannote_chunking", {}) or {},
+            )
+            if turn_chunks:
+                sl.info("[summary] Découpage par tours de parole : %d chunks étiquetés "
+                        "(%d tours exclusifs)", len(turn_chunks), len(speaker_turns.get("exclusive_turns") or []))
+            else:
+                sl.warning("[summary] summary_by_turns actif mais aucun tour exclusif — repli VAD/30 s")
+        if turn_chunks:
+            vad_chunks = turn_chunks
+        elif vad_enabled:
             sl.info("[summary] VAD: détection zones de parole")
             vad = SileroVAD(
                 threshold=vad_cfg.get("threshold", 0.5),
@@ -82,6 +114,8 @@ class SummaryGenerator:
                     "backend=%s chunks=%d", backend, len(vad_chunks))
             segments = [seg for seg in prechunked(vad_chunks, language=stt_language)
                         if not seg.get("error")]
+            if turn_chunks:
+                _label_segments_by_chunk(segments, turn_chunks)
         else:
             for chunk in vad_chunks:
                 chunk_segs = transcriber.transcribe(
@@ -95,6 +129,8 @@ class SummaryGenerator:
                         continue
                     seg["start"] = round(chunk["start"] + seg["start"], 3)
                     seg["end"] = round(chunk["start"] + seg["end"], 3)
+                    if chunk.get("speaker"):
+                        seg["speaker"] = chunk["speaker"]
                     segments.append(seg)
 
         sl.info("[summary] Transcription terminée: %d segments produits", len(segments))

@@ -190,7 +190,7 @@
   "transcria.stt.remote_transcriber": 6,
   "transcria.stt.sortformer_diarizer": 3,
   "transcria.stt.speaker_detection": 6,
-  "transcria.stt.summary": 7,
+  "transcria.stt.summary": 8,
   "transcria.stt.transcriber_factory": 5,
   "transcria.stt.transcription": 16,
   "transcria.stt.voxtral_transcriber": 5,

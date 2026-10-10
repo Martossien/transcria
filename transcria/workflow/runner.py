@@ -133,6 +133,11 @@ class WorkflowRunner:
     ) -> None:
         summary.run_pyannote_after_transcription(self, job, audio_path, config)
 
+    def _run_speaker_detection_before_transcription(
+        self, job: Job, audio_path: str, config: dict, sl
+    ) -> dict:
+        return summary.run_speaker_detection_before_transcription(self, job, audio_path, config, sl)
+
     def _run_llm_summary(
         self, job: Job, result: dict, config: dict, sl
     ) -> None:

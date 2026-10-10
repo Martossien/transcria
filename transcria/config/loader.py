@@ -500,6 +500,12 @@ _DEFAULT_CONFIG = {
                 r"^\s*thanks\s*[.!?…]*\s*$",
             ],
         },
+        # Phase Résumé « diariser d'abord » (étude docs/ATTRIBUTION_LOCUTEURS_RESUME.md,
+        # option A) : la détection des locuteurs tourne AVANT la transcription rapide, qui
+        # est alors découpée par tours exclusifs — chaque segment naît avec son locuteur, la
+        # LLM lit une transcription entièrement attribuée. false = ordre historique
+        # (STT par blocs VAD/30 s, diarisation ensuite). En cours de MESURE.
+        "summary_by_turns": False,
         "pyannote_chunking": {
             "merge_micro_chunks": True,
             "micro_chunk_s": 0.35,

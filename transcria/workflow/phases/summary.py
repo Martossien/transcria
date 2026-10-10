@@ -56,6 +56,13 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
                 backend=backend, segments=cached.get("segment_count", 0))
         result = cached
     else:
+        if (config.get("workflow", {}) or {}).get("summary_by_turns"):
+            # Option A (docs/ATTRIBUTION_LOCUTEURS_RESUME.md) : diariser D'ABORD pour que la
+            # transcription rapide soit découpée par tours et naisse étiquetée. Best-effort :
+            # sans tours, le générateur retombe sur le chemin historique. La passe de
+            # contexte plus bas réutilise le checkpoint (aucune seconde diarisation).
+            sl.info("[0/3] Diarisation AVANT la STT rapide (summary_by_turns)")
+            runner._run_speaker_detection_before_transcription(job, audio_path, config, sl)
         sl.info("[1/3] STT rapide — chargement GPU", backend=backend)
         result = runner._run_quick_transcription(job, audio_path, config, sl)
     sl.info(
@@ -273,6 +280,26 @@ def run_audio_scene_before_participants(runner, job: Job, audio_path: str, confi
     except Exception as exc:
         sl.warning("[summary] Analyse de scène ignorée", error=str(exc))
         return {}
+
+
+def run_speaker_detection_before_transcription(runner, job: Job, audio_path: str, config: dict, sl) -> dict:
+    """Détection des locuteurs AVANT la STT rapide (mode ``summary_by_turns``), best-effort.
+
+    Écrit ``speakers/speaker_turns.json`` (tours exclusifs) que le générateur découpe ; un
+    échec ou une attente VRAM ne bloque pas le résumé (repli : chemin historique)."""
+    if not config.get("workflow", {}).get("enable_speaker_detection", True):
+        return {}
+    try:
+        result = runner.run_speaker_detection(job, audio_path, config, update_state=False)
+    except Exception as exc:  # noqa: BLE001 — best-effort, le résumé continue sans tours
+        sl.warning("[0/3] Diarisation avant STT ignorée", error=str(exc))
+        return {}
+    if result.get("vram_wait") or not result.get("available"):
+        sl.warning("[0/3] Diarisation avant STT indisponible — STT rapide par blocs",
+                   reason=result.get("reason") or result.get("message") or result.get("error"))
+        return {}
+    sl.info("[0/3] Diarisation avant STT : %d locuteurs", len(result.get("speakers") or []))
+    return result
 
 
 def run_pyannote_after_transcription(runner, job: Job, audio_path: str, config: dict) -> None:

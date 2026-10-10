@@ -31,7 +31,8 @@ class TestSplitLabelFunction:
     def test_separateurs_reconnus(self, label, expected):
         assert split_label_function(label) == expected
 
-    @pytest.mark.parametrize("label", ["Vendeur / fromager", "Cliente", "Jean-Pierre Nom", "Animateur", ""])
+    @pytest.mark.parametrize("label", ["Vendeur / fromager", "Cliente", "Jean-Pierre Nom", "Animateur", "",
+                                       "Pharmacien(ne)", "Participant(e)"])   # parenthèse collée = un mot
     def test_sans_separateur_tout_reste_dans_le_nom(self, label):
         assert split_label_function(label) == (label, "")
 

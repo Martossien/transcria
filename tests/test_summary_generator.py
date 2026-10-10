@@ -126,3 +126,68 @@ class TestSummaryBatchedPath:
         assert calls == {"prechunked": 1, "transcribe": 0}
         assert result.get("error") is None
         assert result["segments_count"] == 2 if "segments_count" in result else True
+
+
+class TestSummaryByTurns:
+    """Mode « diariser d'abord » (docs/ATTRIBUTION_LOCUTEURS_RESUME.md, option A) : la
+    transcription rapide est découpée par tours exclusifs et chaque segment naît étiqueté."""
+
+    def _setup(self, app, owner_id, tmp_path, monkeypatch, *, turns):
+        cfg = _default_cfg(tmp_path)
+        cfg.setdefault("workflow", {})["summary_by_turns"] = True
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.jobs.store import JobStore
+        from transcria.stt.cohere_transcriber import CohereTranscriber
+        monkeypatch.setitem(sys.modules, "librosa",
+                            SimpleNamespace(load=lambda *a, **kw: (_FAKE_AUDIO, 16000)))
+        job = JobStore.create_job(owner_id, "Résumé par tours")
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        if turns is not None:
+            fs.save_json("speakers/speaker_turns.json", turns)
+        calls: list[dict] = []
+
+        def fake_transcribe(self, audio_path=None, language=None, audio_array=None, sample_rate=16000, **kw):
+            calls.append({"n": len(audio_array)})
+            return [{"start": 0.0, "end": len(audio_array) / sample_rate, "text": f"segment {len(calls)}"}]
+
+        monkeypatch.setattr(CohereTranscriber, "load", lambda self: True)
+        monkeypatch.setattr(CohereTranscriber, "transcribe", fake_transcribe)
+        monkeypatch.setattr(CohereTranscriber, "offload", lambda self: None)
+        audio_path = tmp_path / "a.wav"
+        audio_path.write_text("fake")
+        return cfg, job, fs, audio_path, calls
+
+    def test_segments_etiquetes_par_tour(self, app, owner_id, tmp_path, monkeypatch):
+        with app.app_context():
+            total = len(_FAKE_AUDIO) / 16000
+            turns = {"exclusive_turns": [
+                {"speaker": "SPEAKER_01", "start": 0.0, "end": total / 2},
+                {"speaker": "SPEAKER_00", "start": total / 2, "end": total},
+            ]}
+            cfg, job, fs, audio_path, calls = self._setup(app, owner_id, tmp_path, monkeypatch, turns=turns)
+            result = SummaryGenerator(cfg).generate_quick_summary(job, audio_path, gpu_index=0)
+            segs = fs.load_json("summary/summary.json")["segments"]
+            assert [s["speaker"] for s in segs] == ["SPEAKER_01", "SPEAKER_00"]
+            assert result["segment_count"] == 2 and len(calls) == 2
+            # Le transcript rapide porte l'étiquette : la LLM lit « qui dit quoi ».
+            assert "SPEAKER_01 segment 1" in result["transcript_text"]
+
+    def test_sans_tours_repli_historique(self, app, owner_id, tmp_path, monkeypatch):
+        with app.app_context():
+            from transcria.audio.vad import SileroVAD
+            monkeypatch.setattr(SileroVAD, "build_speech_chunks",
+                                lambda self, audio, **kw: [{"start": 0.0, "end": 1.0, "audio": audio}])
+            cfg, job, fs, audio_path, calls = self._setup(app, owner_id, tmp_path, monkeypatch, turns=None)
+            SummaryGenerator(cfg).generate_quick_summary(job, audio_path, gpu_index=0)
+            segs = fs.load_json("summary/summary.json")["segments"]
+            assert segs and "speaker" not in segs[0]        # chemin VAD : non étiqueté
+
+
+def test_label_segments_by_chunk_voie_batchee():
+    from transcria.stt.summary import _label_segments_by_chunk
+
+    segs = [{"start": 1.0, "end": 3.0, "text": "a"}, {"start": 7.0, "end": 9.0, "text": "b"},
+            {"start": 20.0, "end": 21.0, "text": "hors chunk"}]
+    _label_segments_by_chunk(segs, [{"start": 0.0, "end": 5.0, "speaker": "SPEAKER_00"},
+                                    {"start": 5.0, "end": 10.0, "speaker": "SPEAKER_01"}])
+    assert [s.get("speaker") for s in segs] == ["SPEAKER_00", "SPEAKER_01", None]

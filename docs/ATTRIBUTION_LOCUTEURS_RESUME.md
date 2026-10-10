@@ -1,6 +1,8 @@
 # Attribution des locuteurs à l'étape Résumé — étude des solutions
 
-> Statut : **étude, aucune décision prise** (2026-10-10). Déclenchée par des retours
+> Statut : **mesurée** (2026-10-10, §7) — l'option A est implémentée derrière
+> `workflow.summary_by_turns` (défaut `false`) ; son activation par défaut est une décision de
+> version. Déclenchée par des retours
 > d'utilisateurs : à l'étape Participants, la description que la LLM rédige pour chaque
 > locuteur est juste, mais elle tombe parfois sur le **mauvais numéro** (SPEAKER_XX).
 > Le défaut jumeau (nom et fonction dans le même champ) était un défaut de parseur, corrigé
@@ -152,3 +154,96 @@ chronométrer la phase Résumé dans les deux cas. Le banc existe (`scripts/benc
 - Le parseur des « Participants probables » reste tolérant (nom — fonction — rôle).
 - L'humain valide à l'étape 5 : on améliore une **suggestion**, jamais une décision prise à
   sa place.
+
+## 7. Mesure (2026-10-10) — option A implémentée et jouée sur trois réunions réelles
+
+### Protocole
+
+Option A est implémentée derrière `workflow.summary_by_turns` (défaut `false`) : la phase
+Résumé lance la diarisation **avant** la transcription rapide
+(`phases/summary.run_speaker_detection_before_transcription`, best-effort : VRAM indisponible
+ou diarisation absente ⇒ ordre historique), et `SummaryGenerator` découpe l'audio par tours
+exclusifs avec **la même fonction que le pipeline final** (`transcription.chunk_by_turns`).
+Chaque segment de `quick_transcript.txt` porte alors son locuteur ; `diarization_context.md`
+est étiqueté en entier.
+
+Le banc (`scripts/bench/attribution_bench.py`) joue la seule phase Résumé sur un audio réel
+dans un mode donné et écrit, par SPEAKER_XX, ce que la LLM a attribué et les phrases
+réellement prononcées par cette voix (`scripts/bench/attribution_report.py`). Le verdict est
+une **lecture humaine** : une description est *juste* si ce qu'elle dit de la voix correspond à
+ce que cette voix dit ; *fausse* si le contenu attribué est prononcé par une autre voix (vérifié
+par mots-clés dans le transcript étiqueté) ou inventé à partir d'une mention faite par un
+tiers ; *générique* si elle ne dit rien (« intervention courte »). Les prénoms ne sont pas
+comptés : sans vérité terrain sur les voix, ils restent une inférence de la LLM dans les deux
+modes. Même LLM d'arbitrage, même STT rapide, même machine (8× RTX 3090), runs séquentiels.
+
+| Réunion | Durée | Voix | Diarisation | Particularité |
+|---|---|---|---|---|
+| M1 | 1 h 52 | 7 | `auto` → Nemotron 3 | revue à sept voix, alternance rapide (2 068 tours) |
+| M2 | 35 min (fenêtre) | 8 détectées / 19 en référence | `pyannote` | séance plénière > 8 voix, nombreuses voix brèves |
+| M3 | 1 h 07 | 4 | `auto` → Nemotron 3 | réunion technique, longs monologues |
+
+### Exactitude des « Participants probables »
+
+| | Historique (STT par blocs, diarisation ensuite) | Option A (`summary_by_turns`) |
+|---|---|---|
+| M1 (7 voix) | **4 justes**, 2 fausses, 1 voix **non décrite** | **7 justes** |
+| M2 (8 voix) | **3 justes**, 1 fausse, 1 douteuse, 3 génériques | **7 justes**, 1 fausse |
+| M3 (4 voix) | **4 justes** | **4 justes** |
+| Total | **11 / 19** | **18 / 19** |
+| Couverture étiquetée du transcript lu par la LLM | 0 % (+ lignes « certaines » seules) | 100 % |
+
+Lecture des erreurs, parce qu'elles sont exactement le symptôme rapporté :
+
+- M1, historique : la description de la **troisième voix** (arbitrage budgétaire, nouvelle
+  infrastructure) reprend un contenu que le transcript étiqueté montre **prononcé par la
+  deuxième voix** ; la **sixième voix** n'est décrite que par la phrase d'accueil où l'animateur
+  la présente (rien de ce qu'elle dit) ; la **quatrième voix** (7 minutes de parole) n'est pas
+  décrite du tout. En option A, les sept descriptions correspondent aux propos de chaque voix.
+- M2, historique : la description de la **deuxième voix la plus bavarde** (sujets techniques
+  longuement développés) est celle des propos de la **troisième** ; trois voix reçoivent
+  « membre, intervention courte ». En option A, six voix reçoivent une description conforme ;
+  la seule erreur est un **prénom** pris dans une phrase où la voix parle d'une tierce personne
+  (« c'est plutôt X qui… ») — une inférence de la LLM, pas un défaut d'attribution de numéro.
+- M3 : quatre voix aux rôles très contrastés et aux longs monologues — l'ordre historique
+  suffit (136 lignes « certaines ») ; l'option A ne change rien à l'exactitude.
+
+L'option A transcrit aussi **11 à 14 % de mots en plus** (M1 : 20 392 → 23 214 ; M2 : 5 312 →
+5 983 ; M3 : 12 256 → 14 274) : les tours de diarisation retiennent de la parole que le VAD
+coupait (débuts et fins de prise de parole, interjections).
+
+### Coût
+
+Durées reconstruites à partir des horodatages des artefacts (STT = transcription rapide,
+LLM = résumé opencode) :
+
+| | Diarisation | STT rapide | LLM | Phase Résumé |
+|---|---|---|---|---|
+| M1 historique | 127 s | 250 s | 310 s | 695 s |
+| M1 option A | 109 s | **415 s** | 270 s | 812 s (**+17 %**) |
+| M2 historique | 37 s | 81 s | 151 s | 272 s |
+| M2 option A | 33 s | **108 s** | 185 s | 335 s (**+23 %**) |
+| M3 historique | 87 s | 161 s | 169 s | 432 s |
+| M3 option A | 70 s | **233 s** | 170 s | 491 s (**+14 %**) |
+
+Le surcoût est entièrement dans la STT par tours (1,3 à 1,7× la STT par blocs : 2 068
+segments de 3,2 s en moyenne sur M1 contre 338 de 19 s), pas dans la diarisation (elle
+tournait déjà) ni dans la LLM (un transcript plus long mais étiqueté ne lui coûte pas plus).
+Pistes si ce coût gêne : regrouper les tours consécutifs d'un même locuteur jusqu'à
+`max_chunk_s` (déjà le cas — l'alternance de M1 est réelle), ou servir la STT rapide par un
+moteur batché.
+
+### Conclusion
+
+L'option A corrige le symptôme rapporté : **18 descriptions justes sur 19 contre 11**, et
+aucune voix laissée sans description, pour **+15 à +25 %** sur l'étape Résumé. Elle est valable
+avec pyannote au-delà de huit voix (M2) et n'introduit aucune numérotation nouvelle (mêmes tours,
+même checkpoint). Recommandation : **activer `workflow.summary_by_turns` par défaut à la
+prochaine version**, en gardant `false` comme repli documenté pour qui préfère la vitesse. Les
+compléments B/C restent sans objet une fois A en place.
+
+Deux défauts attrapés en lisant le banc, corrigés le même jour : le parseur coupait
+« Pharmacien(ne) » en nom + fonction « ne » (la parenthèse doit être précédée d'un espace pour
+séparer une fonction) ; et le bench a montré que les prénoms restent une inférence fragile
+(mention d'un tiers) — hors du périmètre de cette mesure.
+

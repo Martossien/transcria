@@ -456,6 +456,7 @@ deferred:
 - workflow.multi_stt.secondary_backend
 - workflow.progress.enabled
 - workflow.progress.update_interval_s
+- workflow.summary_by_turns
 - workflow.pyannote_chunking.isolated_min_chunk_s
 - workflow.pyannote_chunking.max_chunk_s
 - workflow.pyannote_chunking.merge_micro_chunks

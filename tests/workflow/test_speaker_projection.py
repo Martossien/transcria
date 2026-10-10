@@ -180,3 +180,14 @@ class TestRenderDiarizationContext:
         assert "**[SPEAKER_00]** Goûtez notre fromage, Bertrand" in content
         assert "## Genre vocal par locuteur (estimation acoustique)" in content
         assert "**Consigne :**" in content
+
+
+class TestBuildLabeledSegmentsByTurns:
+    def test_segment_deja_etiquete_attribue_tel_quel(self):
+        # summary_by_turns : l'étiquette vient du découpage acoustique, même si deux locuteurs
+        # ont des tours dans la fenêtre (le chunk, lui, n'en a qu'un).
+        turns = {"turns": [{"speaker": "SPEAKER_00", "start": 0.0, "end": 5.0},
+                           {"speaker": "SPEAKER_01", "start": 4.0, "end": 9.0}]}
+        segs = [{"speaker": "SPEAKER_01", "start": 3.0, "end": 8.0, "text": "je prends la parole"},
+                {"start": 3.0, "end": 8.0, "text": "segment mixte non étiqueté"}]
+        assert sp.build_labeled_segments(segs, turns) == [("SPEAKER_01", "je prends la parole")]

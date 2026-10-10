@@ -561,84 +561,21 @@ class Transcriber:
         Returns:
             Liste de chunks {start, end, speaker, audio} ou None si exclusive_turns vide.
         """
-        chunk_cfg = chunk_cfg or {}
-        padding_s = float(chunk_cfg.get("padding_s", padding_s))
-        max_chunk_s = int(chunk_cfg.get("max_chunk_s", max_chunk_s))
-        min_chunk_s = float(chunk_cfg.get("min_chunk_s", min_chunk_s))
-
-        turns = speaker_turns.get("exclusive_turns") or []
-        if not turns:
-            return None
-        turns = self._smooth_micro_turns(turns, chunk_cfg)
-
-        chunks: list[dict] = []
-
-        for turn in turns:
-            start = max(0.0, turn["start"] - padding_s)
-            end = min(total_duration, turn["end"] + padding_s)
-            speaker = turn["speaker"]
-            duration = end - start
-
-            if duration <= 0:
-                continue
-
-            if duration <= max_chunk_s:
-                if duration >= min_chunk_s:
-                    chunks.append(self._make_chunk(audio, start, end, speaker))
-                elif chunks and chunks[-1]["speaker"] == speaker:
-                    # Tour court du même locuteur : étendre le chunk précédent
-                    prev = chunks[-1]
-                    prev["end"] = end
-                    prev["audio"] = audio[int(prev["start"] * _SR):int(end * _SR)]
-                elif duration >= 0.3:
-                    # Interjection courte isolée (ok, bien, d'accord...)
-                    chunks.append(self._make_chunk(audio, start, end, speaker))
-            else:
-                # Tour long : découper en sous-chunks, même locuteur
-                pos = start
-                while pos < end:
-                    chunk_end = min(pos + max_chunk_s, end)
-                    chunks.append(self._make_chunk(audio, pos, chunk_end, speaker))
-                    pos = chunk_end
-
-        logger.info(
-            "Chunking par tours: %d exclusive_turns → %d chunks (durée moy. %.1fs)",
-            len(turns),
-            len(chunks),
-            sum(c["end"] - c["start"] for c in chunks) / max(len(chunks), 1),
+        return chunk_by_turns(
+            audio, total_duration, speaker_turns, padding_s=padding_s,
+            max_chunk_s=max_chunk_s, min_chunk_s=min_chunk_s, chunk_cfg=chunk_cfg,
         )
-        return chunks or None
 
     @staticmethod
     def _smooth_micro_turns(turns: list[dict], cfg: dict) -> list[dict]:
-        """Fusionne uniquement les micro-tours sûrs avec un voisin du même locuteur."""
-        if not cfg.get("merge_micro_chunks", True):
-            return turns
+        return smooth_micro_turns(turns, cfg)
 
-        micro_s = float(cfg.get("micro_chunk_s", 0.35))
-        neighbor_gap_s = float(cfg.get("micro_chunk_neighbor_gap_s", 0.4))
-        smoothed: list[dict] = []
+    @staticmethod
+    def _make_chunk(audio: np.ndarray, start: float, end: float, speaker: str) -> dict:
+        return make_chunk(audio, start, end, speaker)
 
-        for turn in turns:
-            current = dict(turn)
-            duration = float(current.get("end", 0)) - float(current.get("start", 0))
-            gap = (
-                float(current.get("start", 0)) - float(smoothed[-1].get("end", 0))
-                if smoothed else None
-            )
-            if (
-                duration < micro_s
-                and smoothed
-                and smoothed[-1].get("speaker") == current.get("speaker")
-                and gap is not None
-                and gap <= neighbor_gap_s
-            ):
-                smoothed[-1]["end"] = max(float(smoothed[-1].get("end", 0)), float(current.get("end", 0)))
-                smoothed[-1]["micro_turns_merged"] = int(smoothed[-1].get("micro_turns_merged", 0)) + 1
-                continue
-            smoothed.append(current)
 
-        return smoothed
+
 
     def _transcribe_per_track(self, fs: JobFilesystem, lang: str, sl) -> list[dict] | None:
         """Mode PAR PISTE (vague 5, lot B — `docs/archive/VAGUE5_PISTES_SEPAREES.md` D5.3).
@@ -714,14 +651,6 @@ class Transcriber:
             return None
         return segments
 
-    @staticmethod
-    def _make_chunk(audio: np.ndarray, start: float, end: float, speaker: str) -> dict:
-        return {
-            "start": start,
-            "end": end,
-            "speaker": speaker,
-            "audio": audio[int(start * _SR):int(end * _SR)],
-        }
 
     def _apply_vad_filter(
         self, chunks: list[dict], audio: np.ndarray, sl, vad_cfg: dict | None = None
@@ -1110,3 +1039,111 @@ class Transcriber:
                 seg["speaker"] = mapping.get(best_speaker, best_speaker)
 
         return segments
+
+
+# ── Découpage par tours — fonctions de module, partagées avec la phase Résumé ──
+
+def smooth_micro_turns(turns: list[dict], cfg: dict) -> list[dict]:
+    """Fusionne uniquement les micro-tours sûrs avec un voisin du même locuteur."""
+    if not cfg.get("merge_micro_chunks", True):
+        return turns
+
+    micro_s = float(cfg.get("micro_chunk_s", 0.35))
+    neighbor_gap_s = float(cfg.get("micro_chunk_neighbor_gap_s", 0.4))
+    smoothed: list[dict] = []
+
+    for turn in turns:
+        current = dict(turn)
+        duration = float(current.get("end", 0)) - float(current.get("start", 0))
+        gap = (
+            float(current.get("start", 0)) - float(smoothed[-1].get("end", 0))
+            if smoothed else None
+        )
+        if (
+            duration < micro_s
+            and smoothed
+            and smoothed[-1].get("speaker") == current.get("speaker")
+            and gap is not None
+            and gap <= neighbor_gap_s
+        ):
+            smoothed[-1]["end"] = max(float(smoothed[-1].get("end", 0)), float(current.get("end", 0)))
+            smoothed[-1]["micro_turns_merged"] = int(smoothed[-1].get("micro_turns_merged", 0)) + 1
+            continue
+        smoothed.append(current)
+
+    return smoothed
+
+
+def make_chunk(audio: np.ndarray, start: float, end: float, speaker: str) -> dict:
+    return {
+        "start": start,
+        "end": end,
+        "speaker": speaker,
+        "audio": audio[int(start * _SR):int(end * _SR)],
+    }
+
+
+def chunk_by_turns(
+    audio: np.ndarray,
+    total_duration: float,
+    speaker_turns: dict,
+    *,
+    padding_s: float = 0.15,
+    max_chunk_s: int = 45,
+    min_chunk_s: float = 1.5,
+    chunk_cfg: dict | None = None,
+) -> list[dict] | None:
+    """Chunks audio alignés sur les tours EXCLUSIFS — fonction de module (pure sur ses entrées).
+
+    Partagée par le pipeline final (``Transcriber._chunk_by_pyannote_turns``) et la phase
+    Résumé en mode « diariser d'abord » (``workflow.summary_by_turns``) : chaque chunk porte
+    son locuteur, la transcription naît étiquetée.
+    """
+    if True:
+        chunk_cfg = chunk_cfg or {}
+        padding_s = float(chunk_cfg.get("padding_s", padding_s))
+        max_chunk_s = int(chunk_cfg.get("max_chunk_s", max_chunk_s))
+        min_chunk_s = float(chunk_cfg.get("min_chunk_s", min_chunk_s))
+
+        turns = speaker_turns.get("exclusive_turns") or []
+        if not turns:
+            return None
+        turns = smooth_micro_turns(turns, chunk_cfg)
+
+        chunks: list[dict] = []
+
+        for turn in turns:
+            start = max(0.0, turn["start"] - padding_s)
+            end = min(total_duration, turn["end"] + padding_s)
+            speaker = turn["speaker"]
+            duration = end - start
+
+            if duration <= 0:
+                continue
+
+            if duration <= max_chunk_s:
+                if duration >= min_chunk_s:
+                    chunks.append(make_chunk(audio, start, end, speaker))
+                elif chunks and chunks[-1]["speaker"] == speaker:
+                    # Tour court du même locuteur : étendre le chunk précédent
+                    prev = chunks[-1]
+                    prev["end"] = end
+                    prev["audio"] = audio[int(prev["start"] * _SR):int(end * _SR)]
+                elif duration >= 0.3:
+                    # Interjection courte isolée (ok, bien, d'accord...)
+                    chunks.append(make_chunk(audio, start, end, speaker))
+            else:
+                # Tour long : découper en sous-chunks, même locuteur
+                pos = start
+                while pos < end:
+                    chunk_end = min(pos + max_chunk_s, end)
+                    chunks.append(make_chunk(audio, pos, chunk_end, speaker))
+                    pos = chunk_end
+
+        logger.info(
+            "Chunking par tours: %d exclusive_turns → %d chunks (durée moy. %.1fs)",
+            len(turns),
+            len(chunks),
+            sum(c["end"] - c["start"] for c in chunks) / max(len(chunks), 1),
+        )
+        return chunks or None
