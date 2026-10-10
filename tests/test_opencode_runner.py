@@ -548,10 +548,12 @@ Quelques paragraphes de texte sans autres champs structurés.
 
         assert result["speaker_roles"]["SPEAKER_00"] == {
             "label": "Fonction A",
+            "function": "",
             "role": "décrit une autre action observée",
         }
         assert result["speaker_roles"]["SPEAKER_01"] == {
             "label": "Fonction B",
+            "function": "",
             "role": "décrit une action observée",
         }
 
@@ -564,6 +566,7 @@ Quelques paragraphes de texte sans autres champs structurés.
 
         assert result["speaker_roles"]["SPEAKER_00"] == {
             "label": "Fonction A",
+            "function": "",
             "role": "décrit une action observée",
         }
 
@@ -579,6 +582,7 @@ Quelques paragraphes de texte sans autres champs structurés.
 
         assert result["speaker_roles"]["PISTE_p2_S1"] == {
             "label": "Fonction A",
+            "function": "",
             "role": "anime la réunion",
         }
         assert "Alice Durand" not in result["speaker_roles"]
@@ -593,6 +597,7 @@ Quelques paragraphes de texte sans autres champs structurés.
         assert "Alex Dupont" in result["participants_detectes"]
         assert result["speaker_roles"]["SPEAKER_00"] == {
             "label": "Alex Dupont",
+            "function": "",
             "role": "personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)",
         }
 

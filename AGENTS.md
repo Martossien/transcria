@@ -932,11 +932,13 @@ La phase summary (LLM d'arbitrage) déduit les rôles de chaque SPEAKER_XX depui
 
 **Important :** `_apply_speaker_roles()` nécessite que `speakers/speaker_mapping.json` existe déjà (lien SPEAKER_XX → participant_id). Ne pas l'appeler avant la création du mapping.
 
-Le parser accepte deux formats pour les participants probables :
-- `SPEAKER_XX [Fonction A] : rôle détaillé`
-- `SPEAKER_XX : Fonction A — rôle détaillé`
+Le parser (`llm_parsing.parse_participant_entry`, PUR, testé par `tests/test_participant_parsing.py`) rend `{speaker_id, label (= NOM), function, role}` et tolère les surprises selon la LLM :
+- `SPEAKER_XX [Prénom Nom — Fonction] : rôle détaillé` (gabarit du prompt v2.9 : le tiret long sépare TOUJOURS nom et fonction ; `split_label_function` accepte aussi « Nom (Fonction) » et « Nom, Fonction », jamais un tiret court collé — « Jean-Pierre » reste un nom)
+- `SPEAKER_XX [Fonction A] : rôle détaillé` (fonction seule, sans nom)
+- `SPEAKER_XX : Fonction A — rôle détaillé` (ancien gabarit) et `SPEAKER_XX : rôle`
+- id en gras/code Markdown, crochets OU parenthèses, deux-points collé ou remplacé par un tiret, `speaker_xx` minuscule (canonisé ; un `PISTE_…` est repris tel quel)
 
-Le format avec crochets est le format cible du prompt. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
+Retour utilisateurs 2026-10 : la LLM mettait « Prénom Nom — Fonction » entre les crochets, le champ Nom de l'étape 5 recevait les deux et la fonction restait vide. Désormais la fonction suit sa propre voie (`speaker_roles_llm[id].function` → `speaker_projection.apply_speaker_roles` → `participants.json["function"]` ; pré-remplissage `mapped_func` en étape 5) et `normalize_speaker_role_info` rattrape aussi un label « Nom — Fonction » déjà stocké par une version antérieure. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
 
 ### Lexiques centralisés (admin / admin groupe → section 6)
 Les lexiques centralisés sont gérés depuis `/admin/lexicons` par les admins globaux et les admins de groupe. Ils sont stockés en base (`group_lexicons`, `group_lexicon_entries`) et ne remplacent jamais le fichier de session validé par l'utilisateur.

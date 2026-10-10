@@ -671,6 +671,8 @@ def job_wizard(job_id: str):
             # (trouvé au 4ᵉ parcours réel, invisible aux tests).
             if normalized["label"] and not is_generic_label(normalized["label"]):
                 s["mapped_name"] = normalized["label"]
+            if normalized.get("function"):
+                s["mapped_func"] = normalized["function"]
             if normalized["role"]:
                 s["mapped_role"] = normalized["role"]
     # Vague 2 (plan UI_REUNIONS D5) — suggestions depuis le MANIFESTE de la réunion : les

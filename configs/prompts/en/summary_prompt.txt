@@ -341,7 +341,7 @@ deviation breaks the data import. Follow the template to the character:
 - **Number of detected participants:** [number]
 
 ## Probable participants
-- SPEAKER_XX [Name or function] : [probable role if identifiable]
+- SPEAKER_XX [First name Last name — Function] : [probable role if identifiable]   (function alone in brackets when the name is unknown; the em dash ALWAYS separates name and function)
 - SPEAKER_YY [Name or function] : [probable role if identifiable]
 
 ## Summary

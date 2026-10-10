@@ -370,7 +370,7 @@ datos. Respete la plantilla al pie de la letra:
 [de 3 a 8 términos centrales de la transcripción, separados por comas]
 
 ## Participantes probables
-- SPEAKER_XX [Nombre o función] : [rol probable si es identificable]
+- SPEAKER_XX [Nombre Apellido — Función] : [rol probable si es identificable]   (solo la función entre corchetes si el nombre es desconocido; la raya separa SIEMPRE nombre y función)
 - SPEAKER_YY [Nombre o función] : [rol probable si es identificable]
 
 ## Resumen

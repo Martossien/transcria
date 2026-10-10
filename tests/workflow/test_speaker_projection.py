@@ -111,12 +111,12 @@ class TestApplySpeakerRoles:
 class TestNormalizeSpeakerRoleInfo:
     def test_split_label_dans_le_role(self):
         assert sp.normalize_speaker_role_info({"label": "", "role": "Anna — animatrice"}) == {
-            "label": "Anna", "role": "animatrice",
+            "label": "Anna", "function": "", "role": "animatrice",
         }
 
     def test_deja_normalise(self):
         assert sp.normalize_speaker_role_info({"label": "Anna", "role": "animatrice"}) == {
-            "label": "Anna", "role": "animatrice",
+            "label": "Anna", "function": "", "role": "animatrice",
         }
 
 

@@ -366,7 +366,7 @@ Rispettare il modello alla lettera:
 [da 3 a 8 termini centrali della trascrizione, separati da virgole]
 
 ## Partecipanti probabili
-- SPEAKER_XX [Nome o funzione] : [ruolo probabile se identificabile]
+- SPEAKER_XX [Nome Cognome — Funzione] : [ruolo probabile se identificabile]   (solo la funzione tra parentesi quadre se il nome è sconosciuto; la lineetta separa SEMPRE nome e funzione)
 - SPEAKER_YY [Nome o funzione] : [ruolo probabile se identificabile]
 
 ## Sintesi

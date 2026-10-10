@@ -393,7 +393,7 @@ die Vorlage buchstabengetreu ein:
 [3 bis 8 zentrale Begriffe aus der Transkription, durch Kommas getrennt]
 
 ## Wahrscheinliche Teilnehmer
-- SPEAKER_XX [Name oder Funktion] : [wahrscheinliche Rolle, falls erkennbar]
+- SPEAKER_XX [Vorname Nachname — Funktion] : [wahrscheinliche Rolle, falls erkennbar]   (nur die Funktion in Klammern, wenn der Name unbekannt ist; der Gedankenstrich trennt IMMER Name und Funktion)
 - SPEAKER_YY [Name oder Funktion] : [wahrscheinliche Rolle, falls erkennbar]
 
 ## Zusammenfassung

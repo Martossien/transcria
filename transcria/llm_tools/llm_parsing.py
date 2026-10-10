@@ -337,29 +337,90 @@ def vllm_metrics_busy(metrics_text: str) -> bool | None:
     return busy if seen else None
 
 
-def parse_participant_line(line: str) -> tuple[str | None, str, str]:
-    """Extrait speaker_id, label et rôle depuis une ligne Participants probables."""
-    text = line.strip("- ").strip()
+# Tiret « long » (— –) avec ou sans espaces, ou tiret court ENTOURÉ d'espaces : le trait que
+# la LLM met entre un nom et une fonction. Un tiret court collé (« Jean-Pierre », « e-mail »)
+# n'est jamais un séparateur.
+_NAME_FUNCTION_DASH_RE = re.compile(r"\s*[—–]\s*|\s+-\s+")
+# Identifiant machine, éventuellement enrobé de gras/code Markdown (« **SPEAKER_00** »,
+# « `SPEAKER_00` ») — constaté selon la LLM.
+_PARTICIPANT_ID_RE = r"[*_`]*(SPEAKER_\d+|PISTE_\S+?)[*_`]*"
+
+
+def split_label_function(label: str) -> tuple[str, str]:
+    """Sépare « Prénom Nom — Fonction » en (nom, fonction) — fonction PURE.
+
+    Le gabarit du prompt demande ``[Nom ou fonction]`` : selon la LLM, les deux arrivent
+    dans le même champ, séparés par un tiret long, une parenthèse (« Nom (Fonction) ») ou
+    une virgule. Sans séparateur reconnu, tout reste dans le nom (« Vendeur / fromager »
+    est une fonction unique, pas deux champs). Retour : ``(nom, fonction)``, fonction vide
+    quand rien n'est séparé.
+    """
+    text = str(label or "").strip()
     if not text:
-        return None, "", ""
+        return "", ""
+    parts = _NAME_FUNCTION_DASH_RE.split(text, maxsplit=1)
+    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+        return parts[0].strip(), parts[1].strip()
+    match = re.match(r"^(.+?)\s*\(([^()]+)\)\s*$", text)
+    if match and match.group(1).strip():
+        return match.group(1).strip(), match.group(2).strip()
+    if "," in text:
+        head, tail = text.split(",", 1)
+        if head.strip() and tail.strip():
+            return head.strip(), tail.strip()
+    return text, ""
 
-    # Ids MACHINE seulement (diarisation mix ou sous-voix de piste, lot B2) — jamais un
-    # nom libre : « Alice : anime la réunion » matcherait n'importe quelle phrase à
-    # deux-points.
-    match = re.match(r"^(SPEAKER_\d+|PISTE_\S+)\s+\[([^\]]+)\]\s*:\s*(.+)$", text)
-    if match:
-        return match.group(1), match.group(2).strip(), match.group(3).strip()
 
-    match = re.match(r"^(SPEAKER_\d+|PISTE_\S+)\s*:\s*(.+)$", text)
+def parse_participant_entry(line: str) -> dict:
+    """Lit une ligne « Participants probables » : ``{speaker_id, label, function, role}``.
+
+    Formats tolérés (constatés selon les LLM, cf. tests/test_participant_parsing.py) :
+
+    - ``SPEAKER_XX [Nom — Fonction] : rôle`` (gabarit), crochets ou parenthèses, id en gras
+      ou en code, deux-points collé ou absent (tiret à la place) ;
+    - ``SPEAKER_XX : Nom — rôle`` (ancien gabarit) et ``SPEAKER_XX : rôle`` (sans label).
+
+    ``speaker_id`` est ``None`` si la ligne n'en porte pas : jamais un nom libre (« Alice :
+    anime la réunion » matcherait n'importe quelle phrase à deux-points).
+    """
+    empty = {"speaker_id": None, "label": "", "function": "", "role": ""}
+    text = re.sub(r"^[-•\s]+", "", line.replace("\u00a0", " ")).strip()
+    if not text:
+        return empty
+
+    def _canonical(raw: str) -> str:
+        # SPEAKER_xx en minuscules (vu selon la LLM) → forme canonique ; un id de PISTE est
+        # repris tel quel (il porte l'identifiant de participant, sensible à la casse).
+        return raw.upper() if raw.upper().startswith("SPEAKER_") else raw
+
+    match = re.match(rf"^{_PARTICIPANT_ID_RE}\s*(?:\[([^\]]+)\]|\(([^)]+)\))\s*(?:[:—–-]\s*)?(.*)$",
+                     text, re.IGNORECASE)
     if match:
-        speaker_id = match.group(1)
+        speaker_id = _canonical(match.group(1))
+        name, function = split_label_function(match.group(2) or match.group(3) or "")
+        return {"speaker_id": speaker_id, "label": name, "function": function,
+                "role": match.group(4).strip()}
+
+    match = re.match(rf"^{_PARTICIPANT_ID_RE}\s*:\s*(.+)$", text, re.IGNORECASE)
+    if match:
+        speaker_id = _canonical(match.group(1))
         rest = match.group(2).strip()
         split = re.split(r"\s+[—–-]\s+", rest, maxsplit=1)
         if len(split) == 2:
-            return speaker_id, split[0].strip(), split[1].strip()
-        return speaker_id, "", rest
+            return {"speaker_id": speaker_id, "label": split[0].strip(), "function": "",
+                    "role": split[1].strip()}
+        return {"speaker_id": speaker_id, "label": "", "function": "", "role": rest}
 
-    return None, "", ""
+    return empty
+
+
+def parse_participant_line(line: str) -> tuple[str | None, str, str]:
+    """Extrait speaker_id, label et rôle depuis une ligne Participants probables.
+
+    Façade historique de :func:`parse_participant_entry` (le label est le NOM, la
+    fonction séparée n'y figure pas)."""
+    entry = parse_participant_entry(line)
+    return entry["speaker_id"], entry["label"], entry["role"]
 
 
 def strip_role_gender(text: str) -> str:
@@ -580,13 +641,13 @@ def parse_structured_summary(
                 continue
             participants.append(line)
             # Extraire SPEAKER_XX + label + rôle.
-            # Formats acceptés :
-            # - "SPEAKER_XX [label] : rôle"
-            # - "SPEAKER_XX : label — rôle"
-            # - "SPEAKER_XX : rôle" (sans label)
-            speaker_id, label, role = parse_participant_line(line)
-            if speaker_id and role:
-                speaker_roles[speaker_id] = {"label": label, "role": role}
+            # Formats acceptés : cf. parse_participant_entry (gabarit « [Nom — Fonction] :
+            # rôle », variantes selon la LLM, anciens gabarits).
+            entry = parse_participant_entry(line)
+            if entry["speaker_id"] and entry["role"]:
+                speaker_roles[entry["speaker_id"]] = {
+                    "label": entry["label"], "function": entry["function"], "role": entry["role"],
+                }
         fields["participants_detectes"] = "\n".join(participants)
         if speaker_roles:
             fields["speaker_roles"] = speaker_roles

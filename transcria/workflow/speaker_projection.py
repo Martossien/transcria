@@ -16,6 +16,8 @@ import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
+from transcria.llm_tools.llm_parsing import split_label_function
+
 # Champs de suggestion LLM projetés tels quels dans meeting_context.json.
 SUGGESTION_FIELDS = (
     "title_suggere", "type_suggere", "sujet_suggere",
@@ -80,15 +82,24 @@ def is_generic_label(label: str) -> bool:
 
 
 def normalize_speaker_role_info(info: dict) -> dict:
-    """Normalise les anciens formats où le label était inclus dans le rôle."""
+    """Normalise les formats LLM : ``{label (nom), function, role}``.
+
+    - ancien gabarit : le label était dans le rôle (« Anna — animatrice ») ;
+    - « Prénom Nom — Fonction » dans le label (vu en réel : le champ Nom de l'étape 5
+      recevait les deux, la fonction restait vide) — rattrapé ici aussi pour les contextes
+      déjà stockés par une version antérieure, pas seulement au parsing.
+    """
     label = str(info.get("label", "") or "").strip()
+    function = str(info.get("function", "") or "").strip()
     role = str(info.get("role", "") or "").strip()
     if not label and role:
         split = re.split(r"\s+[—–-]\s+", role, maxsplit=1)
         if len(split) == 2 and split[0].strip() and split[1].strip():
             label = split[0].strip()
             role = split[1].strip()
-    return {"label": label, "role": role}
+    if label and not function:
+        label, function = split_label_function(label)
+    return {"label": label, "function": function, "role": role}
 
 
 def merge_llm_suggestions(meeting_ctx: dict, parsed: dict) -> list[str]:
@@ -263,6 +274,8 @@ def apply_speaker_roles(
         if participant is not None:
             if label and participant.get("name") in ("", speaker_id):
                 participant["name"] = label
+            if normalized["function"] and not participant.get("function"):
+                participant["function"] = normalized["function"]
             if not participant.get("role"):
                 participant["role"] = role
                 updated += 1
@@ -277,7 +290,7 @@ def apply_speaker_roles(
             new_p = {
                 "id": speaker_id.lower().replace("_", ""),
                 "name": label or name or speaker_id,
-                "function": "",
+                "function": normalized["function"],
                 "service": "",
                 "role": role,
                 "is_animator": False,

@@ -361,7 +361,7 @@ le gabarit au caractère près :
 - **Nombre de participants détectés :** [nombre]
 
 ## Participants probables
-- SPEAKER_XX [Nom ou fonction] : [rôle probable si identifiable]
+- SPEAKER_XX [Prénom Nom — Fonction] : [rôle probable si identifiable]   (fonction seule entre crochets si le nom est inconnu ; le tiret long sépare TOUJOURS nom et fonction)
 - SPEAKER_YY [Nom ou fonction] : [rôle probable si identifiable]
 
 ## Synthèse
