@@ -424,6 +424,11 @@ workflow:
   enable_speaker_detection: true
   enable_quality_mode: true
   enable_vad: true
+  # Étape Résumé : diariser D'ABORD puis transcrire par tours de parole (défaut depuis 0.4.8).
+  # Chaque segment de la transcription rapide porte son locuteur : les descriptions des
+  # « Participants probables » tombent sur la bonne voix (mesure : 18/19 contre 11/19), pour
+  # +15 à 25 % sur la durée de l'étape. false = ordre historique (STT par blocs, diarisation ensuite).
+  summary_by_turns: true
   progress:
     enabled: true
     update_interval_s: 10.0

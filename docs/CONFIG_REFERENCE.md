@@ -540,7 +540,7 @@ Paramètres contrôlant les fonctionnalités du workflow.
 | `enable_speaker_detection` | bool | `true` | Active la détection pyannote des locuteurs |
 | `enable_quality_mode` | bool | `true` | Active le mode "Qualité" (diarization finale + correction SRT) |
 | `enable_vad` | bool | `true` | Ancien interrupteur global VAD, conservé pour compatibilité |
-| `summary_by_turns` | bool | `false` | Étape Résumé : diariser D'ABORD puis transcrire par tours de parole (comme le pipeline final) — chaque segment de la transcription rapide porte son locuteur, la LLM attribue les « Participants probables » sur une évidence complète (mesure 2026-10 : 18/19 descriptions justes contre 11/19, pour +15 à +25 % sur la durée de l'étape ; cf. `docs/ATTRIBUTION_LOCUTEURS_RESUME.md`). `false` = ordre historique (STT par blocs VAD, diarisation ensuite). Diarisation indisponible ⇒ repli automatique sur l'ordre historique |
+| `summary_by_turns` | bool | `true` | Étape Résumé : diariser D'ABORD puis transcrire par tours de parole (comme le pipeline final) — chaque segment de la transcription rapide porte son locuteur, la LLM attribue les « Participants probables » sur une évidence complète (mesure 2026-10 : 18/19 descriptions justes contre 11/19, pour +15 à +25 % sur la durée de l'étape ; cf. `docs/ATTRIBUTION_LOCUTEURS_RESUME.md`). `false` = ordre historique (STT par blocs VAD, diarisation ensuite, plus rapide). Diarisation indisponible ⇒ repli automatique sur l'ordre historique |
 
 #### `workflow.profiles`
 

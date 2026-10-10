@@ -1,8 +1,8 @@
 # Attribution des locuteurs à l'étape Résumé — étude des solutions
 
-> Statut : **mesurée** (2026-10-10, §7) — l'option A est implémentée derrière
-> `workflow.summary_by_turns` (défaut `false`) ; son activation par défaut est une décision de
-> version. Déclenchée par des retours
+> Statut : **mesurée et adoptée** (2026-10-10, §7) — l'option A est implémentée derrière
+> `workflow.summary_by_turns`, activée **par défaut** depuis 0.4.8 (`false` = ordre historique,
+> plus rapide). Déclenchée par des retours
 > d'utilisateurs : à l'étape Participants, la description que la LLM rédige pour chaque
 > locuteur est juste, mais elle tombe parfois sur le **mauvais numéro** (SPEAKER_XX).
 > Le défaut jumeau (nom et fonction dans le même champ) était un défaut de parseur, corrigé
@@ -159,7 +159,8 @@ chronométrer la phase Résumé dans les deux cas. Le banc existe (`scripts/benc
 
 ### Protocole
 
-Option A est implémentée derrière `workflow.summary_by_turns` (défaut `false`) : la phase
+Option A est implémentée derrière `workflow.summary_by_turns` (mesurée à `false` par défaut, puis
+adoptée par défaut) : la phase
 Résumé lance la diarisation **avant** la transcription rapide
 (`phases/summary.run_speaker_detection_before_transcription`, best-effort : VRAM indisponible
 ou diarisation absente ⇒ ordre historique), et `SummaryGenerator` découpe l'audio par tours
@@ -238,8 +239,8 @@ moteur batché.
 L'option A corrige le symptôme rapporté : **18 descriptions justes sur 19 contre 11**, et
 aucune voix laissée sans description, pour **+15 à +25 %** sur l'étape Résumé. Elle est valable
 avec pyannote au-delà de huit voix (M2) et n'introduit aucune numérotation nouvelle (mêmes tours,
-même checkpoint). Recommandation : **activer `workflow.summary_by_turns` par défaut à la
-prochaine version**, en gardant `false` comme repli documenté pour qui préfère la vitesse. Les
+même checkpoint). Décision (2026-10-10, validée par le mainteneur) : **`workflow.summary_by_turns` est activée
+par défaut** à partir de 0.4.8, `false` restant le repli documenté pour qui préfère la vitesse. Les
 compléments B/C restent sans objet une fois A en place.
 
 Deux défauts attrapés en lisant le banc, corrigés le même jour : le parseur coupait

@@ -505,7 +505,7 @@ _DEFAULT_CONFIG = {
         # est alors découpée par tours exclusifs — chaque segment naît avec son locuteur, la
         # LLM lit une transcription entièrement attribuée. false = ordre historique
         # (STT par blocs VAD/30 s, diarisation ensuite). En cours de MESURE.
-        "summary_by_turns": False,
+        "summary_by_turns": True,
         "pyannote_chunking": {
             "merge_micro_chunks": True,
             "micro_chunk_s": 0.35,
