@@ -160,8 +160,10 @@ ARG PG_DSN_USER=transcria
 # Au build (sans GPU) la sélection de palier LLM passe en « raw-mode » → AUCUN modèle téléchargé
 # (build hermétique préservé). install.sh installe tout requirements.txt (dont nemo_toolkit[asr]
 # → Sortformer) + opencode (profil all-in-one = needs_llm). Le mot de passe baké = placeholder.
+# --no-nemotron-diar : audiocpp_cli vit dans /opt/runtimes (étage ci-dessus), le GGUF est tiré
+# au premier démarrage par l'entrypoint — la phase poserait un précompilé inutile sous /app/runtimes.
 RUN ./install.sh --profile all-in-one \
-        --non-interactive --no-service --skip-doctor \
+        --non-interactive --no-service --skip-doctor --no-nemotron-diar \
         --cuda "${TORCH_CUDA_TAG}" \
         --postgres --pg-defer \
         --pg-host "${PG_DSN_HOST}" --pg-port "${PG_DSN_PORT}" \

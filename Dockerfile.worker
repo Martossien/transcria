@@ -59,10 +59,17 @@ ARG PG_DSN_USER=transcria
 # Le mot de passe baké est un PLACEHOLDER littéral (jamais utilisé : le runtime fournit le vrai
 # DSN via TRANSCRIA_DATABASE_URL) → pas d'ARG « password » (évite l'alerte BuildKit secrets).
 RUN ./install.sh --profile scheduler \
-        --non-interactive --no-service --skip-doctor \
+        --non-interactive --no-service --skip-doctor --no-nemotron-diar \
         --postgres --pg-defer \
         --pg-host "${PG_DSN_HOST}" --pg-port "${PG_DSN_PORT}" \
         --pg-db "${PG_DSN_DB}" --pg-user "${PG_DSN_USER}" --pg-password placeholder
+
+# Diarisation « auto » (0.4.7) : le binaire audiocpp_cli PRÉCOMPILÉ CPU (55 Mo, sha256
+# vérifié) dans l'image — sans lui, « auto » retomberait sur pyannote (gated). Le GGUF
+# (199 Mo) est tiré au premier démarrage par l'entrypoint dans MODELS_DIR (volume), pas baké :
+# install.sh n'est pas appelé pour cela (--no-nemotron-diar ci-dessus) car il le poserait
+# sous /app/models, masqué par le montage du volume.
+RUN /app/venv/bin/python -m transcria.installer.cli audiocpp --prebuilt --runtimes-dir /app/runtimes
 
 # PATH = venv créé par install.sh. Le rôle (web|scheduler) est fourni par TRANSCRIA_ROLE.
 ENV PATH="/app/venv/bin:$PATH"
