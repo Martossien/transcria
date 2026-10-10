@@ -104,6 +104,7 @@ validated in real conditions; two more ship prepared but unvalidated.
 | Document | What it covers |
 |---|---|
 | [REFACTORING_QUALITE.md](archive/REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
+| [ATTRIBUTION_LOCUTEURS_RESUME.md](ATTRIBUTION_LOCUTEURS_RESUME.md) | Study (no decision yet): why the LLM's speaker descriptions sometimes land on the wrong SPEAKER number at the summary step, constraints (> 8 speakers, backends, stable ids), five options compared, recommendation (diarize first, then transcribe by turn) |
 | [PISTES_AMELIORATION.md](PISTES_AMELIORATION.md) | Post-0.3.7 improvement analysis: measured time breakdown, engine choices, CPU-fallback trade-offs, UX and operations gaps, suggested roadmap |
 | [GESTION_IDENTITE.md](GESTION_IDENTITE.md) | Enterprise identity (shipped in 0.3.9): pluggable backends — OIDC, direct LDAP/AD, trusted proxy headers, API tokens — group→role mapping, JIT provisioning, break-glass, test matrix |
 

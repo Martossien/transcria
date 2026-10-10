@@ -1176,5 +1176,6 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/STT_BENCHMARK_REAL_MEETINGS.md` | Banc sur réunions réelles (anonymisé) : WER/CER par backend |
 | `docs/STT_CORPUS.md` | Constitution du corpus de référence |
 | `docs/PISTES_AMELIORATION.md` | Backlog technique : ce qui est identifié, pas encore décidé |
+| `docs/ATTRIBUTION_LOCUTEURS_RESUME.md` | ÉTUDE (non tranchée, 2026-10) : descriptions LLM sur le mauvais SPEAKER_XX à l'étape Résumé — cause (transcription rapide sans étiquettes, 3 segments « certains » sur 28), contraintes (> 8 voix, numéros stables), 5 options, reco = diariser puis transcrire par tour |
 | `docs/TESTERS.md` | Guide des testeurs externes |
 | `docs/PRESENTATION.md` / `.en.md` | Présentation non technique (français / anglais) |
