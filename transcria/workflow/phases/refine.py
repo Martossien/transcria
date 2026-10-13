@@ -130,6 +130,29 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
             "pacchetto — per ottenere la versione aggiornata.)"
         ),
     },
+    "pt-br": {
+        "no_review_point": "(nenhum ponto detectado)",
+        "busy": "O assistente está ocupado (o LLM está processando outra tarefa). Tente novamente em alguns minutos.",
+        "vram": "VRAM insuficiente para carregar o assistente (uma tarefa está usando as GPUs). Tente novamente mais tarde.",
+        "no_start": "O assistente não pôde ser iniciado (LLM de arbitragem indisponível). Tente novamente mais tarde.",
+        "long_notice": (
+            "ℹ️ Reunião longa: a conversa abrange ~{pct}% da transcrição (o período {gap_from} → {gap_to} "
+            "não está visível para o assistente)."
+        ),
+        "fail": "Falha na configuração ({exc}) — os documentos resultantes não foram modificados. Tente novamente.",
+        "progress_working": "Configuração: o assistente está trabalhando.",
+        "progress_done": "Configuração concluída.",
+        "invalid_structured": "Os dados estruturados revisados são inválidos (não é um objeto JSON) — mantidos como estão.",
+        "non_json_structured": "Os dados estruturados revisados não são JSON — mantidos como estão.",
+        "non_json_options": "As opções de renderização revisadas não são JSON — mantidas como estão.",
+        "no_change": "Nenhuma alteração aplicável.",
+        "zip_failed": "O pacote ZIP não pôde ser reconstruído imediatamente.",
+        "applied": "Alterações aplicadas.",
+        "version_saved": (
+            "\n\n(versão v{version} salva — pode ser restaurada a partir da página. Baixe novamente os documentos — "
+            "Word, SRT, pacote — para obter a versão atualizada.)"
+        ),
+    },
 }
 
 

@@ -33,7 +33,7 @@ def test_default_locale_valid_and_coerced():
 def test_beta_locales_flagged():
     from transcria.i18n import BETA_LOCALES, is_beta_locale
     assert is_beta_locale("de") and is_beta_locale("es") and is_beta_locale("it")
-    assert not is_beta_locale("fr") and not is_beta_locale("en")
+    assert not is_beta_locale("fr") and not is_beta_locale("en") and not is_beta_locale("pt-br")
     # Les locales bêta doivent être connues du validateur de config (sinon warning trompeur).
     from transcria.config.checks.platform import _KNOWN_LOCALES
     assert BETA_LOCALES <= _KNOWN_LOCALES

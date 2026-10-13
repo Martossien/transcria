@@ -22,6 +22,7 @@ def test_resolve_output_language_defaults_to_fr():
 def test_resolve_output_language_reads_meeting_context():
     assert resolve_output_language(extra_data={"meeting_context": {"language": "en"}}) == "en"
     assert resolve_output_language(extra_data={"meeting_context": {"language": "de"}}) == "de"
+    assert resolve_output_language(extra_data={"meeting_context": {"language": "pt-br"}}) == "pt-br"
 
 
 def test_resolve_output_language_from_job_object():
@@ -67,6 +68,8 @@ def test_language_directive_empty_for_fr():
 def test_language_directive_mentions_target():
     d = language_directive("en")
     assert "English" in d and "marqueurs de format" in d
+    d = language_directive("pt-br")
+    assert "Português do Brasil" in d and "marqueurs de format" in d
 
 
 # ── Parsers pilotés par la langue (table de marqueurs) ────────────────────────

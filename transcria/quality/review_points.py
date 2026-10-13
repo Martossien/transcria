@@ -31,6 +31,12 @@ _RP_STRINGS: dict[str, dict[str, str]] = {
         "variant_to_fix": "Variante da correggere: {v} → {t}",
         "close_form": "Forma vicina: {f} (≈ {t})",
     },
+    "pt-br": {
+        "audio_zone": "Zona de áudio: {lbl} {a}→{b}",
+        "inconsistent_form": "Forma inconsistente: {f} (para decidir)",
+        "variant_to_fix": "Variante a corrigir: {v} → {t}",
+        "close_form": "Forma próxima: {f} (≈ {t})",
+    },
 }
 
 

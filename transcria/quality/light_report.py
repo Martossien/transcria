@@ -177,6 +177,35 @@ _STRINGS: dict[str, dict[str, str]] = {
         "md_review": "## Punti da verificare",
         "md_none": "Nessun punto di verifica rilevato dal controllo leggero.",
     },
+    "pt-br": {
+        "empty": "Segmentos vazios: {n} — verifique e remova manualmente.",
+        "short": "Segmentos muito curtos (< 0,5s): {n} — considere mesclar.",
+        "long": "Segmentos muito longos (> 60s): {n} — considere dividir.",
+        "missing_srt": "SRT ausente ou vazio — a transcrição falhou.",
+        "marquage_manquant": ("Segmentos não marcados não confiáveis: {n} — o revisor deveria"
+                              " ter adicionado um marcador [INCERTAIN] (dica forte) e não o fez."
+                              " Ouça novamente primeiro."),
+        "synthese_editee": ("Resumo editado manualmente: mantido como está — a reancoragem"
+                            " na transcrição corrigida e a harmonização do glossário NÃO foram"
+                            " aplicadas deliberadamente. {variantes}"),
+        "synthese_editee_variantes": (" {n} forma(s) lexical(is). Entradas validadas ainda"
+                                      " aparecem com uma grafia não validada (por exemplo, {ex}) — harmonize"
+                                      " manualmente, se necessário."),
+        "correction_muette": ("A revisão não modificou nenhum segmento — "
+                              "provavelmente não foi concluída. Erros de transcrição e "
+                              "variantes do léxico foram deixados como estão."),
+        "relecture_muette": ("A revisão final não produziu nada — a harmonização com o "
+                             "léxico validado não ocorreu."),
+        "gaps": ("Lacunas anormais na transcrição: {n} (máximo de {max_s:.0f}s em direção"
+                 " a {at}) — o mecanismo pode ter pulado uma passagem; ouça novamente essas áreas."),
+       "tail": ("Possível truncamento do final da reunião: última intervenção em {at} para um áudio de {dur} — "
+                "verifique os últimos minutos."),
+       "md_title": "# Relatório de qualidade (verificação rápida)",
+       "md_score": "Pontuação de qualidade: {s}/100",
+       "md_checks": "Verificações: {c} · avisos: {w}",
+       "md_review": "## Pontos a verificar",
+       "md_none": "Nenhum ponto de verificação foi detectado pela verificação rápida.",
+    },
 }
 
 

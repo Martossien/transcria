@@ -38,7 +38,7 @@ _WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
 
 _LANG_LABELS: dict[str, str] = {
     "fr": "Français", "en": "English", "de": "Deutsch",
-    "it": "Italiano", "es": "Español",
+    "it": "Italiano", "es": "Español", "pt-br": "Português do Brasil",
 }
 
 # Libellés de chrome du DOCX par langue (Axe B). Les entrées « fr » reproduisent À
@@ -367,6 +367,78 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "quorum_not_reached": "✗ Quorum non raggiunto",
         "odj_prefix": "ODG",
     },
+    "pt-br": {
+        "banner": "ATA DA TRANSCRIÇÃO",
+        "generated_by": "Gerado pelo TranscrIA",
+        "date": "Data",
+        "duration": "Duração",
+        "type": "Tipo",
+        "service": "Departamento",
+        "language": "Idioma",
+        "topic": "Tema",
+        "objective": "Objetivo",
+        "notes": "Notas / Pauta",
+        "sec_context": "Contexto da reunião",
+        "synthese": "Resumo",
+        "summary_stale_note":
+            "⚠ O resumo é anterior à última edição da transcrição — resincronize pelo editor para refletir as correções.",
+        "sec_specific": "Informações específicas",
+        "sec_participants": "Participantes",
+        "sec_transcription": "Transcrição",
+        "sec_review": "Pontos para revisão",
+        "no_participants": "Nenhum participante inscrito.",
+        "no_transcription": "Nenhuma transcrição disponível.",
+        "next_meeting": "Próxima reunião: ",
+        "sd_agenda": "Pauta",
+        "sd_decisions": "Decisões tomadas",
+        "sd_votes": "Votos",
+        "sd_resolutions": "Resoluções aprovadas",
+        "sd_actions": "Ações pendentes",
+        "sd_blockers": "Impedimentos",
+        "sd_deferred": "Itens adiados",
+        "th_name": "Nome",
+        "speaker_n": "Participante {n}",
+        "th_function": "Função",
+        "th_service": "Departamento",
+        "th_role": "Cargo",
+        "th_speaking_time": "Tempo de fala",
+        "th_turns": "Opções de fala",
+        "quality": "Confiabilidade",
+        "badge_crise": "⚠ SITUAÇÃO DE CRISE ⚠",
+        "badge_confidentiel": "▪ DOCUMENTO CONFIDENCIAL ▪",
+        "q_coverage": "⚠ Cobertura de áudio",
+        "q_relisten": "🔍 Área para ouvir novamente",
+        "q_term_validate": "✎ Termo a ser validado",
+        "q_spelling": "✎ Ortografia a ser verificada",
+        "q_altered_name": "⚠ Nome do participante alterado",
+        "q_missing_term": "✎ Termo ausente no léxico",
+        "q_unmapped": "⚠ Participantes não identificados",
+        "q_foreign": "🔍 Segmentos em língua estrangeira",
+        "q_non_latin": "🔍 Caracteres não latinos",
+        "q_anomaly": "anomalia",
+        "d_coverage": "{pct}% — possível perda de transcrição",
+        "d_term_validate": "{term} (variante: {variant})",
+        "d_spelling": "{form} similar a {term}",
+        "d_altered_name": "{sid}: «{found}» em vez de «{expected}»",
+        "d_missing_term": "«{term}» não encontrado na transcrição corrigida",
+        "d_unmapped": "{count} segmento(s) sem participante associado",
+        "d_foreign":
+            "{count} segmento(s) marcado(s) — provável alucinação de reconhecimento automático de fala ou área ruidosa",
+        "d_non_latin": "{count} segmento(s) — áreas a serem ouvidas novamente",
+        "d_generic_count": "{count} elemento(s) afetado(s)",
+        "d_generic_details": "detalhes em quality_report.md",
+        "chk_empty_segments": "Segmentos vazios",
+        "chk_short_segments": "Segmentos muito curtos",
+        "chk_long_segments": "Segmentos muito longos",
+        "chk_overlaps": "Sobreposições de voz",
+        "chk_audio_preflight_flags": "Alertas de qualidade de áudio",
+        "chk_suspect_no_speech_prob": "Segmentos com baixa probabilidade de fala",
+        "chk_suspicious_short_segments": "Segmentos curtos suspeitos",
+        "quorum": "Quórum",
+        "quorum_reached": "✓ Quórum atingido",
+        "quorum_not_reached": "✗ Quórum não atingido",
+        "odj_prefix": "Pauta",
+    },
 }
 
 def _docx_labels(language: str | None) -> dict[str, str]:
@@ -482,7 +554,7 @@ def _fmt_date(date_str: str) -> str:
         return "—"
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
-        return f"{dt.day} {_MONTHS_FR[dt.month]} {dt.year}"
+        return f"{dt.day} {_MONTHS_FR[dt.month]} {dt.year}" # ??? i18n
     except ValueError:
         return date_str
 
