@@ -8,7 +8,7 @@ import os
 import re
 
 _LANGUAGE_NAMES = {
-    "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español",
+    "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español", "pt-br": "português do Brasil",
 }
 
 
@@ -161,6 +161,19 @@ _SUMMARY_MARKERS: dict[str, dict[str, str]] = {
         "terms_section_re": r"Termini\s+dubbi[^\n]*",
         "structured_section_re": r"Dati\s+strutturati",
         "summary_heading": "## Sintesi",
+    },
+    "pt-br": {
+        "title": "Título sugerido",
+        "type": "Tipo sugerido",
+        "subject": "Tema principal",
+        "objective": "Objetivo provável",
+        "notes": "Notas / Pauta provável",
+        "keywords": "Palavras-chave",
+        "participant_count": "Número de participantes detectados",
+        "participants_heading": "## Participantes prováveis",
+        "terms_section_re": r"Termos\s+suspeitos[^\n]*",
+        "structured_section_re": r"Dados\s+estruturados",
+        "summary_heading": "## Resumo",
     },
 }
 

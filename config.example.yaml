@@ -951,6 +951,7 @@ i18n:
     - "de"                       # bêta : traduction relue mécaniquement, pas encore validée par un natif
     - "es"                       # bêta
     - "it"                       # bêta
+    - "pt-br"                    # português do Brasil
 
 notifications:
   email:

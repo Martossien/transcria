@@ -726,6 +726,27 @@ _MSG: dict[str, dict[str, str]] = {
             "il trattamento, verrà rieseguita solo la correzione."
         ),
     },
+    "pt-br": {
+        "diff_annex_title": "## Anexo — diferença factual (gerada por código)",
+        "diff_annex_intro": (
+            "Esta diferença é calculada mecanicamente, independentemente do relatório anterior do agente: {n} linha(s)"
+            " modificada(s). Uma alteração listada aqui e ausente no relatório foi feita sem ser declarada."
+        ),
+        "segment_parity": (
+            "SRT corrigido não conforme: {out} segmentos em vez de {src} (segmentos perdidos, mesclados ou adicionados"
+            " pelo LLM). O SRT bruto é preservado — execute o trabalho novamente; apenas a correção será repetida."
+        ),
+        "block_structure": (
+            "SRT corrigido não conforme: {out} blocos para segmentos de origem {src} — a estrutura interna dos"
+            " segmentos está quebrada (linhas vazias inseridas ou blocos mesclados). O SRT bruto é preservado — execute"
+            " o trabalho novamente; apenas a correção será repetida."
+        ),
+        "size_ratio": (
+            "SRT corrigido não conforme: proporção de tamanho {ratio:.2f} fora de [0.90, 1.10] (conteúdo truncado,"
+            " resumido ou reescrito — por exemplo, prefixos de parceiros alterados). O SRT bruto é mantido — execute"
+            " o trabalho novamente, apenas a correção será repetida."
+        ),
+    },
 }
 
 

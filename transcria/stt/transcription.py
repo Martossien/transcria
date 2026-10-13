@@ -82,7 +82,7 @@ _DEFAULT_NON_LATIN_CHAR_PATTERN = (
 )
 # Langues de sortie à écriture LATINE (miroir de _KNOWN_LOCALES du schéma) :
 # seule condition d'activation du filtre anti-dérive courte (_is_short_non_latin_drift).
-_LATIN_SCRIPT_LANGUAGES = frozenset({"fr", "en", "es", "de", "it", "pt", "nl"})
+_LATIN_SCRIPT_LANGUAGES = frozenset({"fr", "en", "es", "de", "it", "pt", "pt-br", "nl"})
 
 _DEFAULT_GENERIC_HALLUCINATION_PATTERNS = [
     # Segments isolés observés sur silences/bruits de réunions françaises.

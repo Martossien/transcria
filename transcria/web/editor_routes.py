@@ -491,6 +491,15 @@ _SYNC_SUMMARY_STRINGS: dict[str, dict[str, str]] = {
             "invece di decidere."
         ),
     },
+    "pt-br": {
+        "instruction": (
+            "O usuário acabou de corrigir o texto literal no editor SRT (segmento(s) {editado(s)} modificado(s), "
+            "{new_speakers} participante(s) renomeado(s) ou adicionado(s)). Atualize o resumo e os dados estruturados "
+            "SOMENTE onde o texto literal corrigido os contradiz: nomes, números, atribuições de palavras, decisões "
+            "e ações. Não reestruture nada; não reescreva o estilo. Em caso de ambiguidade, aponte para o problema em "
+            "seu relatório em vez de decidir."
+        ),
+    },
 }
 
 

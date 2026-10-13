@@ -277,7 +277,7 @@ class TestReancrageSynthese:
         n'existe que pour les livrables français."""
         fr = (ROOT / "configs/prompts/correction_prompt.txt").read_text(encoding="utf-8")
         assert "synthese_a_reancrer.md" in fr and "summary_reancree.md" in fr
-        for loc in ("en", "de", "es", "it"):
+        for loc in ("en", "de", "es", "it", "pt-br"):
             texte = (ROOT / f"configs/prompts/{loc}/correction_prompt.txt").read_text(encoding="utf-8")
             assert "synthese_a_reancrer.md" in texte, f"{loc} : entrée absente"
             assert "summary_reancree.md" in texte, f"{loc} : sortie absente"
@@ -346,7 +346,7 @@ class TestLisibiliteDuCompteRendu:
         fr = (ROOT / "configs/prompts/correction_prompt.txt").read_text(encoding="utf-8")
         assert "faits\n   VALIDÉS" in fr or "VALIDÉS" in fr
         for loc, mot in (("en", "VALIDATED"), ("de", "BESTÄTIGTE"),
-                         ("es", "VALIDADOS"), ("it", "CONVALIDATI")):
+                         ("es", "VALIDADOS"), ("it", "CONVALIDATI"), ("pt-br", "VALIDADOS")):
             texte = (ROOT / f"configs/prompts/{loc}/correction_prompt.txt").read_text(encoding="utf-8")
             assert mot in texte, f"{loc} : règle anti-hésitation absente"
 
@@ -503,7 +503,7 @@ class TestLongueurDeLaSynthese:
 
     def test_la_regle_de_longueur_est_dans_les_cinq_prompts(self):
         mots = {"": "paragraphe", "en": "paragraph", "de": "Absatz",
-                "es": "párrafo", "it": "paragrafo"}
+                "es": "párrafo", "it": "paragrafo", "pt-br": "parágrafo"}
         for loc, mot in mots.items():
             chemin = f"configs/prompts/{loc + '/' if loc else ''}summary_prompt.txt"
             texte = (ROOT / chemin).read_text(encoding="utf-8")

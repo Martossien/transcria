@@ -88,7 +88,7 @@ def texts_equivalent(primary: str, secondary: str) -> bool:
     return _normalize_text(primary) == _normalize_text(secondary)
 
 
-_LANGUAGE_NAMES = {"fr": "français", "en": "anglais", "de": "allemand", "es": "espagnol", "it": "italien"}
+_LANGUAGE_NAMES = {"fr": "français", "en": "anglais", "de": "allemand", "es": "espagnol", "it": "italien", "pt-br": "portugais du Brésil"}
 
 
 def build_arbitration_messages(
