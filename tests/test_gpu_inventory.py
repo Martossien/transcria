@@ -79,3 +79,95 @@ class TestDelegation:
         manager_view = VRAMManager(cfg).get_gpu_info()
         allocator_view = GPUAllocator(cfg).get_gpu_info()
         assert manager_view == allocator_view == [self._STATES[0].as_dict()]
+
+
+class TestLectureSansContexteCuda:
+    """La mesure du LIBRE passe par NVML pour ne pas ouvrir de contexte CUDA.
+
+    `torch.cuda.mem_get_info(idx)` sélectionne la carte, donc y ouvre un contexte :
+    ~500 Mio par RTX 5090 (mesuré 2026-10-12). L'inventaire sondant TOUTES les cartes,
+    un process payait ~1,2 Gio de VRAM pour lire « combien est libre » — de quoi
+    empêcher le lancement de la LLM d'arbitrage sur une machine chargée. NVML répond
+    sans contexte ; on ne lui prend QUE le libre, le total restant celui de torch
+    (base du planificateur STT). Tout doute retombe sur `mem_get_info`.
+    """
+
+    @staticmethod
+    def _torch_pci(cartes, mem_get_info=None):
+        """`cartes` = {index: (bus_pci, total_octets)}."""
+        def _refuse(idx):
+            raise AssertionError("mem_get_info appelé : un contexte CUDA aurait été ouvert")
+
+        props = {i: SimpleNamespace(pci_domain_id=0, pci_bus_id=bus, pci_device_id=0,
+                                    total_memory=total)
+                 for i, (bus, total) in cartes.items()}
+        cuda = SimpleNamespace(
+            is_available=lambda: True,
+            device_count=lambda: len(cartes),
+            get_device_name=lambda idx: f"NVIDIA GeForce RTX 509{idx}",
+            get_device_properties=lambda idx: props[idx],
+            mem_get_info=mem_get_info or _refuse,
+        )
+        return SimpleNamespace(cuda=cuda)
+
+    def test_le_libre_vient_de_nvml_et_le_total_de_torch(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci({0: (0x84, 32 * _GIB)}))
+        vus = []
+        monkeypatch.setattr(inventory, "_nvml_free_total",
+                            lambda bus: vus.append(bus) or (4 * _GIB, 32 * _GIB))
+
+        states = snapshot()
+
+        # Apparié par bus PCI, jamais par index : torch énumère en FASTEST_FIRST et NVML
+        # en ordre PCI — sur machine hétérogène les deux numérotations divergent.
+        assert vus == ["00000000:84:00.0"]
+        assert states[0].free_gib == 4.0
+        assert states[0].total_gib == 32.0
+        assert states[0].used_gib == 28.0
+
+    def test_chaque_carte_est_lue_par_son_propre_bus(self, monkeypatch):
+        # Deux cartes de MÊME nom et MÊME taille : seul le bus les distingue. Un
+        # appariement par index serait silencieusement faux sous CUDA_VISIBLE_DEVICES.
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci({
+            0: (0x04, 32 * _GIB), 1: (0x84, 32 * _GIB),
+        }))
+        par_bus = {"00000000:04:00.0": (3 * _GIB, 32 * _GIB),
+                   "00000000:84:00.0": (9 * _GIB, 32 * _GIB)}
+        monkeypatch.setattr(inventory, "_nvml_free_total", lambda bus: par_bus[bus])
+
+        assert [s.free_gib for s in snapshot()] == [3.0, 9.0]
+
+    def test_mig_detecte_et_refuse_la_mesure_nvml(self, monkeypatch):
+        # Sur une machine MIG, le bus mène à la carte PARENTE (80 Gio) alors que torch
+        # voit une TRANCHE (10 Gio) : la mesure NVML décrirait une autre carte.
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci(
+            {0: (0x04, 10 * _GIB)}, mem_get_info=lambda idx: (6 * _GIB, 10 * _GIB)))
+        monkeypatch.setattr(inventory, "_nvml_free_total", lambda bus: (70 * _GIB, 80 * _GIB))
+
+        assert snapshot()[0].free_gib == 6.0   # repli, pas les 70 Gio de la carte parente
+
+    def test_libre_borne_au_total_pilote(self, monkeypatch):
+        # NVML compte le total MATÉRIEL : son libre peut dépasser le total pilote de
+        # torch. Sans bornage, `used` deviendrait négatif chez les appelants.
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci({0: (0x04, 32 * _GIB)}))
+        monkeypatch.setattr(inventory, "_nvml_free_total",
+                            lambda bus: (33 * _GIB, 33 * _GIB))
+
+        state = snapshot()[0]
+        assert state.free_gib == 32.0 and state.used_gib == 0.0
+
+    def test_repli_sur_mem_get_info_si_nvml_muet(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci(
+            {0: (0x04, 32 * _GIB)}, mem_get_info=lambda idx: (7 * _GIB, 32 * _GIB)))
+        monkeypatch.setattr(inventory, "_nvml_free_total", lambda bus: None)
+
+        assert snapshot()[0].free_gib == 7.0
+
+    def test_nvml_indisponible_ne_fait_jamais_echouer_la_sonde(self, monkeypatch):
+        # Machine sans pilote NVIDIA, conteneur sans libnvidia-ml : comportement
+        # historique conservé.
+        monkeypatch.setitem(sys.modules, "torch", self._torch_pci(
+            {0: (0x04, 32 * _GIB)}, mem_get_info=lambda idx: (7 * _GIB, 32 * _GIB)))
+        monkeypatch.setattr(inventory, "_nvml", lambda: None)
+
+        assert snapshot()[0].free_gib == 7.0
