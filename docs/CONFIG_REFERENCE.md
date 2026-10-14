@@ -33,8 +33,8 @@ Dans les deux cas, la sauvegarde passe par `ConfigService.save_if_valid()` (vali
 |---|---|---|
 | `models.cohere_model_path` | `./models/cohere-asr/...` (relatif) | peut être absolu selon l'installation |
 | `workflow.summary_llm.model_id` | `local/votre-modele-llm-ici` | identifiant du modèle utilisé |
-| `workflow.summary_llm.timeout_seconds` | 1800 | typ. 1800+ |
-| `workflow.arbitration_llm.timeout_seconds` | 7200 | typ. 7200 (défaut code : 600) |
+| `workflow.summary_llm.timeout_seconds` | 7200 | typ. 7200 (défaut code : 7200) |
+| `workflow.arbitration_llm.timeout_seconds` | 7200 | typ. 7200 (défaut code : 7200) |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
 La clé `qwen_port` reste lue pour compatibilité avec les anciennes installations (alias de `arbitrage_llm_port`). Les nouvelles configurations doivent utiliser `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`. Les méthodes Python `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
@@ -1183,7 +1183,7 @@ Configuration de la LLM de résumé.
 | `enabled` | bool | `false` | Active la Phase 2 LLM du résumé ; à activer seulement quand `model_id` est renseigné |
 | `model_id` | string | `""` (obligatoire) | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` — doit être défini dans `config.yaml` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
-| `timeout_seconds` | int | `120` | Timeout du résumé via opencode |
+| `timeout_seconds` | int | `7200` | Garde-fou ABSOLU du run opencode de résumé (dernier recours : un gel réel est attrapé en ~120 s par les gardes d'inactivité) |
 | `use_chat_api` | bool | absent dans `_DEFAULT_CONFIG` | Ancien paramètre du chemin API direct, non utilisé par le chemin opencode actif |
 
 **Redémarrage requis :** non — lus à chaque appel dans `OpenCodeRunner` et `SummaryGenerator._llm_summarize()`.
@@ -1191,7 +1191,7 @@ Configuration de la LLM de résumé.
 **Impact si modifié :**
 - `enabled=false` : la Phase 2 est sautée. Le résumé affiche "Résumé de contrôle indisponible (LLM non configurée)."
 - `model_id` : utilisé par le chemin actif `OpenCodeRunner.run_summary()` pour choisir le modèle du résumé opencode.
-- `timeout_seconds` : défaut 120s (conservateur). En production, monter à 1800+ pour les réunions longues.
+- `timeout_seconds` : défaut 7200 s. Le dimensionner sur le modèle SERVI, pas sur la durée de la réunion : une réunion de 64 min a demandé 2 163 s avec un modèle dense de 27B (~60 tok/s) là où un MoE 35B-A3B tenait dans 1 800 s. Trop bas, l'agent est tué en pleine production et la phase rend un résumé vide.
 - `use_chat_api` : conservé pour compatibilité documentaire/production, mais le code `_llm_summarize()` utilise aujourd'hui directement `/chat/completions` et ce chemin n'est pas appelé par le workflow.
 
 **Note sur la dualité de résumé :** Il existe DEUX chemins de résumé LLM :
@@ -1209,7 +1209,7 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `enabled` | bool | `false` | Active l'arbitrage LLM |
 | `model_id` | string | `""` (obligatoire) | Identifiant du modèle — doit être défini dans `config.yaml`, `OpenCodeRunner` lève `ValueError` si absent |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
-| `timeout_seconds` | int | `600` | Timeout de la correction SRT via opencode |
+| `timeout_seconds` | int | `7200` | Garde-fou ABSOLU du run opencode de correction (cf. `summary_llm.timeout_seconds`) |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
 | `keep_warm` | bool | `false` | Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en file : le suivant la réutilise chaude (CAS A, ~17 s de démarrage llama.cpp économisées ; **fortement recommandé en vLLM local** où chaque relance coûte des minutes). Décision prise sous le verrou LLM (pas de course avec un lancement concurrent) ; file vide → arrêt comme avant |
 | `prelaunch_at_analyze` | bool | `false` | Pré-lancer la LLM dès l'étape ANALYSE du wizard (thread best-effort, sous verrou, jamais de préemption VRAM) : le démarrage s'absorbe pendant la saisie des étapes suivantes |

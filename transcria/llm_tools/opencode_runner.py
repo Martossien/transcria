@@ -147,16 +147,23 @@ class OpenCodeRunner:
     def _get_correction_timeout(self) -> int:
         llm = (self._config or {}).get("workflow", {}).get("arbitration_llm", {})
         try:
-            return int(llm.get("timeout_seconds", 900))
+            return int(llm.get("timeout_seconds", 7200))
         except (TypeError, ValueError):
-            return 900
+            return 7200
 
     def _get_summary_timeout(self) -> int:
+        # Défaut 600→7200 s (2026-10-12, MESURÉ) : ce plafond ABSOLU n'est pas une marge
+        # de confort, c'est le dernier recours derrière les gardes d'INACTIVITÉ (silence
+        # + LLM au repos corroborée par les cartes), qui tuent un vrai gel en ~120 s.
+        # Trop bas, il tue un agent EN TRAIN de produire, et la phase rend un résumé vide :
+        # une réunion réelle de 64 min a demandé 2 163 s avec un modèle dense de 27B
+        # (le MoE 35B-A3B tenait dans 1 800 s). Le coût du défaut haut est nul, celui du
+        # défaut bas est un livrable perdu après 30 minutes de calcul.
         llm = (self._config or {}).get("workflow", {}).get("summary_llm", {})
         try:
-            return int(llm.get("timeout_seconds", 600))
+            return int(llm.get("timeout_seconds", 7200))
         except (TypeError, ValueError):
-            return 600
+            return 7200
 
     # Parseurs purs extraits vers gpu/llm_parsing.py (vague C2). Délégateurs
     # conservés : les appelants historiques et les tests passent par la classe.

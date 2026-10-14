@@ -757,7 +757,17 @@ workflow:
     # change. La clé `arbitrage` doit exister dans opencode.json (provider `local`).
     model_id: "local/arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
-    timeout_seconds: 1800
+    # Garde-fou ABSOLU du run opencode de la phase résumé. Il n'est PAS une marge de
+    # confort : il borne un gel, et les vraies pannes sont déjà attrapées bien plus tôt
+    # par les gardes d'INACTIVITÉ (120 s de silence avec la LLM au repos, corroborés par
+    # l'activité des cartes). Le dimensionner à l'usage le plus lent, pas au cas moyen.
+    # MESURÉ (2026-10-12, réunion réelle de 64 min, 5 locuteurs, délégation @general) :
+    # 2 163 s avec un modèle DENSE de 27B à ~60 tok/s. L'ancienne valeur de 1 800 s tuait
+    # l'agent en plein travail, deux fois de suite, et la phase rendait un résumé vide
+    # (« aucun résumé produit ») — diagnostic coûteux car tout le reste était sain.
+    # Un MoE à faible nombre de paramètres actifs (ex. 35B-A3B) tenait dans 1 800 s : la
+    # valeur dépend du modèle servi, pas de la durée de la réunion seule.
+    timeout_seconds: 7200
   arbitration_llm:
     # Correction du SRT (mode quality) via opencode + LLM d'arbitrage.
     # PRÉREQUIS quand enabled: true — sinon le step "correction" attend puis échoue :

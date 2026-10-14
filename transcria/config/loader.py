@@ -710,13 +710,20 @@ _DEFAULT_CONFIG = {
             "enabled": False,
             "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
-            "timeout_seconds": 120,
+            # Garde-fou ABSOLU du run opencode, pas une estimation de durée : les vraies
+            # pannes (gel, LLM injoignable) sont attrapées en ~120 s par les gardes
+            # d'INACTIVITÉ. Trop bas, il tue un agent EN TRAIN de produire et la phase
+            # rend un livrable vide. 120 s ne couvrait même pas le boot nominal
+            # d'opencode (12-17 s) suivi d'un seul appel LLM. MESURÉ (2026-10-12) :
+            # 2 163 s pour une réunion réelle de 64 min avec un modèle dense de 27B.
+            "timeout_seconds": 7200,
         },
         "arbitration_llm": {
             "enabled": False,
             "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
-            "timeout_seconds": 600,
+            # Même garde-fou pour la correction (cf. summary_llm ci-dessus).
+            "timeout_seconds": 7200,
             "opencode_bin": "opencode",
             # Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en
             # file : le suivant la réutilise chaude (~17 s de démarrage llama.cpp
