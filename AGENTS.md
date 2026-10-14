@@ -56,8 +56,8 @@ venv/bin/python -m pytest tests/test_auth.py -v
 #    (le serveur doit autoriser CREATE DATABASE ; chaque run crée/détruit une base jetable).
 
 # CI (.github/workflows/tests.yml) — les gates, reproductibles en local :
-ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
-mypy transcria/ inference_service/ --ignore-missing-imports               # check_untyped_defs actif via pyproject (C5)
+ruff check transcria/ inference_service/ connector_service/          # AUCUN drapeau : pyproject fait foi
+mypy transcria/ inference_service/ connector_service/ --ignore-missing-imports  # check_untyped_defs actif via pyproject (C5)
 venv/bin/python scripts/i18n_check.py                                     # catalogues fr/en complets + compilés
 python scripts/audit_imports.py --check-baseline quality_baseline.json    # RATCHET architecture (cf. section Architecture)
 python scripts/audit_front.py --check-baseline quality_baseline_front.json # RATCHET front (JS inline, tailles)
@@ -81,8 +81,8 @@ Leçons durement acquises (beta.8/beta.9), NON négociables :
 ```bash
 # Les commandes EXACTES de la CI, sur l'ARBRE ENTIER (jamais une version ciblée) :
 set -o pipefail   # OBLIGATOIRE : `mypy … | tail -1` a déjà laissé passer une CI rouge
-venv/bin/python -m ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
-venv/bin/python -m mypy transcria/ inference_service/ --ignore-missing-imports
+venv/bin/python -m ruff check transcria/ inference_service/ connector_service/
+venv/bin/python -m mypy transcria/ inference_service/ connector_service/ --ignore-missing-imports
 venv/bin/python scripts/i18n_check.py
 python scripts/audit_imports.py --check-baseline quality_baseline.json
 python scripts/audit_front.py --check-baseline quality_baseline_front.json
@@ -92,6 +92,11 @@ venv/bin/python -m pytest tests/ -q --cov=transcria --cov=inference_service --co
 
 1. **Jamais de pipe qui masque un code de sortie** sur un gate (`cmd | tail` → l'échec
    devient invisible). `set -o pipefail` ou pas de pipe du tout.
+1bis. **Aucun drapeau sur ruff et mypy, et les TROIS paquets** (`connector_service/`
+   compris). `pyproject.toml` est la source unique des règles : y ajouter `--select E,W,F,I`
+   REDUIT le jeu de règles et rend vert un arbre que la CI refuse (vécu 2026-10-14 : `UP032`
+   invisible en local, CI rouge après un push). Recopier la commande de
+   `.github/workflows/tests.yml`, jamais une variante « équivalente ».
 2. **UI : piloter ET voir.** Un banc Playwright de GESTES réels (pas des GET), puis
    **revue visuelle de chaque capture** — la revue attrape ce que les assertions ratent
    (7 vrais défauts attrapés ainsi sur l'éditeur SRT en une semaine).

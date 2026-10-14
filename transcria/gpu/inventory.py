@@ -82,9 +82,7 @@ def _nvml() -> ctypes.CDLL | None:
 def _bus_id(props) -> str | None:
     """`00000000:04:00.0` depuis les champs PCI de `get_device_properties`."""
     try:
-        return "{:08X}:{:02X}:{:02X}.0".format(
-            props.pci_domain_id, props.pci_bus_id, props.pci_device_id
-        )
+        return f"{props.pci_domain_id:08X}:{props.pci_bus_id:02X}:{props.pci_device_id:02X}.0"
     except Exception:  # noqa: BLE001 — torch ancien ou doublure de test minimale
         return None
 
