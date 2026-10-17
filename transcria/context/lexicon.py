@@ -21,6 +21,7 @@ _LEXICON_PRIORITY_LABELS: dict[str, dict[str, str]] = {
     "de": {"critique": "kritisch", "importante": "wichtig", "normale": "normal"},
     "es": {"critique": "crítica", "importante": "importante", "normale": "normal"},
     "it": {"critique": "critica", "importante": "importante", "normale": "normale"},
+    "pt-br": {"critique": "crítica", "importante": "importante", "normale": "normal"},
 }
 
 

@@ -261,7 +261,7 @@ def _check_maintenance(cfg: dict, r: ValidationResult) -> None:
     if "purge_on_calendar" in sched:
         _check_str(sched, "purge_on_calendar", "maintenance.schedule.purge_on_calendar", r)
 
-_KNOWN_LOCALES = {"fr", "en", "es", "de", "it", "pt", "nl"}
+_KNOWN_LOCALES = {"fr", "en", "es", "de", "it", "pt", "pt-br", "nl"}
 
 def _check_i18n(cfg: dict, r: ValidationResult) -> None:
     if not cfg:

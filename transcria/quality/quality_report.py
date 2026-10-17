@@ -308,6 +308,70 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "verificare la generazione della sintesi."
         ),
     },
+    "pt-br": {
+        "empty": "Segmentos vazios: {n} — verificar e excluir manualmente.",
+        "short": "Segmentos muito curtos (< 0,5s): {n} — considerar mesclar.",
+        "long": "Segmentos muito longos (> 60s): {n} — considerar dividir.",
+        "gaps": "Lacunas de tempo (> {gap}s): {n} — verificar cobertura de áudio.",
+        "unmapped": "Participantes não mapeados: {n} segmentos — associar participantes.",
+        "low_coverage": "Baixa cobertura: {pct} — possível perda de transcrição.",
+        "low_wps": "Baixa taxa de palavras: {wps} palavras/s.",
+        "high_wps": "Alta taxa de palavras: {wps} palavras/s — possível erro.",
+        "md_title": "# Relatório de qualidade",
+        "md_score": "Confiabilidade da transcrição: {s}/100",
+        "md_checks": "Verificações realizadas: {c}",
+        "md_warnings": "Pontos de aviso: {w}",
+        "md_review": "## Pontos a verificar",
+        "md_none": "- Nenhum ponto de aviso detectado.",
+        "md_audio_diag": "## Diagnóstico de áudio antes da transcrição",
+        "md_risk": "- Risco: {v}",
+        "md_flags": "- Sinalizadores: {v}",
+        "md_rms": "- RMS: {v}",
+        "md_snr": "- SNR estimado: {v}",
+        "md_bandwidth": "- Largura de banda a 95%: {v} Hz",
+        "md_silence": "- Silêncio: {v}",
+        "md_details": "## Detalhes das verificações",
+        "md_all_passed": "- Todas as verificações foram aprovadas com sucesso.",
+        "md_review_load": "## Carga de revisão",
+        "risk_unknown": "desconhecido",
+        "removed_hallucinations": (
+            "Alucinações STT removidas: {n} segmento(s) (assinatura do mecanismo + áudio silencioso/musical) — detalhes"
+            " em removed_hallucinations.json, por exemplo, '{example}'."
+        ),
+        "overlaps": "Sobreposições: {n} das quais {sig} ≥ {thr}s — verifique os carimbos de data/hora.",
+        "out_of_order":
+            "Segmentos fora de ordem: {n} — a ordem dos segmentos não está aumentando (verifique fusão/diarização).",
+        "missing_lexicon": "Termos do léxico normalizados ausentes: {terms}",
+        "inconsistent_forms": "Formas inconsistentes fora do léxico: {n} — sinalizadas sem correção automática ({detail}).",
+        "close_to": "próximo de",
+        "unresolved_variants": "Variantes do léxico não resolvidas após a correção: {detail}",
+        "malformed_srt": "SRT malformado: {n} anomalias estruturais (numeração/tempo/ordem) — verificar exportação.",
+        "speaker_names_expected": "esperados",
+        "speaker_names_modified": "Nomes de participantes modificados no SRT corrigido: {detail}",
+        "foreign_segments":
+            "Segmentos sinalizados como estrangeiros: {n} — provavelmente alucinação do ASR ou zona de áudio ruidosa.",
+        "non_latin_segments": "Segmentos com escrita não latina no ASR bruto: {n} — verificar VAD/qualidade de áudio.",
+        "suspicious_short": (
+            "Segmentos curtos: {n} dos quais {c} corroborados (silêncio/ruído/baixa confiança = prováveis "
+            "alucinações); os demais são breves interjeições a serem confirmadas."
+        ),
+        "audio_problem_zones": "Zonas de áudio problemáticas: {n} — ouvir novamente {detail}.",
+        "audio_prediag": "Pré-diagnóstico de áudio: {flags} — transcrição potencialmente parcial ou incerta.",
+        "suspect_nsp": (
+            "Segmentos com alta probabilidade de não serem fala (nf>{thr}): {n} — provável alucinação sobre silêncio "
+            "ou áudio degradado."
+        ),
+        "low_word_conf": (
+            "Segmentos com baixa confiança de palavras (>{pct}% palavras < {min}): {n} — transcrição incerta, "
+            "verificar o conteúdo do áudio."
+        ),
+        "segment_reliability":
+            "Confiabilidade do ASR por segmento: {counts} — priorizar segmentos degradados/suspeitos na revisão.",
+        "summary_too_short": (
+            "Resumo anormalmente curto ({summary_chars} caracteres para uma transcrição de {transcript_chars} "
+            "caracteres) — verificar a geração do resumo."
+        ),
+    },
 }
 
 
