@@ -1213,6 +1213,21 @@ class TestStripRoleGender:
         for src, expected in cases.items():
             assert OpenCodeRunner._strip_role_gender(src) == expected, src
 
+    def test_strips_sentence_initial_and_mid_sentence_forms(self):
+        # Revue 2026-10-22 : le \\s* du symbole mangeait l'espace du qualificatif.
+        cases = {
+            "Voz feminina estimada. Conduz a entrevista.": "Conduz a entrevista.",
+            "coordina el proyecto, voz masculina estimada, y cierra": "coordina el proyecto, y cierra",
+            "Männliche Stimme. Leitet die Sitzung.": "Leitet die Sitzung.",
+        }
+        for src, expected in cases.items():
+            assert OpenCodeRunner._strip_role_gender(src) == expected, src
+
+    def test_strips_english_forms(self):
+        assert OpenCodeRunner._strip_role_gender("Leads the meeting (female voice)") == "Leads the meeting"
+        assert OpenCodeRunner._strip_role_gender("runs the agenda, male voice, then closes") == "runs the agenda, then closes"
+        assert OpenCodeRunner._strip_role_gender("presents the budget — Female") == "presents the budget"
+
     def test_keeps_latin_adjective_glued_to_noun(self):
         role = "treina a equipe feminina de vôlei"
         assert OpenCodeRunner._strip_role_gender(role) == role

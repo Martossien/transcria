@@ -169,7 +169,7 @@ _SUMMARY_MARKERS: dict[str, dict[str, str]] = {
         "objective": "Objetivo provável",
         "notes": "Notas / Pauta provável",
         "keywords": "Palavras-chave",
-        "participant_count": "Número de participantes detectados",
+        "participant_count": "Número de participantes identificados",
         "participants_heading": "## Participantes prováveis",
         "terms_section_re": r"Termos\s+suspeitos[^\n]*",
         "structured_section_re": r"Dados\s+estruturados",

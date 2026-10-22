@@ -743,7 +743,7 @@ _MSG: dict[str, dict[str, str]] = {
         ),
         "size_ratio": (
             "SRT corrigido não conforme: proporção de tamanho {ratio:.2f} fora de [0.90, 1.10] (conteúdo truncado,"
-            " resumido ou reescrito — por exemplo, prefixos de parceiros alterados). O SRT bruto é mantido — execute"
+            " resumido ou reescrito — por exemplo, prefixos de participantes alterados). O SRT bruto é mantido — execute"
             " o trabalho novamente, apenas a correção será repetida."
         ),
     },

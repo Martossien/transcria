@@ -114,6 +114,14 @@ class ForcedAlignmentService:
             logger.warning("Alignement forcé ignoré: backend non supporté '%s'", backend)
             return segments
 
+        # Pas de modèle CTC pour cette langue (ex. « pt » : VoxPopuli n'en publie pas) et
+        # aucun `bundle_name` explicite : on SAUTE plutôt que d'aligner en silence avec le
+        # modèle français (jeu d'étiquettes étranger → timestamps mot-à-mot faux).
+        if not self.align_cfg.get("bundle_name") and language not in _TorchaudioCTCAligner._BUNDLES_BY_LANGUAGE:
+            logger.warning("Alignement forcé ignoré: aucun modèle CTC pour la langue '%s' "
+                           "(renseigner whisper.forced_alignment.bundle_name)", language)
+            return segments
+
         try:
             aligner = _TorchaudioCTCAligner(self.align_cfg, self.device, language)
             return aligner.align(audio_path, segments)

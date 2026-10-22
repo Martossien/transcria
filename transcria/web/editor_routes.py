@@ -493,7 +493,7 @@ _SYNC_SUMMARY_STRINGS: dict[str, dict[str, str]] = {
     },
     "pt": {
         "instruction": (
-            "O usuário acabou de corrigir o texto literal no editor SRT (segmento(s) {editado(s)} modificado(s), "
+            "O usuário acabou de corrigir o texto literal no editor SRT ({edited} segmento(s) modificado(s), "
             "{new_speakers} participante(s) renomeado(s) ou adicionado(s)). Atualize o resumo e os dados estruturados "
             "SOMENTE onde o texto literal corrigido os contradiz: nomes, números, atribuições de palavras, decisões "
             "e ações. Não reestruture nada; não reescreva o estilo. Em caso de ambiguidade, aponte para o problema em "

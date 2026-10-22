@@ -231,7 +231,7 @@ _PT_BR: dict[str, str] = {
     "Word enrichi": "Word enriquecido",
     "Word complet": "Word completo",
     "Rapport qualité complet": "Relatório de qualidade completo",
-    "Archive ZIP complet": "Arquivo ZIP completo",
+    "Archive ZIP complète": "Arquivo ZIP completo",
     "Résumé de contrôle": "Resumo de controle",
     "Contexte de réunion": "Contexto da reunião",
     "Participants": "Participantes",

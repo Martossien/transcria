@@ -440,26 +440,28 @@ def strip_role_gender(text: str) -> str:
     l'indice de voix. Les artefacts (parenthèses/crochets vides, séparateurs
     orphelins, doubles espaces) sont nettoyés ; le point final est préservé.
     """
-    # Adjectif de genre accordé, dans les cinq langues des livrables (fr/en/de/es/it) et
-    # en portugais : masculin·e, masculino/a, femenino/a, feminino/a, maschile, femminile,
-    # männlich·e, weiblich·e + symbole facultatif. Première fuite hors français vue sur un
-    # E2E portugais (2026-10-22) : « Voz feminina estimada. » traversait la garde.
-    g = (r"(?:masculin[aeo]?|f[ée]minin[aeo]?|femenin[ao]|femminile|maschile"
-         r"|m[äa]nnlich(?:e[rsn]?)?|weiblich(?:e[rsn]?)?)\s*[♂♀]?")
-    # Nom porteur de l'indice (« voix », « genre », « sexe » et leurs équivalents).
-    noun = r"(?:voix|genre|sexe|voz|voce|g[eéê]nero|genere|sexo|sesso|stimme|geschlecht)"
-    # Qualificatif facultatif recopié par les LLM latines (« voz feminina estimada »).
+    # Adjectif de genre accordé, dans les six langues des livrables (fr/en/de/es/it/pt) :
+    # masculin·e, male/female, masculino/a, femenino/a, feminino/a, maschile, femminile,
+    # männlich·e, weiblich·e. Première fuite hors français vue sur un E2E portugais
+    # (2026-10-22) : « Voz feminina estimada. » traversait la garde.
+    adj = (r"(?:masculin[aeo]?|f[ée]minin[aeo]?|femenin[ao]|femminile|maschile|male|female"
+           r"|m[äa]nnlich(?:e[rsn]?)?|weiblich(?:e[rsn]?)?)")
+    # Qualificatif facultatif recopié par les LLM (« voz feminina estimada », « voix
+    # féminine estimée ») — AVANT le symbole, sinon le \s* du symbole mange son espace.
     qual = r"(?:\s+(?:estim[ée]e?|estimad[ao]|stimat[ao]|presunt[ao]|prov[áa]vel|probable|geschätzt))?"
+    g = rf"{adj}{qual}\s*[♂♀]?"
+    # Nom porteur de l'indice (« voix », « genre », « sexe » et leurs équivalents).
+    noun = r"(?:voix|voice|genre|gender|sexe|sex|voz|voce|g[eéê]nero|genere|sexo|sesso|stimme|geschlecht)"
+    # Locution complète : « voix féminine », « female voice », « weibliche Stimme ».
+    phrase = rf"(?:{noun}\s+{g}|{g}\s+(?:voice|stimme))"
     cleaned = text
     # (a) « (…genre…) » : parenthèse ne contenant qu'un marqueur de genre.
-    cleaned = re.sub(rf"\(\s*(?:{noun}\s+)?{g}{qual}\s*\)", "", cleaned, flags=re.IGNORECASE)
-    # (b0) phrase AUTONOME « Voz feminina estimada. » après une fin de phrase : retirée
-    #      avec son point, pour ne pas laisser « … perguntas. . ».
-    cleaned = re.sub(rf"(?<=[.!?])\s+{noun}\s+{g}{qual}\s*\.?(?=\s|$)", "", cleaned, flags=re.IGNORECASE)
-    # (b) « voix/genre/sexe masculin·e|féminin·e » n'importe où (ordre allemand compris :
-    #     « weibliche Stimme »).
-    cleaned = re.sub(rf"\b{noun}\s+{g}{qual}", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(rf"\b{g}\s+(?:stimme)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(rf"\(\s*(?:{phrase}|{g})\s*\)", "", cleaned, flags=re.IGNORECASE)
+    # (b0) phrase AUTONOME (« Voz feminina estimada. ») en tête de texte ou après une fin
+    #      de phrase : retirée avec son point, pour ne pas laisser « … perguntas. . ».
+    cleaned = re.sub(rf"(?:^|(?<=[.!?]))\s*{phrase}\s*\.?(?=\s|$)", "", cleaned, flags=re.IGNORECASE)
+    # (b) la locution n'importe où ailleurs.
+    cleaned = re.sub(rf"\b{phrase}", "", cleaned, flags=re.IGNORECASE)
     # (c) genre détaché par une ponctuation de séparation, n'importe où ; on consomme
     #     aussi la virgule/point-virgule fermante d'un appositif (« A, masculin, B » → « A B »).
     cleaned = re.sub(rf"\s*[—–\-,;/]\s*{g}\s*[,;]?", "", cleaned, flags=re.IGNORECASE)
@@ -476,7 +478,7 @@ def strip_role_gender(text: str) -> str:
     #      accolé et lowercase (« vestiaire masculin », « foot féminin ») est PRÉSERVÉ
     #      (bug pré-0.3.0 : l'ancienne règle mangeait ce dernier mot). Sensible à la casse.
     cleaned = re.sub(
-        r"\s+\b(?:Masculin[aeo]?|F[ée]minin[aeo]?|Femenin[ao]|Femminile|Maschile|M[äa]nnlich|Weiblich|Homme|Femme)\b"
+        r"\s+\b(?:Masculin[aeo]?|F[ée]minin[aeo]?|Femenin[ao]|Femminile|Maschile|Male|Female|M[äa]nnlich|Weiblich|Homme|Femme)\b"
         r"\s*[♂♀]?\s*\)?\s*$",
         "", cleaned,
     )
@@ -498,7 +500,12 @@ def is_non_identifiable_participant_line(line: str) -> bool:
     lowered = text.casefold()
     # Sentinelles « aucun participant » FR + EN (Axe B : le prompt EN écrit "(not identifiable)").
     _none = {"non identifiable", "(non identifiable)", "aucun", "(aucun)", "aucune", "(aucune)",
-             "not identifiable", "(not identifiable)", "none", "(none)"}
+             "not identifiable", "(not identifiable)", "none", "(none)",
+             # de/es/it/pt : la sentinelle que chaque configs/prompts/<lang>/summary_prompt.txt impose.
+             "nicht identifizierbar", "(nicht identifizierbar)", "keine", "(keine)",
+             "no identificable", "(no identificable)", "ninguno", "(ninguno)",
+             "non identificabile", "(non identificabile)", "nessuno", "(nessuno)",
+             "não identificável", "(não identificável)", "nenhum", "(nenhum)"}
     if lowered in _none:
         return True
 

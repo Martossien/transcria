@@ -57,7 +57,7 @@ ANIMATION_WORDS: tuple[str, ...] = (
     # it
     "moderatore", "moderatrice", "modera la riunione", "anima la riunione",
     # pt (« moderador/moderadora » sont déjà couverts par l'espagnol)
-    "mediador", "mediadora", "facilitador", "facilitadora", "apresentador", "apresentadora",
+    "mediador", "mediadora", "facilitador", "facilitadora",
     "modera a reuniao", "anima a reuniao", "conduz a reuniao", "conduz a entrevista",
     "preside a sessao", "dirige a reuniao", "conduz os debates",
     # Verbes d'animation SITUÉS (banc du 2026-08-22) : sur une réunion de projet, la LLM

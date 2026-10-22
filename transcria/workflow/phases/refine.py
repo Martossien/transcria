@@ -139,9 +139,9 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
             "ℹ️ Reunião longa: a conversa abrange ~{pct}% da transcrição (o período {gap_from} → {gap_to} "
             "não está visível para o assistente)."
         ),
-        "fail": "Falha na configuração ({exc}) — os documentos resultantes não foram modificados. Tente novamente.",
-        "progress_working": "Configuração: o assistente está trabalhando.",
-        "progress_done": "Configuração concluída.",
+        "fail": "Falha no refinamento ({exc}) — os documentos resultantes não foram modificados. Tente novamente.",
+        "progress_working": "Refinamento: o assistente está trabalhando.",
+        "progress_done": "Refinamento concluído.",
         "invalid_structured": "Os dados estruturados revisados são inválidos (não é um objeto JSON) — mantidos como estão.",
         "non_json_structured": "Os dados estruturados revisados não são JSON — mantidos como estão.",
         "non_json_options": "As opções de renderização revisadas não são JSON — mantidas como estão.",

@@ -2564,7 +2564,7 @@ def main() -> int:
             # Garde-fou : aucun rôle ne doit contenir le genre (champ dédié ailleurs).
             roles = [p.get("role", "") for p in ParticipantsManager.get(job, cfg["storage"]["jobs_dir"])]
             gender_leak = [r for r in roles if re.search(
-                r"masculin|f[ée]minin|femenin|femminil|maschil|m[äa]nnlich|weiblich|[♂♀]", r, re.IGNORECASE)]
+                r"masculin|f[ée]minin|femenin|femminil|maschil|m[äa]nnlich|weiblich|\bmale\b|\bfemale\b|[♂♀]", r, re.IGNORECASE)]
             if gender_leak:
                 warn(f"Genre présent dans {len(gender_leak)} rôle(s) participant — fuite à corriger")
                 RESULTS["role_gender_clean"] = False
