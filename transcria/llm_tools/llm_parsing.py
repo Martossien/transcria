@@ -440,13 +440,26 @@ def strip_role_gender(text: str) -> str:
     l'indice de voix. Les artefacts (parenthèses/crochets vides, séparateurs
     orphelins, doubles espaces) sont nettoyés ; le point final est préservé.
     """
-    # Adjectif de genre accordé (masculin·e / féminin·e) + symbole facultatif.
-    g = r"(?:masculin|f[ée]minin)e?\s*[♂♀]?"
+    # Adjectif de genre accordé, dans les cinq langues des livrables (fr/en/de/es/it) et
+    # en portugais : masculin·e, masculino/a, femenino/a, feminino/a, maschile, femminile,
+    # männlich·e, weiblich·e + symbole facultatif. Première fuite hors français vue sur un
+    # E2E portugais (2026-10-22) : « Voz feminina estimada. » traversait la garde.
+    g = (r"(?:masculin[aeo]?|f[ée]minin[aeo]?|femenin[ao]|femminile|maschile"
+         r"|m[äa]nnlich(?:e[rsn]?)?|weiblich(?:e[rsn]?)?)\s*[♂♀]?")
+    # Nom porteur de l'indice (« voix », « genre », « sexe » et leurs équivalents).
+    noun = r"(?:voix|genre|sexe|voz|voce|g[eéê]nero|genere|sexo|sesso|stimme|geschlecht)"
+    # Qualificatif facultatif recopié par les LLM latines (« voz feminina estimada »).
+    qual = r"(?:\s+(?:estim[ée]e?|estimad[ao]|stimat[ao]|presunt[ao]|prov[áa]vel|probable|geschätzt))?"
     cleaned = text
     # (a) « (…genre…) » : parenthèse ne contenant qu'un marqueur de genre.
-    cleaned = re.sub(rf"\(\s*(?:voix\s+|genre\s+|sexe\s+)?{g}\s*\)", "", cleaned, flags=re.IGNORECASE)
-    # (b) « voix/genre/sexe masculin·e|féminin·e » n'importe où.
-    cleaned = re.sub(rf"\b(?:voix|genre|sexe)\s+{g}", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(rf"\(\s*(?:{noun}\s+)?{g}{qual}\s*\)", "", cleaned, flags=re.IGNORECASE)
+    # (b0) phrase AUTONOME « Voz feminina estimada. » après une fin de phrase : retirée
+    #      avec son point, pour ne pas laisser « … perguntas. . ».
+    cleaned = re.sub(rf"(?<=[.!?])\s+{noun}\s+{g}{qual}\s*\.?(?=\s|$)", "", cleaned, flags=re.IGNORECASE)
+    # (b) « voix/genre/sexe masculin·e|féminin·e » n'importe où (ordre allemand compris :
+    #     « weibliche Stimme »).
+    cleaned = re.sub(rf"\b{noun}\s+{g}{qual}", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(rf"\b{g}\s+(?:stimme)\b", "", cleaned, flags=re.IGNORECASE)
     # (c) genre détaché par une ponctuation de séparation, n'importe où ; on consomme
     #     aussi la virgule/point-virgule fermante d'un appositif (« A, masculin, B » → « A B »).
     cleaned = re.sub(rf"\s*[—–\-,;/]\s*{g}\s*[,;]?", "", cleaned, flags=re.IGNORECASE)
@@ -455,7 +468,7 @@ def strip_role_gender(text: str) -> str:
     # (e1) indice isolé en FIN de ligne précédé d'une ponctuation de séparation
     #      (— – - ( , ; /), quelle que soit la casse.
     cleaned = re.sub(
-        r"[\s]*[—–\-(,;/][\s]*\b(?:masculin|f[ée]minin|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
+        rf"[\s]*[—–\-(,;/][\s]*\b(?:{g}|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
         "", cleaned, flags=re.IGNORECASE,
     )
     # (e2) indice en fin de ligne précédé d'un simple espace : retiré UNIQUEMENT s'il est
@@ -463,7 +476,8 @@ def strip_role_gender(text: str) -> str:
     #      accolé et lowercase (« vestiaire masculin », « foot féminin ») est PRÉSERVÉ
     #      (bug pré-0.3.0 : l'ancienne règle mangeait ce dernier mot). Sensible à la casse.
     cleaned = re.sub(
-        r"\s+\b(?:Masculin|F[ée]minin|Homme|Femme)\b\s*[♂♀]?\s*\)?\s*$",
+        r"\s+\b(?:Masculin[aeo]?|F[ée]minin[aeo]?|Femenin[ao]|Femminile|Maschile|M[äa]nnlich|Weiblich|Homme|Femme)\b"
+        r"\s*[♂♀]?\s*\)?\s*$",
         "", cleaned,
     )
     # Nettoyage des artefacts laissés par les retraits.

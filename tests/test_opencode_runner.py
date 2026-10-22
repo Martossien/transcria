@@ -1197,6 +1197,26 @@ class TestStripRoleGender:
         assert "♂" not in out and "()" not in out
         assert out == "vendeur au comptoir"
 
+    def test_strips_portuguese_sentence_with_period(self):
+        # E2E portugais 2026-10-22 : la LLM ajoute une phrase autonome après le rôle.
+        out = OpenCodeRunner._strip_role_gender(
+            "Conduz a entrevista e formula as perguntas. Voz masculina estimada.")
+        assert out == "Conduz a entrevista e formula as perguntas."
+
+    def test_strips_latin_and_german_forms(self):
+        cases = {
+            "coordina el proyecto (voz femenina)": "coordina el proyecto",
+            "presenta i dati, voce femminile, poi conclude": "presenta i dati, poi conclude",
+            "Leitet die Sitzung — weibliche Stimme": "Leitet die Sitzung",
+            "Orienta os alunos — Feminino": "Orienta os alunos",
+        }
+        for src, expected in cases.items():
+            assert OpenCodeRunner._strip_role_gender(src) == expected, src
+
+    def test_keeps_latin_adjective_glued_to_noun(self):
+        role = "treina a equipe feminina de vôlei"
+        assert OpenCodeRunner._strip_role_gender(role) == role
+
     def test_strips_comma_separated_gender_mid_line(self):
         out = OpenCodeRunner._strip_role_gender("anime la réunion, masculin, puis conclut")
         assert "masculin" not in out.lower()

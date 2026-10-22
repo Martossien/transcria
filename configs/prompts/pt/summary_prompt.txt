@@ -85,7 +85,7 @@ Regras:
   se os segmentos garantidos indicarem o contrário.
 - **Gênero vocal**: apenas uma indicação fraca, para evitar inconsistências óbvias ou para decidir
   entre uma hipótese de nome já presente no texto. Isso nunca cria um nome, uma identidade
-  ou uma funçÃo. NUNCA escreva o gênero (Masculino/Feminino, ♂/♀) no nome ou na função
+  ou uma função. NUNCA escreva o gênero (Masculino/Feminino, ♂/♀) no nome ou na função
   de um participante: trata-se de uma indicação interna e possui seu próprio campo.
 - **Indicações de qualidade de áudio**: Estas sugerem cautela nas passagens afetadas;
   elas nunca indicam que uma palavra, um nome ou uma função precisa de correção.
