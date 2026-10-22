@@ -8,10 +8,10 @@ msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2026-10-10 10:29+0200\n"
-"PO-Revision-Date: 2026-08-09 11:31+0200\n"
+"PO-Revision-Date: 2026-10-22 10:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pt_BR\n"
-"Language-Team: de <LL@li.org>\n"
+"Language-Team: pt_BR <LL@li.org>\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
@@ -3628,7 +3628,7 @@ msgstr "árvores: %(t)s"
 
 #: transcria/web/templates/admin_maintenance.html:196
 msgid "<strong>Opération destructive.</strong> Le service va <strong>s'arrêter</strong>, la base et les fichiers seront <strong>remplacés</strong> par le contenu de l'archive, puis le service redémarrera. Vous serez déconnecté quelques instants."
-msgstr "<strong>Operação destrutiva.</strong> O serviço será <strong>interrompido</strong>, o banco de dados e os arquivos serão <strong>substituídos</strong> pelo conteúdo do arquivar e, em seguida, o serviço será reiniciado. Você será desconectado por alguns instantes.
+msgstr "<strong>Operação destrutiva.</strong> O serviço será <strong>interrompido</strong>, o banco de dados e os arquivos serão <strong>substituídos</strong> pelo conteúdo do arquivar e, em seguida, o serviço será reiniciado. Você será desconectado por alguns instantes."
 
 #: transcria/web/templates/admin_maintenance.html:204
 msgid "Ressaisissez le nom exact de l'archive pour confirmer"
@@ -5739,7 +5739,7 @@ msgstr "Silêncio:"
 #: transcria/web/templates/wizard/_step_analysis.html:83
 #, python-format
 msgid "Bande 95%% :"
-msgstr "Largura de banda de 95%:"
+msgstr "Largura de banda de 95%%:"
 
 #: transcria/web/templates/wizard/_step_analysis.html:89
 msgid "Durée"

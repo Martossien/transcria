@@ -8,7 +8,7 @@ import os
 import re
 
 _LANGUAGE_NAMES = {
-    "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español", "pt-br": "português do Brasil",
+    "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español", "pt": "português do Brasil",
 }
 
 
@@ -162,7 +162,7 @@ _SUMMARY_MARKERS: dict[str, dict[str, str]] = {
         "structured_section_re": r"Dati\s+strutturati",
         "summary_heading": "## Sintesi",
     },
-    "pt-br": {
+    "pt": {
         "title": "Título sugerido",
         "type": "Tipo sugerido",
         "subject": "Tema principal",

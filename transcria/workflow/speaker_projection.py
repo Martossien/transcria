@@ -193,7 +193,7 @@ _SP_STRINGS: dict[str, dict[str, str]] = {
     "it": {
         "excerpt_heading": "## Estratto di trascrizione",
     },
-    "pt-br": {
+    "pt": {
         "excerpt_heading": "## Extrato da transcrição",
     },
 }

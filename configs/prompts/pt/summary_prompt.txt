@@ -4,7 +4,7 @@
 # cada rótulo de campo com seus dois pontos, o formato das linhas dos participantes
 # e o bloco JSON EXATAMENTE como especificado — os marcadores em português devem
 # corresponder à tabela do analisador
-# (transcria/llm_tools/prompt_locator._SUMMARY_MARKERS["pt-br"]).
+# (transcria/llm_tools/prompt_locator._SUMMARY_MARKERS["pt"]).
 # Os subcampos dos termos questionáveis (`variants:`, `comment:`, `contexts:`, `source:`)
 # são deliberadamente deixados EM INGLÊS: o analisador sintático
 # (transcria/llm_tools/llm_parsing.py) reconhece apenas os sinônimos em francês e

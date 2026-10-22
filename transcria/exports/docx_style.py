@@ -38,7 +38,7 @@ _WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
 
 _LANG_LABELS: dict[str, str] = {
     "fr": "Français", "en": "English", "de": "Deutsch",
-    "it": "Italiano", "es": "Español", "pt-br": "Português do Brasil",
+    "it": "Italiano", "es": "Español", "pt": "Português do Brasil",
 }
 
 # Libellés de chrome du DOCX par langue (Axe B). Les entrées « fr » reproduisent À
@@ -367,7 +367,7 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "quorum_not_reached": "✗ Quorum non raggiunto",
         "odj_prefix": "ODG",
     },
-    "pt-br": {
+    "pt": {
         "banner": "ATA DA TRANSCRIÇÃO",
         "generated_by": "Gerado pelo TranscrIA",
         "date": "Data",
@@ -554,7 +554,7 @@ def _fmt_date(date_str: str) -> str:
         return "—"
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
-        return f"{dt.day} {_MONTHS_FR[dt.month]} {dt.year}" # ??? i18n
+        return f"{dt.day} {_MONTHS_FR[dt.month]} {dt.year}"
     except ValueError:
         return date_str
 

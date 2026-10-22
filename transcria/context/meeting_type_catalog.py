@@ -377,7 +377,7 @@ _TYPE_DISPLAY_I18N: dict[str, dict[str, dict[str, str]]] = {
         "Podcast / média": {"name": "Podcast / media", "badge": "MEDIA", "banner_text": "TRASCRIZIONE"},
         "Autre": {"name": "Altro"},
     },
-    "pt-br": {
+    "pt": {
         "Réunion interne": {"name": "Reunião interna"},
         "Réunion projet": {"name": "Reunião de projeto", "badge": "PROJETO", "banner_text": "ATA DA REUNIÃO DE PROJETO"},
         "Réunion technique": {"name": "Reunião técnica", "badge": "TÉCNICA", "banner_text": "ATA DA REUNIÃO TÉCNICA"},
@@ -389,7 +389,7 @@ _TYPE_DISPLAY_I18N: dict[str, dict[str, dict[str, str]]] = {
         "CSE extraordinaire": {"name": "Conselho de Trabalhadores Extraordinário", "badge": "CT EXTRA",
             "banner_text": "ATA DO CONSELHO DE TRABALHO — SESSÃO EXTRAORDINÁRIA"},
         "CODIR / COMEX": {"name": "CODIR / COMEX", "badge": "CODIR", "banner_text": "RELATÓRIO — COMITÊ DE GESTÃO"},
-        "Reunião com o Cliente": {"name": "Reunião com o cliente", "badge": "CLIENTE", "banner_text": "ATA DA REUNIÃO COM O CLIENTE"},
+        "Réunion client": {"name": "Reunião com o cliente", "badge": "CLIENTE", "banner_text": "ATA DA REUNIÃO COM O CLIENTE"},
         "Point projet": {"name": "Acompanhamento do projeto", "badge": "PROJETO", "banner_text": "ATA DA REUNIÃO DO PROJETO"},
         "Réunion de crise": {"name": "Reunião de crise", "badge": "CRISE", "banner_text": "RELATÓRIO — REUNIÃO DE CRISE"},
         "Séminaire / atelier": {"name": "Seminário / Workshop", "badge": "SEMINÁRIO", "banner_text": "ATA DO SEMINÁRIO/WORKSHOP"},
@@ -509,7 +509,7 @@ _FIELD_LABEL_I18N: dict[str, dict[str, str]] = {
         "sprint": "Sprint",
         "thematique": "Tema",
     },
-    "pt-br": {
+    "pt": {
         "chef_de_projet": "Gerente de projeto",
         "evaluateur": "Avaliador",
         "formateur": "Instrutor",

@@ -130,7 +130,7 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
             "pacchetto — per ottenere la versione aggiornata.)"
         ),
     },
-    "pt-br": {
+    "pt": {
         "no_review_point": "(nenhum ponto detectado)",
         "busy": "O assistente está ocupado (o LLM está processando outra tarefa). Tente novamente em alguns minutos.",
         "vram": "VRAM insuficiente para carregar o assistente (uma tarefa está usando as GPUs). Tente novamente mais tarde.",

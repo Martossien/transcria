@@ -726,7 +726,7 @@ _MSG: dict[str, dict[str, str]] = {
             "il trattamento, verrà rieseguita solo la correzione."
         ),
     },
-    "pt-br": {
+    "pt": {
         "diff_annex_title": "## Anexo — diferença factual (gerada por código)",
         "diff_annex_intro": (
             "Esta diferença é calculada mecanicamente, independentemente do relatório anterior do agente: {n} linha(s)"

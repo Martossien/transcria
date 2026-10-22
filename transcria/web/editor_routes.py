@@ -491,7 +491,7 @@ _SYNC_SUMMARY_STRINGS: dict[str, dict[str, str]] = {
             "invece di decidere."
         ),
     },
-    "pt-br": {
+    "pt": {
         "instruction": (
             "O usuário acabou de corrigir o texto literal no editor SRT (segmento(s) {editado(s)} modificado(s), "
             "{new_speakers} participante(s) renomeado(s) ou adicionado(s)). Atualize o resumo e os dados estruturados "

@@ -177,7 +177,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "md_review": "## Punti da verificare",
         "md_none": "Nessun punto di verifica rilevato dal controllo leggero.",
     },
-    "pt-br": {
+    "pt": {
         "empty": "Segmentos vazios: {n} — verifique e remova manualmente.",
         "short": "Segmentos muito curtos (< 0,5s): {n} — considere mesclar.",
         "long": "Segmentos muito longos (> 60s): {n} — considere dividir.",
@@ -198,13 +198,13 @@ _STRINGS: dict[str, dict[str, str]] = {
                              "léxico validado não ocorreu."),
         "gaps": ("Lacunas anormais na transcrição: {n} (máximo de {max_s:.0f}s em direção"
                  " a {at}) — o mecanismo pode ter pulado uma passagem; ouça novamente essas áreas."),
-       "tail": ("Possível truncamento do final da reunião: última intervenção em {at} para um áudio de {dur} — "
+        "tail": ("Possível truncamento do final da reunião: última intervenção em {at} para um áudio de {dur} — "
                 "verifique os últimos minutos."),
-       "md_title": "# Relatório de qualidade (verificação rápida)",
-       "md_score": "Pontuação de qualidade: {s}/100",
-       "md_checks": "Verificações: {c} · avisos: {w}",
-       "md_review": "## Pontos a verificar",
-       "md_none": "Nenhum ponto de verificação foi detectado pela verificação rápida.",
+        "md_title": "# Relatório de qualidade (verificação rápida)",
+        "md_score": "Pontuação de qualidade: {s}/100",
+        "md_checks": "Verificações: {c} · avisos: {w}",
+        "md_review": "## Pontos a verificar",
+        "md_none": "Nenhum ponto de verificação foi detectado pela verificação rápida.",
     },
 }
 

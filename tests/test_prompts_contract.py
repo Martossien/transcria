@@ -158,7 +158,7 @@ class TestLocalizedPromptsContract:
         "de": ("Vorschlag zur Anwendung:", "keine"),
         "es": ("Propuesta a aplicar:", "ninguna"),
         "it": ("Proposta da applicare:", "nessuna"),
-        "pt-br": ("Proposta a aplicar:", "nenhuma"),
+        "pt": ("Proposta a aplicar:", "nenhuma"),
     }
 
     @staticmethod

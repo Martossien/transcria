@@ -12,7 +12,7 @@ _FILENAMES = {
     "de": "einwilligung_stimmabdruck_v1.pdf",
     "es": "consentimiento_huella_vocal_v1.pdf",
     "it": "consenso_impronta_vocale_v1.pdf",
-    "pt-br": "consentimento_impressao_vocal_v1.pdf",
+    "pt": "consentimento_impressao_vocal_v1.pdf",
 }
 
 
@@ -210,7 +210,7 @@ _CONSENT_TEXT: dict[str, list[str]] = {
         "Ricevuto da: _____________________  Data: ____ / ____ / ________",
         "Stato: [ ] attivo   [ ] respinto   Motivo se respinto: _____________",
     ],
-    "pt-br": [
+    "pt": [
         "TranscrIA - Consentimento para impressao vocal",
         "",
         "Versao do formulario: {form_version}",

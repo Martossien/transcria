@@ -308,7 +308,7 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "verificare la generazione della sintesi."
         ),
     },
-    "pt-br": {
+    "pt": {
         "empty": "Segmentos vazios: {n} — verificar e excluir manualmente.",
         "short": "Segmentos muito curtos (< 0,5s): {n} — considerar mesclar.",
         "long": "Segmentos muito longos (> 60s): {n} — considerar dividir.",

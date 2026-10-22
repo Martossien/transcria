@@ -246,7 +246,7 @@ _PT_BR: dict[str, str] = {
 
 # Tables par langue (même idiome que ``_DOCX_LABELS`` / ``_TYPE_DISPLAY_I18N``) : une
 # locale absente retombe sur le FR inchangé — ajouter une langue = ajouter son dict ici.
-_TABLES: dict[str, dict[str, str]] = {"en": _EN, "de": _DE, "es": _ES, "it": _IT, "pt-br": _PT_BR}
+_TABLES: dict[str, dict[str, str]] = {"en": _EN, "de": _DE, "es": _ES, "it": _IT, "pt": _PT_BR}
 
 
 def localize_profile_text(text: str, language: str | None) -> str:
