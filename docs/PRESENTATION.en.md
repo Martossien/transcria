@@ -141,7 +141,8 @@ board meeting — the choice is one click, right when you drop the file.
   credentials, IT keeps control.
 - **Multilingual (0.4.3)** — interface and deliverables in French or English, each
   user's choice; German, Spanish and Italian ship in **beta** (flagged as such in the
-  application until a native speaker validates the translation).
+  application until a native speaker validates the translation). Brazilian Portuguese
+  is a native contribution, offered without a badge (0.4.8).
 
 ## What TranscrIA is not
 

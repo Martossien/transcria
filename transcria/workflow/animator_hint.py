@@ -38,7 +38,7 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
-#: Vocabulaire FERMÉ de l'animation, dans les cinq langues des livrables. Normalisé
+#: Vocabulaire FERMÉ de l'animation, dans les six langues des livrables (fr/en/de/es/it/pt). Normalisé
 #: (minuscules, sans accents) au moment de la comparaison. Volontairement restreint à
 #: l'animation/la présidence de séance : « formateur », « président » (d'une entreprise)
 #: ou « organisateur » décrivent autre chose et produiraient de faux positifs.
@@ -56,6 +56,10 @@ ANIMATION_WORDS: tuple[str, ...] = (
     "moderador", "moderadora", "modera la reunion", "anima la reunion",
     # it
     "moderatore", "moderatrice", "modera la riunione", "anima la riunione",
+    # pt (« moderador/moderadora » sont déjà couverts par l'espagnol)
+    "mediador", "mediadora", "facilitador", "facilitadora", "apresentador", "apresentadora",
+    "modera a reuniao", "anima a reuniao", "conduz a reuniao", "conduz a entrevista",
+    "preside a sessao", "dirige a reuniao", "conduz os debates",
     # Verbes d'animation SITUÉS (banc du 2026-08-22) : sur une réunion de projet, la LLM
     # étiquette « Manager / Lead » — aucun mot d'animation dans l'identité — mais décrit
     # sans ambiguïté « dirige la réunion » dans le rôle. Locutions ENTIÈRES seulement :

@@ -140,7 +140,8 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
   utilisateurs se connectent avec leurs identifiants habituels, la DSI garde la main.
 - **Multilingue (0.4.3)** — interface et livrables en français ou en anglais, au choix
   de chacun ; l'allemand, l'espagnol et l'italien arrivent en **bêta** (signalés comme
-  tels dans l'application tant qu'un locuteur natif n'a pas validé la traduction).
+  tels dans l'application tant qu'un locuteur natif n'a pas validé la traduction). Le
+  portugais (variante brésilienne) est une contribution native, proposé sans badge (0.4.8).
 
 ## Ce que TranscrIA n'est pas
 

@@ -402,7 +402,7 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "th_service": "Departamento",
         "th_role": "Cargo",
         "th_speaking_time": "Tempo de fala",
-        "th_turns": "Opções de fala",
+        "th_turns": "Turnos de fala",
         "quality": "Confiabilidade",
         "badge_crise": "⚠ SITUAÇÃO DE CRISE ⚠",
         "badge_confidentiel": "▪ DOCUMENTO CONFIDENCIAL ▪",

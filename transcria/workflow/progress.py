@@ -141,6 +141,22 @@ _PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
         "review": "Final review: consistency and fidelity", "review_done": "Final review complete",
         "package": "Preparing the final package",
     },
+    "pt": {
+        "summary_stt": "Resumo: transcrição rápida em andamento",
+        "summary_stt_load": "Resumo: carregando STT {backend}",
+        "summary_scene": "Resumo: análise acústica da reunião",
+        "summary_diar": "Resumo: detecção dos participantes em andamento",
+        "summary_llm": "Resumo: geração pelo LLM em andamento",
+        "summary_stt_done": "Resumo: transcrição rápida concluída",
+        "transcribe": "Transcrição final em andamento",
+        "transcribe_done": "Transcrição final concluída",
+        "diar": "Diarização final em andamento", "diar_done": "Diarização final concluída",
+        "quality": "Controle de qualidade em andamento", "quality_done": "Controle de qualidade concluído",
+        "correction": "Correção do SRT pelo LLM em andamento",
+        "correction_off": "Correção pelo LLM desativada", "correction_done": "Correção pelo LLM concluída",
+        "review": "Revisão final: consistência e fidelidade", "review_done": "Revisão final concluída",
+        "package": "Preparando o pacote final",
+    },
 }
 
 

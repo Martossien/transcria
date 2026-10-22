@@ -135,7 +135,7 @@ class TestSuggestion:
 
     def test_role_annonce_dans_les_cinq_langues(self):
         for role in ("Animatrice de la réunion", "facilitator", "Moderation der Sitzung",
-                     "moderadora", "moderatrice"):
+                     "moderadora", "moderatrice", "Mediadora da reunião"):
             hint = animator_from_roles({"SPEAKER_01": {"label": "X", "role": role}})
             assert hint is not None and hint.speaker_id == "SPEAKER_01"
 
