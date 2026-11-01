@@ -23,8 +23,8 @@
   </div>
   <div class="d-flex flex-wrap gap-2">
     {% if can_purge_e2e_jobs %}
-    <button class="btn btn-outline-danger btn-sm" type="button" data-purge-e2e title="{{ _('Supprimer les jobs de test E2E') }}">
-      <i class="bi bi-trash3" aria-hidden="true"></i> {{ _('Nettoyer E2E') }}
+    <button class="btn btn-outline-danger btn-sm" type="button" data-purge-e2e title="{{ _('Supprimer les jobs de test : titres commençant par E2E, BENCH ou BANC (majuscules)') }}">
+      <i class="bi bi-trash3" aria-hidden="true"></i> {{ _('Nettoyer les jobs de test') }}
     </button>
     {% endif %}
     <a href="/admin/schedule" class="btn btn-outline-secondary btn-sm">

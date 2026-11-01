@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from flask import Blueprint, jsonify, render_template, request
@@ -63,7 +64,15 @@ def _localized(labels: dict[str, str]) -> dict[str, str]:
     """Traduit les valeurs d'un dict de libellés dans la locale UI (str simple, sérialisable JSON)."""
     return {key: gettext(value) for key, value in labels.items()}
 
-E2E_TEST_JOB_TITLE_PREFIX = "E2E workflow"
+# Jobs de TEST à purger (bouton « Nettoyer les jobs de test ») : titres commençant, en
+# MAJUSCULES et en mot entier, par l'un de ces préfixes — E2E = tests/test_e2e_workflow.py,
+# BENCH/BANC = scripts/bench (attribution_bench, bench_audio…). Retour utilisateur 2026-11 :
+# le filtre historique « E2E workflow » laissait passer les bancs et les E2E renommés.
+# Volontairement sensible à la casse : « Banc d'essai » est un titre de réunion plausible.
+TEST_JOB_TITLE_PREFIXES = ("E2E", "BENCH", "BANC")
+TEST_JOB_TITLE_RE = re.compile(r"^(?:" + "|".join(TEST_JOB_TITLE_PREFIXES) + r")(?:$|[\s_:\-])")
+TEST_JOB_PREFIXES_LABEL = ", ".join(TEST_JOB_TITLE_PREFIXES)
+E2E_TEST_JOB_TITLE_PREFIX = "E2E workflow"  # compat : clé `prefix` de la réponse JSON et des audits anciens
 RUNNING_JOB_STATES = {
     JobState.SUMMARY_RUNNING.value,
     JobState.SPEAKER_DETECTION_RUNNING.value,
@@ -102,7 +111,7 @@ def queue_page() -> ResponseReturnValue:
         schedule_enabled=calendar.enabled,
         timezone=calendar.timezone_name,
         can_purge_e2e_jobs=current_user.has_role(Role.ADMIN),
-        e2e_test_job_prefix=E2E_TEST_JOB_TITLE_PREFIX,
+        e2e_test_job_prefix=TEST_JOB_PREFIXES_LABEL,
     )
 
 
@@ -308,13 +317,13 @@ def api_purge_e2e_test_jobs() -> ResponseReturnValue:
         return jsonify({"error": "Accès refusé"}), 403
     cfg = get_config()
     jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
-    jobs: list[Job] = list(
-        db.session.execute(
-            db.select(Job)
-            .filter(Job.title.like(f"{E2E_TEST_JOB_TITLE_PREFIX}%"))
-            .order_by(Job.created_at.asc())
-        ).scalars().all()
-    )
+    candidates = db.session.execute(
+        db.select(Job)
+        .filter(db.or_(*[Job.title.like(f"{prefix}%") for prefix in TEST_JOB_TITLE_PREFIXES]))
+        .order_by(Job.created_at.asc())
+    ).scalars().all()
+    # LIKE est insensible à la casse sur certains moteurs : la regex tranche (majuscules, mot entier).
+    jobs: list[Job] = [job for job in candidates if TEST_JOB_TITLE_RE.match(job.title or "")]
     deleted: list[dict] = []
     skipped: list[dict] = []
     for job in jobs:
@@ -331,9 +340,10 @@ def api_purge_e2e_test_jobs() -> ResponseReturnValue:
         AuditAction.JOB_TEST_PURGE,
         target_type="job",
         target_id=None,
-        target_label=E2E_TEST_JOB_TITLE_PREFIX,
+        target_label=TEST_JOB_PREFIXES_LABEL,
         details={
             "prefix": E2E_TEST_JOB_TITLE_PREFIX,
+            "prefixes": list(TEST_JOB_TITLE_PREFIXES),
             "deleted_count": len(deleted),
             "skipped_count": len(skipped),
             "deleted_job_ids": [item["id"] for item in deleted],
@@ -345,6 +355,7 @@ def api_purge_e2e_test_jobs() -> ResponseReturnValue:
     return jsonify({
         "ok": True,
         "prefix": E2E_TEST_JOB_TITLE_PREFIX,
+        "prefixes": list(TEST_JOB_TITLE_PREFIXES),
         "deleted_count": len(deleted),
         "skipped_count": len(skipped),
         "deleted": deleted,

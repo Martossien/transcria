@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-01 11:26+0100\n"
+"POT-Creation-Date: 2026-11-01 12:03+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -1301,7 +1301,7 @@ msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "Se creará una versión restaurable (se puede deshacer)."
 
 #: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:261
-#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:41
+#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:43
 msgid "Erreur"
 msgstr "Error"
 
@@ -1642,56 +1642,56 @@ msgstr "El trabajo no ha fallado: se reanudará automáticamente en cuanto se li
 msgid "Votre transcription a échoué."
 msgstr "Su transcripción ha fallado."
 
-#: transcria/queue/routes.py:36 transcria/web/templates/queue.html:42
+#: transcria/queue/routes.py:38 transcria/web/templates/queue.html:42
 msgid "En attente"
 msgstr "En espera"
 
-#: transcria/queue/routes.py:37
+#: transcria/queue/routes.py:39
 msgid "En pause"
 msgstr "En pausa"
 
-#: transcria/queue/routes.py:38 transcria/web/templates/queue.html:50
+#: transcria/queue/routes.py:40 transcria/web/templates/queue.html:50
 msgid "En cours"
 msgstr "En curso"
 
-#: transcria/queue/routes.py:39 transcria/web/templates/job_result.html:4
+#: transcria/queue/routes.py:41 transcria/web/templates/job_result.html:4
 #: transcria/web/ui_labels.py:35
 msgid "Terminé"
 msgstr "Completado"
 
-#: transcria/queue/routes.py:40 transcria/web/ui_labels.py:37
+#: transcria/queue/routes.py:42 transcria/web/ui_labels.py:37
 msgid "Annulé"
 msgstr "Cancelado"
 
-#: transcria/queue/routes.py:45
+#: transcria/queue/routes.py:47
 msgid "Bloquer les nouveaux départs"
 msgstr "Bloquear los nuevos inicios"
 
-#: transcria/queue/routes.py:46
+#: transcria/queue/routes.py:48
 msgid "Limiter les jobs simultanés"
 msgstr "Limitar los trabajos simultáneos"
 
-#: transcria/queue/routes.py:47
+#: transcria/queue/routes.py:49
 msgid "Prioriser les traitements (récupération GPU agressive)"
 msgstr "Priorizar los trabajos (recuperación agresiva de GPU)"
 
-#: transcria/queue/routes.py:48
+#: transcria/queue/routes.py:50
 msgid "Aucune règle"
 msgstr "Ninguna regla"
 
-#: transcria/queue/routes.py:52
+#: transcria/queue/routes.py:54
 msgid "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
 msgstr "Los trabajos ya iniciados continúan, pero no se inicia ningún trabajo nuevo durante esta franja horaria."
 
-#: transcria/queue/routes.py:53
+#: transcria/queue/routes.py:55
 msgid "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
 msgstr "El planificador reduce temporalmente el número máximo de trabajos ejecutados en paralelo."
 
-#: transcria/queue/routes.py:55
+#: transcria/queue/routes.py:57
 msgid "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
 msgstr "Si la primera fase carece de VRAM, TranscrIA puede liberar una GPU deteniendo únicamente los procesos externos autorizados por la configuración."
 
-#: transcria/queue/routes.py:58
+#: transcria/queue/routes.py:60
 msgid "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
 msgstr "La franja horaria se conserva como referencia horaria, sin modificar el comportamiento de la cola."
 
@@ -5009,12 +5009,12 @@ msgid "Agenda désactivé"
 msgstr "Agenda desactivada"
 
 #: transcria/web/templates/queue.html:26
-msgid "Supprimer les jobs de test E2E"
-msgstr "Eliminar los trabajos de prueba E2E"
+msgid "Supprimer les jobs de test : titres commençant par E2E, BENCH ou BANC (majuscules)"
+msgstr "Eliminar los trabajos de prueba: títulos que empiezan por E2E, BENCH o BANC (mayúsculas)"
 
 #: transcria/web/templates/queue.html:27
-msgid "Nettoyer E2E"
-msgstr "Limpiar E2E"
+msgid "Nettoyer les jobs de test"
+msgstr "Limpiar los trabajos de prueba"
 
 #: transcria/web/templates/queue.html:58
 msgid "En pause manuelle"
@@ -6529,4 +6529,7 @@ msgstr "Generar el resumen"
 
 #~ msgid "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, puis lancez le traitement final."
 #~ msgstr "El preanálisis de su audio está listo. Compruebe el contexto de la reunión y, después, inicie el procesamiento final."
+
+#~ msgid "Nettoyer E2E"
+#~ msgstr "Limpiar E2E"
 

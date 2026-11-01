@@ -151,7 +151,15 @@ def test_admin_can_purge_e2e_test_jobs(admin_client, app, owner_id):
         _clear_queue()
         jobs_dir = get_config()["storage"]["jobs_dir"]
         e2e_job = JobStore.create_job(owner_id, "E2E workflow production")
+        bench_job = JobStore.create_job(owner_id, "BENCH attribution M1 by_turns")
+        banc_job = JobStore.create_job(owner_id, "BANC_T001 fenêtre 10-45")
+        e2e_short = JobStore.create_job(owner_id, "E2E split v2")
+        # Faux amis CONSERVÉS : minuscules (« Banc d'essai » est un vrai titre), préfixe collé.
+        lower_job = JobStore.create_job(owner_id, "Banc d'essai du nouveau micro")
+        glued_job = JobStore.create_job(owner_id, "E2Explorateur de réunions")
         normal_job = JobStore.create_job(owner_id, "Réunion réelle")
+        gone_ids = [bench_job.id, banc_job.id, e2e_short.id]
+        kept_ids = [lower_job.id, glued_job.id]
         JobFilesystem(jobs_dir, e2e_job.id).save_text("metadata/test.txt", "e2e")
         JobFilesystem(jobs_dir, normal_job.id).save_text("metadata/test.txt", "normal")
         QueueStore.enqueue(e2e_job.id)
@@ -164,10 +172,15 @@ def test_admin_can_purge_e2e_test_jobs(admin_client, app, owner_id):
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["deleted_count"] == 1
+    assert payload["deleted_count"] == 4
     assert payload["skipped_count"] == 0
+    assert payload["prefixes"] == ["E2E", "BENCH", "BANC"]
     with app.app_context():
         assert JobStore.get_by_id(e2e_job_id) is None
+        for gone in gone_ids:
+            assert JobStore.get_by_id(gone) is None
+        for kept in kept_ids:
+            assert JobStore.get_by_id(kept) is not None
         assert JobStore.get_by_id(normal_job_id) is not None
         assert QueueStore.get_entry(e2e_job_id) is None
         assert not e2e_dir.exists()
