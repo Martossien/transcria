@@ -18,14 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé = amont du 2026-09-30 (11 commits après le tag v0.5.0) : diarisation
-# Nemotron 3 et ASR attribué aux locuteurs (#71, #73), fuite mémoire du tampon mel en
-# streaming corrigée (#69), build GCC 16 (#74). Le dépôt tire désormais des
-# sous-modules (ced.cpp, voice-detect.cpp) — le clone est `--recursive`. Aucune rupture
-# d'API serveur ; validé par test de fumée réel après le bump (même règle qu'audio.cpp).
+# Commit épinglé = amont du 2026-10-30 (master, 41 commits après l'épinglage précédent du
+# 2026-09-30 ; releases v0.6.0/v0.6.1 au passage) : checkpoint Nemotron unifié hors ligne
+# et en streaming tamponné (#108, #109), dernière trame sous-échantillonnée conservée (#111),
+# VAD autonome (#83), seek 64 bits du chargeur de bundle (#97), nombre de threads par appel
+# (#91). Le dépôt tire des sous-modules (ggml, ced.cpp, voice-detect.cpp) — le clone est
+# `--recursive`. Aucune rupture d'API serveur ; validé par test de fumée réel après le bump
+# (même règle qu'audio.cpp).
 PARAKEETCPP_REPO = "https://github.com/mudler/parakeet.cpp"
 # SHA COMPLET requis : `git fetch origin <sha>` refuse les SHA courts (exit 128).
-PARAKEETCPP_PINNED_COMMIT = "2c3bb736a44f2aa2e386ed06a4787122fb952575"
+PARAKEETCPP_PINNED_COMMIT = "2eac2e77d9c7ef8899f7a86a46e693ac5ac1a5cd"
 
 
 class Runner(Protocol):

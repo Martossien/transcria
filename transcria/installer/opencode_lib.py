@@ -27,7 +27,7 @@ OPENCODE_INSTALL_URL = "https://opencode.ai/install"
 # opencode n'est trouvé). Vérifié au registre le 2026-09-30 (opencode-ai 1.18.33). La v2
 # (@opencode/cli) est SUPPORTÉE à l'exécution (adaptateur transcria/llm_tools/opencode_cli)
 # mais pas installée par nous tant qu'un parcours réel ne l'a pas qualifiée.
-OPENCODE_PINNED_VERSION = "1.18.33"
+OPENCODE_PINNED_VERSION = "1.19.5"
 
 
 def private_opencode_home(service_home: Path) -> Path:

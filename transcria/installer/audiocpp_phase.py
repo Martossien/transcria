@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé = tag v0.9.0 (2026-09-30). Monter de version = nouveau SHA, rebuild
+# Commit épinglé = tag v0.9.3 (2026-10-26 ; précédent : v0.9.0 du 2026-09-30). Monter de version = nouveau SHA, rebuild
 # `--force`, puis un test de fumée RÉEL (lancer le moteur, transcrire un fichier) — la
 # requalification sur le banc n'est plus exigée à chaque bump : elle n'a jamais rien
 # attrapé que le test de fumée n'attrape pas. Apports utiles depuis le dernier bump :
@@ -38,15 +38,15 @@ from typing import Protocol
 # fourni directement : les installs antérieures restent servables (le lanceur
 # préfère le GGUF s'il existe, sinon retombe sur le répertoire HF).
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
-AUDIOCPP_PINNED_COMMIT = "795c45fbde0a7d29c93b22199728ff5caaec02e5"
+AUDIOCPP_PINNED_COMMIT = "41c1f8ffa0d13a1b7e366e30ea5fe5ab8d169d48"
 # Archive PRÉCOMPILÉE de la même release (tag du commit épinglé) : `audiocpp_cli` CPU
 # « portable » (libggml par génération de processeur, RUNPATH $ORIGIN), 55 Mo, aucune
 # chaîne de compilation. C'est la voie par défaut de la diarisation Nemotron 3 (0.4.7) :
 # vérifié sur la machine de dev = 31 tours IDENTIQUES au build CUDA local, 73 s d'audio
 # en 2 s. Monter de version = nouveau tag + nouveau sha256 (toujours vérifié avant
 # extraction — binaire tiers). L'archive CUDA de l'amont ne contient que le serveur.
-AUDIOCPP_PREBUILT_TAG = "v0.9.0"
-AUDIOCPP_PREBUILT_SHA256 = "cf87b6baa46cf45fc8a2816b8f04f0f3f3fce32cca297231a4da56543f19fe87"
+AUDIOCPP_PREBUILT_TAG = "v0.9.3"
+AUDIOCPP_PREBUILT_SHA256 = "02156f7a7bd9924902cec26be35087d3806c7e348be344b1ec28cac0c1af3929"
 AUDIOCPP_PREBUILT_MARKER = "PREBUILT"
 # Modèle recommandé (Apache-2.0) — id du paquet dans LEUR model_manager_v2 (spec v1).
 AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_q8_0"

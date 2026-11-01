@@ -1489,9 +1489,9 @@ else
         # CUDA 12.8, amd64) — évite d'exiger nvcc sur une distro vierge.
         # En interactif, on propose le téléchargement si aucun binaire n'est trouvé.
         if [[ -z "$LLAMA_SRV" ]]; then
-            _AIDOCK_TAG="v0.5.0"
+            _AIDOCK_TAG="v0.8.0"
             _AIDOCK_CUDA="12.8"
-            _AIDOCK_SHA256="26b46a50c71e6287dfdaf0f2a9ceeaec51040243d6f4b9e90b4038b0cf347002"
+            _AIDOCK_SHA256="3720c93df5f3cc246838c4cbdf342db5021d51b17445370f1db2ecc4c973a076"
             _AIDOCK_DEST="$INSTALL_DIR/vendor/llama"
             _DO_PREBUILT=false
             if [[ "$NON_INTERACTIVE" = true ]]; then

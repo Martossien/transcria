@@ -197,6 +197,16 @@ Aucune migration de base. Trois choses à savoir :
   les connaître : `venv/bin/pip install pip-audit && venv/bin/pip-audit`. Ne lancez PAS
   `pip install --upgrade -r requirements.txt` : il réinstallerait `torch` depuis PyPI sans la
   variante CUDA choisie à l'installation.
+- **Moteurs amont remontés** : audio.cpp v0.9.3 (précompilé CPU et build CUDA ; trois
+  changements marqués cassants chez l'amont sur la normalisation des options et le routage des
+  requêtes serveur, re-fumés sur nos deux usages : diarisation Nemotron 3 et STT servi
+  `qwen3asr`), parakeet.cpp du 2026-10-30 (checkpoint Nemotron unifié hors ligne et en streaming
+  tamponné), llama.cpp v0.8.0 dans les images et le précompilé d'`install.sh` (le port par
+  défaut de `llama-server` passe à 9931 chez l'amont : nos profils passent `--port 8080`
+  explicitement, rien ne change pour vous ; vérifiez vos scripts maison), opencode v1 1.19.5
+  pour la copie privée (Bun 1.4.4 avec correctifs de sécurité). Rejouer `./install.sh` (ou les
+  phases `audiocpp`, `parakeetcpp`, `nemotron-diar` de `transcria.installer.cli` avec `--force`)
+  pose les nouveaux binaires ; un opencode déjà présent n'est jamais remplacé.
 
 ### Notes spécifiques 0.4.6 → 0.4.7
 

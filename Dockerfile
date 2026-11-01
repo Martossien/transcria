@@ -80,7 +80,7 @@ ENV PATH="/home/transcria/.opencode/bin:$PATH"
 # l'endpoint LLM configuré. Les rôles web/migrate l'embarquent aussi (sans surcoût notable).
 # Release ÉPINGLÉE = transcria.installer.opencode_lib.OPENCODE_PINNED_VERSION (garde
 # tests/test_docker_sync.py) : l'installateur officiel pose sinon la dernière v1 du jour.
-ARG OPENCODE_VERSION=1.18.33
+ARG OPENCODE_VERSION=1.19.5
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
 # Le rôle est fourni par TRANSCRIA_ROLE (ou en argument de la commande). L'entrypoint
 # valide les invariants (config, PostgreSQL), attend la base, puis exec le serveur.
