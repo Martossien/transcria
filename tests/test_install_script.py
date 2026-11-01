@@ -362,6 +362,80 @@ def test_install_script_recovers_opencode_bin_from_config_after_phase():
     assert delegate < recover < usage, "OPENCODE_BIN doit être récupéré APRÈS la phase opencode et AVANT la sélection LLM"
 
 
+
+def test_install_script_wires_llm_cloud_phase_after_opencode():
+    # Lot D (docs/LLM_CLOUD.md § 5) : --llm-cloud est OPT-IN, la phase tourne APRÈS opencode
+    # (binaire toujours nécessaire) avec le HOME du COMPTE DE SERVICE, et jamais la clé en argument.
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "LLM_CLOUD=false" in content  # jamais par défaut
+    assert "--llm-cloud)       LLM_CLOUD=true" in content
+    assert "transcria.installer.cli llm-cloud" in content
+    phase = content.index("LLM_CLOUD_CLI_ARGS=(\n        -m transcria.installer.cli llm-cloud")
+    assert content.index("transcria.installer.cli opencode") < phase < content.index("# SECTION 9-bis —")
+    bloc = content[phase:content.index("# SECTION 9-bis —")]
+    assert '--user-home "$SERVICE_HOME_GLOBAL"' in bloc
+    assert '--key-env "$LLM_CLOUD_KEY_ENV"' in bloc
+    assert "llm_cloud_failed" in bloc
+
+
+def test_install_script_skips_llm_tier_section_in_cloud():
+    # SECTION 9-bis (palier VRAM, llama-server, GGUF, calibration) SAUTÉE en cloud, que le
+    # drapeau soit passé ou que la config existante soit déjà en cloud.
+    content = _INSTALL.read_text(encoding="utf-8")
+    section = content.split("# SECTION 9-bis —")[1]
+    skip = section.index('elif [[ "$LLM_CLOUD_ACTIVE" = true ]]; then')
+    assert section.index('LLM_CLOUD_ACTIVE="$LLM_CLOUD"') < skip
+    assert 'yaml_get "services.backend"' in section[:skip]
+    assert "llm_cloud_skip" in section[skip:skip + 200]
+    # Tout le choix local (palier, Ollama, llama-server, GGUF) vit APRÈS la garde.
+    for marker in ("--placement-plan", "transcria.installer.cli recommend-llm", "--install-llama-prebuilt",
+                   "--apply-placement-calibration"):
+        assert section.index(marker) > skip, marker
+
+
+def test_install_script_refuses_llm_cloud_with_llm_backend():
+    result = _run_install("--llm-cloud", "--llm-backend", "ollama", "--plan", "--locale", "fr")
+
+    assert result.returncode == 1
+    assert "incompatibles" in result.stdout + result.stderr
+
+
+def test_install_script_llm_cloud_non_interactif_exige_fournisseur_et_modele():
+    # Échec DÈS le parsing (avant PostgreSQL/venv) : --plan suffit à le prouver, sans effet de bord.
+    result = _run_install("--llm-cloud", "--non-interactive", "--plan", "--locale", "fr")
+    assert result.returncode == 1
+    assert "--llm-cloud-provider ET --llm-cloud-model" in result.stdout + result.stderr
+
+    ok = _run_install("--llm-cloud-provider", "mistral", "--llm-cloud-model", "m",
+                      "--non-interactive", "--plan", "--locale", "fr")
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+
+
+def test_install_script_llm_cloud_ignoree_pour_un_profil_sans_llm():
+    result = _run_install("--profile", "web", "--llm-cloud", "--non-interactive", "--plan", "--locale", "fr")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--llm-cloud ignorée pour le profil web" in result.stdout + result.stderr
+
+
+def test_install_script_llm_cloud_bilans_modeles_et_resume():
+    # Plus de « LLM arbitrage : ABSENT » / « [MANQUANT] GGUF » en cloud : drapeau aux helpers.
+    content = _INSTALL.read_text(encoding="utf-8")
+    assert 'log_model_status_event llm-cloud "$LLM_CLOUD_MODEL_REF"' in content
+    assert 'cloud_args=(--llm-cloud --llm-cloud-model "${LLM_CLOUD_MODEL_REF:-}")' in content
+    assert '&& SUMMARY_CLI_ARGS+=(--llm-cloud)' in content
+    status = content.index("log_model_status_event llm-cloud")
+    assert content.index('LLM_CLOUD_EARLY="$LLM_CLOUD"') < status < content.index("log_model_status_event llm-missing")
+
+
+def test_install_script_llm_cloud_reste_interactif_apres_express():
+    # L'express bascule NON_INTERACTIVE=true après confirmation : la phase llm-cloud doit
+    # pourtant garder ses questions (fournisseur, clé masquée) sur un vrai terminal.
+    content = _INSTALL.read_text(encoding="utf-8")
+    assert content.index("LLM_CLOUD_TTY=true") < content.index("SECTION 2 —")
+    assert '[[ "$LLM_CLOUD_TTY" != true ]] && LLM_CLOUD_CLI_ARGS+=(--non-interactive)' in content
+    assert '"$EXPRESS_LLM_CLOUD" = true && "$LLM_CLOUD" != true' in content
+
 def test_install_script_delegates_llm_selection_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 

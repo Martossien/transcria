@@ -13,7 +13,10 @@ embarque un runtime différent de celui qualifié. Trois gardes :
     moins une documentation. Classe de bug distincte mais de même nature : un
     artefact qu'on ne peut pas trouver n'existe pas pour qui reprend le projet
     sur une autre machine. Vécu : ``docker-compose.legacy-gpu.yml`` et les deux
-    scripts ``docker/zoom_sdk_*`` n'étaient mentionnés NULLE PART.
+    scripts ``docker/zoom_sdk_*`` n'étaient mentionnés NULLE PART ;
+(e) l'image CPU pose ``audiocpp_cli`` précompilé par la sous-commande de
+    l'installateur (tag + sha256 = constantes Python, jamais recopiés), sous une
+    racine de runtimes hors volume que ``resolve_runtimes_dir()`` lit.
 
 Chaque garde est une fonction PURE testée recto-verso (elle passe sur l'arbre
 réel ET rougit sur une mutation synthétique — un filet qui ne rougit jamais
@@ -24,7 +27,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from transcria.installer.audiocpp_phase import AUDIOCPP_PINNED_COMMIT
+from transcria.installer.audiocpp_phase import AUDIOCPP_PINNED_COMMIT, AUDIOCPP_PREBUILT_SHA256, AUDIOCPP_PREBUILT_TAG
 from transcria.installer.parakeetcpp_phase import PARAKEETCPP_PINNED_COMMIT
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -248,3 +251,59 @@ class TestOpencodePin:
         m = re.search(r"^ARG\s+OPENCODE_VERSION=(?P<value>\S+)\s*$", text, re.MULTILINE)
         assert m and m.group("value") == OPENCODE_PINNED_VERSION, "Dockerfile et installateur divergent sur opencode"
         assert '--version "${OPENCODE_VERSION}"' in text
+
+
+# ── (e) image CPU : audiocpp_cli précompilé posé par la logique de l'installateur ──
+
+def cpu_image_prebuilt_problems(dockerfile: str) -> list[str]:
+    """Écarts entre le ``Dockerfile`` CPU et la pose native du précompilé — PUR.
+
+    Le tag et le sha256 n'ont qu'une source : ``audiocpp_phase`` (constantes Python), lue
+    par ``installer.cli audiocpp --prebuilt``. Le Dockerfile ne doit donc ni recopier un
+    sha256/tag (il divergerait), ni contourner la sous-commande (pas de vérification), et
+    sa racine de runtimes doit être celle que ``resolve_runtimes_dir()`` lira au runtime.
+    """
+    code = "\n".join(line for line in dockerfile.splitlines() if not line.lstrip().startswith("#"))
+    problems: list[str] = []
+    runtime = "\n".join(stage_block(code, "runtime")) or code
+    m = re.search(r"python -m transcria\.installer\.cli audiocpp --prebuilt --runtimes-dir (?P<dir>\S+)", runtime)
+    if not m:
+        problems.append("l'étage runtime ne pose pas audiocpp_cli via `installer.cli audiocpp --prebuilt`")
+    env = re.search(r"^ENV\s+TRANSCRIA_RUNTIMES_DIR=(?P<dir>\S+)\s*$", runtime, re.MULTILINE)
+    if not env:
+        problems.append("ENV TRANSCRIA_RUNTIMES_DIR absent de l'étage runtime")
+    elif m and env.group("dir") != m.group("dir"):
+        problems.append(f"runtimes posés sous {m.group('dir')} mais lus sous {env.group('dir')}")
+    if env and env.group("dir").startswith("/app/"):
+        problems.append("racine de runtimes sous /app : masquée par un volume monté sur l'application")
+    if AUDIOCPP_PREBUILT_SHA256 in code or f"audio-{AUDIOCPP_PREBUILT_TAG}-" in code:
+        problems.append("sha256/archive recopiés en dur : la seule source est audiocpp_phase")
+    return problems
+
+
+class TestCpuImagePrebuiltAudiocpp:
+    def test_cpu_dockerfile_installs_the_pinned_prebuilt(self):
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert cpu_image_prebuilt_problems(text) == []
+
+    def test_runtimes_dir_is_not_on_a_compose_volume(self):
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        env = re.search(r"^ENV\s+TRANSCRIA_RUNTIMES_DIR=(?P<dir>\S+)\s*$", text, re.MULTILINE)
+        assert env
+        compose = (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        assert f":{env.group('dir')}" not in compose, "un volume masquerait le binaire baké"
+
+    def test_guard_goes_red_without_the_install_step(self):
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        mutated = text.replace("--prebuilt", "--no-such-flag")
+        assert cpu_image_prebuilt_problems(mutated)
+
+    def test_guard_goes_red_on_mismatched_dirs(self):
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        mutated = text.replace("ENV TRANSCRIA_RUNTIMES_DIR=/opt/runtimes", "ENV TRANSCRIA_RUNTIMES_DIR=/srv/rt")
+        assert any("lus sous" in p for p in cpu_image_prebuilt_problems(mutated))
+
+    def test_guard_goes_red_on_a_copied_sha(self):
+        text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        mutated = text + f"\nRUN echo {AUDIOCPP_PREBUILT_SHA256}\n"
+        assert any("en dur" in p for p in cpu_image_prebuilt_problems(mutated))

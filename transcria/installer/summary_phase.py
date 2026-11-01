@@ -56,6 +56,23 @@ class SummaryPlan:
     systemd: bool = True
     elapsed_seconds: int = 0
     admin_login: bool = False
+    llm_cloud: bool = False
+
+
+def _read_cloud_model(config_path: Path, forced: bool) -> str | None:
+    """``<fournisseur>/<modèle>`` si la LLM d'arbitrage est cloud (drapeau OU config), sinon None.
+
+    Best-effort comme ``_read_admin_login`` : config illisible ⇒ le drapeau seul décide."""
+    try:
+        cfg = load_yaml_file(config_path)
+    except Exception:
+        cfg = {}
+    services = cfg.get("services") or {}
+    is_cloud = forced or str(services.get("backend") or "").strip().lower() == "cloud"
+    if not is_cloud:
+        return None
+    arb = (cfg.get("workflow") or {}).get("arbitration_llm") or {}
+    return str(arb.get("model_id") or "")
 
 
 def _read_admin_login(config_path: Path) -> tuple[str, bool]:
@@ -103,6 +120,7 @@ def apply_summary(plan: SummaryPlan, *, console: _ConsoleLike) -> None:
             pyannote_ok=plan.pyannote_ok,
             qwen_ok=plan.qwen_ok,
             opencode_bin=plan.opencode_bin,
+            llm_cloud_model=_read_cloud_model(plan.config_path, plan.llm_cloud),
         ),
         render_database_summary(plan.db_backend),
         render_configuration_summary(

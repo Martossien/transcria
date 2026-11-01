@@ -5,7 +5,7 @@ API **compatible OpenAI**. TranscrIA est agnostique du moteur : le client parle 
 `base_url`, et le **cycle de vie** (démarrage, sonde, libération VRAM) est porté par un
 backend dédié (`transcria/gpu/llm_backend.py`), auquel `VRAMManager` **délègue**.
 
-## Trois paradigmes de cycle de vie
+## Paradigmes de cycle de vie
 
 Le verbe « arrêter » ne veut pas dire la même chose selon le moteur — c'est la raison
 d'être de l'abstraction `LLMBackend` (`unload()` / `is_loaded()`) :
@@ -16,12 +16,36 @@ d'être de l'abstraction `LLMBackend` (`unload()` / `is_loaded()`) :
 | **vLLM** (`script`) | `arbitrage_script` (`vllm serve`) | port ouvert + `/v1/models` | `stop_script` **par pattern** (`EngineCore`/`Worker_TP` — enfants réappés) |
 | **Ollama** | démon persistant (`ollama serve`) | **`/api/ps` + `size_vram`** | **`ollama stop` / `keep_alive:0`** (démon conservé) |
 | **http** (distant) | géré ailleurs | port ouvert + `/v1/models` | no-op (pas notre process) |
+| **cloud** (fournisseur externe) | sans objet | sans objet (aucune VRAM locale) | no-op |
 
 Point clé Ollama : le démon écoute **toujours** le port 11434 même modèle déchargé —
 donc `is_loaded` interroge `/api/ps` (empreinte VRAM réelle), pas le port. La préemption
 VRAM STT↔LLM (`vram_reclaim.stop_idle_arbitrage_llm`) **décharge le modèle** sans jamais
 tuer le démon (il est persistant, partagé, relancé par systemd). Le démon Ollama est
 d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
+
+### Cloud (4ᵉ paradigme) — fournisseur externe, passe-plat
+
+`services.backend: cloud` : la LLM est chez un fournisseur (`mistral`, `ollama-cloud`,
+`openrouter`, `opencode`, ou `api_base` https hors table). Plan et gouvernance :
+[LLM_CLOUD.md](LLM_CLOUD.md). `CloudLLMBackend` n'a **aucun cycle de vie local** : rien à
+démarrer, à sonder par port ni à libérer.
+
+| Aspect | En cloud |
+|---|---|
+| Démarrer / arrêter | sans objet (jamais de script, de process ni de `stop_script`) |
+| VRAM | aucune réservation, aucune préemption, aucune part LLM à l'admission |
+| Verrou LLM de l'allocateur | no-op (comme une LLM distante) |
+| Santé | `GET /models` avec `Authorization: Bearer` (clé = variable d'environnement du fournisseur) |
+| Chien de garde d'opencode | inactivité **désactivée** (pas de sonde `/slots`) ; seul le plafond absolu s'applique |
+| Panne / clé révoquée | **une** reprise automatique de la phase, puis échec explicite et relançable (jamais `vram_wait`) |
+| Appels directs | clé + URL de la table, pas de `chat_template_kwargs`, pas de retry sur 401/403/429/5xx, `workflow.llm_cloud.extra_request_fields` fusionné |
+
+Les deux `model_id` (`summary_llm`, `arbitration_llm`) valent `<fournisseur>/<modèle>` et
+doivent être identiques ; l'alias `arbitrage` reste réservé à la LLM locale. Redémarrage requis
+à la bascule. Contrairement aux trois autres paradigmes, **les transcriptions quittent le
+serveur** : validation administrateur en base, bandeau permanent, interdiction par groupe,
+provenance par job (cf. [SECURITY_MODEL.md](SECURITY_MODEL.md) § 9).
 
 ## Choisir un backend
 
@@ -47,6 +71,9 @@ d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
 - **vLLM** — moteur portable (`launch_arbitrage_vllm.sh`), notamment pour la topologie split.
   FP8 natif, tensor-parallel, batching concurrent — qualité 100/100 mesurée (Test 4).
 - **http** — serveur OpenAI externe déjà en place (`workflow.arbitration_llm.api_base`).
+- **cloud** — fournisseur d'inférence externe (opt-in, `services.backend: cloud`) : aucun GPU
+  requis, mais **les transcriptions quittent le serveur** (validation administrateur). Voir
+  la section « Cloud » ci-dessus et [LLM_CLOUD.md](LLM_CLOUD.md).
 
 ### Recommandation par palier
 
@@ -77,6 +104,16 @@ services:
   # ollama_model: "qwen3.5:9b"        # nom NATIF registre ; opencode voit "local/qwen3.5:9b"
   arbitrage_script: "./scripts/launch_arbitrage.sh"   # voie llama.cpp/vLLM
   stop_script: "./scripts/stop_arbitrage_llm.sh"
+```
+
+LLM chez un fournisseur externe (clé dans `.env`, jamais ici) :
+
+```yaml
+services:
+  backend: cloud
+workflow:
+  summary_llm:     { model_id: "mistral/mistral-large-4" }
+  arbitration_llm: { model_id: "mistral/mistral-large-4" }   # identique au précédent
 ```
 
 `resolve_arbitrage_endpoint()` (source **unique** partagée par `VRAMManager` et le provider

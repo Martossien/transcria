@@ -138,6 +138,46 @@ diarization from a config-driven catalog, with disk-space checks and progress).
 - Hugging Face downloads use `hf_transfer` (multi-stream) with automatic fallback;
   `TRANSCRIA_NO_HF_TRANSFER=1` forces the classic path behind finicky proxies.
 
+### Cloud arbitration LLM (opt-in)
+
+Instead of the local LLM, summary, correction, final review and refine can go to an inference
+provider **the administrator chose, contracted and monitors**. TranscrIA is a **pass-through**
+(design: [LLM_CLOUD.md](LLM_CLOUD.md), French). Off by default; never enabled on its own.
+
+- **Leaves the server**: the full transcript, invitation brief, text extracted from attached
+  documents, filtered lexicon, participant names/roles, meeting context. **Never**: the audio
+  or voiceprints (STT, diarization and voiceprints stay local). Cost, usage and availability
+  are the administrator's responsibility.
+- **Key**: the provider's variable in `.env` only, single-quoted
+  (`MISTRAL_API_KEY='…'`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY` for the
+  providers `mistral`, `ollama-cloud`, `openrouter`, `opencode`). Never in `config.yaml`,
+  `opencode.json`, logs or readable backups.
+- **Config**: `services.backend: cloud` and **both** `workflow.summary_llm.model_id` and
+  `workflow.arbitration_llm.model_id` set to the same `<provider>/<model>` (e.g.
+  `mistral/mistral-large-4`). Provider not in the table: `workflow.arbitration_llm.api_base`
+  (https) + `workflow.llm_cloud.api_key_env`. `workflow.llm_cloud.extra_request_fields` is merged
+  into direct calls only. **Restart the service** to switch (also the scheduler in split).
+- **Approval**: an administrator must validate provider and model in *Administration → Cloud
+  LLM* (`/admin/llm-cloud`). Until then every LLM treatment is refused; if the notice text
+  changes in a later version, the approval lapses. Optional box for meetings captured by
+  connectors/bots (off by default).
+- **Governance**: permanent banner, per-group ban ("cloud LLM forbidden" on a group), per-job
+  provenance in `metadata/llm_provenance.json` and in the DOCX footer.
+- **Behavior**: no VRAM, no local start/stop, no idle watchdog. Provider outage or revoked key =
+  one automatic retry, then an explicit, relaunchable failure.
+- **Check**: `scripts/doctor.py` ("Cloud arbitration LLM"); `--llm-smoke` is a paid call.
+- **Zero-GPU tier**: cloud LLM + Kroko CPU STT + Nemotron 3 CPU diarization = a complete
+  install without a graphics card (slower, less accurate STT; no local LLM fallback).
+- **`install.sh --llm-cloud`** (opt-in): installer phase that writes the key variable to `.env`
+  (never echoed) and sets the model ids and backend; it does not write the approval. See the
+  command help for the exact options. Non-interactive: `--llm-cloud-provider <id>
+  --llm-cloud-model <model>` are required and the key goes through `--llm-cloud-key-env VAR`
+  (name of an exported variable, never the key itself); **`sudo` strips that variable**: use
+  `sudo --preserve-env=VAR ./install.sh …`. A provider **outside the table** (OpenAI-compatible,
+  non-local `https://`) is not handled by `install.sh`: `venv/bin/python -m
+  transcria.installer.cli llm-cloud --config config.yaml --env-file .env --user-home <service
+  HOME> --provider <id> --key-env VAR --model <model> --api-base https://…/v1`.
+
 ## 6. Verify
 
 ```bash

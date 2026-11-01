@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.installer.express import ExpressPlan, build_express_plan, render_shell
+from transcria.installer.express import ExpressPlan, build_express_plan, config_declares_cloud_backend, render_shell
 
 
 def _plan(**overrides) -> ExpressPlan:
@@ -97,11 +97,13 @@ class TestShellRendering:
         assert out.splitlines() == [
             "EXPRESS_SETUP_PG=true", "EXPRESS_OPEN_MODELS=true",
             "EXPRESS_STT_BACKEND=whisper", "EXPRESS_DIAR_BACKEND=auto",
+            "EXPRESS_LLM_CLOUD=false",
         ]
         out = render_shell(_plan(psql_available=False, has_hf_token=True))
         assert out.splitlines() == [
             "EXPRESS_SETUP_PG=false", "EXPRESS_OPEN_MODELS=false",
             "EXPRESS_STT_BACKEND=", "EXPRESS_DIAR_BACKEND=",
+            "EXPRESS_LLM_CLOUD=false",
         ]
 
 
@@ -200,3 +202,87 @@ class TestInstallShWiring:
             in self._CONTENT
         assert 'yaml_set "models.stt_backend" "$EXPRESS_STT_BACKEND"' in self._CONTENT
         assert 'yaml_set "models.diarization_backend" "$EXPRESS_DIAR_BACKEND"' in self._CONTENT
+
+
+class TestPalierZeroGpuCloud:
+    """--llm-cloud : palier « zéro GPU » (docs/LLM_CLOUD.md § 4) — plus d'impasse sans GPU."""
+
+    def test_sans_gpu_plan_complet_sans_palier_local(self):
+        plan = _plan(gpu_count=0, total_vram_mb=0, gpu_sizes_csv="", llm_cloud=True, cloud_provider="mistral")
+        recap = "\n".join(plan.recap)
+        assert plan.llm_cloud is True
+        assert plan.stt_backend == "kroko" and plan.diarization_backend == "auto"
+        assert "zéro GPU" in recap and "Kroko" in recap and "Nemotron 3" in recap
+        assert "fournisseur cloud mistral" in recap
+        assert "aucun llama-server" in recap and "aucune VRAM" in recap
+        assert "indisponibles sans fournisseur cloud" not in recap  # plus d'impasse
+        assert "llama.cpp, palier" not in recap
+        assert "Administration → LLM cloud" in recap
+        assert "EXPRESS_LLM_CLOUD=true" in render_shell(plan)
+
+    def test_avec_gpu_aucun_palier_llm(self):
+        plan = _plan(llm_cloud=True)
+        recap = "\n".join(plan.recap)
+        assert "llama.cpp" not in recap and "fournisseur cloud" in recap
+
+    def test_whisper_seulement_si_la_plus_grande_carte_loge_le_modele(self, monkeypatch):
+        # Sans LLM résidente, la carte n'est plus le facteur limitant… sauf la VRAM du Whisper
+        # CONFIGURÉ (large-v3 ≈ 10 Go) : sur 4-8 Go, attente VRAM sans fin ⇒ Kroko CPU.
+        from transcria.installer import express as express_mod
+
+        required = express_mod.whisper_required_vram_mb()
+        assert required == 10000  # large-v3 par défaut (whisper_transcriber._MODEL_VRAM)
+        assert _plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192", llm_cloud=True).stt_backend == "kroko"
+        assert _plan(gpu_count=2, total_vram_mb=16384, gpu_sizes_csv="8192,8192", llm_cloud=True).stt_backend == "kroko"
+        assert _plan(gpu_count=1, total_vram_mb=12288, gpu_sizes_csv="12288", llm_cloud=True).stt_backend == "whisper"
+        monkeypatch.setattr(express_mod, "whisper_required_vram_mb", lambda: 2000)  # ex. Whisper « small »
+        assert _plan(gpu_count=1, total_vram_mb=8192, gpu_sizes_csv="8192", llm_cloud=True).stt_backend == "whisper"
+
+    def test_repli_conservateur_sans_pyyaml(self, monkeypatch):
+        import builtins
+
+        from transcria.installer import express as express_mod
+
+        real_import = builtins.__import__
+
+        def no_whisper(name, *args, **kwargs):
+            if name.startswith("transcria.stt"):
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_whisper)
+        assert express_mod.whisper_required_vram_mb() == express_mod.WHISPER_FALLBACK_VRAM_MB
+
+    def test_sans_gpu_config_conservee_ne_promet_pas_kroko(self):
+        recap = "\n".join(_plan(gpu_count=0, total_vram_mb=0, config_exists=True, llm_cloud=True,
+                                cloud_already_configured=True).recap)
+        assert "Kroko" not in recap and "configuration conservée" in recap
+        assert "déjà configuré" in recap and "clé demandée" not in recap
+
+    def test_recap_anglais(self):
+        recap = "\n".join(_plan(gpu_count=0, total_vram_mb=0, llm_cloud=True, locale="en").recap)
+        assert "zero GPU" in recap and "no llama-server" in recap
+
+    def test_config_existante_en_cloud_detectee_sans_pyyaml(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("auth:\n  backend: local\nservices:\n  # x\n  backend: cloud  # fournisseur\n", encoding="utf-8")
+        assert config_declares_cloud_backend(cfg) is True
+        cfg.write_text("auth:\n  backend: cloud\nservices:\n  backend: script\n", encoding="utf-8")
+        assert config_declares_cloud_backend(cfg) is False
+        cfg.write_text("services:\n  ollama:\n    backend: cloud\n", encoding="utf-8")
+        assert config_declares_cloud_backend(cfg) is False
+        assert config_declares_cloud_backend(tmp_path / "absent.yaml") is False
+
+    def test_cli_express_lit_la_config_cloud(self, tmp_path, capsys):
+        from transcria.installer import cli as installer_cli
+
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text('services:\n  backend: "cloud"\n', encoding="utf-8")
+        rc = installer_cli.main(["express", "--gpu-count", "0", "--total-vram-mb", "0",
+                                 "--config", str(cfg), "--service-user", "svc"])
+        assert rc == 0 and "EXPRESS_LLM_CLOUD=true" in capsys.readouterr().out
+
+    def test_install_sh_transmet_le_drapeau(self):
+        content = (Path(__file__).resolve().parents[1] / "install.sh").read_text(encoding="utf-8")
+        bloc = content.split("SECTION 1-bis")[1].split("SECTION 2")[0]
+        assert '--llm-cloud --llm-cloud-provider "$LLM_CLOUD_PROVIDER"' in bloc

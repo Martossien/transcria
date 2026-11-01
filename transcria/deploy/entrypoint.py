@@ -450,7 +450,8 @@ def provision_diarization_model(
     """Garantit le GGUF de diarisation Nemotron 3 quand la config le retient (`auto`/`nemotron_diar`).
 
     L'image GPU slim bake le binaire `audiocpp_cli` (/opt/runtimes) mais aucun poids ; la
-    bundled bake aussi ce GGUF (199 Mo, OpenMDW 1.1). Sans lui, « auto » retomberait sur
+    bundled bake aussi ce GGUF (199 Mo, OpenMDW 1.1) ; l'image CPU bake le précompilé CPU
+    (/opt/runtimes/audiocpp/prebuilt, palier zéro GPU) et passe aussi par ici. Sans lui, « auto » retomberait sur
     pyannote (gated) en silence — on le tire une fois dans `MODELS_DIR` (volume persistant),
     au même chemin que la page « Modèles ». Rôles qui diarisent : `all` et `scheduler`.
     Best-effort : jamais bloquant, False = absent (le doctor et la page Modèles le disent).

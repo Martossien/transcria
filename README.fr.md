@@ -245,6 +245,10 @@ que de vraies personnes partagent l'outil, semaine après semaine.
   entretiennent et que les utilisateurs appliquent. Un terme validé sur un job peut être
   promu dans un lexique central, pour que toute l'organisation écrive « SIRET » ou un
   acronyme interne de la même façon la fois suivante.
+- **LLM cloud optionnelle.** La LLM d'arbitrage peut être un fournisseur externe (Mistral,
+  Ollama cloud, OpenRouter…) à la place d'un modèle local : un passe-plat que l'administrateur
+  choisit et doit valider explicitement, avec bandeau permanent, interdiction par groupe et
+  provenance par job. Aucun GPU nécessaire pour ce palier ([docs/LLM_CLOUD.md](docs/LLM_CLOUD.md)).
 - **Piste d'audit et protection des données.** Chaque action sensible est journalisée
   (acteur, IP, horodatage) dans une piste filtrable et exportable ; la rétention est
   configurable avec purge automatique, documentée pour un DPO dans
@@ -357,6 +361,7 @@ Nous gardons cette liste honnête et à jour.
 | Taille d'un fichier | `security.max_upload_size_mb` (1 Go par défaut) | Message « fichier trop volumineux » (413), jamais d'erreur brute |
 | Locuteurs (diarisation Sortformer) | ≤ 4 | Utiliser pyannote (sous conditions) au-delà |
 | Langue de l'interface | Français / anglais + allemand / espagnol / italien (bêta) | Interface, livrables et prompts localisés ; de/es/it sont traduits machine avec glossaires imposés, badgés **bêta** tant qu'un locuteur natif n'a pas relu — [relectures natives bienvenues](https://github.com/Martossien/transcria/discussions) |
+| LLM cloud (opt-in) | Les transcriptions (jamais l'audio ni les voix) quittent le serveur vers le fournisseur validé par l'administrateur | Désactivée par défaut ; refusée tant qu'elle n'est pas validée dans *Administration → LLM cloud* ; interdisible par groupe |
 | VRAM < 8 Go | Pas de LLM de synthèse/correction | Repli sur la transcription brute (les cartes 8-11 Go reçoivent automatiquement le palier 4B) |
 | Espace disque | Surveillé par `doctor` (< 10 Go = alerte, < 2 Go = échec) | Un disque plein fait échouer un job proprement et apparaît au diagnostic |
 | Rétention | Traitements 365 j, audit 1095 j (configurable) | Purge automatique + commande `maintenance.cli purge` |

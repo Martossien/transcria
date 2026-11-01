@@ -63,6 +63,24 @@ COPY --chown=transcria:transcria . /app
 RUN python -m transcria.installer.cli i18n-compile \
         --translations-dir /app/transcria/web/translations || true
 
+# audiocpp_cli PRÉCOMPILÉ (CPU) — diarisation Nemotron 3 sans token HF ni GPU (palier zéro
+# GPU, docs/LLM_CLOUD.md § 4). MÊME logique que l'installation native : archive de la release
+# épinglée (AUDIOCPP_PREBUILT_TAG) dont le sha256 est VÉRIFIÉ (AUDIOCPP_PREBUILT_SHA256),
+# posée sous <runtimes>/audiocpp/prebuilt/ — jamais dans bin/. Racine /opt/runtimes comme
+# les images GPU : hors volume (un volume la masquerait), lue par resolve_runtimes_dir().
+# Le GGUF (199 Mo) n'est pas baké : l'entrypoint le tire au premier démarrage dans le volume
+# `models` (provision_diarization_model). Archive amont x86-64 seulement : ailleurs, on passe
+# (la diarisation « auto » retombe alors sur pyannote).
+ARG TARGETARCH
+ENV TRANSCRIA_RUNTIMES_DIR=/opt/runtimes
+RUN if [ "${TARGETARCH:-amd64}" = "amd64" ]; then \
+        python -m transcria.installer.cli audiocpp --prebuilt --runtimes-dir /opt/runtimes \
+        && /opt/runtimes/audiocpp/prebuilt/audiocpp_cli --help >/dev/null 2>&1 \
+        || { echo "audiocpp_cli précompilé : échec de pose ou de démarrage" >&2; exit 1; }; \
+    else \
+        echo "audiocpp_cli précompilé non disponible pour ${TARGETARCH} — étape sautée"; \
+    fi
+
 # Répertoires d'exécution inscriptibles par l'utilisateur de service (le rôle écrit
 # les artefacts de jobs, voix, instance). `/app` reste root après WORKDIR : on rend
 # l'arbre et ces dossiers propriété de transcria. Les volumes nommés montés sur

@@ -18,6 +18,15 @@
 #   --cuda VERSION     Forcer la version CUDA (ex: cu130, cu126, cu124, cu121)
 #   --llm-backend B    Forcer le backend LLM d'arbitrage : ollama | llamacpp
 #                      (all-in-one ; utile en non-interactif/CI. Défaut interactif : demandé)
+#   --llm-cloud        LLM d'arbitrage chez un FOURNISSEUR EXTERNE (opt-in, jamais par défaut) :
+#                      ni llama-server, ni GGUF, ni calibration VRAM — palier « zéro GPU »
+#                      possible. Clé lue dans opencode (HOME du service) ou demandée en
+#                      saisie masquée, écrite dans .env ; validation par un admin dans
+#                      Administration → LLM cloud (cf. docs/LLM_CLOUD.md)
+#   --llm-cloud-provider ID  Fournisseur (table transcria/data/llm_providers.yaml)
+#   --llm-cloud-model M      Modèle chez le fournisseur (sans préfixe)
+#   --llm-cloud-key-env VAR  Variable d'environnement qui PORTE la clé (non interactif ;
+#                            la clé elle-même n'est jamais acceptée en argument)
 #   --user USER        Utilisateur pour le service systemd (défaut: $USER)
 #   --install-dir DIR  Répertoire d'installation (défaut: répertoire courant)
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
@@ -61,8 +70,8 @@
 # Toute la logique métier vit dans transcria/installer/ (testée) ; ce script ne
 # fait que le bootstrap, les invites et le résumé. Il n'invoque Python que via :
 #   - transcria.installer.cli <phase>    : python-env, i18n-compile, config,
-#       config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd,
-#       summary, recommend-llm, moss-site, audiocpp, parakeetcpp ;
+#       config-proxy, opencode, llm-cloud, ollama, postgres, postgres-bootstrap,
+#       systemd, summary, recommend-llm, express, moss-site, audiocpp, parakeetcpp ;
 #   - transcria.installer.cli <helper>   : prerequisites, hardware, paths,
 #       profiles, check-imports, models, arbitrage, summary-log, postgres-tools
 #       (helpers à CLI propre, transférés tels quels par cli.py) ;
@@ -154,6 +163,18 @@ declare -A _MSG=(
     [en:py_found]="Python %s found (%s)"
     [fr:unknown_arg]="Argument inconnu: %s"
     [en:unknown_arg]="Unknown argument: %s"
+    [fr:llm_cloud_skip]="LLM cloud : palier VRAM, llama-server, téléchargement GGUF et calibration sautés (fournisseur externe)."
+    [en:llm_cloud_skip]="Cloud LLM: VRAM tier, llama-server, GGUF download and calibration skipped (external provider)."
+    [fr:llm_cloud_failed]="Configuration de la LLM cloud échouée — corrigez puis relancez : venv/bin/python -m transcria.installer.cli llm-cloud --config config.yaml --env-file .env --user-home <HOME du service>"
+    [en:llm_cloud_failed]="Cloud LLM setup failed — fix it, then re-run: venv/bin/python -m transcria.installer.cli llm-cloud --config config.yaml --env-file .env --user-home <service HOME>"
+    [fr:llm_cloud_backend_conflict]="--llm-cloud et --llm-backend sont incompatibles (la LLM n'est pas locale)."
+    [en:llm_cloud_backend_conflict]="--llm-cloud and --llm-backend are mutually exclusive (the LLM is not local)."
+    [fr:llm_cloud_kept]="LLM cloud déjà configurée : fournisseur et clé conservés (relancer avec --llm-cloud pour en changer)."
+    [en:llm_cloud_kept]="Cloud LLM already configured: provider and key kept (re-run with --llm-cloud to change them)."
+    [fr:llm_cloud_needs_args]="--llm-cloud en mode non interactif : --llm-cloud-provider ET --llm-cloud-model sont requis (et la clé via --llm-cloud-key-env VAR ou déjà présente dans .env/opencode)."
+    [en:llm_cloud_needs_args]="--llm-cloud in non-interactive mode: --llm-cloud-provider AND --llm-cloud-model are required (and the key via --llm-cloud-key-env VAR or already in .env/opencode)."
+    [fr:llm_cloud_profile_ignored]="--llm-cloud ignorée pour le profil %s (aucune phase LLM sur ce rôle)."
+    [en:llm_cloud_profile_ignored]="--llm-cloud ignored for profile %s (no LLM phase on this role)."
     [fr:bad_locale]="Langue inconnue : %s (attendu fr ou en). Utilisation de « fr »."
     [en:bad_locale]="Unknown language: %s (expected fr or en). Falling back to \"fr\"."
 )
@@ -215,6 +236,10 @@ INSTALL_INFERENCE=false   # --inference-service
 INSTALL_PROFILE="all-in-one"
 PROFILE_EXPLICIT=false
 LLM_BACKEND_FORCED=""     # --llm-backend {ollama|llamacpp} : force le backend (utile en non-interactif/CI)
+LLM_CLOUD=false           # --llm-cloud : phase llm-cloud (fournisseur externe, opt-in) ; SECTION 9-bis sautée
+LLM_CLOUD_PROVIDER=""     # --llm-cloud-provider ID
+LLM_CLOUD_MODEL=""        # --llm-cloud-model M
+LLM_CLOUD_KEY_ENV=""      # --llm-cloud-key-env VAR (nom de variable, jamais la clé)
 PLAN_ONLY=false
 DOCTOR_STATUS="non exécuté"
 INF_LOG_DIR="/var/log"
@@ -237,6 +262,10 @@ while [[ $# -gt 0 ]]; do
         --skip-deps)       SKIP_DEPS=true; INSTALL_TORCH=false; shift ;;
         --cuda)            FORCE_CUDA="$2"; shift 2 ;;
         --llm-backend)     LLM_BACKEND_FORCED="$2"; shift 2 ;;
+        --llm-cloud)       LLM_CLOUD=true; shift ;;
+        --llm-cloud-provider) LLM_CLOUD=true; LLM_CLOUD_PROVIDER="$2"; shift 2 ;;
+        --llm-cloud-model) LLM_CLOUD=true; LLM_CLOUD_MODEL="$2"; shift 2 ;;
+        --llm-cloud-key-env) LLM_CLOUD=true; LLM_CLOUD_KEY_ENV="$2"; shift 2 ;;
         --locale)          INSTALL_LOCALE="$2"; LOCALE_EXPLICIT=true; shift 2 ;;
         --user)            SERVICE_USER="$2"; shift 2 ;;
         --install-dir)     INSTALL_DIR="$2"; shift 2 ;;
@@ -296,6 +325,11 @@ normalize_install_locale
 # i18n.default_locale côté application (cf. config/loader) : langue cohérente partout.
 export TRANSCRIA_DEFAULT_LOCALE="$INSTALL_LOCALE"
 [[ "$PLAN_ONLY" != true ]] && log_info "$(t locale_set)"
+
+if [[ "$LLM_CLOUD" = true && -n "$LLM_BACKEND_FORCED" ]]; then
+    log_error "$(t llm_cloud_backend_conflict)"
+    exit 1
+fi
 
 if [[ "$SKIP_DOCTOR" = true && "$STRICT_DOCTOR" = true ]]; then
     log_error "--skip-doctor et --strict-doctor sont incompatibles"
@@ -465,7 +499,10 @@ load_install_profile_plan() {
 }
 
 print_model_detection_table() {
+    local cloud_args=()
+    [[ "${LLM_CLOUD_EARLY:-false}" = true ]] && cloud_args=(--llm-cloud --llm-cloud-model "${LLM_CLOUD_MODEL_REF:-}")
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models detection-table \
+        ${cloud_args[@]+"${cloud_args[@]}"} \
         --cohere-ok "$COHERE_OK" \
         --cohere-path "${COHERE_PATH:-}" \
         --pyannote-ok "$PYANNOTE_OK" \
@@ -479,6 +516,18 @@ print_model_detection_table() {
 }
 
 load_install_profile_plan
+
+# --llm-cloud sur un rôle sans phase LLM (web, resource-node…) : ignorée, et on le DIT.
+if [[ "$LLM_CLOUD" = true && "$PROFILE_NEEDS_LLM" != true ]]; then
+    printf -v _lcp -- "$(t llm_cloud_profile_ignored)" "$INSTALL_PROFILE"; log_warn "$_lcp"
+    LLM_CLOUD=false
+fi
+# Non interactif : tout ce que la phase llm-cloud demanderait doit être fourni DÈS maintenant
+# (échec avant PostgreSQL/venv, pas au milieu de l'installation).
+if [[ "$LLM_CLOUD" = true && "$NON_INTERACTIVE" = true && ( -z "$LLM_CLOUD_PROVIDER" || -z "$LLM_CLOUD_MODEL" ) ]]; then
+    log_error "$(t llm_cloud_needs_args)"
+    exit 1
+fi
 
 if [[ "$PLAN_ONLY" = true ]]; then
     print_install_plan
@@ -757,6 +806,11 @@ EXPRESS_SETUP_PG=false
 EXPRESS_OPEN_MODELS=false
 EXPRESS_STT_BACKEND=""
 EXPRESS_DIAR_BACKEND=""
+EXPRESS_LLM_CLOUD=false
+# La phase llm-cloud reste INTERACTIVE sur un vrai terminal même après la confirmation express
+# (qui bascule NON_INTERACTIVE=true) : le fournisseur et la clé ne font pas partie des défauts.
+LLM_CLOUD_TTY=false
+[[ "$NON_INTERACTIVE" = false && -t 0 ]] && LLM_CLOUD_TTY=true
 if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_PROFILE" == "all-in-one" ]]; then
     # Offre AVANT le récapitulatif : sinon l'express annonce « SQLite » puis propose
     # PostgreSQL, et le récapitulatif signé par l'utilisateur devient faux. Sautée si
@@ -774,12 +828,13 @@ if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_
     [[ $EUID -eq 0 ]] && EXPRESS_CLI_ARGS+=(--is-root)
     [[ -n "${HF_TOKEN:-}" ]] && EXPRESS_CLI_ARGS+=(--has-hf-token)
     [[ "$INSTALL_SERVICE" = false ]] && EXPRESS_CLI_ARGS+=(--no-service)
+    [[ "$LLM_CLOUD" = true ]] && EXPRESS_CLI_ARGS+=(--llm-cloud --llm-cloud-provider "$LLM_CLOUD_PROVIDER")
     if EXPRESS_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "${EXPRESS_CLI_ARGS[@]}" 2>/dev/null); then
         log_section "$(t sec_express)"
         # Lignes machine séparées AVANT l'eval (convention recommend-llm) : les lignes
         # humaines du récapitulatif ne doivent pas déclencher de « sortie ignorée ».
         eval_named_shell_assignments "$(printf '%s\n' "$EXPRESS_OUT" | grep '^EXPRESS_' || true)" \
-            EXPRESS_SETUP_PG EXPRESS_OPEN_MODELS EXPRESS_STT_BACKEND EXPRESS_DIAR_BACKEND
+            EXPRESS_SETUP_PG EXPRESS_OPEN_MODELS EXPRESS_STT_BACKEND EXPRESS_DIAR_BACKEND EXPRESS_LLM_CLOUD
         while IFS= read -r line; do
             [[ -z "$line" || "$line" == EXPRESS_* ]] && continue
             log_info "$line"
@@ -791,6 +846,11 @@ if [[ "$NON_INTERACTIVE" = false && "$EXPERT_MODE" = false && -t 0 && "$INSTALL_
             exit 0
         fi
         NON_INTERACTIVE=true
+        # Config DÉJÀ en cloud sans --llm-cloud : la phase llm-cloud ne sera pas rejouée (la clé
+        # et le fournisseur restent ceux de .env/config.yaml) — on le dit, sans rien redemander.
+        if [[ "$EXPRESS_LLM_CLOUD" = true && "$LLM_CLOUD" != true ]]; then
+            log_info "$(t llm_cloud_kept)"
+        fi
         # PostgreSQL seulement si non déjà tranché par un drapeau (--postgres/--sqlite-dev).
         [[ "$EXPRESS_SETUP_PG" = true && -z "$SETUP_PG" ]] && SETUP_PG=true
     fi
@@ -1122,6 +1182,20 @@ log_pyannote_setup_event() {
         --event "$event"
 }
 
+# LLM d'arbitrage CLOUD (drapeau, ou config déjà en cloud) : aucun GGUF attendu — les
+# bilans disent « LLM cloud : <fournisseur>/<modèle> — validation admin à faire » au lieu
+# de « ABSENT/MANQUANT ». Le modèle vient de la config (déjà cloud) ou des drapeaux ; vide =
+# choisi plus loin par la phase llm-cloud (après opencode).
+LLM_CLOUD_EARLY="$LLM_CLOUD"
+LLM_CLOUD_MODEL_REF=""
+if [[ "$(yaml_get "services.backend" 2>/dev/null || true)" == "cloud" ]]; then
+    LLM_CLOUD_EARLY=true
+    LLM_CLOUD_MODEL_REF=$(yaml_get "workflow.arbitration_llm.model_id")
+fi
+if [[ "$LLM_CLOUD" = true && -n "$LLM_CLOUD_PROVIDER" && -n "$LLM_CLOUD_MODEL" ]]; then
+    LLM_CLOUD_MODEL_REF="$LLM_CLOUD_PROVIDER/${LLM_CLOUD_MODEL#"$LLM_CLOUD_PROVIDER"/}"
+fi
+
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     MODEL_DETECTION=$(python_module transcria.installer.cli models detect-local \
         --cohere-path "$(yaml_get "models.cohere_model_path")" \
@@ -1157,7 +1231,9 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
         log_model_status_event squim-missing
     fi
 
-    if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
+    if [[ "$PROFILE_NEEDS_LLM" = true && "$LLM_CLOUD_EARLY" = true ]]; then
+        log_model_status_event llm-cloud "$LLM_CLOUD_MODEL_REF"
+    elif [[ "$PROFILE_NEEDS_LLM" = true ]]; then
         if [[ "$QWEN_OK" = true ]]; then
             QWEN_OK=true
             log_model_status_event llm-ok "$QWEN_GGUF"
@@ -1341,6 +1417,30 @@ if [[ -n "$OPENCODE_BIN" ]]; then
         "Config opencode (provider local) — fixe la résolution indépendamment du HOME"
 fi
 
+# ── LLM d'arbitrage CLOUD (opt-in --llm-cloud, docs/LLM_CLOUD.md § 5) ─────────
+# APRÈS la phase opencode (le binaire reste nécessaire : les phases agentiques passent par
+# lui). --user-home = HOME du COMPTE DE SERVICE (piège root vs compte admin) : c'est là que
+# vivent ses identifiants opencode et son opencode.json. La clé n'apparaît ni à l'écran, ni
+# dans les journaux, ni dans config.yaml ; la validation admin se fait dans l'écran web.
+if [[ "$LLM_CLOUD" = true && "$PROFILE_NEEDS_LLM" = true ]]; then
+    LLM_CLOUD_CLI_ARGS=(
+        -m transcria.installer.cli llm-cloud
+        --config "$CONFIG_PATH"
+        --env-file "$ENV_FILE"
+        --service-user "$SERVICE_USER"
+        --user-home "$SERVICE_HOME_GLOBAL"
+        --opencode-config "$OPENCODE_HOME/.config/opencode/opencode.json"
+    )
+    [[ -n "$LLM_CLOUD_PROVIDER" ]] && LLM_CLOUD_CLI_ARGS+=(--provider "$LLM_CLOUD_PROVIDER")
+    [[ -n "$LLM_CLOUD_MODEL" ]] && LLM_CLOUD_CLI_ARGS+=(--model "$LLM_CLOUD_MODEL")
+    [[ -n "$LLM_CLOUD_KEY_ENV" ]] && LLM_CLOUD_CLI_ARGS+=(--key-env "$LLM_CLOUD_KEY_ENV")
+    [[ "$LLM_CLOUD_TTY" != true ]] && LLM_CLOUD_CLI_ARGS+=(--non-interactive)
+    if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${LLM_CLOUD_CLI_ARGS[@]}"; then
+        log_error "$(t llm_cloud_failed)"
+        exit 1
+    fi
+fi
+
 # ============================================================================
 # SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle
 # ============================================================================
@@ -1364,8 +1464,17 @@ load_llm_tier_metadata() {
     eval_prefixed_shell_assignments LLM "$metadata"
 }
 
+# Fournisseur externe (phase llm-cloud ci-dessus, ou config déjà en cloud) : rien de local à
+# choisir ni à télécharger — palier « zéro GPU » possible, plus d'impasse « VRAM insuffisante ».
+# (--llm-cloud suffit : la phase sort en erreur si elle n'a pas écrit le backend ; la lecture
+# de config.yaml couvre une ré-installation sans le drapeau.)
+LLM_CLOUD_ACTIVE="$LLM_CLOUD"
+[[ "$(yaml_get "services.backend" 2>/dev/null || true)" == "cloud" ]] && LLM_CLOUD_ACTIVE=true
+
 if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
     log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
+elif [[ "$LLM_CLOUD_ACTIVE" = true ]]; then
+    log_info "$(t llm_cloud_skip)"
 else
 
 # GPU_SIZES_CSV = tailles PAR carte (Mio), calculé par transcria.installer.hardware
@@ -1733,6 +1842,7 @@ SUMMARY_CLI_ARGS=(
 [[ "$COHERE_OK" = true ]]                  && SUMMARY_CLI_ARGS+=(--cohere-ok)
 [[ "$PYANNOTE_OK" = true ]]                && SUMMARY_CLI_ARGS+=(--pyannote-ok)
 [[ "$QWEN_OK" = true ]]                    && SUMMARY_CLI_ARGS+=(--qwen-ok)
+[[ "${LLM_CLOUD_ACTIVE:-false}" = true ]]  && SUMMARY_CLI_ARGS+=(--llm-cloud)
 # Bloc « première connexion » (issue #11) — l'état sentinelle/défini est relu de la
 # config par le résumé lui-même (reflète la réponse donnée à la section 8).
 [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true ]] && SUMMARY_CLI_ARGS+=(--admin-login)

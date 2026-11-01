@@ -550,3 +550,35 @@ def test_find_first_gguf_ignores_runtime_weights(tmp_path):
     llm.parent.mkdir()
     llm.write_bytes(b"x")
     assert find_first_gguf(tmp_path) == llm
+
+
+def test_llm_cloud_remplace_absent_et_manquant():
+    # LLM cloud : ni « ABSENT » au statut, ni « [MANQUANT] » au bilan, ni GGUF au tableau.
+    status = render_model_status_log(event="llm-cloud", value="mistral/modele-a")
+    assert status.startswith("INFO:") and "mistral/modele-a" in status and "Administration → LLM cloud" in status
+    assert "plus loin" not in status
+    assert "phase llm-cloud" in render_model_status_log(event="llm-cloud", value="")
+    summary = render_model_summary(profile="all-in-one", needs_local_models=True, needs_llm=True, cohere_ok=True,
+                                   pyannote_ok=True, qwen_ok=False, opencode_bin="/usr/bin/opencode",
+                                   llm_cloud_model="mistral/modele-a")
+    assert "MANQUANT" not in summary and "LLM cloud : mistral/modele-a" in summary
+    table = render_model_detection_table(cohere_ok=True, cohere_path="", pyannote_ok=True, pyannote_cache="",
+                                         needs_llm=True, qwen_ok=False, qwen_gguf="", squim_ok=True,
+                                         llm_cloud_model="mistral/modele-a")
+    assert "LLM arbitrage GGUF" not in table and "cloud" in table and "mistral/modele-a" in table
+
+
+def test_llm_cloud_cli_summary_et_table():
+    import contextlib
+    import io
+
+    from transcria.installer.models import main
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert main(["summary", "--profile", "all-in-one", "--needs-local-models", "true", "--needs-llm", "true",
+                     "--cohere-ok", "true", "--pyannote-ok", "true", "--qwen-ok", "false",
+                     "--opencode-bin", "/usr/bin/opencode", "--llm-cloud", "--llm-cloud-model", "mistral/m"]) == 0
+        assert main(["detection-table", "--cohere-ok", "true", "--pyannote-ok", "true", "--needs-llm", "true",
+                     "--qwen-ok", "false", "--squim-ok", "true", "--llm-cloud", "--llm-cloud-model", "mistral/m"]) == 0
+    assert "MANQUANT" not in buf.getvalue() and buf.getvalue().count("mistral/m") == 2

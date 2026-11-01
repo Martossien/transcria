@@ -257,3 +257,37 @@ dit rien des fichiers créés avant lui.
 utilisateur) : le détail est réservé aux **administrateurs**, la sonde anonyme garde son
 oui/non. Les exports CSV neutralisent les formules (`=`, `+`, `-`, `@`) — le titre d'un job
 est une valeur d'utilisateur, et un tableur l'exécute à l'ouverture.
+
+## 9. LLM d'arbitrage externe (cloud) — opt-in
+
+Avec `services.backend: cloud` ([LLM_CLOUD.md](LLM_CLOUD.md)), **les transcriptions quittent le
+serveur** vers un fournisseur choisi par l'administrateur. Mode désactivé par défaut.
+
+- **Données sortantes** : transcription, brief d'invitation, texte des documents joints, lexique
+  filtré, noms et fonctions des participants, contexte. **Jamais** l'audio ni les voix. Le
+  fournisseur applique sa propre politique (conservation, entraînement) : l'écran d'administration
+  en affiche les faits, à confirmer sur ses conditions. Les agents d'édition de fichiers restent
+  confinés à un espace isolé, et `share: disabled` est posé dans `opencode.json` : une session
+  d'agent ne part jamais vers le service en ligne d'opencode.
+- **Clé d'API** : variable d'environnement du fournisseur, dans `.env` uniquement — jamais dans
+  `config.yaml`, `opencode.json`, un journal ou une sauvegarde lisible. Hygiène : une clé mal
+  formée (espaces, retour à la ligne) est refusée ; les motifs `sk-…` et `Bearer` sont masqués dans
+  les détails du doctor, qui nomme la variable, jamais la valeur. Le sous-process opencode hérite
+  de l'environnement du service (comportement préexistant, hors périmètre).
+- **Validation administrateur versionnée** : table `llm_cloud_acknowledgements` (fournisseur,
+  modèle, version du texte lu, validateur, date, réunions de connecteurs autorisées ou non).
+  Sans validation, ou si le texte d'information a changé (validation **caduque**), tous les
+  traitements LLM sont refusés à la soumission **et** par le worker ; le service démarre quand
+  même, pour que l'administrateur puisse atteindre l'écran. Le juge est le propriétaire du job,
+  jamais le demandeur.
+- **Interdiction par groupe** : « LLM cloud interdite » sur un groupe (admin global). Un
+  utilisateur est interdit dès qu'**un** de ses groupes l'est ; refus à la soumission et au
+  worker (un job enfilé avant l'interdiction est refusé), profils à LLM grisés, jamais de repli
+  silencieux sur une LLM locale. **Limite** : un admin de groupe peut retirer un membre du
+  groupe interdit, ce qui lève l'interdiction pour lui (action auditée `group_member_remove`) —
+  c'est une politique de groupe, pas de personne.
+- **Audit** : `config_llm_cloud_acknowledge`, `config_llm_cloud_revoke`, `job_external_llm`
+  (métadonnées seules, voir [AUDIT_DPO.md](AUDIT_DPO.md)) ; provenance par job dans
+  `metadata/llm_provenance.json` et au pied du DOCX.
+- **Réunions captées par connecteurs/bots** : refusées en cloud tant que la case dédiée de la
+  validation n'est pas cochée.

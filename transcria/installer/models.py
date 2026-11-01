@@ -184,8 +184,13 @@ def render_model_summary(
     pyannote_ok: bool,
     qwen_ok: bool,
     opencode_bin: str,
+    llm_cloud_model: str | None = None,
 ) -> str:
-    """Rend le bilan final des modèles à partir des états déjà détectés (FR/EN)."""
+    """Rend le bilan final des modèles à partir des états déjà détectés (FR/EN).
+
+    ``llm_cloud_model`` non ``None`` = LLM d'arbitrage chez un fournisseur externe : aucun GGUF
+    n'est attendu, la ligne dit le fournisseur/modèle et la validation admin à faire.
+    """
 
     lines = [t("mdl_sum_title")]
     if needs_local_models:
@@ -195,7 +200,10 @@ def render_model_summary(
         lines.append(t("mdl_sum_local_not_required", profile=profile))
 
     if needs_llm:
-        lines.append(t("mdl_sum_llm_ok") if qwen_ok else t("mdl_sum_llm_missing"))
+        if llm_cloud_model is not None:
+            lines.append(t("mdl_sum_llm_cloud", model=llm_cloud_model or t("mdl_llm_cloud_pending")))
+        else:
+            lines.append(t("mdl_sum_llm_ok") if qwen_ok else t("mdl_sum_llm_missing"))
         if opencode_bin:
             lines.append(t("mdl_sum_opencode_ok", bin=opencode_bin))
         else:
@@ -221,6 +229,7 @@ def render_model_detection_table(
     squim_ok: bool,
     stt_backend: str = "",
     diarization_backend: str = "",
+    llm_cloud_model: str | None = None,
 ) -> str:
     """Rend le tableau de vérification des modèles locaux (FR/EN).
 
@@ -248,7 +257,10 @@ def render_model_detection_table(
                   else t("mdl_tbl_backend_info", value=diarization_backend)),
         ),
     ]
-    if needs_llm:
+    if needs_llm and llm_cloud_model is not None:
+        rows.append((t("mdl_tbl_llm_cloud"), "cloud",
+                     t("mdl_tbl_llm_cloud_info", model=llm_cloud_model or t("mdl_llm_cloud_pending"))))
+    elif needs_llm:
         rows.append(
             (
                 t("mdl_tbl_llm"),
@@ -288,6 +300,8 @@ def render_model_status_log(*, event: str, value: str = "", profile: str = "") -
         return f"OK:{t('mdl_st_llm_ok', value=value)}\n"
     if event == "llm-missing":
         return f"WARN:{t('mdl_st_llm_missing')}\n"
+    if event == "llm-cloud":
+        return f"INFO:{t('mdl_st_llm_cloud', value=value or t('mdl_llm_cloud_pending'))}\n"
     if event == "llm-not-required":
         return f"INFO:{t('mdl_st_llm_not_required', profile=profile)}\n"
     if event == "local-models-skipped":
@@ -382,6 +396,7 @@ def _render_detection_table_from_args(args) -> str:
         squim_ok=parse_bool(args.squim_ok),
         stt_backend=args.stt_backend,
         diarization_backend=args.diarization_backend,
+        llm_cloud_model=args.llm_cloud_model if args.llm_cloud else None,
     )
 
 
@@ -419,6 +434,8 @@ def main(argv: list[str] | None = None) -> int:
     summary_parser.add_argument("--pyannote-ok", required=True)
     summary_parser.add_argument("--qwen-ok", required=True)
     summary_parser.add_argument("--opencode-bin", default="")
+    summary_parser.add_argument("--llm-cloud", action="store_true", help="LLM d'arbitrage chez un fournisseur externe")
+    summary_parser.add_argument("--llm-cloud-model", default="", help="<fournisseur>/<modèle> (vide = choisi plus loin)")
 
     table_parser = subparsers.add_parser("detection-table", help="rend le tableau de vérification des modèles locaux")
     table_parser.add_argument("--cohere-ok", required=True)
@@ -431,6 +448,8 @@ def main(argv: list[str] | None = None) -> int:
     table_parser.add_argument("--squim-ok", required=True)
     table_parser.add_argument("--stt-backend", default="")
     table_parser.add_argument("--diarization-backend", default="")
+    table_parser.add_argument("--llm-cloud", action="store_true", help="LLM d'arbitrage chez un fournisseur externe")
+    table_parser.add_argument("--llm-cloud-model", default="", help="<fournisseur>/<modèle> (vide = choisi plus loin)")
 
     status_parser = subparsers.add_parser("status-log", help="rend une ligne de statut modèle")
     status_parser.add_argument("--event", required=True)
@@ -490,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                     pyannote_ok=parse_bool(args.pyannote_ok),
                     qwen_ok=parse_bool(args.qwen_ok),
                     opencode_bin=args.opencode_bin,
+                    llm_cloud_model=args.llm_cloud_model if args.llm_cloud else None,
                 ),
                 end="",
             )

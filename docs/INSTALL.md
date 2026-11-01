@@ -912,6 +912,113 @@ services:
 
 TranscrIA attend une API OpenAI-compatible. Le backend peut être llama.cpp, SGLang, vLLM, ik_llama.cpp ou autre. Adaptez `arbitrage_script`, `stop_script`, `arbitrage_llm_port` et `llm_cleanup_ports` au backend réellement utilisé.
 
+### LLM d'arbitrage chez un fournisseur cloud (opt-in)
+
+Alternative à la LLM locale : le résumé, la correction, la relecture finale et l'affinage sont
+confiés à un fournisseur d'inférence que **l'administrateur a choisi, contracté et surveille**.
+TranscrIA est un **passe-plat** : il transmet les prompts et reçoit les réponses (plan et
+décisions : [LLM_CLOUD.md](LLM_CLOUD.md)). Ce mode est **désactivé par défaut** et ne s'active
+jamais seul.
+
+**Ce qui part chez le fournisseur** : la transcription intégrale, le brief d'invitation, le texte
+extrait des documents joints, le lexique filtré, les noms et fonctions des participants et le
+contexte de la réunion. **Ne part jamais** : l'audio et les empreintes vocales. Le STT, la
+diarisation, les empreintes vocales et la qualification du son restent locaux. Les coûts, la
+consommation et la disponibilité du fournisseur relèvent de l'administrateur.
+
+**Mise en place** (à la main, ou par `install.sh --llm-cloud` — voir plus bas) :
+
+1. **La clé d'API, dans `.env` uniquement** (jamais dans `config.yaml`, `opencode.json`, un log
+   ou une sauvegarde lisible), valeur entre **guillemets simples** : `start.sh` source ce
+   fichier, un `$` ou un espace non protégé altérerait la clé. Une clé mal formée est refusée
+   (espaces, retour à la ligne) et le doctor le dit sans jamais afficher la valeur. Variable du
+   fournisseur, imposée par la table `transcria/data/llm_providers.yaml` :
+
+   | Fournisseur (id) | Variable de `.env` | URL de base (appels directs) |
+   |---|---|---|
+   | `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
+   | `ollama-cloud` | `OLLAMA_API_KEY` | `https://ollama.com/v1` |
+   | `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
+   | `opencode` | `OPENCODE_API_KEY` | `https://opencode.ai/inference/openai/v1` |
+
+   ```bash
+   echo "MISTRAL_API_KEY='…'" >> .env && chmod 600 .env
+   ```
+
+2. **`config.yaml`** — les **deux** `model_id` doivent être identiques et s'écrire
+   `<fournisseur>/<modèle>` (identifiants du catalogue opencode ; un mélange local/cloud est
+   refusé par la validation) :
+
+   ```yaml
+   services:
+     backend: cloud
+   workflow:
+     summary_llm:     { enabled: true, model_id: "mistral/mistral-large-4" }
+     arbitration_llm: { enabled: true, model_id: "mistral/mistral-large-4" }
+     # llm_cloud:
+     #   extra_request_fields: { reasoning_effort: none }   # appels directs seulement
+   ```
+
+   `extra_request_fields` est fusionné dans le corps des seuls **appels directs** (chat
+   d'affinage, arbitrage multi-STT, extraction des champs de type) — ex. `reasoning_effort: none`
+   chez Ollama cloud, `zdr: true` chez OpenRouter. **Fournisseur hors table** : `api_base`
+   (`workflow.arbitration_llm.api_base`, en `https://`) et `workflow.llm_cloud.api_key_env` (nom
+   de la variable portant la clé). Référence des clés : [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md).
+
+3. **Redémarrer le service** : la bascule local ↔ cloud est capturée au démarrage (en split,
+   l'ordonnanceur est un autre process : le redémarrer aussi). La clé doit être présente sur le
+   **worker** (rôle `scheduler`/`all`) ; le rôle `web` n'a besoin que de la base.
+
+4. **Valider dans Administration → LLM cloud** (`/admin/llm-cloud`, permission de configuration).
+   L'écran affiche le fournisseur, le modèle, l'hébergement et les faits de la table (vérifiés à
+   une date, à confirmer sur les conditions du fournisseur) et le périmètre exact de ce qui part.
+   **Tant que l'administrateur n'a pas validé, tous les traitements LLM sont refusés** (message
+   qui guide) ; si le texte d'information change dans une version ultérieure, la validation
+   devient **caduque** et doit être refaite. Une case, décochée par défaut, autorise aussi les
+   réunions captées par connecteurs et bots (personne ne peut être averti à ce moment-là). La
+   validation est inscrite en base et auditée.
+
+**Gouvernance** : un **bandeau permanent** (accueil, upload, wizard, page résultat) rappelle à
+tous que cette instance confie les transcriptions au fournisseur ; la case « LLM cloud interdite »
+d'un groupe (Administration → Groupes) l'interdit à tous ses membres (refus à la soumission **et**
+au worker) ; chaque job garde sa **provenance** dans `metadata/llm_provenance.json` (fournisseur,
+modèle, phases confiées), rappelée au pied de page du DOCX.
+
+**Comportement** : aucune VRAM réservée, aucun lancement ni arrêt local, verrou LLM sans effet,
+chien de garde d'inactivité d'opencode désactivé (seul le plafond absolu de 7200 s s'applique).
+Une panne du fournisseur ou une clé révoquée donne **une reprise automatique** puis un **échec
+explicite et relançable** (jamais une attente VRAM). Les bascules Ollama/GGUF de la page Modèles
+sont refusées en cloud. `share: disabled` est posé dans `opencode.json` : une session d'agent ne
+part jamais vers le service en ligne d'opencode.
+
+**Vérifier** : `venv/bin/python scripts/doctor.py` — le check « LLM d'arbitrage cloud » contrôle
+le fournisseur et les deux `model_id`, la présence et la forme de la clé (la variable est
+nommée, jamais la valeur), `opencode.json`, l'absence d'identifiant stocké qui primerait, la
+présence du modèle dans le catalogue d'opencode puis chez le fournisseur (`GET /models`, seul
+appel réseau du doctor) et une validation non caduque. Les checks de la LLM locale (script,
+placement, GPU) sont « sans objet ». `--llm-smoke` y est un **appel payant**, annoncé avant le
+lancement.
+
+**Palier zéro GPU** : LLM cloud + STT CPU (Kroko) + diarisation Nemotron 3 sur CPU
+(`audiocpp_cli` précompilé) = installation complète sans carte graphique ; l'accueil admin ne
+signale alors aucun manque de GPU. Limites : le STT CPU est plus lent et moins précis que
+Cohere/Whisper sur GPU, aucune LLM locale n'existe en secours, et au-delà de 8 locuteurs la
+diarisation retombe sur pyannote (jeton HF requis).
+
+**`install.sh --llm-cloud`** (opt-in, jamais par défaut) : phase `llm-cloud` de l'installateur
+(`python -m transcria.installer.cli llm-cloud`) qui retrouve les fournisseurs déjà connectés à
+opencode sous le compte du service, écrit la variable dans `.env` (0600, valeur entre
+guillemets simples, **jamais affichée**), règle les deux `model_id` et `services.backend:
+cloud`. Elle **n'écrit pas la validation** (étape 4 ci-dessus, par un administrateur connecté).
+Options exactes : voir l'aide de la commande (`install.sh --help`). En non interactif,
+`--llm-cloud-provider <id> --llm-cloud-model <modèle>` sont requis et la clé passe par
+`--llm-cloud-key-env VAR` (nom d'une variable exportée, jamais la clé en argument) ; **`sudo`
+retire cette variable de l'environnement** : `sudo --preserve-env=VAR ./install.sh …`. Un
+fournisseur **hors table** (OpenAI-compatible, `https://` non local) ne passe pas par
+`install.sh` : `venv/bin/python -m transcria.installer.cli llm-cloud --config config.yaml
+--env-file .env --user-home <HOME du service> --provider <id> --key-env VAR --model <modèle>
+--api-base https://…/v1`.
+
 ### Qualification du son (SQUIM / DNSMOS)
 
 La caractérisation acoustique du préflight (`workflow.audio_preflight.{squim,dnsmos,acoustic}`, active par défaut) utilise deux modèles :

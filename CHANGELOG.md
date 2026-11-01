@@ -6,6 +6,55 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## Prochaine version (0.4.8, non publiée — à renommer en `## [0.4.8] — date` avec la montée de `__version__`)
+
+### Ajouté
+
+#### LLM d'arbitrage « cloud » (fournisseur externe, opt-in)
+
+- **`services.backend: cloud`** — résumé, correction, relecture finale et affinage confiés à un
+  fournisseur d'inférence choisi par l'administrateur ; TranscrIA est un **passe-plat**
+  (`docs/LLM_CLOUD.md`). Table de fournisseurs en données (`mistral`, `ollama-cloud`,
+  `openrouter`, `opencode`) ; les deux `model_id` s'écrivent `<fournisseur>/<modèle>` ; clé
+  d'API **uniquement** dans `.env` ; fournisseur hors table via `api_base` +
+  `workflow.llm_cloud.api_key_env` ; `workflow.llm_cloud.extra_request_fields` pour les appels
+  directs. Aucune VRAM, aucun lancement local, verrou LLM sans effet, chien de garde
+  d'inactivité désactivé ; panne = une reprise puis échec explicite relançable. Redémarrage
+  requis à la bascule.
+- **Gouvernance** : écran *Administration → LLM cloud* (validation administrateur en base,
+  **caduque** si le texte d'information change, case « réunions de connecteurs »), bandeau
+  permanent, case « LLM cloud interdite » par groupe (refus à la soumission et au worker),
+  provenance par job (`metadata/llm_provenance.json`, pied de page du DOCX, audit
+  `job_external_llm`). Migration `a7c3e9f1b2d4`. `share: disabled` posé dans `opencode.json`.
+- **Doctor** : check « LLM d'arbitrage cloud » (clé, `opencode.json`, catalogue, `GET /models`,
+  validation non caduque) ; `--llm-smoke` annoncé comme appel payant. **Docker** : entrypoint
+  sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
+  phases LLM cloud historisées à part dans le modèle de temps.
+- **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation
+  `install.sh --llm-cloud` : voir `docs/INSTALL.md` § « LLM d'arbitrage chez un fournisseur
+  cloud » pour l'état exact livré.
+- **Image CPU Docker** : binaire `audiocpp_cli` précompilé (≈ 55 Mo, téléchargé au build,
+  sha256 vérifié) — diarisation Nemotron 3 CPU dans l'image CPU.
+
+#### Retours utilisateurs
+
+- **Notifications** : bilan d'accueil admin (SMTP désactivé, hôte manquant, comptes sans
+  adresse), bandeau « N réunions attendent votre validation », e-mail de pré-analyse et
+  messages du lancement automatique plus explicites.
+- **`workflow.summary_by_turns` activé par défaut** : diarisation avant la STT rapide ; 18/19
+  descriptions de participants justes contre 11/19, pour +15 à +25 % sur la durée de l'étape
+  Résumé (`false` pour l'ordre historique).
+- **Portugais (Brésil)** : interface, prompts et livrables (contribution native).
+- Lexique : forme à écrire visible, priorités tolérantes, formes « A / B » signalées.
+- Plafond absolu des phases LLM porté à 7200 s (un agent qui produit n'est plus tué) ;
+  inventaire VRAM sans contexte CUDA ; moteurs mis à jour (audio.cpp 0.9.3, parakeet.cpp,
+  llama.cpp 0.8.0, opencode 1.19.5) ; planchers de dépendances relevés.
+
+### Corrigé
+
+- Plus d'animation « en cours » après la fin d'un traitement ; participants : nom et fonction
+  séparés à l'étape 5.
+
 ## [0.4.7] — 2026-10-10
 
 La détection des locuteurs change de défaut : « auto » retient Nemotron 3 de 1 à 8 voix

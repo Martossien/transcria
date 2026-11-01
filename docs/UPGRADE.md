@@ -177,13 +177,22 @@ cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui
 
 ### Notes spécifiques 0.4.7 → 0.4.8
 
-Aucune migration de base. Trois choses à savoir :
+Une migration de base légère (voir ci-dessous, appliquée au démarrage). Choses à savoir :
 
 - **Étape Résumé plus lente, mais juste.** La diarisation passe désormais AVANT la
   transcription rapide (`workflow.summary_by_turns`, activé par défaut) : les descriptions des
   « Participants probables » tombent sur la bonne voix (mesure : 18/19 contre 11/19 sur trois
   réunions réelles), pour **+15 à +25 % sur la durée de cette seule étape**. Pour retrouver
   l'ordre historique : `workflow: { summary_by_turns: false }` dans `config.yaml`.
+- **LLM d'arbitrage cloud (opt-in, rien ne change si vous ne l'activez pas).** La migration
+  `a7c3e9f1b2d4` (table `llm_cloud_acknowledgements` + colonne `groups.llm_cloud_forbidden`)
+  est appliquée automatiquement au démarrage. **Basculer local ↔ cloud
+  (`services.backend`) exige un redémarrage du service** (et de l'ordonnanceur en split) ; les
+  jobs en file sont traités par le nouveau backend. La clé du fournisseur se met dans `.env`,
+  jamais dans `config.yaml`. Sur une installation existante, `share: disabled` (aucune session
+  d'agent envoyée au service en ligne d'opencode) n'apparaît dans `opencode.json` qu'après
+  `venv/bin/python scripts/setup_opencode.py`. Détail : `docs/INSTALL.md` § « LLM d'arbitrage
+  chez un fournisseur cloud ».
 - **Portugais (variante brésilienne)**, contribution native : interface, prompts et livrables.
   Proposé d'office aux configurations neuves ; sur une installation existante, ajouter `"pt"`
   à `i18n.available_locales` puis recompiler les catalogues

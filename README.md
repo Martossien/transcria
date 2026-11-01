@@ -234,6 +234,10 @@ once real people share the tool week after week.
 - **Central lexicons.** Shared, group-scoped glossaries that admins curate and users
   apply. A term validated on one job can be promoted into a central lexicon, so the whole
   organization spells "SIRET" or an internal acronym the same way next time.
+- **Optional cloud LLM.** The arbitration LLM can be an external provider (Mistral, Ollama
+  cloud, OpenRouter…) instead of a local model — a pass-through the administrator chooses and
+  must explicitly approve, with a permanent banner, a per-group ban and per-job provenance. No
+  GPU needed for that tier ([docs/LLM_CLOUD.md](docs/LLM_CLOUD.md)).
 - **Audit trail and data protection.** Every sensitive action is logged (actor, IP,
   timestamp) in a filterable, exportable trail; retention is configurable with an
   automatic purge, documented for a DPO in [docs/AUDIT_DPO.md](docs/AUDIT_DPO.md).
@@ -344,6 +348,7 @@ We keep this list honest and current.
 | Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
 | Speakers (default "auto" diarization) | Up to 8 without a token (Nemotron 3) | pyannote (gated) takes over above 8 or for an exact count |
 | Interface language | French / English / Portuguese (Brazil, native contribution) + German / Spanish / Italian (beta) | UI, deliverables and prompts localized; de/es/it are machine-translated with enforced glossaries, flagged **beta** until a native speaker reviews them — [native reviews welcome](https://github.com/Martossien/transcria/discussions) |
+| Cloud LLM (opt-in) | Transcripts (never the audio or voices) leave the server for the provider the administrator approved | Off by default; refused until approved in *Administration → Cloud LLM*; can be banned per group |
 | Below 8 GB VRAM | No summary/correction LLM | Falls back to raw transcription (8-11 GB cards get the 4B tier automatically) |
 | Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
 | Retention | Jobs 365 days, audit 1095 days (configurable) | Automatic purge plus a `maintenance.cli purge` command |

@@ -15,7 +15,18 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
-from transcria.installer import hardware, imports_check, models, packages, paths, postgres_lib, prerequisites, profiles, summary_lib
+from transcria.installer import (
+    express,
+    hardware,
+    imports_check,
+    models,
+    packages,
+    paths,
+    postgres_lib,
+    prerequisites,
+    profiles,
+    summary_lib,
+)
 from transcria.installer import postgres_server as pgs
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
@@ -286,6 +297,8 @@ def _add_summary_parser(sub: argparse._SubParsersAction) -> None:
                    help="durée totale de l'installation (métrique time-to-first-job)")
     p.add_argument("--admin-login", action="store_true",
                    help="affiche le bloc « première connexion » (profils avec portail web)")
+    p.add_argument("--llm-cloud", action="store_true",
+                   help="LLM d'arbitrage cloud : aucun GGUF attendu (le modèle est relu dans config.yaml)")
 
 
 def _make_confirm(interactive: bool) -> Callable[[str], bool]:
@@ -394,6 +407,7 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         systemd=not args.no_systemd,
         elapsed_seconds=max(0, args.elapsed_seconds),
         admin_login=args.admin_login,
+        llm_cloud=args.llm_cloud,
     )
     summary_phase.apply_summary(plan, console=console)
     return 0
@@ -568,6 +582,9 @@ def _add_express_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--is-root", action="store_true")
     p.add_argument("--has-hf-token", action="store_true")
     p.add_argument("--no-service", action="store_true")
+    p.add_argument("--llm-cloud", action="store_true",
+                   help="LLM d'arbitrage chez un fournisseur externe (palier zéro GPU)")
+    p.add_argument("--llm-cloud-provider", default="", help="fournisseur cloud annoncé au récapitulatif")
 
 
 def _cmd_express(args: argparse.Namespace) -> int:
@@ -577,8 +594,6 @@ def _cmd_express(args: argparse.Namespace) -> int:
     affiche le reste tel quel avant l'unique confirmation."""
     import shutil as _shutil
     import subprocess as _subprocess
-
-    from transcria.installer import express
 
     def _pg_server_reachable() -> bool:
         # pg_isready accompagne psql (postgresql-client) ; absent = install exotique,
@@ -591,6 +606,7 @@ def _cmd_express(args: argparse.Namespace) -> int:
         except Exception:  # noqa: BLE001 — sonde best-effort, jamais bloquante
             return False
 
+    cloud_configured = express.config_declares_cloud_backend(Path(args.config))
     plan = express.build_express_plan(
         gpu_count=args.gpu_count,
         total_vram_mb=args.total_vram_mb,
@@ -602,10 +618,60 @@ def _cmd_express(args: argparse.Namespace) -> int:
         config_exists=Path(args.config).exists(),
         install_service=not args.no_service,
         service_user=args.service_user,
+        llm_cloud=args.llm_cloud or cloud_configured,
+        cloud_provider=args.llm_cloud_provider,
+        cloud_already_configured=cloud_configured and not args.llm_cloud,
     )
     print(express.render_shell(plan))
     for line in plan.recap:
         print(line)
+    return 0
+
+
+def _add_llm_cloud_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "llm-cloud",
+        help="LLM d'arbitrage chez un fournisseur externe : clé dans .env, backend cloud, opencode (opt-in).",
+    )
+    p.add_argument("--config", required=True, help="Chemin de config.yaml")
+    p.add_argument("--env-file", required=True, help="Chemin du .env (reçoit la clé, 0600)")
+    p.add_argument("--service-user", default="", help="Compte du service (propriétaire du .env)")
+    p.add_argument("--user-home", required=True,
+                   help="HOME du compte de SERVICE (identifiants opencode, opencode.json) — pas celui de l'opérateur")
+    p.add_argument("--opencode-config", default="", help="opencode.json (défaut : <user-home>/.config/opencode/opencode.json)")
+    p.add_argument("--provider", default="", help="Identifiant du fournisseur (table llm_providers.yaml)")
+    p.add_argument("--key-env", default="",
+                   help="Variable d'environnement qui PORTE la clé (jamais la clé elle-même en argument)")
+    p.add_argument("--model", default="", help="Modèle chez le fournisseur (sans préfixe)")
+    p.add_argument("--api-base", default="", help="URL OpenAI-compatible d'un fournisseur HORS table")
+    p.add_argument("--non-interactive", action="store_true")
+
+
+def _cmd_llm_cloud(args: argparse.Namespace) -> int:
+    import os
+
+    # Différé §8.3(c) : tire PyYAML/ruamel — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.installer import llm_cloud_phase
+
+    console = Console()
+    plan = llm_cloud_phase.LlmCloudPlan(
+        config_path=Path(args.config),
+        env_file=Path(args.env_file),
+        user_home=Path(args.user_home),
+        service_user=args.service_user,
+        provider=args.provider,
+        key_env=args.key_env,
+        model=args.model,
+        api_base=args.api_base,
+        opencode_config=Path(args.opencode_config) if args.opencode_config else None,
+        interactive=not args.non_interactive,
+        run_as_service_user=os.geteuid() == 0 and args.service_user not in ("", "root"),
+    )
+    try:
+        llm_cloud_phase.apply_llm_cloud(plan, console=console)
+    except llm_cloud_phase.LlmCloudPhaseError as exc:
+        console.error(str(exc))
+        return 1
     return 0
 
 
@@ -860,6 +926,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_summary_parser(sub)
     _add_recommend_llm_parser(sub)
     _add_express_parser(sub)
+    _add_llm_cloud_parser(sub)
     _add_moss_site_parser(sub)
     _add_audiocpp_parser(sub)
     _add_nemotron_diar_parser(sub)
@@ -894,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_summary(args)
     if args.command == "express":
         return _cmd_express(args)
+    if args.command == "llm-cloud":
+        return _cmd_llm_cloud(args)
     if args.command == "recommend-llm":
         return _cmd_recommend_llm(args)
     if args.command == "connectors":

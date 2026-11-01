@@ -102,3 +102,18 @@ def test_summary_admin_login_config_illisible_presume_sentinelle(tmp_path):
     text = _render(plan)
     # Config illisible → cas sûr : on annonce la page de création du compte.
     assert "créer le compte" in text
+
+
+def test_model_summary_cloud_remplace_manquant_par_fournisseur(tmp_path):
+    # LLM cloud (lot D) : aucun GGUF attendu — jamais « [MANQUANT] LLM d'arbitrage GGUF ».
+    config = tmp_path / "config.yaml"
+    config.write_text("services:\n  backend: cloud\nworkflow:\n  arbitration_llm:\n    model_id: mistral/modele-a\n",
+                      encoding="utf-8")
+    text = _render(_plan(tmp_path, profile="all-in-one", needs_llm=True, qwen_ok=False, opencode_bin="/usr/bin/opencode"))
+    assert "MANQUANT" not in text
+    assert "LLM cloud : mistral/modele-a" in text and "Administration → LLM cloud" in text
+
+
+def test_model_summary_drapeau_cloud_sans_config_cloud(tmp_path):
+    text = _render(_plan(tmp_path, profile="all-in-one", needs_llm=True, llm_cloud=True, opencode_bin="/usr/bin/opencode"))
+    assert "MANQUANT" not in text and "phase llm-cloud" in text

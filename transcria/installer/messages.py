@@ -94,6 +94,12 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "mdl_sum_opencode_ok": "  [OK] opencode : {bin}",
         "mdl_sum_opencode_missing": "  [MANQUANT] opencode — résumé/correction LLM désactivé",
         "mdl_sum_llm_not_required": "  [INFO] LLM/opencode non requis pour le profil {profile}",
+        "mdl_sum_llm_cloud": ("  [INFO] LLM cloud : {model} — validation admin à faire "
+                              "(Administration → LLM cloud)"),
+        "mdl_tbl_llm_cloud": "LLM d'arbitrage cloud",
+        "mdl_tbl_llm_cloud_info": "{model} — aucun GGUF local ; validation admin à faire (Administration → LLM cloud)",
+        "mdl_st_llm_cloud": "LLM cloud : {value} — validation admin à faire (Administration → LLM cloud)",
+        "mdl_llm_cloud_pending": "fournisseur choisi par la phase llm-cloud (après opencode)",
         "mdl_tbl_title": "Modèles détectés :",
         "mdl_tbl_cohere": "Cohere ASR (STT ~6 Go)",
         "mdl_tbl_pyannote": "pyannote diarization (~2 Go)",
@@ -275,6 +281,50 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "phase_systemd_section": "Services systemd",
         "phase_summary_section": "Résumé de l'installation",
         "phase_summary_elapsed": "⏱  Durée totale de l'installation : {minutes} min {seconds} s",
+        # llm_cloud_phase (LLM d'arbitrage chez un fournisseur externe — docs/LLM_CLOUD.md § 5)
+        "lc_config_missing": "config.yaml introuvable ({path}) — lancez d'abord la phase config.",
+        "lc_found_in_opencode": "Identifiants opencode du compte de service ({home}) : {providers}",
+        "lc_none_in_opencode": "Aucun fournisseur de la table enregistré dans opencode pour {home}.",
+        "lc_provider_list": "Fournisseurs disponibles :",
+        "lc_provider_found_mark": " (clé trouvée dans opencode)",
+        "lc_provider_prompt": "  Fournisseur (numéro ou identifiant) [{default}] : ",
+        "lc_provider_required": "Mode non interactif : --provider <id> est requis (avec --key-env <VAR>).",
+        "lc_provider_invalid": "Identifiant de fournisseur invalide : « {provider} ».",
+        "lc_provider_unknown": ("Fournisseur « {provider} » absent de la table ({known}) — pour un fournisseur "
+                                "OpenAI-compatible hors table, passez --api-base <url> et --key-env <VAR>."),
+        "lc_unlisted_needs_key_env": ("Fournisseur hors table « {provider} » : --key-env <VAR> est requis "
+                                      "(nom de la variable d'environnement qui portera la clé)."),
+        "lc_model_prompt": "  Modèle chez {provider} (sans préfixe) [{default}] : ",
+        "lc_model_required": "Modèle requis : --model <modèle> (ex. le nom du modèle chez {provider}).",
+        "lc_key_env_missing": "La variable d'environnement {var} est vide ou absente — clé introuvable.",
+        "lc_key_found_prompt": "  Utiliser la clé {provider} trouvée dans opencode ? [O/n] : ",
+        "lc_key_keep_prompt": "  {var} est déjà dans .env — la conserver ? [O/n] : ",
+        "lc_key_required": ("Clé introuvable : exportez {var} ou passez --key-env <VAR> "
+                            "(la clé n'est jamais acceptée en argument)."),
+        "lc_key_hidden_hint": "La saisie de la clé est masquée ; elle n'est ni affichée ni journalisée.",
+        "lc_key_prompt": "  Clé d'API ({var}) : ",
+        "lc_key_empty": "Clé d'API vide — rien n'a été écrit.",
+        "lc_key_invalid": "Clé d'API refusée : elle contient un blanc, un guillemet ou un caractère de contrôle.",
+        "lc_env_comment": "Clé du fournisseur LLM cloud {provider} (jamais dans config.yaml)",
+        "lc_env_written": "{var} écrite dans {path} (0600)",
+        "lc_env_kept": "{var} déjà présente dans {path} — conservée",
+        "lc_config_written": "config.yaml : services.backend = cloud, model_id (résumé + correction) = {model}",
+        "lc_opencode_written": "opencode.json : share désactivé, permissions headless ({path})",
+        "lc_opencode_failed": "opencode.json non mis à jour ({path}) : {error} — relancez scripts/setup_opencode.py",
+        "lc_recap_provider": "LLM d'arbitrage : fournisseur cloud {label} — modèle {model}",
+        "lc_recap_key": "Clé : variable {var} dans {path} — jamais dans config.yaml",
+        "lc_recap_validation": ("À FAIRE : un admin connecté doit valider l'envoi des transcriptions dans "
+                                "Administration → LLM cloud (/admin/llm-cloud) ; d'ici là, les traitements LLM sont refusés."),
+        "lc_recap_restart": "Le service doit (re)démarrer pour lire la clé (sudo systemctl restart transcria.service).",
+        "lc_recap_opencode_credential": ("La clé vient d'un identifiant stocké par opencode : le doctor le signalera (WARN) — "
+                                         "« opencode auth logout » le retire, .env suffit désormais."),
+        "lc_config_write_failed": "config.yaml non modifié ({path}) : {error}",
+        "lc_env_write_failed": "Écriture de {path} impossible : {error} — rien d'autre n'a été modifié.",
+        "lc_schema_invalid": "Configuration refusée par le schéma (config.yaml inchangé) : {errors}",
+        "lc_api_base_invalid": ("--api-base refusé : une URL https:// vers un hôte NON local est requise "
+                                "(jamais http://, localhost, 127.x ou 0.0.0.0)."),
+        "lc_opencode_missing": ("opencode absent pour le compte de service — les phases LLM (résumé, correction, "
+                                "relecture) en ont besoin : installez-le (phase opencode) avant le premier traitement."),
     },
     "en": {
         "path_venv_existing": "Existing venv: {value}",
@@ -350,6 +400,12 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "mdl_sum_opencode_ok": "  [OK] opencode: {bin}",
         "mdl_sum_opencode_missing": "  [MISSING] opencode — LLM summary/correction disabled",
         "mdl_sum_llm_not_required": "  [INFO] LLM/opencode not required for profile {profile}",
+        "mdl_sum_llm_cloud": ("  [INFO] Cloud LLM: {model} — admin approval pending "
+                              "(Administration → Cloud LLM)"),
+        "mdl_tbl_llm_cloud": "Cloud arbitration LLM",
+        "mdl_tbl_llm_cloud_info": "{model} — no local GGUF; admin approval pending (Administration → Cloud LLM)",
+        "mdl_st_llm_cloud": "Cloud LLM: {value} — admin approval pending (Administration → Cloud LLM)",
+        "mdl_llm_cloud_pending": "provider chosen by the llm-cloud phase (after opencode)",
         "mdl_tbl_title": "Detected models:",
         "mdl_tbl_cohere": "Cohere ASR (STT ~6 GB)",
         "mdl_tbl_pyannote": "pyannote diarization (~2 GB)",
@@ -522,6 +578,50 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "phase_systemd_section": "systemd services",
         "phase_summary_section": "Installation summary",
         "phase_summary_elapsed": "⏱  Total installation time: {minutes} min {seconds} s",
+        # llm_cloud_phase
+        "lc_config_missing": "config.yaml not found ({path}) — run the config phase first.",
+        "lc_found_in_opencode": "opencode credentials of the service account ({home}): {providers}",
+        "lc_none_in_opencode": "No provider from the table is registered in opencode for {home}.",
+        "lc_provider_list": "Available providers:",
+        "lc_provider_found_mark": " (key found in opencode)",
+        "lc_provider_prompt": "  Provider (number or id) [{default}]: ",
+        "lc_provider_required": "Non-interactive mode: --provider <id> is required (with --key-env <VAR>).",
+        "lc_provider_invalid": "Invalid provider id: \"{provider}\".",
+        "lc_provider_unknown": ("Provider \"{provider}\" is not in the table ({known}) — for an "
+                                "OpenAI-compatible provider outside the table, pass --api-base <url> and --key-env <VAR>."),
+        "lc_unlisted_needs_key_env": ("Provider \"{provider}\" outside the table: --key-env <VAR> is required "
+                                      "(name of the environment variable that will hold the key)."),
+        "lc_model_prompt": "  Model at {provider} (no prefix) [{default}]: ",
+        "lc_model_required": "Model required: --model <model> (the model name at {provider}).",
+        "lc_key_env_missing": "Environment variable {var} is empty or unset — no key found.",
+        "lc_key_found_prompt": "  Use the {provider} key found in opencode? [Y/n]: ",
+        "lc_key_keep_prompt": "  {var} is already in .env — keep it? [Y/n]: ",
+        "lc_key_required": ("No key found: export {var} or pass --key-env <VAR> "
+                            "(the key is never accepted as an argument)."),
+        "lc_key_hidden_hint": "Key input is hidden; it is never displayed nor logged.",
+        "lc_key_prompt": "  API key ({var}): ",
+        "lc_key_empty": "Empty API key — nothing was written.",
+        "lc_key_invalid": "API key rejected: it contains whitespace, a quote or a control character.",
+        "lc_env_comment": "Key of the cloud LLM provider {provider} (never in config.yaml)",
+        "lc_env_written": "{var} written to {path} (0600)",
+        "lc_env_kept": "{var} already present in {path} — kept",
+        "lc_config_written": "config.yaml: services.backend = cloud, model_id (summary + correction) = {model}",
+        "lc_opencode_written": "opencode.json: sharing disabled, headless permissions ({path})",
+        "lc_opencode_failed": "opencode.json not updated ({path}): {error} — re-run scripts/setup_opencode.py",
+        "lc_recap_provider": "Arbitration LLM: cloud provider {label} — model {model}",
+        "lc_recap_key": "Key: variable {var} in {path} — never in config.yaml",
+        "lc_recap_validation": ("TO DO: a signed-in admin must approve sending transcripts in "
+                                "Administration → Cloud LLM (/admin/llm-cloud); until then, LLM processing is refused."),
+        "lc_recap_restart": "The service must (re)start to read the key (sudo systemctl restart transcria.service).",
+        "lc_recap_opencode_credential": ("The key comes from a credential stored by opencode: the doctor will flag it (WARN) — "
+                                         "\"opencode auth logout\" removes it, .env is enough from now on."),
+        "lc_config_write_failed": "config.yaml not modified ({path}): {error}",
+        "lc_env_write_failed": "Cannot write {path}: {error} — nothing else was changed.",
+        "lc_schema_invalid": "Configuration rejected by the schema (config.yaml unchanged): {errors}",
+        "lc_api_base_invalid": ("--api-base rejected: an https:// URL to a NON-local host is required "
+                                "(never http://, localhost, 127.x or 0.0.0.0)."),
+        "lc_opencode_missing": ("opencode missing for the service account — LLM phases (summary, correction, "
+                                "review) need it: install it (opencode phase) before the first job."),
     },
 }
 

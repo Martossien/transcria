@@ -91,11 +91,20 @@ leur consentement à leur place.
   `config_llm_cloud_acknowledge` (un administrateur valide le couple fournisseur/modèle :
   fournisseur, modèle, version du texte d'information lu, réunions de connecteurs
   autorisées ou non) ; `config_llm_cloud_revoke` (retrait de la validation) ;
-  `job_external_llm` (acteur système, à chaque exécution réussie d'un job dont des phases
-  LLM ont été confiées au fournisseur : fournisseur, modèle, noms des phases, identifiant
-  du propriétaire du job). La même trace figure par job dans
+  `job_external_llm` (acteur système, à chaque issue terminale — succès, ou échec après envoi —
+  d'un job dont des phases LLM ont été confiées au fournisseur : fournisseur, modèle, noms des
+  phases, identifiant du propriétaire du job). La même trace figure par job dans
   `metadata/llm_provenance.json` et en pied de page du DOCX. Événements d'authentification et
   de jetons rangés dans la **famille `auth`** pour la rétention.
+
+  **Transcriptions confiées à un tiers.** Lorsque cette option est activée, le fournisseur de LLM
+  reçoit les transcriptions : il agit pour l'organisation comme un destinataire/sous-traitant à
+  documenter dans son registre des traitements (finalité, hébergement affiché dans l'écran
+  « LLM cloud », durée de conservation annoncée par le fournisseur, garanties contractuelles) et,
+  le cas échéant, dans son analyse d'impact. TranscrIA fournit les faits et la traçabilité
+  (validation datée, interdiction par groupe, provenance par job) ; la qualification juridique
+  relève de l'organisation et de son DPO. L'audio et les empreintes vocales ne sont jamais
+  transmis.
 
 ## 3. Suppression d'un utilisateur
 
