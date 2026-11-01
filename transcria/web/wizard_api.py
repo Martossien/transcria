@@ -37,14 +37,16 @@ from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, Qu
 from transcria.services.audio_source import MIC
 from transcria.services.job_executor import SPEAKER_MODE, SUMMARY_MODE, get_job_executor
 from transcria.services.job_service import JobService
+from transcria.services.llm_cloud_guard import record_cloud_provenance
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backend
 from transcria.voice.matching import VoiceMatchingService
 from transcria.web.blueprint import web_bp
-from transcria.web.job_access import get_job_for_edit
+from transcria.web.job_access import get_job_for_api, get_job_for_edit
+from transcria.web.llm_cloud_entries import cloud_gate, job_cloud_refusal, owner_cloud_forbidden, summary_needs_llm
 from transcria.web.request_helpers import DEFAULT_JOB_TITLE, api_stable, bearer_token_allowed, clean_job_title, json_body
 from transcria.workflow import profiles, resume
-from transcria.workflow.profile_availability import compute_profiles_view
+from transcria.workflow.profile_availability import CLOUD_FORBIDDEN_REASON, compute_profiles_view
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
@@ -89,6 +91,23 @@ _SUMMARY_LLM_UNREACHABLE_MESSAGE = (
     "Diagnostic : transcria doctor (vérifie la résolution du modèle opencode et le serveur ; "
     "réaligner avec scripts/setup_opencode.py si besoin)."
 )
+
+# Refus du dernier rempart LLM cloud (worker ou runner) : rien n'est parti chez le
+# fournisseur — la cause est une décision d'administration, pas une panne technique.
+_SUMMARY_LLM_CLOUD_REFUSED_MESSAGE = (
+    "Le résumé a été refusé : cette instance confie les transcriptions à une LLM externe "
+    "et ce traitement n'est pas autorisé (validation administrateur absente ou caduque, "
+    "groupe interdit, ou réunion issue d'un connecteur). Rapprochez-vous de votre administrateur."
+)
+
+
+def _summary_failure_message(error_kind: str) -> str:
+    """Message FR du bandeau selon la CLASSE de panne du résumé LLM."""
+    if error_kind == "cloud_refused":
+        return _SUMMARY_LLM_CLOUD_REFUSED_MESSAGE
+    if error_kind == "opencode_error":
+        return _SUMMARY_LLM_UNREACHABLE_MESSAGE
+    return _SUMMARY_LLM_FAILED_MESSAGE
 
 
 def _queue_audio_seconds(cfg: dict, job_id: str) -> float:
@@ -204,6 +223,14 @@ def _maybe_autostart_summary(cfg: dict, job_id: str) -> None:
                 if (pending is not None and pending.mode == SUMMARY_MODE
                         and pending.status in {QUEUE_WAITING, QUEUE_RUNNING, QUEUE_PAUSED}):
                     return  # déjà en file (double upload rapide, reprise…)
+                # LLM cloud (§ 3.2.5) : personne ne lit la réponse d'upload — refus JOURNALISÉ,
+                # rien n'est enfilé (le résumé manuel refusera avec le message qui guide).
+                gate = cloud_gate(cfg, owner_id=job.owner_id, job_extra_data=job.get_extra_data(),
+                                  needs_llm=summary_needs_llm(cfg))
+                if not gate.allowed:
+                    logger.warning("[autostart] Résumé NON enfilé : LLM cloud refusée (job=%s, code=%s) : %s",
+                                   job_id, gate.code, gate.message_fr)
+                    return
                 fs = JobFilesystem(cfg["storage"]["jobs_dir"], job_id)
                 audio_path = fs.get_original_audio_path()
                 executor = get_job_executor()
@@ -287,6 +314,10 @@ def api_summary(job_id: str):
             "segment_count": len(existing_summary.get("segments") or []),
         })
 
+    refusal = job_cloud_refusal(cfg, job, needs_llm=summary_needs_llm(cfg), entry="Résumé")
+    if refusal is not None:
+        return refusal
+
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
@@ -342,14 +373,21 @@ def api_summary(job_id: str):
             "message": _VRAM_WAIT_MESSAGE,
         })
 
-    if result.get("summary_llm_failed"):
+    # Topologie `all` : la phase LLM a tourné DANS la requête — personne d'autre ne tracera
+    # la provenance cloud (court-circuit hors cloud dans le helper). Un refus du rempart
+    # cloud n'a rien envoyé au fournisseur : pas de trace.
+    llm_failed = bool(result.get("summary_llm_failed"))
+    if result.get("summary_llm_error_kind") != "cloud_refused":
+        record_cloud_provenance(cfg, job.id, SUMMARY_MODE, succeeded=not llm_failed)
+
+    if llm_failed:
         # La LLM d'arbitrage n'a rien produit après 3 tentatives : le résumé n'est PAS
         # validé (meeting_context non corrompu, job non SUMMARY_DONE), mais relançable.
         # Le message dépend de la CLASSE de panne (corrections opposées) : erreur opencode
-        # (modèle non résolu / serveur) → doctor ; production vide → transcript/prompt.
+        # (modèle non résolu / serveur) → doctor ; production vide → transcript/prompt ;
+        # refus cloud → administrateur.
         error_kind = result.get("summary_llm_error_kind", "empty_output")
-        message = (_SUMMARY_LLM_UNREACHABLE_MESSAGE if error_kind == "opencode_error"
-                   else _SUMMARY_LLM_FAILED_MESSAGE)
+        message = _summary_failure_message(error_kind)
         return jsonify({
             "summary_llm_failed": True,
             "error_kind": error_kind,
@@ -729,8 +767,21 @@ def api_speakers_voice_match(job_id: str):
 @web_bp.route("/api/profiles/availability", methods=["GET"])
 @login_required
 def api_profiles_availability():
-    """Profils de traitement disponibles + profil recommandé (source unique pour le wizard)."""
-    return jsonify(compute_profiles_view(get_config(), select_locale()))
+    """Profils de traitement disponibles + profil recommandé (source unique pour le wizard).
+
+    ``?job_id=`` (optionnel) : grisage selon le PROPRIÉTAIRE de ce job (un admin qui consulte
+    le job d'un membre interdit de LLM cloud voit ce que le job pourra réellement lancer) ;
+    sans paramètre, selon l'utilisateur courant."""
+    cfg = get_config()
+    owner_id = current_user.id
+    job_id = (request.args.get("job_id") or "").strip()
+    if job_id:
+        job, error_response = get_job_for_api(job_id)
+        if error_response:
+            return error_response
+        owner_id = job.owner_id
+    return jsonify(compute_profiles_view(
+        cfg, select_locale(), cloud_forbidden=owner_cloud_forbidden(cfg, owner_id)))
 
 
 @web_bp.route("/api/jobs/<job_id>/profile", methods=["POST"])
@@ -750,10 +801,15 @@ def api_set_profile(job_id: str):
     if not profile_id or not profiles.is_profile(profile_id):
         return jsonify({"error": f"Profil de traitement invalide: {profile_id}"}), 400
 
-    view = compute_profiles_view(get_config())
-    available = {p["id"] for p in view["profiles"] if p["available"]}
-    if profile_id not in available:
-        return jsonify({"error": "Profil indisponible sur cette installation", "processing_profile_id": profile_id}), 409
+    cfg = get_config()
+    view = compute_profiles_view(cfg, cloud_forbidden=owner_cloud_forbidden(cfg, job.owner_id))
+    chosen = next((p for p in view["profiles"] if p["id"] == profile_id), None)
+    if chosen is None or not chosen["available"]:
+        reasons = list(chosen["reasons"]) if chosen is not None else []
+        error = "Profil indisponible sur cette installation"
+        if CLOUD_FORBIDDEN_REASON in reasons:
+            error = CLOUD_FORBIDDEN_REASON
+        return jsonify({"error": error, "processing_profile_id": profile_id, "reasons": reasons}), 409
 
     set_processing_profile(job.id, profile_id)
     return jsonify({"status": "ok", "processing_profile_id": profile_id})

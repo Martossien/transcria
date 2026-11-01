@@ -76,8 +76,14 @@ async def ingest_recording(transcria_url: str, token: str, occurrence, recording
             participants_manifest=recording.to_manifest(provider),
             job_id=job_id,
             track_files=track_parts or None)
-        logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio, %d piste(s))",
-                    job_id, result.status_code, recording.mixer.duration_s, len(track_parts))
+        if result.status_code >= 400:
+            # Refus du portail (garde LLM cloud, jeton, job inconnu…) : l'enregistrement
+            # N'EST PAS rattaché — un INFO « rattaché » ferait chercher un job qui n'existe pas.
+            logger.warning("Enregistrement REFUSÉ par le portail (HTTP %s) : %s — job %s non alimenté",
+                           result.status_code, result.body or "corps de réponse vide", job_id)
+        else:
+            logger.info("Enregistrement rattaché au job %s (HTTP %s, %.0f s d'audio, %d piste(s))",
+                        job_id, result.status_code, recording.mixer.duration_s, len(track_parts))
     except Exception:  # noqa: BLE001
         logger.exception("rattachement de l'enregistrement impossible (job %s)", job_id)
     finally:

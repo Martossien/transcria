@@ -130,11 +130,13 @@ class DocxReport:
         render_options: dict | None = None,
         logo_bytes: bytes | None = None,
         summary_stale: bool = False,
+        llm_provenance: dict | None = None,
     ):
         self.logo_bytes = logo_bytes
         # §5.2 : verbatim édité APRÈS la génération de la synthèse (marqueur posé par
         # l'éditeur SRT) → mention honnête dans le document, levée à la resync LLM.
         self.summary_stale = bool(summary_stale)
+        self.llm_provenance = llm_provenance if isinstance(llm_provenance, dict) else {}
         self.ctx = ctx
         # Langue des livrables (Axe B) : pilote les libellés de chrome du DOCX.
         self.language: str = (ctx or {}).get("language") or "fr"
@@ -1090,6 +1092,12 @@ class DocxReport:
 
         footer_text = str((self.custom_type.get("branding") or {}).get("footer_text") or "").strip()
         prefix = f"{footer_text}  ·  " if footer_text else ""
+        provenance = self.llm_provenance or {}
+        if provenance.get("external"):
+            label = provenance.get("provider_label") or provenance.get("provider") or ""
+            if label:
+                colon = " : " if (self.language or "fr") == "fr" else ": "
+                prefix = f"{prefix}{self.L['external_llm']}{colon}{label}  ·  "
         r_info = p.add_run(f"{prefix}TranscrIA  ·  {title}  ·  {date}  ·  Page ")
         r_info.font.size = Pt(7.5)
         r_info.font.color.rgb = _GREY_DARK
@@ -1167,12 +1175,16 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
             logo_bytes = None
 
     summary_stale = bool(fs.load_json("metadata/summary_stale.json") or {})
+    try:
+        llm_provenance = fs.load_json("metadata/llm_provenance.json") or {}
+    except Exception:  # JSON corrompu = pas de mention, le rendu ne casse jamais
+        llm_provenance = {}
     # Mapping locuteurs validé → substitution des jetons SPEAKER_XX au rendu de la
     # synthèse (le ctx est le canal de données du rapport ; l'artefact reste intact).
     ctx["speaker_mapping"] = speaker_map
     report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
                         render_options=render_options, logo_bytes=logo_bytes,
-                        summary_stale=summary_stale)
+                        summary_stale=summary_stale, llm_provenance=llm_provenance)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

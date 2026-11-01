@@ -35,6 +35,25 @@ class IngestResult:
     status_code: int
     job_id: str | None
     idempotent: bool
+    # Résumé TEXTE du corps de réponse (erreur + code), tronqué : ce que les journaux du
+    # bot doivent montrer quand le portail refuse (personne n'est devant un écran).
+    body: str = ""
+
+
+_BODY_MAX_CHARS = 300
+
+
+def _body_summary(body: object) -> str:
+    """`error (code)` si le portail les fournit, sinon le JSON brut — tronqué."""
+    if not isinstance(body, dict):
+        text = str(body or "")
+    elif body.get("error") or body.get("code"):
+        error = str(body.get("error") or "")
+        code = str(body.get("code") or "")
+        text = f"{error} ({code})" if error and code else (error or code)
+    else:
+        text = json.dumps(body, ensure_ascii=False) if body else ""
+    return text[:_BODY_MAX_CHARS]
 
 
 class JobsApiBridge:
@@ -114,4 +133,5 @@ class JobsApiBridge:
             status_code=status,
             job_id=body.get("job_id"),
             idempotent=bool(body.get("idempotent", False)),
+            body=_body_summary(body),
         )

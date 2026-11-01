@@ -44,8 +44,10 @@ from transcria.services.job_service import JobService
 from transcria.web.blueprint import web_bp
 from transcria.web.connector_catalog import load_catalog
 from transcria.web.job_access import can_access_job
+from transcria.web.llm_cloud_entries import cloud_gate, profile_needs_llm, refusal_response, summary_needs_llm
 from transcria.web.meetings_views import ready_providers as _ready_providers_shared
 from transcria.web.request_helpers import bearer_token_required
+from transcria.workflow import profiles
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +149,16 @@ def api_meetings_create():
     if existing:
         return jsonify({"error": "Cette réunion est déjà planifiée",
                         "session_id": existing[0].id}), 409
+
+    # Garde LLM cloud (§ 3.2.3) : l'utilisateur est DEVANT SON ÉCRAN — c'est le moment de
+    # refuser, pas après la réunion (le bot enregistrerait pour rien). Le profil appliqué au
+    # rattachement est le défaut diarisant ; le résumé de contrôle compte aussi.
+    cfg = get_config()
+    default_profile, _mode = profiles.resolve_request(None, "quality")
+    gate = cloud_gate(cfg, owner_id=current_user.id, job_extra_data={"source": "meeting"},
+                      needs_llm=summary_needs_llm(cfg) or profile_needs_llm(cfg, default_profile))
+    if not gate.allowed:
+        return refusal_response(gate, entry="Planification de réunion")
 
     job_id = JobService.create(owner_id=current_user.id, title=title)["job_id"]
     JobStore.update_extra_data(job_id, lambda extra: {

@@ -134,6 +134,9 @@ class Group(db.Model):
     name = db.Column(db.String(120), unique=True, nullable=False, index=True)
     description = db.Column(db.String(255), nullable=False, default="")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    # Interdiction de confier les transcriptions à une LLM cloud (docs/LLM_CLOUD.md § 3.2.5) :
+    # un utilisateur est interdit dès qu'UN de ses groupes l'est.
+    llm_cloud_forbidden = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     memberships = db.relationship(
         "GroupMembership",
@@ -146,6 +149,7 @@ class Group(db.Model):
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "llm_cloud_forbidden": bool(self.llm_cloud_forbidden),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

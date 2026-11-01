@@ -221,7 +221,13 @@ class TestSchema:
         assert any("api_base" in e for e in _errors(cfg))
 
     def test_cloud_complet_valide(self):
-        assert _errors(_cfg_cloud("mistral/mistral-large-4", "mistral/mistral-small")) == []
+        assert _errors(_cfg_cloud("mistral/mistral-large-4", "mistral/mistral-large-4")) == []
+
+    def test_modeles_differents_refuses_en_cloud(self):
+        # La validation admin porte sur UN couple (fournisseur, modèle) : un modèle de résumé
+        # différent partirait sans avoir été vu ni validé (relecture lot B, I5).
+        errs = _errors(_cfg_cloud("mistral/mistral-large-4", "mistral/mistral-small"))
+        assert any("MÊME modèle" in e for e in errs)
 
 
 # ---------------------------------------------------------------- backend

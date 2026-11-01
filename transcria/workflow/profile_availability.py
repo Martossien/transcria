@@ -17,6 +17,7 @@ le matériel), en respectant un éventuel défaut configuré s'il est disponible
 """
 from __future__ import annotations
 
+from transcria.gpu.arbitrage_endpoint import is_cloud_backend
 from transcria.inference.resource_status import remote_requirements
 from transcria.workflow.profiles import (
     DEFAULT_PROFILE_ID,
@@ -31,6 +32,10 @@ from transcria.workflow.states import StepStatus
 from transcria.workflow.steps import WorkflowSteps
 
 _AVAILABLE_STATUSES = ("available", "available_remote")
+
+# Raison affichée quand le propriétaire du job appartient à un groupe qui interdit la LLM
+# cloud (docs/LLM_CLOUD.md § 3.2.5) — traduite à l'affichage par `localize_profile_text`.
+CLOUD_FORBIDDEN_REASON = "LLM cloud interdite pour votre groupe"
 
 
 def _llm_reachable(config: dict) -> bool:
@@ -69,13 +74,21 @@ def _profile_backend_available(profile: ProcessingProfile, config: dict) -> bool
     return bool(section.get("enabled"))
 
 
-def profile_status(profile: ProcessingProfile, config: dict) -> tuple[str, list[str]]:
-    """Statut structurel d'un profil + raisons (FR) le cas échéant."""
+def profile_status(
+    profile: ProcessingProfile, config: dict, *, cloud_forbidden: bool = False
+) -> tuple[str, list[str]]:
+    """Statut structurel d'un profil + raisons (FR) le cas échéant.
+
+    ``cloud_forbidden`` : le propriétaire du job est interdit de LLM cloud (un de ses groupes
+    l'interdit). Sans effet hors mode cloud (``services.backend: cloud``).
+    """
     rr = profile.resource_requirements
     if not _profile_backend_available(profile, config):
         return "unavailable", [f"Backend STT '{profile.stt_backend}' non activé dans la configuration"]
     if rr.needs_llm and not _llm_reachable(config):
         return "unavailable", ["LLM d'arbitrage non configurée"]
+    if rr.needs_llm and cloud_forbidden and is_cloud_backend(config):
+        return "unavailable", [CLOUD_FORBIDDEN_REASON]
     if rr.needs_diarization and not _quality_mode_enabled(config):
         return "disabled_by_config", ["Mode qualité désactivé dans la configuration"]
     if _remote_configured(config):
@@ -83,7 +96,9 @@ def profile_status(profile: ProcessingProfile, config: dict) -> tuple[str, list[
     return "available", []
 
 
-def compute_profiles_view(config: dict, language: str | None = None) -> dict:
+def compute_profiles_view(
+    config: dict, language: str | None = None, *, cloud_forbidden: bool = False
+) -> dict:
     """Vue complète des profils pour l'UI : statut, livrables, et profil recommandé.
 
     `recommended` = profil disponible de plus haut niveau (le maximum qui passe), en privilégiant
@@ -92,6 +107,9 @@ def compute_profiles_view(config: dict, language: str | None = None) -> dict:
     `language` = locale d'AFFICHAGE (UI). Toutes les chaînes user-facing (label/description/
     livrables/validations/raisons) sont localisées via `localize_profile_text` ; l'`id` reste la
     clé logique. Défaut `None`/`fr` = sortie FR historique inchangée.
+
+    `cloud_forbidden` = le propriétaire est interdit de LLM cloud : en mode cloud, les profils à
+    LLM passent `unavailable` (donc jamais recommandés). Sans effet hors cloud.
     """
     enabled = _enabled_ids(config)
     configured_default = (config.get("workflow", {}).get("profiles", {}) or {}).get("default") or DEFAULT_PROFILE_ID
@@ -105,7 +123,7 @@ def compute_profiles_view(config: dict, language: str | None = None) -> dict:
         if enabled is not None and profile.id not in enabled:
             status, reasons = "disabled_by_config", ["Profil désactivé dans la configuration"]
         else:
-            status, reasons = profile_status(profile, config)
+            status, reasons = profile_status(profile, config, cloud_forbidden=cloud_forbidden)
         is_available = status in _AVAILABLE_STATUSES
         if is_available:
             available_by_level.append(profile)

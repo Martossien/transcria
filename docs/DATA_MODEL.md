@@ -34,6 +34,7 @@ Note : les comptes fédérés portent un `password_hash` INUTILISABLE (`!federat
 | `name` | String(120) | UNIQUE, NOT NULL, INDEX | Nom du groupe |
 | `description` | String(255) | NOT NULL, default="" | Description courte |
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
+| `llm_cloud_forbidden` | Boolean | NOT NULL, default=false | Interdit à TOUS les membres de confier leurs transcriptions à une LLM d'arbitrage cloud (fournisseur externe). Un utilisateur est interdit dès qu'UN de ses groupes porte le drapeau (`llm_cloud.policy.user_forbidden`). Ajouté par la migration `a7c3e9f1b2d4`. |
 
 **Relations :** `Group.memberships` → adhésions du groupe
 
@@ -97,6 +98,8 @@ Le jeton est accepté via `Authorization: Bearer tia_…` sur les routes du cont
 | `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`, plus `waiting_vram` non terminal en cas de VRAM insuffisante transitoire), `mode`, **`processing_profile_id`** (profil de traitement choisi, posé au 1ᵉʳ enfilage et jamais écrasé par un re-queue automatique), timestamps, `cancel_requested`, `required_vram_mb`/`phase` (si `waiting_vram`) |
 | `vram_alert_sent` | `mark_execution_waiting_vram` | Drapeau anti-spam de l'alerte admin VRAM. Levé à la 1ʳᵉ entrée en attente, réarmé seulement aux transitions terminales (`completed`/`failed`/`cancelled`). |
 | `pipeline` | `transcria/workflow/resume.py` (via `PipelineService`) | État de **reprise** du pipeline : `completed_phases` (phases réussies, écrites atomiquement après succès) ; `phase_inputs` (empreintes sha256 des entrées de chaque phase au checkpoint = provenance v2 : un skip n'est légitime que si les entrées n'ont pas bougé) ; `audio_path` (chemin audio final après transforms pré-STT) ; `skipped_phases` (phases best-effort sautées pour cause **transitoire** — ex. relecture finale, LLM occupée — `{phase: raison}` : enregistrées **sans** être marquées faites → rejouées à un re-traitement, et auditables au lieu d'un silence). Permet de **sauter les phases déjà faites** au re-dispatch. Vidé par `reset_resume_state` à une re-soumission utilisateur ; **préservé** sur les re-queues automatiques. Cf. `docs/PIPELINE_REPRISE.md`. |
+| `llm_provider` | `llm_cloud.provenance.record_external_llm_use` (appelée par l'exécuteur) | Miroir de `metadata/llm_provenance.json` pour l'interface : `{provider, model, external: true}`. Présent seulement si une phase LLM a été confiée à un fournisseur externe. |
+| `summary_llm_failed` / `summary_llm_error_kind` | `WorkflowRunner` (résumé) ; `llm_cloud_guard.apply_refusal_side_effects` | Résumé LLM non produit (bandeau relançable du wizard). `summary_llm_error_kind: "cloud_refused"` = refusé par le rempart LLM cloud du worker (validation absente/caduque, groupe interdit, connecteur non autorisé) — le job n'est pas passé en échec, le résumé reste relançable. |
 | `workflow_progress` | `WorkflowProgressReporter` | Progression UI courte : `step`, `phase`, `message`, `percent` optionnel, `updated_at`. Exposée par `/api/jobs/<id>/status`; messages non confidentiels et écritures throttlées |
 | `meeting_context` | recouvrement de contexte | langue, métadonnées de réunion |
 | `last_non_terminal_state` | reprise | dernier état non terminal connu |
@@ -235,6 +238,25 @@ casse aucun traitement passé.
 | `group_lexicon_entries` | Entrées du lexique : terme validé, variantes, catégorie, priorité, commentaire | Vocabulaire métier interne ; peut contenir des noms propres |
 
 `group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant. `group_lexicon_entries.usage_count` et `last_used_at` alimentent les statistiques admin ; ils sont incrémentés uniquement quand une entrée centrale est sauvegardée dans un lexique de session. Les exports CSV de lexiques centralisés sont des requêtes `POST`, réservables aux admins globaux via `security.lexicon_export_admin_only`, et génèrent une action `lexicon_export`.
+
+### Table `llm_cloud_acknowledgements`
+
+Validation par un administrateur de l'usage d'une LLM d'arbitrage chez un fournisseur externe (`services.backend: cloud`, `docs/LLM_CLOUD.md` § 3.2). Modèle : `transcria/llm_cloud/models.py` ; migration `alembic/versions/a7c3e9f1b2d4_llm_cloud_governance.py`.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK, default=uuid4 | Identifiant unique |
+| `provider` | String(64) | NOT NULL, INDEX | Fournisseur (premier segment du `model_id`), stocké en minuscules |
+| `model` | String(255) | NOT NULL | Modèle exact validé (comparaison exacte, casse comprise) |
+| `text_version` | String(80) | NOT NULL | Version du texte d'information lu par l'admin (`CLOUD_NOTICE_TEXT_VERSION`) |
+| `acknowledged_by` | String(36) | FK → users.id ON DELETE SET NULL, nullable | Admin qui a validé |
+| `acknowledged_by_username` | String(80) | NOT NULL, default="" | Login dénormalisé (survit à la suppression du compte) |
+| `acknowledged_at` | DateTime(tz) | NOT NULL, default=now | Date de la validation |
+| `connectors_allowed` | Boolean | NOT NULL, default=false | Les réunions captées par connecteur/bot (`extra_data.source == "meeting"`) peuvent-elles partir vers le fournisseur ? |
+| `usages_json` | Text | NOT NULL, default=`{"pipeline": true}` | Usages couverts par la validation |
+| `revoked_at` | DateTime(tz) | nullable | Renseigné quand la validation est retirée ou remplacée |
+
+**Sémantique :** table **append-only** — chaque validation ajoute une ligne, aucune n'est modifiée sauf `revoked_at`. La validation *courante* d'un couple (fournisseur, modèle) est la plus récente non révoquée ; une nouvelle validation du même couple révoque la précédente. Une validation est **caduque** (donc sans effet : les soumissions sont refusées, aucun repli sur une LLM locale) si elle ne vise pas exactement le fournisseur et le modèle configurés, si `text_version` diffère de la version courante du texte, ou si elle est révoquée. Aucun contenu de transcription n'y figure.
 
 ### Table `audit_logs`
 
@@ -444,6 +466,7 @@ jobs/<job_id>/
 │   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
 │   ├── audio_scene_filter.json     # Filtrage pré-STT optionnel, timeline préservée
 │   ├── audio_normalization.json    # Normalisation pré-STT optionnelle, timeline préservée (forced=true si auto-loudnorm)
+│   ├── llm_provenance.json         # LLM externe (cloud) : {provider, provider_label, model, hosting, external: true, phases: [{name, at}]} — absent si tout est resté local
 │   ├── audio_denoise.json          # Débruitage pré-STT optionnel via ffmpeg afftdn (preserve_timeline=true)
 │   ├── audio_excerpts/             # Cache WAV des extraits de validation du lexique (5s avant/après contexte)
 │   ├── transcription.srt          # SRT final (Cohere/Whisper/Granite + speakers + nettoyage post-STT)
@@ -574,6 +597,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Relecture finale (quality) | `metadata/transcription_corrigee.srt` (réécrit si ratio ok), `meeting_context["summary_harmonized"]` + `["structured_data"]`, `metadata/final_review_report.md` | `WorkflowRunner.run_final_review()` + `OpenCodeRunner.run_final_review()` — A+C+D+G, best-effort |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json`, `quality/review_points_anchors.json` (ancres cliquables de l'éditeur) | `QualityReporter.run_all_checks()` |
 | Édition manuelle (post-traitement) | `metadata/transcription_corrigee.srt` (réécrit), `speakers/speaker_stats.json` (recalculées), `speakers/speaker_mapping.json` (locuteurs créés), snapshot `refine/versions/v<N>/` AVANT write-back | `web/editor_routes.editor_save` — atelier `/jobs/<id>/editor` |
+| LLM externe (cloud) | `metadata/llm_provenance.json` (phases LLM confiées au fournisseur, cumulées d'une exécution à l'autre) + miroir `extra_data.llm_provider` + audit `job_external_llm` | `llm_cloud_guard.record_cloud_provenance()` → `llm_cloud.provenance.record_external_llm_use()`, appelée par `JobExecutorService` après une exécution RÉUSSIE en `services.backend: cloud` (hors fenêtre de surveillance d'un `AgentWorkspace`). Lu par `generate_docx_report()` : mention « LLM externe : <fournisseur> » au pied de page du DOCX |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
 | Affinage (post-workflow, job terminé) | `refine/chat.json`, `refine/request.json` (consommé), `refine/versions/v<N>/` + `manifest.json` ; en `apply` : artefacts texte réécrits (`context/meeting_context.json`, `metadata/transcription_corrigee.srt`, `context/render_options.json`), ZIP rebuild best-effort | `WorkflowRunner.run_refine()` — `discuss` = `refine_llm.chat_completion()` (appel direct, lecture seule) ; `apply` = `OpenCodeRunner.run_refine()` (AgentWorkspace, snapshot AVANT write-back) ; entrée de file mode `refine` |

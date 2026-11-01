@@ -66,6 +66,8 @@
                 <i class="bi bi-camera-video me-2"></i>{{ _('Connecteurs de réunion') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/config') %}active{% endif %}" href="/admin/config">
                 <i class="bi bi-sliders me-2"></i>{{ _('Configuration') }}</a></li>
+              <li><a class="dropdown-item {% if path.startswith('/admin/llm-cloud') %}active{% endif %}" href="/admin/llm-cloud">
+                <i class="bi bi-cloud-arrow-up me-2"></i>{{ _('LLM cloud') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/maintenance') %}active{% endif %}" href="/admin/maintenance">
                 <i class="bi bi-hdd-stack me-2"></i>{{ _('Maintenance') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/models') %}active{% endif %}" href="/admin/models">
@@ -138,6 +140,18 @@
         <i class="bi bi-shield-exclamation me-2"></i>
         <div>
           {% trans %}Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href="/account/password" class="alert-link">Changez-le maintenant</a> pour sécuriser votre compte.{% endtrans %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if llm_cloud and llm_cloud.active %}
+      <div class="alert {{ 'alert-info' if llm_cloud.acknowledged else 'alert-warning' }} d-flex align-items-center" role="status" data-llm-cloud-banner>
+        <i class="bi bi-cloud-arrow-up me-2"></i>
+        <div>
+          {% if llm_cloud.unknown %}{% trans provider=llm_cloud.provider_label %}Cette instance confie les transcriptions à <strong>{{ provider }}</strong> — état de validation indisponible (base injoignable) : les traitements LLM sont refusés.{% endtrans %}
+          {% elif llm_cloud.acknowledged %}{% trans provider=llm_cloud.provider_label, hosting=llm_cloud.hosting or _('hébergement non renseigné') %}Cette instance confie les transcriptions à <strong>{{ provider }}</strong> ({{ hosting }}).{% endtrans %}
+          {% else %}{% trans provider=llm_cloud.provider_label, hosting=llm_cloud.hosting or _('hébergement non renseigné') %}Cette instance confie les transcriptions à <strong>{{ provider }}</strong> ({{ hosting }}), non encore validée par un administrateur : les traitements LLM sont refusés.{% endtrans %}{% endif %}
+          {% if Permission.MANAGE_CONFIG in user_permissions %}<a href="/admin/llm-cloud" class="alert-link">{{ _('Écran LLM cloud') }}</a>{% endif %}
         </div>
       </div>
     {% endif %}

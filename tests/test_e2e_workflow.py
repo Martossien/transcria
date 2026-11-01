@@ -1883,6 +1883,14 @@ def main() -> int:
 
     print_effective_config(cfg, args)
 
+    from transcria.config.views import LlmCloudView
+    from transcria.gpu.arbitrage_endpoint import is_cloud_backend
+    if is_cloud_backend(cfg):
+        _cloud = LlmCloudView.from_config(cfg)
+        print(f"  LLM d'arbitrage : cloud {_cloud.provider}/{_cloud.model}")
+    else:
+        print("  LLM d'arbitrage : local")
+
     app = create_app()
     app.config.update({"TESTING": True})
 

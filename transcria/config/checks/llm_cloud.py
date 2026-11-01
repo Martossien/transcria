@@ -76,6 +76,7 @@ def _check_llm_cloud(cfg: dict, r: ValidationResult) -> None:
         return
 
     providers: dict[str, str] = {}
+    models: dict[str, str] = {}
     for prefix, sec in sections:
         if not isinstance(sec, dict) or not sec.get("enabled"):
             continue
@@ -102,9 +103,15 @@ def _check_llm_cloud(cfg: dict, r: ValidationResult) -> None:
             )
             continue
         providers[prefix] = provider
+        models[prefix] = model
     if len(set(providers.values())) > 1:
         detail = ", ".join(f"{k} → {v}" for k, v in providers.items())
         r.add_error(f"workflow: les model_id doivent viser le MÊME fournisseur cloud ({detail})")
+    elif len(set(models.values())) > 1:
+        # La validation admin, l'écran et la garde portent sur UN couple (fournisseur, modèle) :
+        # un modèle de résumé différent partirait sans avoir été vu ni validé (relecture lot B).
+        detail = ", ".join(f"{k} → {v}" for k, v in models.items())
+        r.add_error(f"workflow: en cloud, résumé et correction doivent utiliser le MÊME modèle ({detail})")
     unlisted = next((p for p in providers.values() if get_llm_provider(p) is None), None)
     if unlisted is not None:
         _check_unlisted_provider(unlisted, wf.get("arbitration_llm") or {}, key_env, r)

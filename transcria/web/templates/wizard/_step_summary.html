@@ -94,7 +94,11 @@
       {% if job.get_extra_data().get('summary_llm_failed') %}
       <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle"></i>
+        {% if job.get_extra_data().get('summary_llm_error_kind') == 'cloud_refused' %}
+        {% trans %}Le résumé a été refusé : cette instance confie les transcriptions à une LLM externe et ce traitement n'est pas autorisé (validation administrateur absente ou caduque, groupe interdit, ou réunion issue d'un connecteur). Rapprochez-vous de votre administrateur.{% endtrans %}
+        {% else %}
         {% trans %}Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.{% endtrans %}
+        {% endif %}
       </div>
       {% endif %}
       <button class="btn btn-primary" data-action="TranscrIA.generateSummary">

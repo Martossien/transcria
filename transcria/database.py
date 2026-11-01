@@ -15,6 +15,7 @@ MODEL_MODULES: tuple[str, ...] = (
     "transcria.ingestion.session_models",
     "transcria.jobs.models",
     "transcria.jobs.timing_store",
+    "transcria.llm_cloud.models",
     "transcria.queue.models",
     "transcria.voice.models",
 )

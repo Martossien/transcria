@@ -17,6 +17,11 @@
           <input type="text" name="description" class="form-control" value="{{ group.description if group else '' }}" {{ '' if Permission.MANAGE_USERS in user_permissions else 'readonly' }}>
         </div>
       </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="llm_cloud_forbidden" value="1" id="llm-cloud-forbidden"
+               {{ 'checked' if group and group.llm_cloud_forbidden else '' }} {{ '' if Permission.MANAGE_USERS in user_permissions else 'disabled' }}>
+        <label class="form-check-label" for="llm-cloud-forbidden">{{ _('Interdire la LLM cloud à ce groupe (les transcriptions de ses membres ne partent jamais vers un fournisseur externe)') }}</label>
+      </div>
       {% if Permission.MANAGE_USERS in user_permissions %}
       <button type="submit" class="btn btn-primary">{{ _('Enregistrer') if group else _('Créer') }}</button>
       {% endif %}

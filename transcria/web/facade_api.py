@@ -69,6 +69,7 @@ from transcria.stt.transcriber_factory import (
 )
 from transcria.web import facade_format
 from transcria.web.blueprint import web_bp
+from transcria.web.llm_cloud_entries import cloud_gate, profile_needs_llm, refusal_response
 from transcria.web.request_helpers import bearer_token_required, clean_job_title
 from transcria.workflow import profiles
 
@@ -373,6 +374,24 @@ def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict
     if session is None:
         return jsonify({"error": "Ce job ne porte aucune session de réunion"}), 409
 
+    # Garde LLM cloud AVANT le dépôt : un job à session est une réunion par construction.
+    profile_id = (job.get_extra_data() or {}).get("processing_profile_id")
+    try:
+        profile, mode = profiles.resolve_request(profile_id, "quality")
+    except (KeyError, ValueError):
+        profile, mode = profiles.resolve_request(None, "quality")
+    refusal = _ingest_cloud_refusal(cfg, profile, owner_id=job.owner_id,
+                                    extra_data={**(job.get_extra_data() or {}), "source": "meeting"},
+                                    job_id=job_id)
+    if refusal is not None:
+        return refusal
+
+    # Provenance garantie AVANT toute mise en file : le dernier rempart du worker reconnaît
+    # un job de connecteur à `source == "meeting"` (la planification la pose déjà ; un job
+    # à session créé par un autre chemin ne doit pas y échapper).
+    if (job.get_extra_data() or {}).get("source") != "meeting":
+        JobStore.update_extra_data(job_id, lambda extra: {**extra, "source": "meeting"})
+
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
     manifest_raw = _store_track_parts(cfg, job_id, manifest_raw)
     # L'ARRIVÉE de l'enregistrement prouve la fin de réunion — clore la session sans
@@ -383,12 +402,6 @@ def _attach_recording_to_job(cfg: dict, job_id: str, file, *, manifest_raw: dict
     analysis = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
     if analysis.get("error"):
         return jsonify({"error": f"Analyse impossible: {analysis['error']}", "job_id": job_id}), 422
-
-    profile_id = (job.get_extra_data() or {}).get("processing_profile_id")
-    try:
-        profile, mode = profiles.resolve_request(profile_id, "quality")
-    except (KeyError, ValueError):
-        profile, mode = profiles.resolve_request(None, "quality")
 
     # DÉCISION UTILISATEUR (2026-07-29) : la réunion n'est qu'une AUTRE façon d'amener
     # l'audio à l'étape 1 — le job s'arrête AU MÊME POINT qu'un upload (analysé), et le
@@ -451,13 +464,30 @@ def _seed_from_manifest(cfg: dict, job_id: str, raw: dict) -> None:
         logger.warning("semis du manifeste participants impossible (job %s)", job_id, exc_info=True)
 
 
+def _ingest_cloud_refusal(cfg: dict, profile, *, owner_id: str | None, extra_data: dict | None,
+                          job_id: str | None = None):
+    """Garde LLM cloud de l'ingestion (§ 3.2.3) : refus 403 JSON, ou None si admissible.
+
+    `needs_llm` = le TRAITEMENT du profil seulement : le résumé de contrôle (autostart) a sa
+    propre garde (`_maybe_autostart_summary`, qui n'enfile pas et journalise) — un profil sans
+    LLM (SRT express) reste donc ingérable même quand le résumé est refusé. Personne n'est
+    devant un écran à ce moment-là : le WARNING (via `refusal_response`) et le corps de réponse
+    sont ce que lisent les journaux du runner."""
+    gate = cloud_gate(cfg, owner_id=owner_id, job_extra_data=extra_data,
+                      needs_llm=profile_needs_llm(cfg, profile))
+    if gate.allowed:
+        return None
+    return refusal_response(gate, entry="Ingestion de réunion", job_id=job_id)
+
+
 def _create_and_queue_job(cfg: dict, file, title: str, *,
                           processing_profile_id: str | None = None,
                           requested_mode: str | None = None,
                           participants_manifest_raw: dict | None = None,
                           owner_id: str | None = None,
                           participants_hint_raw: str | None = None,
-                          provider_hint: str | None = None):
+                          provider_hint: str | None = None,
+                          external_meeting_id: str | None = None):
     """Crée → dépose → analyse → met en file un job depuis un fichier uploadé.
 
     Primitives identiques au wizard (JobService + exécuteur), via l'API de jobs.
@@ -475,7 +505,23 @@ def _create_and_queue_job(cfg: dict, file, title: str, *,
     except (KeyError, ValueError) as exc:
         return None, None, (jsonify({"error": f"Profil ou mode inconnu: {exc}"}), 400)
 
-    job_id = JobService.create(owner_id=owner_id or current_user.id, title=title)["job_id"]
+    owner_id = owner_id or current_user.id
+    # Refus AVANT la création : aucun job orphelin quand la LLM cloud n'est pas admissible.
+    refusal = _ingest_cloud_refusal(cfg, profile, owner_id=owner_id,
+                                    extra_data={"source": "meeting"} if provider_hint else None)
+    if refusal is not None:
+        return None, None, refusal
+
+    job_id = JobService.create(owner_id=owner_id, title=title)["job_id"]
+    # Provenance VISIBLE (plan UI_REUNIONS §4 D7) posée DÈS la création, donc AVANT toute
+    # soumission : le dernier rempart LLM cloud du worker lit `source == "meeting"` au
+    # moment du traitement — la poser après `submit_process` laissait une fenêtre où un
+    # job de connecteur passait pour un upload.
+    if provider_hint:
+        provenance = {"source": "meeting", "provider": provider_hint}
+        if external_meeting_id:
+            provenance["external_meeting_id"] = external_meeting_id
+        JobStore.update_extra_data(job_id, lambda extra: {**extra, **provenance})
     JobService.upload(job_id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
 
     participants_manifest_raw = _store_track_parts(cfg, job_id, participants_manifest_raw)
@@ -701,21 +747,14 @@ def facade_ingest():
         participants_manifest_raw=manifest_raw,
         owner_id=_resolve_owner(request.form.get("owner_email")),
         participants_hint_raw=request.form.get("participants_hint"),
-        provider_hint=provider)
+        provider_hint=provider,
+        external_meeting_id=external_meeting_id)
     if error is not None:
         if dedup_key:
             MeetingImportStore.release(dedup_key)  # rejeu propre après échec
         return error
     if dedup_key:
         MeetingImportStore.attach_job(dedup_key, result["job_id"])
-
-    # Provenance VISIBLE (plan UI_REUNIONS §4 D7) : avant, `MeetingImport` était écrit mais
-    # jamais relié au job côté UI — un job de réunion était indiscernable d'un upload.
-    if provider:
-        provenance = {"source": "meeting", "provider": provider}
-        if external_meeting_id:
-            provenance["external_meeting_id"] = external_meeting_id
-        JobStore.update_extra_data(result["job_id"], lambda extra: {**extra, **provenance})
 
     audit_log(
         action=AuditAction.JOB_ENQUEUE,

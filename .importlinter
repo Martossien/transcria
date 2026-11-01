@@ -88,6 +88,7 @@ modules =
     transcria.web.health_routes
     transcria.web.editor_routes
     transcria.web.facade_api
+    transcria.web.llm_cloud_routes
 
 # A0 (2026-07-13) — pureté (partielle) du noyau : auth/config/audit n'importent pas
 # l'orchestration. (jobs/ a deux imports de constantes workflow connus — hors contrat

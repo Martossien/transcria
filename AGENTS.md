@@ -183,6 +183,11 @@ transcria/
       restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
     config/local_dirs.py    # resolve_models_dir()/resolve_runtimes_dir() — MODELS_DIR et TRANSCRIA_RUNTIMES_DIR, source unique (catalogue, doctor, diariseur Nemotron)
+    llm_cloud/              # GOUVERNANCE de la LLM d'arbitrage cloud (docs/LLM_CLOUD.md § 3.2 — « que ce soit dit ») :
+      policy.py             #   politique PURE (CLOUD_NOTICE_TEXT_VERSION = version du texte lu par l'admin → validation CADUQUE si elle change ; decide_gate ; un utilisateur est interdit dès qu'UN de ses groupes l'est)
+      models.py / store.py  #   table llm_cloud_acknowledgements (append-only, revoked_at) + LlmCloudStore (current/acknowledge/revoke/user_forbidden via groups.llm_cloud_forbidden)
+      gate.py               #   check_cloud_gate = JUGE UNIQUE des entrées (web : process/autostart/résumé/affinage/sync éditeur/ingest ; worker : services/llm_cloud_guard) ; cloud_status pour bandeau/écran
+      provenance.py         #   metadata/llm_provenance.json + miroir extra_data.llm_provider + audit job_external_llm — écrit par l'EXÉCUTEUR hors fenêtre AgentWorkspace
     models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF) ; backend Ollama → ligne du modèle CONFIGURÉ (kind ollama, présence via /api/tags), jamais un GGUF re-déduit
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
@@ -369,6 +374,7 @@ transcria/
       pipeline_admission.py # B2 : estimation VRAM d'admission d'un traitement
       pipeline_config.py    # B2 : config effective d'un traitement (mode, garde qualité, lexiques)
       pipeline_remote_gate.py # B2 : pré-vol des ressources distantes (admission §7.2 + auto-lancement STT)
+      llm_cloud_guard.py    # rempart WORKER de la LLM cloud (job enfilé avant une interdiction ⇒ refus explicite : FAILED / summary_llm_failed cloud_refused / tour assistant) + record_cloud_provenance après succès
       pipeline_steps/       # B2 : les étapes audio extraites (preflight, canonical_audio [lot 2, opt-in], scene_analysis, scene_filter, denoise, normalization, source_separation)
     audit/
       models.py             # AuditAction + AuditLog (SQLAlchemy)

@@ -84,7 +84,9 @@ CONFIG_FORM_SECTIONS: list[dict] = [
     },
     {
         "title": _l("LLM d'arbitrage"),
-        "help": _l("Résumé et correction par la LLM locale OpenAI-compatible."),
+        "help": _l("Résumé et correction par la LLM locale OpenAI-compatible. Pour confier ces phases à "
+                   "un fournisseur externe (services.backend: cloud), voir l'écran /admin/llm-cloud : "
+                   "périmètre de ce qui part, validation administrateur, bascule au redémarrage."),
         "fields": [
             {"path": "workflow.arbitration_llm.enabled", "label": _l("Activer la correction LLM"), "type": "bool",
              "help": _l("Désactiver pour produire un SRT brut sans correction.")},

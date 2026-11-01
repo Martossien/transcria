@@ -24,6 +24,7 @@ from transcria.notifications.job_facts import completed_facts
 from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QUEUE_RUNNING, QueueStore
+from transcria.services import llm_cloud_guard
 from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow.agent_workspace import resolve_agent_work_root
@@ -192,6 +193,10 @@ class JobExecutorService:
                 # relançable) plutôt que de produire un résultat sans entrées.
                 artifact_store.pull_job_files(self.config, job_id)
 
+                # Rempart LLM cloud (§ 3.2.5) : refus explicite, jamais d'envoi silencieux.
+                if self._refuse_if_cloud_forbidden(job, job_id, mode, sl):
+                    return
+
                 is_step_mode = ExecutionMode.from_string(mode).is_step
                 if is_step_mode:
                     # Étape GPU synchrone routée vers le worker (frontal sans GPU / reprise
@@ -257,6 +262,7 @@ class JobExecutorService:
                         self._check_vram_wait_bound(job, job_id, required_mb, phase, sl)
                 elif outcome.kind is OutcomeKind.FAILED:
                     error = outcome.reason or "Erreur inconnue"
+                    llm_cloud_guard.record_cloud_provenance(self.config, job_id, mode, succeeded=False)
                     QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, error)
                     if is_step_mode:
@@ -274,10 +280,12 @@ class JobExecutorService:
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
                     sl.info("Étape GPU (worker) terminée", job_id=job_id, mode=mode)
+                    llm_cloud_guard.record_cloud_provenance(self.config, job_id, mode)
                 else:
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
                     JobStore.update_state(job_id, JobState.COMPLETED)
+                    llm_cloud_guard.record_cloud_provenance(self.config, job_id, mode)
                     # Email « terminé » enrichi : temps réel + score qualité + points
                     # (lien vers /result). Best-effort côté collecte des faits.
                     try:
@@ -331,6 +339,27 @@ class JobExecutorService:
                 alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
         except Exception:  # noqa: BLE001 — la borne est de l'observabilité, jamais un risque
             sl.warning("Contrôle de borne d'attente VRAM impossible (non bloquant)", job_id=job_id)
+
+    def _refuse_if_cloud_forbidden(self, job, job_id: str, mode: str, sl) -> bool:
+        """Dernier rempart LLM cloud : True si le run est REFUSÉ (file libérée, état explicite).
+
+        Pipeline complet → FAILED + e-mail d'échec ; résumé → drapeau ``summary_llm_failed``
+        (bandeau relançable) ; affinage → tour assistant explicatif. Hors cloud : jamais appelé
+        à refuser (la garde répond « autorisé » sans toucher à la base).
+        """
+        gate = llm_cloud_guard.cloud_gate_for_run(self.config, job, mode)
+        if gate.allowed:
+            return False
+        message = llm_cloud_guard.refusal_message(gate)
+        sl.error("Traitement refusé — %s", message, job_id=job_id, mode=mode, code=gate.code)
+        QueueStore.dequeue(job_id, status="failed")
+        mark_execution_failed(job_id, message)
+        llm_cloud_guard.apply_refusal_side_effects(self.config, job_id, mode, message)
+        if not ExecutionMode.from_string(mode).is_step:
+            JobStore.update_state(job_id, JobState.FAILED, message)
+            _notify(self.config, job, "failed", message)
+        WorkflowProgressReporter(self.config).clear(job_id)
+        return True
 
     def _abort_cancelled_before_start(self, job, job_id: str, mode: str, sl) -> None:
         """Annulation demandée pendant l'attente (file, VRAM) : le dispatch arrive trop tard.

@@ -21,7 +21,7 @@
   <tbody>
     {% for group in groups %}
     <tr>
-      <td><strong>{{ group.name }}</strong></td>
+      <td><strong>{{ group.name }}</strong>{% if group.llm_cloud_forbidden %} <span class="badge text-bg-warning">{{ _('LLM cloud interdite') }}</span>{% endif %}</td>
       <td>{{ group.description }}</td>
       <td>{{ member_counts.get(group.id, 0) }}</td>
       <td><a href="/admin/groups/{{ group.id }}/edit" class="btn btn-sm btn-outline-secondary">{{ _('Gérer') }}</a></td>

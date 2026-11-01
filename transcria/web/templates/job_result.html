@@ -46,6 +46,14 @@
 </div>
 {% endif %}
 
+{% set ext_llm = job.get_extra_data().get('llm_provider') %}
+{% if ext_llm %}
+<div class="alert alert-info d-flex align-items-center gap-2" role="status" data-llm-provenance>
+  <i class="bi bi-cloud-arrow-up"></i>
+  <div>{% trans name=(ext_llm.provider ~ '/' ~ ext_llm.model) if ext_llm is mapping else ext_llm %}Les livrables de cette réunion ont été produits avec une LLM externe : <strong>{{ name }}</strong>.{% endtrans %}</div>
+</div>
+{% endif %}
+
 {% if summary_stale %}
 <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
   <i class="bi bi-exclamation-triangle"></i>

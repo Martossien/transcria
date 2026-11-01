@@ -32,6 +32,7 @@ from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import can_manage_queue_job, get_job_for_api, get_job_for_edit
+from transcria.web.llm_cloud_entries import job_cloud_refusal, profile_needs_llm
 from transcria.web.meetings_views import sessions_for_jobs
 from transcria.web.request_helpers import api_stable, bearer_token_allowed
 from transcria.workflow import profiles
@@ -201,6 +202,10 @@ def api_process(job_id: str):
 
     if is_execution_active(job):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": get_execution_status(job)}), 409
+
+    refusal = job_cloud_refusal(cfg, job, needs_llm=profile_needs_llm(cfg, profile), entry="Traitement")
+    if refusal is not None:
+        return refusal
 
     executor = get_job_executor()
     if executor is None:
@@ -397,6 +402,10 @@ def api_reprocess(job_id: str):
         profile, mode = profiles.resolve_request(processing_profile_id, payload.get("mode", "fast"))
     except (KeyError, ValueError):
         return jsonify({"error": f"Profil/mode invalide: {processing_profile_id or payload.get('mode')}"}), 400
+
+    refusal = job_cloud_refusal(cfg, job, needs_llm=profile_needs_llm(cfg, profile), entry="Traitement")
+    if refusal is not None:
+        return refusal
 
     executor = get_job_executor()
     if executor is None:

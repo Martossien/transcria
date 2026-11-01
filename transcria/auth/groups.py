@@ -41,12 +41,16 @@ class GroupStore:
         )
 
     @staticmethod
-    def update_group(group_id: str, name: str, description: str = "") -> Group | None:
+    def update_group(
+        group_id: str, name: str, description: str = "", *, llm_cloud_forbidden: bool | None = None,
+    ) -> Group | None:
         group = db.session.get(Group, group_id)
         if group is None:
             return None
         group.name = name.strip()
         group.description = description.strip()
+        if llm_cloud_forbidden is not None:
+            group.llm_cloud_forbidden = bool(llm_cloud_forbidden)
         db.session.commit()
         return group
 

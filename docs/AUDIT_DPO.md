@@ -85,7 +85,16 @@ leur consentement à leur place.
   `audit/models.py`, libellés en français sur la page Audit). Les connexions fédérées
   (OIDC/proxy/LDAP) journalisent la source et le groupe décisif ; un refus de mapping
   journalise les groupes reçus (diagnostic administrateur) — jamais de mot de passe, de
-  secret de jeton ni d'email dans les détails d'audit. Événements d'authentification et
+  secret de jeton ni d'email dans les détails d'audit.
+- **LLM d'arbitrage cloud** (fournisseur externe, `docs/LLM_CLOUD.md`) : trois actions,
+  métadonnées seules — jamais de contenu de transcription, de prompt ou de clé d'API.
+  `config_llm_cloud_acknowledge` (un administrateur valide le couple fournisseur/modèle :
+  fournisseur, modèle, version du texte d'information lu, réunions de connecteurs
+  autorisées ou non) ; `config_llm_cloud_revoke` (retrait de la validation) ;
+  `job_external_llm` (acteur système, à chaque exécution réussie d'un job dont des phases
+  LLM ont été confiées au fournisseur : fournisseur, modèle, noms des phases, identifiant
+  du propriétaire du job). La même trace figure par job dans
+  `metadata/llm_provenance.json` et en pied de page du DOCX. Événements d'authentification et
   de jetons rangés dans la **famille `auth`** pour la rétention.
 
 ## 3. Suppression d'un utilisateur

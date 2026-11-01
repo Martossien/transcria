@@ -33,6 +33,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
 from transcria.web.job_access import get_job_for_api, get_job_for_edit
+from transcria.web.llm_cloud_entries import job_cloud_refusal
 from transcria.web.refine_shared import refine_running
 from transcria.workflow.refine_store import RefineStore
 from transcria.workflow.srt_editor import (
@@ -531,6 +532,9 @@ def editor_sync_summary(job_id: str):
                                  "(job non terminé ou LLM désactivée)."}), 409
 
     cfg = get_config()
+    refusal = job_cloud_refusal(cfg, job, needs_llm=True, entry="Synchronisation de synthèse")
+    if refusal is not None:
+        return refusal
     store = RefineStore(jobs_dir=cfg["storage"]["jobs_dir"], job_id=job.id)
 
     if store.has_active_request() or refine_running(job):

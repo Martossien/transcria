@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ _('LLM cloud') }} — TranscrIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3"><i class="bi bi-cloud-arrow-up me-2"></i>{{ _('LLM d\'arbitrage cloud') }}</h1>
+
+{% if not cloud.active %}
+<div class="alert alert-secondary" role="status" data-llm-cloud-inactive>
+  <p class="mb-2"><strong>{{ _('La LLM cloud n\'est pas active sur cette instance.') }}</strong>
+    {{ _('Les phases LLM (résumé, correction, relecture, affinage) sont traitées par la LLM d\'arbitrage locale : rien ne part vers un fournisseur externe.') }}</p>
+  <p class="mb-0">{% trans %}Pour l'activer, réglez <code>services.backend: cloud</code> et <code>workflow.arbitration_llm.model_id</code> (forme <code>fournisseur/modèle</code>) dans <code>config.yaml</code>, fournissez la clé du fournisseur par variable d'environnement, puis <strong>redémarrez le service</strong> : la bascule ne prend effet qu'au redémarrage. Revenez ensuite sur cet écran pour la valider.{% endtrans %}</p>
+</div>
+{% else %}
+
+<div class="card mb-4">
+  <div class="card-header">{{ _('Fournisseur configuré') }}</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">{{ _('Fournisseur') }}</dt>
+      <dd class="col-sm-9">{{ cloud.provider_label }} <code>{{ cloud.provider }}</code>
+        {% if not cloud.known_provider %}<span class="badge text-bg-warning">{{ _('hors table des fournisseurs connus') }}</span>{% endif %}</dd>
+      <dt class="col-sm-3">{{ _('Modèle') }}</dt>
+      <dd class="col-sm-9"><code>{{ cloud.model }}</code></dd>
+      <dt class="col-sm-3">{{ _('URL') }}</dt>
+      <dd class="col-sm-9"><code>{{ cloud.base_url or '—' }}</code></dd>
+      <dt class="col-sm-3">{{ _('Hébergement') }}</dt>
+      <dd class="col-sm-9">{{ cloud.hosting or _('non renseigné : vérifiez-le auprès du fournisseur') }}</dd>
+    </dl>
+    {% if cloud.facts %}
+    <ul class="mt-3 mb-0" data-llm-cloud-facts>
+      {% for fact in cloud.facts %}<li>{{ fact }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if cloud.terms_url %}
+    <p class="mt-3 mb-0"><a href="{{ cloud.terms_url }}" target="_blank" rel="noopener noreferrer">
+      <i class="bi bi-box-arrow-up-right me-1"></i>{{ _('Conditions du fournisseur') }}</a></p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4" data-llm-cloud-scope>
+  <div class="card-header">{{ _('Ce qui part chez le fournisseur') }}</div>
+  <div class="card-body">
+    <ul>
+      <li>{{ _('la transcription intégrale de chaque réunion traitée ;') }}</li>
+      <li>{{ _('le brief d\'invitation collé ;') }}</li>
+      <li>{{ _('le texte extrait des documents joints ;') }}</li>
+      <li>{{ _('le lexique de session filtré ;') }}</li>
+      <li>{{ _('les noms et fonctions des participants ;') }}</li>
+      <li>{{ _('le contexte de la réunion (type, titre, champs saisis).') }}</li>
+    </ul>
+    <p><strong>{{ _('Jamais l\'audio ni les voix :') }}</strong> {{ _('la transcription et la diarisation restent sur cette instance.') }}</p>
+    <p>{{ _('La LLM peut éditer des fichiers dans un espace isolé, comme la LLM locale.') }}</p>
+    <p>{{ _('Les coûts, la consommation et la disponibilité du fournisseur relèvent de l\'administrateur.') }}</p>
+    <p class="mb-0">{{ _('La bascule prend effet au redémarrage du service ; les jobs en file seront traités par le nouveau backend.') }}</p>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ _('Validation administrateur') }}</div>
+  <div class="card-body">
+    {% if cloud.acknowledged %}
+    <p data-llm-cloud-ack class="text-success"><i class="bi bi-check-circle me-1"></i>
+      {% trans who=cloud.acknowledgement.acknowledged_by_username, when=(cloud.acknowledgement.acknowledged_at or '')[:16] | replace('T', ' ') %}Validée par <strong>{{ who }}</strong> le {{ when }} (UTC).{% endtrans %}
+      {% if cloud.connectors_allowed %}{{ _('Réunions captées par connecteurs et bots : autorisées.') }}{% else %}{{ _('Réunions captées par connecteurs et bots : refusées.') }}{% endif %}</p>
+    {% elif cloud.stale_acknowledgement %}
+    <p data-llm-cloud-stale class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>
+      {% trans %}Validation <strong>CADUQUE</strong> : le texte d'avertissement a changé depuis. Relisez cet écran et validez de nouveau ; d'ici là, les traitements LLM sont refusés.{% endtrans %}</p>
+    {% else %}
+    <p data-llm-cloud-unacknowledged class="text-warning-emphasis"><i class="bi bi-hourglass me-1"></i>
+      {{ _('Non validée : tant qu\'un administrateur n\'a pas validé ce fournisseur et ce modèle, les traitements LLM sont refusés.') }}</p>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('web.admin_llm_cloud_acknowledge') }}" class="mb-3">
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="connectors_allowed" value="1" id="llm-cloud-connectors"
+               {{ 'checked' if cloud.connectors_allowed else '' }}>
+        <label class="form-check-label" for="llm-cloud-connectors">{{ _('Autoriser aussi les réunions captées par connecteurs et bots') }}</label>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ _('Je valide') }}</button>
+    </form>
+
+    {% if cloud.acknowledged or cloud.stale_acknowledgement %}
+    <form method="POST" action="{{ url_for('web.admin_llm_cloud_revoke') }}"
+          data-confirm="{{ _('Retirer la validation ? Les traitements LLM vers ce fournisseur seront refusés.') }}">
+      <button type="submit" class="btn btn-outline-danger">{{ _('Retirer la validation') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

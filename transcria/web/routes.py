@@ -21,12 +21,14 @@ routes ne s'importent JAMAIS entre eux (contrat import-linter).
 import logging
 
 from flask import request
+from flask_babel import get_locale
 from flask_login import current_user
 
 from transcria.auth.models import Role
 from transcria.config import get_config
 from transcria.jobs import artifact_store
 from transcria.jobs.store import JobStore
+from transcria.llm_cloud.gate import cloud_status
 from transcria.maintenance import update_check as maintenance_update_check
 from transcria.web.blueprint import web_bp
 from transcria.web.connector_catalog import load_catalog
@@ -108,6 +110,22 @@ def inject_update_available():
     except Exception:  # noqa: BLE001
         pass
     return {"update_available_tag": None}
+
+
+@web_bp.app_context_processor
+def inject_llm_cloud_status():
+    """Bandeau PERMANENT « cette instance confie les transcriptions à <fournisseur> » (LLM_CLOUD § 3.2.4).
+
+    Pour tout utilisateur connecté. Hors cloud : ``{"active": False}`` sans toucher à la base ;
+    en cloud : une requête au plus. Best-effort : ne casse jamais le rendu.
+    """
+    try:
+        if current_user and current_user.is_authenticated:
+            # cloud_status ne touche pas la base hors cloud (court-circuit ``is_cloud_backend``).
+            return {"llm_cloud": cloud_status(get_config(), str(get_locale() or "fr"))}
+    except Exception:  # noqa: BLE001 — cloud_status gère déjà rollback + état dégradé ; ceci = filet
+        logger.warning("Bandeau LLM cloud : état indisponible", exc_info=True)
+    return {"llm_cloud": {"active": False}}
 
 
 @web_bp.before_app_request

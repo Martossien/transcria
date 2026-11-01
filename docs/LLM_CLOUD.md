@@ -238,10 +238,12 @@ appels directs.
    redémarrage du service** ; les jobs en file seront traités par le nouveau backend ».
 2. **Validation admin en base**, table `llm_cloud_acknowledgements` (`provider, model, text_version,
    acknowledged_by, acknowledged_at, connectors_allowed`), **caducité réellement codée** : si
-   `text_version` courante ≠ celle enregistrée, le mode est refusé au démarrage (`validate_config`
-   consulte la base ; patron `auth.backend` inconnu : jamais de repli silencieux) et le doctor est
-   en FAIL. Pas dans `config.yaml` (lecture seule en Docker, falsifiable sans trace). Écriture
-   auditée (`config_change`).
+   `text_version` courante ≠ celle enregistrée, la validation est CADUQUE : **tous les traitements
+   LLM sont refusés** (garde web à la soumission + rempart worker) et le doctor est en FAIL (lot C).
+   **Réalisé (lot B) :** le service DÉMARRE quand même — un refus au démarrage empêcherait l'admin
+   d'atteindre l'écran pour valider ; le bandeau permanent affiche « non validée : traitements LLM
+   refusés ». Pas dans `config.yaml` (lecture seule en Docker, falsifiable sans trace). Écriture
+   auditée (`config_llm_cloud_acknowledge` / `config_llm_cloud_revoke`).
 3. **Case « autoriser aussi les réunions captées par connecteurs et bots »** (`connectors_allowed`,
    **décochée par défaut**) : décochée, `/v1/audio/ingest` est refusée en cloud avec un message
    clair dans les journaux du runner (personne ne peut être averti à ce moment-là).
@@ -257,7 +259,9 @@ appels directs.
    refus à la soumission (toutes les entrées du point 4, message FR qui guide, jamais de repli
    silencieux sur une LLM locale) **et dernier rempart côté worker** (`job_executor._run_process`
    avant toute phase LLM : un job enfilé avant l'interdiction est refusé avec un état explicite).
-   `profile_availability` grise les profils à LLM pour un utilisateur interdit.
+   `profile_availability` grise les profils à LLM pour un utilisateur interdit. Limite connue : un
+   **admin de groupe** peut retirer un membre d'un groupe interdit, ce qui lève l'interdiction pour
+   ce membre (action auditée `group_member_remove`) — l'interdiction est une politique de GROUPE.
 6. **Trace par job** : fichier de provenance `metadata/llm_provenance.json`
    (`{provider, model, hosting, external: true, phases: [{name, at, tokens?}]}` — tokens notés
    parce que gratuits, sans tableau de bord), écrit par `job_executor` **hors de la fenêtre

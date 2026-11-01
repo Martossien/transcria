@@ -638,9 +638,12 @@ def group_create() -> ResponseReturnValue:
             flash(_("Ce groupe existe déjà."), "error")
             return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
         group = GroupStore.create_group(name, description)
+        llm_cloud_forbidden = bool(request.form.get("llm_cloud_forbidden"))
+        if llm_cloud_forbidden:
+            GroupStore.update_group(group.id, group.name, group.description or "", llm_cloud_forbidden=True)
         audit_log(
             AuditAction.GROUP_CREATE, target_type="group", target_id=group.id,
-            target_label=group.name,
+            target_label=group.name, details={"llm_cloud_forbidden": llm_cloud_forbidden},
         )
         flash(_("Groupe %(g)s créé.", g=group.name), "success")
         return redirect(url_for("auth.group_edit", group_id=group.id))
@@ -668,10 +671,12 @@ def group_edit(group_id: str) -> ResponseReturnValue:
             elif existing_group and existing_group.id != group.id:
                 flash(_("Ce groupe existe déjà."), "error")
             else:
-                GroupStore.update_group(group.id, name, description)
+                llm_cloud_forbidden = bool(request.form.get("llm_cloud_forbidden"))
+                GroupStore.update_group(group.id, name, description, llm_cloud_forbidden=llm_cloud_forbidden)
                 audit_log(
                     AuditAction.GROUP_MODIFY, target_type="group", target_id=group.id,
-                    target_label=name, details={"name": name, "description": description},
+                    target_label=name,
+                    details={"name": name, "description": description, "llm_cloud_forbidden": llm_cloud_forbidden},
                 )
                 flash(_("Groupe mis à jour."), "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))

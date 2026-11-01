@@ -22,6 +22,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api, get_job_for_edit
+from transcria.web.llm_cloud_entries import job_cloud_refusal
 from transcria.web.refine_shared import REFINE_READY_STATES, refine_running, refine_store_for
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,10 @@ def api_refine_submit(job_id: str):
     max_chars = int(refine_cfg.get("max_message_chars", 4000))
     if len(message) > max_chars:
         return jsonify({"error": f"Message trop long (max {max_chars} caractères)"}), 400
+
+    refusal = job_cloud_refusal(cfg, job, needs_llm=True, entry="Affinage")
+    if refusal is not None:
+        return refusal
 
     store = refine_store_for(cfg, job.id)
     if store.has_active_request() or refine_running(job):

@@ -44,6 +44,7 @@ from transcria.web.lexicon_views import (
     promote_groups_view,
     promote_lexicons_view,
 )
+from transcria.web.llm_cloud_entries import owner_cloud_forbidden
 from transcria.web.meetings_views import meeting_creation_context, sessions_for_jobs
 from transcria.web.request_helpers import clean_job_title
 from transcria.workflow.agent_workspace import resolve_agent_work_root
@@ -586,7 +587,7 @@ def job_wizard(job_id: str):
     # Le profil pilote la disposition du wizard (étapes affichées/masquées, numérotation).
     # Profil sélectionné = celui persisté sur le job, sinon le recommandé (présélection du
     # curseur) ; None ⇒ comportement complet (legacy/aucun profil dispo).
-    profiles_view = compute_profiles_view(cfg, select_locale())
+    profiles_view = compute_profiles_view(cfg, select_locale(), cloud_forbidden=owner_cloud_forbidden(cfg, job.owner_id))
     selected_profile = profile_for_job(job)
 
     # Types de réunion : intégrés + personnalisés VISIBLES DU PROPRIÉTAIRE du job

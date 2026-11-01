@@ -149,6 +149,9 @@
 | `/admin/connecteurs/zoom-sdk/test-legacy` | POST | connexion + Permission.MANAGE_CONFIG | Bouton « Tester la connexion » de la fiche Zoom : vérifie le couple Client | `transcria.web.admin_routes` |
 | `/admin/first-run-status` | GET | connexion + Permission.MANAGE_CONFIG | Fragment HTML de la checklist de premier démarrage (204 quand tout est vert). | `transcria.web.admin_routes` |
 | `/admin/hardware` | GET,POST | connexion + Permission.MANAGE_CONFIG | Préconisations matériel (lot conseiller) : scan GPU vs config courante. | `transcria.web.admin_routes` |
+| `/admin/llm-cloud` | GET | connexion + Permission.MANAGE_CONFIG | Écran LLM cloud : état, fournisseur, périmètre de ce qui part et validation administrateur. | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/acknowledge` | POST | connexion + Permission.MANAGE_CONFIG | Enregistre (en base, audité) la validation du couple fournisseur/modèle configuré. | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/revoke` | POST | connexion + Permission.MANAGE_CONFIG | Retire (audité) la validation courante : les traitements LLM cloud sont de nouveau refusés. | `transcria.web.llm_cloud_routes` |
 | `/admin/maintenance` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup/<name>/download` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -223,7 +226,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 157 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 160 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 
