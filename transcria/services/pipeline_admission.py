@@ -6,9 +6,19 @@ l'admission (`QueueScheduler`) et les routes wizard via les délégateurs
 statiques du service.
 """
 from transcria.config.views import GpuView, SttView, WorkflowView
+from transcria.gpu.arbitrage_endpoint import is_cloud_backend
 from transcria.stt.diarizer_factory import get_diarizer_vram_mb
 from transcria.stt.transcriber_factory import get_backend_vram_mb
 from transcria.workflow.profiles import get_profile, profile_to_legacy_mode, resolve_legacy_mode
+
+
+def llm_uses_local_resources(config: dict) -> bool:
+    """La LLM d'arbitrage consomme-t-elle des ressources de CETTE machine (VRAM, process) ?
+
+    Faux en CLOUD (fournisseur externe, docs/LLM_CLOUD.md § 3.1.1) : ni part VRAM à
+    l'admission, ni verrou/sonde/arrêt en fin de pipeline. Prédicat unique : ``is_cloud_backend``.
+    """
+    return not is_cloud_backend(config)
 
 
 def estimate_profile_resources(config: dict, profile) -> dict:
@@ -32,8 +42,10 @@ def estimate_profile_resources(config: dict, profile) -> dict:
         phases["diarization"] = get_diarizer_vram_mb(stt.diarization_backend, config)
     # La LLM (résumé/correction) partage le même serveur d'arbitrage : on conditionne sa
     # réservation au flag global `arbitration_llm.enabled` (comme l'estimateur historique),
-    # en plus du besoin du profil.
-    if rr.needs_llm and WorkflowView.from_config(config).arbitration_llm_enabled:
+    # en plus du besoin du profil. En CLOUD, aucune part : la LLM ne consomme aucune VRAM
+    # locale (le profil reste admissible sans GPU — docs/LLM_CLOUD.md § 3.1.1).
+    if (rr.needs_llm and WorkflowView.from_config(config).arbitration_llm_enabled
+            and llm_uses_local_resources(config)):
         phases["llm_arbitration"] = GpuView.from_config(config).llm_vram_mb
     return {
         "mode": profile_to_legacy_mode(profile),

@@ -17,6 +17,7 @@ if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestra
 
 from transcria.config.views import QueueView
 from transcria.database import db
+from transcria.gpu.arbitrage_endpoint import is_cloud_backend
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.inference.client import InferenceClientError, build_client_from_config
@@ -386,6 +387,11 @@ class QueueScheduler:
         phases = profile.get("phases") if isinstance(profile, dict) else {}
         llm_mb = self._positive_int((phases or {}).get("llm_arbitration"))
         if llm_mb <= 0 or "llm_arbitration" in completed_profile_phases:
+            return True
+        if is_cloud_backend(self.config):
+            # LLM cloud : aucune VRAM locale — une entrée enfilée AVANT la bascule porte encore
+            # une part `llm_arbitration` ; sans ce court-circuit l'admission sonderait le
+            # fournisseur à chaque tour puis exigerait `can_host_llm` sur une machine sans LLM.
             return True
         if "llm_arbitration" in self._remote_phase_names():
             return True

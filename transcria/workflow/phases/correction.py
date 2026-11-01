@@ -15,7 +15,6 @@ import yaml
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.meeting_context import synthese_section
-from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import (
     _SUMMARY_MARKERS,
@@ -24,6 +23,14 @@ from transcria.llm_tools.opencode_runner import (
     summary_markers,
 )
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+from transcria.workflow.llm_readiness import (
+    cloud_unavailable_error,
+    describe_arbitrage_endpoint,
+    ensure_llm_ready,
+    is_cloud_backend,
+    is_remote_arbitrage,
+    llm_running_before_phase,
+)
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)
@@ -68,11 +75,10 @@ def run(runner, job: Job, config: dict) -> dict:
     lexicon_path_for_correction = _prefilter_lexicon(fs, job)
 
     api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-    arbitrage_port = resolve_arbitrage_endpoint(config)[1]  # backend-aware (Ollama=11434, llama.cpp=8080)
     logger.info(
-        "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
+        "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, endpoint %s)",
         api_model_id or "non contraint",
-        arbitrage_port,
+        describe_arbitrage_endpoint(config),  # « 127.0.0.1:8080 » en local, le fournisseur en cloud
     )
     if not runner.allocator.try_acquire_llm(job.id, timeout_s=300):
         return {"success": False, "error": "LLM d'arbitrage occupée"}
@@ -81,7 +87,7 @@ def run(runner, job: Job, config: dict) -> dict:
     # Snapshot de l'état LLM *avant* toute action : si elle n'était pas
     # déjà active (CAS C), c'est ce call qui l'a lancée et il doit la
     # stopper en cas d'exception pour éviter un processus zombie.
-    llm_was_already_running = runner.vram.is_arbitrage_llm_running()
+    llm_was_already_running = llm_running_before_phase(runner.vram, config)
     try:
         if runner._should_reserve_llm_vram() and not llm_was_already_running:
             llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
@@ -108,8 +114,13 @@ def run(runner, job: Job, config: dict) -> dict:
                 }
             llm_phase_reserved = True
 
-        launched = runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
+        launched = ensure_llm_ready(runner.vram, config, api_model_id)
         if not launched:
+            # CLOUD (testé AVANT le distant : `is_remote_arbitrage` est vrai aussi en cloud) :
+            # une reprise automatique a déjà eu lieu → échec EXPLICITE relançable, JAMAIS
+            # `vram_wait` (re-file sans fin sur une clé révoquée, cf. docs/LLM_CLOUD.md § 3.1.7).
+            if is_cloud_backend(config):
+                return {"success": False, "error": cloud_unavailable_error(config)}
             # LLM DISTANTE indisponible = transitoire (saturée : health-check lent sous
             # forte charge alors qu'elle répond encore). On NE marque PAS FAILED : `vram_wait`
             # → re-queue + reprise (STT/diar déjà sur disque) jusqu'à ce qu'elle se libère —
@@ -136,6 +147,7 @@ def run(runner, job: Job, config: dict) -> dict:
             ocr, job,
             runner=runner,
             api_model_id=api_model_id,
+            config=config,
             **staged,
         )
         workspace.verify_and_restore_sources()
@@ -355,7 +367,7 @@ def _invoke_correction_with_retries(
     ocr: OpenCodeRunner, job: Job, *,
     staged_srt: str, staged_context: str, staged_lexicon: str, staged_invite: str | None,
     staged_summary: str | None = None,
-    runner=None, api_model_id: str | None = None,
+    runner=None, api_model_id: str | None = None, config: dict | None = None,
 ) -> dict:
     """Rejoue la SEULE passe LLM sur gel opencode ou production vide (≤ 3 tentatives)."""
     result: dict = {}
@@ -371,6 +383,12 @@ def _invoke_correction_with_retries(
         # (success=False SANS interruption) coupe la boucle. Un SRT produit = succès.
         hang = (not result["success"]) and "interrompu" in str(result.get("error", ""))
         if result["corrected_srt"] or (not result["success"] and not hang):
+            break
+        if hang and result.get("error_kind") == "absolute_timeout" and is_cloud_backend(config or {}):
+            # Cloud : le plafond absolu (7200 s) est la SEULE garde (chien de garde d'inactivité
+            # désactivé) — le retenter coûterait jusqu'à 3 × 2 h pour un fournisseur qui ne
+            # répond pas. Échec explicite relançable, le message nomme la cause.
+            logger.error("[correction] plafond absolu atteint chez le fournisseur cloud — pas de nouvel essai")
             break
         logger.warning(
             "[correction] %s — tentative %d/%d",

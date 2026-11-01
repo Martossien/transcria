@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from transcria.llm_tools.opencode_cli import OpencodeVersion
 from transcria.llm_tools.opencode_runner import OpenCodeRunner, _get_prompts_dir
 
 
@@ -1738,3 +1739,169 @@ class TestCorrectionRanges:
         for avant, apres in zip(plages, plages[1:], strict=False):
             assert apres["seg_debut"] == avant["seg_fin"] + 1
             assert apres["ligne_debut"] == avant["ligne_fin"] + 1
+
+
+# ── LLM d'arbitrage CLOUD (docs/LLM_CLOUD.md § 3.1.6 / § 3.1.7) ─────────────────
+
+def _cloud_cfg(**arbitration):
+    from builders import make_config
+
+    llm = {"enabled": True, "model_id": "mistral/mistral-large-4"}
+    llm.update(arbitration)
+    return make_config({"services": {"backend": "cloud"}, "workflow": {"arbitration_llm": llm}})
+
+
+def _local_cfg(**arbitration):
+    from builders import make_config
+
+    llm = {"enabled": True, "model_id": "local/arbitrage"}
+    llm.update(arbitration)
+    return make_config({"workflow": {"arbitration_llm": llm}})
+
+
+def _patch_binary(monkeypatch):
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
+    monkeypatch.setattr(os.path, "isfile", lambda p: True)
+    monkeypatch.setattr(os.path, "abspath", lambda p: p)
+    monkeypatch.setattr(OpenCodeRunner, "opencode_version",
+                        staticmethod(lambda path: OpencodeVersion(1, 19, 5)))
+
+
+class TestCloudPreflight:
+    def test_pre_garde_tcp_sautee_meme_si_rien_n_ecoute(self, tmp_path, monkeypatch):
+        import transcria.llm_tools.opencode_runner as mod
+
+        def _forbidden(*a, **k):
+            raise AssertionError("aucune sonde TCP en cloud")
+
+        monkeypatch.setattr(mod.socket, "create_connection", _forbidden)
+        runner = OpenCodeRunner(str(tmp_path), config=_cloud_cfg())
+        t0 = time.monotonic()
+        assert runner._wait_llm_endpoint_ready(5.0) is None
+        assert time.monotonic() - t0 < 1.0
+
+    def test_aucune_sonde_slots_metrics_en_cloud(self, tmp_path, monkeypatch):
+        import requests
+
+        def _forbidden(*a, **k):
+            raise AssertionError("aucune sonde HTTP en cloud")
+
+        monkeypatch.setattr(requests, "get", _forbidden)
+        runner = OpenCodeRunner(str(tmp_path), config=_cloud_cfg())
+        assert runner._llm_is_processing() is None
+
+    def test_capteur_gpu_inconnu_en_cloud(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        monkeypatch.setattr(sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("pas de nvidia-smi")))
+        runner = OpenCodeRunner(str(tmp_path), config=_cloud_cfg())
+        assert runner._llm_gpus_active() is None
+
+
+class TestCloudWatchdog:
+    _FAST = {"opencode_watchdog_poll_s": 0.02, "opencode_idle_grace_s": 0.05,
+             "opencode_first_contact_grace_s": 0.05, "opencode_pure_idle_cap_s": 0.05}
+
+    def _run_silent(self, tmp_path, monkeypatch, cfg, timeout):
+        _patch_binary(monkeypatch)
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
+        runner = OpenCodeRunner(str(tmp_path), config=cfg)
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
+        return runner.run("instr", "/tmp/prompt.txt", timeout=timeout)
+
+    def test_run_silencieux_tue_seulement_par_le_timeout_absolu(self, tmp_path, monkeypatch, caplog):
+        import logging
+
+        import transcria.llm_tools.opencode_runner as mod
+
+        called = {"pure_idle": 0}
+
+        def _spy(*a, **k):
+            called["pure_idle"] += 1
+            return True
+
+        monkeypatch.setattr(mod, "stop_on_pure_idle", _spy)
+        with caplog.at_level(logging.INFO, logger=mod.__name__):
+            result = self._run_silent(tmp_path, monkeypatch, _cloud_cfg(**self._FAST), timeout=1)
+        assert result["success"] is False
+        assert "timeout absolu" in result["error"]
+        assert "démarrage" not in result["error"] and "idle" not in result["error"]
+        assert called["pure_idle"] == 0
+        assert any("chien de garde d'inactivité désactivé" in r.getMessage() for r in caplog.records)
+
+    def test_en_local_le_repli_idle_pur_tranche_toujours(self, tmp_path, monkeypatch):
+        cfg = _local_cfg(**self._FAST)
+        _patch_binary(monkeypatch)
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
+        runner = OpenCodeRunner(str(tmp_path), config=cfg)
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
+        monkeypatch.setattr(runner, "_llm_is_processing", lambda: None)
+        result = runner.run("instr", "/tmp/prompt.txt", timeout=600)
+        assert result["success"] is False
+        assert "timeout absolu" not in result["error"]
+
+
+class TestFormatOpencodeErrorEvent:
+    def test_forme_v1(self):
+        from transcria.llm_tools.opencode_runner import format_opencode_error_event
+
+        ev = {"type": "error", "error": {"name": "UnknownError", "data": {"message": "Unexpected server error."}}}
+        assert format_opencode_error_event(ev) == "UnknownError: Unexpected server error."
+
+    def test_forme_v2(self):
+        from transcria.llm_tools.opencode_runner import format_opencode_error_event
+
+        ev = {"type": "error", "error": {"type": "ModelUnavailableError",
+                                         "message": "Model unavailable: mistral/mistral-large-4"}}
+        assert format_opencode_error_event(ev) == "ModelUnavailableError: Model unavailable: mistral/mistral-large-4"
+        assert format_opencode_error_event({"type": "error", "error": {"type": "provider.auth"}}) == "provider.auth"
+
+    @pytest.mark.parametrize("ev", [
+        {}, {"type": "error"}, {"type": "error", "error": None}, {"type": "error", "error": 42},
+        {"type": "error", "error": {"data": "pas un dict"}}, {"type": "error", "error": {"name": None}},
+        "pas un dict", None, [],
+    ])
+    def test_malforme_ne_leve_jamais(self, ev):
+        from transcria.llm_tools.opencode_runner import format_opencode_error_event
+
+        out = format_opencode_error_event(ev)
+        assert isinstance(out, str) and out
+
+    def test_exit_1_avec_erreur_v2_rend_le_message_du_fournisseur(self, tmp_path, monkeypatch):
+        _patch_binary(monkeypatch)
+        err = json.dumps({"type": "error", "error": {
+            "type": "provider.auth", "message": "401 Unauthorized: invalid api key"}})
+        monkeypatch.setattr(subprocess, "Popen",
+                            _fake_popen(stdout=err, stderr="INFO journal du serveur\n", returncode=1))
+        runner = OpenCodeRunner(str(tmp_path), config=_cloud_cfg())
+        result = runner.run("instr", "/tmp/prompt.txt")
+        assert result["success"] is False
+        assert result["error_kind"] == "opencode_error"
+        assert "provider.auth" in result["error"]
+        assert "invalid api key" in result["error"]
+
+
+class TestCloudPrintLogsEnv:
+    def _captured_env(self, tmp_path, monkeypatch, cfg):
+        _patch_binary(monkeypatch)
+        seen = {}
+
+        def _factory(cmd, **kw):
+            seen["env"] = kw.get("env") or {}
+            return _FakePopen(stdout="{}", returncode=0)
+
+        monkeypatch.setattr(subprocess, "Popen", _factory)
+        monkeypatch.delenv("OPENCODE_PRINT_LOGS", raising=False)
+        runner = OpenCodeRunner(str(tmp_path), config=cfg)
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
+        runner.run("instr", "/tmp/prompt.txt")
+        return seen["env"]
+
+    def test_present_en_cloud(self, tmp_path, monkeypatch):
+        assert self._captured_env(tmp_path, monkeypatch, _cloud_cfg()).get("OPENCODE_PRINT_LOGS") == "1"
+
+    def test_absent_en_local(self, tmp_path, monkeypatch):
+        assert "OPENCODE_PRINT_LOGS" not in self._captured_env(tmp_path, monkeypatch, _local_cfg())

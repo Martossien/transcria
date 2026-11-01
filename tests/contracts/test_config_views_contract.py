@@ -17,13 +17,14 @@ import pytest
 from transcria.config.loader import get_default_config
 from transcria.config.views import (
     GpuView,
+    LlmCloudView,
     QualityTranscriptionView,
     QueueView,
     SttView,
     WorkflowView,
 )
 
-ALL_VIEWS = [GpuView, QueueView, WorkflowView, SttView, QualityTranscriptionView]
+ALL_VIEWS = [GpuView, QueueView, WorkflowView, SttView, QualityTranscriptionView, LlmCloudView]
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +80,16 @@ EMPTY_GOLDENS = {
         cohere_model_path="",
         pyannote_model="",
     ),
+    LlmCloudView: LlmCloudView(
+        provider="",
+        model="",
+        summary_provider="",
+        summary_model="",
+        known_provider=False,
+        base_url="",
+        api_key_env="",
+        extra_request_fields={},
+    ),
 }
 
 
@@ -117,6 +128,10 @@ DEFAULT_GOLDENS = {
         cohere_model_path="CohereLabs/cohere-transcribe-03-2026",
         pyannote_model="pyannote/speaker-diarization-community-1",
     ),
+    # Les model_id du loader sont vides ; llm_cloud porte api_key_env "" et extra_request_fields {}.
+    # Sans fournisseur, base_url reste "" (la dérogation api_base n'est lue QUE pour un fournisseur
+    # hors table) : le défaut local http://127.0.0.1:8080/v1 du loader n'est jamais pris pour une URL cloud.
+    LlmCloudView: EMPTY_GOLDENS[LlmCloudView],
 }
 
 

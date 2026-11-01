@@ -410,3 +410,12 @@ class TestAutoDiarizationCatalog:
         flags = {it["spec"].role: it.get("optional") for it in view["items"]}
         assert flags["diarization_runtime_candidate"] is True and flags["diarization_candidate"] is True
         assert flags["diarization"] is None
+
+
+def test_build_catalog_cloud_sans_gguf_de_palier():
+    """LLM chez un fournisseur externe : aucun GGUF de palier proposé, même VRAM connue."""
+    cfg = {**_cfg(), "services": {"backend": "cloud"},
+           "workflow": {"arbitration_llm": {"model_id": "mistral/mistral-large-4"}}}
+    specs = build_catalog(cfg, total_vram_mb=64000)
+    assert not [s for s in specs if s.role == "arbitrage_llm"]
+    assert {s.role for s in specs if not s.role.endswith("_candidate")} == {"stt", "diarization"}

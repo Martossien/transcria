@@ -1,0 +1,77 @@
+_doc: >
+  Fournisseurs de LLM d'arbitrage « cloud » (services.backend: cloud — docs/LLM_CLOUD.md § 2.2 et
+  § 2.6). TranscrIA est un PASSE-PLAT : cette table ne porte que ce dont le code a besoin pour
+  joindre le fournisseur (URL de base OpenAI-compatible, nom de la variable d'environnement qui
+  porte la clé) et ce que l'écran d'administration doit DIRE à l'admin (hébergement, faits,
+  lien vers les conditions). Les identifiants sont ceux du catalogue d'opencode (models.dev) :
+  le `model_id` de la config s'écrit `<id>/<modèle>` et opencode résout la clé par la MÊME
+  variable d'environnement. Les faits viennent de sources secondaires (recherche web du
+  2026-11-01) : l'admin les VÉRIFIE sur les conditions du fournisseur avant de valider.
+  Contrat vérifié par tests/test_llm_providers.py.
+providers:
+  mistral:
+    label: "Mistral — La Plateforme"
+    base_url: "https://api.mistral.ai/v1"
+    api_key_env: "MISTRAL_API_KEY"
+    terms_url: "https://mistral.ai/terms/"
+    verified_on: "2026-11-01"
+    hosting:
+      fr: "Union européenne (par défaut)"
+      en: "European Union (default)"
+    facts:
+      fr:
+        - "Les requêtes sont conservées 30 jours, sauf option « zéro conservation » (plans payants, appels sans état)."
+        - "L'exclusion de l'entraînement sur vos données est un réglage distinct du compte."
+        - "Certains modèles proposés sont édités par des tiers et hébergés par Mistral ; la gouvernance porte sur l'hébergeur."
+      en:
+        - "Requests are retained for 30 days unless the zero-data-retention option is enabled (paid plans, stateless calls)."
+        - "Opting out of training on your data is a separate account setting."
+        - "Some listed models are built by third parties and hosted by Mistral; governance applies to the host."
+  ollama-cloud:
+    label: "Ollama cloud"
+    base_url: "https://ollama.com/v1"
+    api_key_env: "OLLAMA_API_KEY"
+    terms_url: "https://ollama.com/terms"
+    verified_on: "2026-11-01"
+    hosting:
+      fr: "Principalement États-Unis (capacité en Europe et à Singapour)"
+      en: "Mainly United States (capacity in Europe and Singapore)"
+    facts:
+      fr:
+        - "Traitement transitoire annoncé : pas de conservation au-delà de la requête, pas d'entraînement."
+        - "Les modèles sans capacité de raisonnement rejettent certains champs de requête (ex. reasoning_effort)."
+      en:
+        - "Announced transient processing: no retention beyond the request, no training."
+        - "Models without reasoning reject some request fields (e.g. reasoning_effort)."
+  openrouter:
+    label: "OpenRouter"
+    base_url: "https://openrouter.ai/api/v1"
+    api_key_env: "OPENROUTER_API_KEY"
+    terms_url: "https://openrouter.ai/terms"
+    verified_on: "2026-11-01"
+    hosting:
+      fr: "Routeur : le sous-traitant varie selon le modèle (région UE sur comptes entreprise)"
+      en: "Router: the actual provider varies by model (EU region on enterprise accounts)"
+    facts:
+      fr:
+        - "Ne conserve pas les prompts sauf journalisation activée sur le compte."
+        - "Le champ de requête « zdr: true » limite le routage aux points sans rétention."
+        - "Le sous-traitant qui exécute le modèle change selon le modèle choisi."
+      en:
+        - "Does not retain prompts unless logging is enabled on the account."
+        - "The request field \"zdr: true\" restricts routing to zero-retention endpoints."
+        - "The subprocessor running the model changes with the model chosen."
+  opencode:
+    label: "opencode (fournisseur d'inférence d'opencode)"
+    base_url: "https://opencode.ai/inference/openai/v1"
+    api_key_env: "OPENCODE_API_KEY"
+    terms_url: "https://opencode.ai/legal/terms-of-service"
+    verified_on: "2026-11-01"
+    hosting:
+      fr: "Selon le modèle (fournisseur d'inférence tiers derrière opencode)"
+      en: "Depends on the model (third-party inference provider behind opencode)"
+    facts:
+      fr:
+        - "Passe-plat d'opencode vers des fournisseurs d'inférence tiers : la politique de données dépend du modèle."
+      en:
+        - "opencode relays to third-party inference providers: the data policy depends on the model."

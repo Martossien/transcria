@@ -10,6 +10,32 @@ from __future__ import annotations
 
 import os
 
+from transcria.config.llm_providers import ARBITRAGE_BACKENDS, CLOUD_BACKEND
+from transcria.config.views import LlmCloudView
+
+__all__ = [
+    "ARBITRAGE_BACKENDS", "CLOUD_BACKEND", "cloud_base_url", "cloud_view", "configured_backend",
+    "default_base_url", "describe_arbitrage_endpoint", "is_cloud_backend", "is_ollama_backend",
+    "is_remote_arbitrage", "ollama_model_name", "ollama_name_matches", "resolve_arbitrage_endpoint",
+]
+
+
+def configured_backend(config: dict) -> str:
+    """Valeur normalisée de ``services.backend`` ("" = non fixée → auto-détection)."""
+    services = config.get("services", {}) or {}
+    return str(services.get("backend", "") or "").strip().lower()
+
+
+def is_cloud_backend(config: dict) -> bool:
+    """La LLM d'arbitrage est-elle chez un FOURNISSEUR EXTERNE (``services.backend: cloud``) ?
+
+    PRÉDICAT UNIQUE du mode cloud (docs/LLM_CLOUD.md § 3.1.1). Tout en découle : aucun
+    lancement/arrêt/réservation VRAM/préemption (``is_remote_arbitrage`` devient vrai), pas de
+    sonde ``127.0.0.1``, chien de garde d'inactivité désactivé, clé par variable d'environnement.
+    Jamais déduit d'un hôte ou d'un ``model_id`` : seule la valeur explicite compte.
+    """
+    return configured_backend(config) == CLOUD_BACKEND
+
 
 def is_ollama_backend(config: dict) -> bool:
     """Le backend d'arbitrage est-il Ollama ? (``services.backend`` explicite > ``ollama_url``).
@@ -18,8 +44,8 @@ def is_ollama_backend(config: dict) -> bool:
     ``VRAMManager``, ``provision_opencode`` et le port par défaut restent cohérents,
     sans dépendre du module ``llm_backend`` (évite un import circulaire)."""
     services = config.get("services", {}) or {}
-    explicit = str(services.get("backend", "") or "").strip().lower()
-    if explicit in ("ollama", "script", "http"):
+    explicit = configured_backend(config)
+    if explicit in ARBITRAGE_BACKENDS:
         return explicit == "ollama"
     return bool(services.get("ollama_url"))
 
@@ -71,6 +97,13 @@ def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
     sur l'endpoint — quel que soit le mode de déploiement (all-in-one, frontale, nœud GPU).
     """
     services = config.get("services", {}) or {}
+    if is_cloud_backend(config):
+        # Fournisseur externe : (hôte, port) de l'URL de la table — pour les journaux et les
+        # appelants qui n'ont besoin que d'un hôte. Le cycle de vie local n'existe pas en cloud.
+        url = cloud_base_url(config)
+        if not url:
+            return "", 443
+        return _parse_host_port(url, 443)
     if is_ollama_backend(config):
         # `ollama_url` est LA source de l'endpoint Ollama (host+port). On n'utilise PAS
         # `arbitrage_llm_port` : l'exemple le fixe toujours à 8080 (port llama.cpp/vLLM) et
@@ -89,10 +122,37 @@ def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
     return host, port
 
 
+def cloud_view(config: dict) -> LlmCloudView:
+    """La vue typée du fournisseur cloud (``workflow.llm_cloud.*`` + model_id découpés)."""
+    return LlmCloudView.from_config(config)
+
+
+def cloud_base_url(config: dict) -> str:
+    """URL OpenAI-compatible du fournisseur cloud (table > ``api_base`` pour un non listé)."""
+    return cloud_view(config).base_url
+
+
 def default_base_url(config: dict) -> str:
-    """URL OpenAI de la LLM d'arbitrage (cf. :func:`resolve_arbitrage_endpoint`)."""
+    """URL OpenAI de la LLM d'arbitrage (cf. :func:`resolve_arbitrage_endpoint`).
+
+    En cloud : l'URL du fournisseur (``https://…``), jamais un ``http://hôte:port`` fabriqué.
+    """
+    if is_cloud_backend(config):
+        return cloud_base_url(config)
     host, port = resolve_arbitrage_endpoint(config)
     return f"http://{host}:{port}/v1"
+
+
+def describe_arbitrage_endpoint(config: dict) -> str:
+    """Libellé de l'endpoint pour les JOURNAUX — « port 8080 » en local, le fournisseur en cloud.
+
+    Les phases (résumé, correction…) journalisaient « port %d » : faux et trompeur en cloud.
+    """
+    if is_cloud_backend(config):
+        view = cloud_view(config)
+        return f"cloud {view.provider or '?'} ({view.base_url or 'URL non résolue'})"
+    host, port = resolve_arbitrage_endpoint(config)
+    return f"{host}:{port}"
 
 
 _LOCAL_ARBITRAGE_HOSTS = ("", "127.0.0.1", "localhost", "::1")
@@ -104,5 +164,8 @@ def is_remote_arbitrage(config: dict) -> bool:
     Source unique partagée par `VRAMManager` (cycle de vie : ni lancement ni arrêt local d'une
     LLM distante) et `GPUAllocator` (le verrou LLM ne sérialise PAS une LLM distante qui batche).
     """
+    if is_cloud_backend(config):
+        # Fournisseur externe : rien ne tourne ici — ni lancement, ni arrêt, ni VRAM, ni verrou.
+        return True
     host, _ = resolve_arbitrage_endpoint(config)
     return host not in _LOCAL_ARBITRAGE_HOSTS

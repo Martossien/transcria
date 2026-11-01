@@ -47,6 +47,7 @@ from transcria.config.checks.base import (  # noqa: F401 — façade
     _check_str,
     _check_time_string,
 )
+from transcria.config.checks.llm_cloud import _check_llm_cloud
 from transcria.config.checks.orchestration import (
     _check_workflow,
     _check_zones_executables,  # noqa: F401 — façade
@@ -108,6 +109,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_kroko(cfg.get("kroko", {}), result)
     _check_moss(cfg.get("moss", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
+    _check_llm_cloud(cfg, result)
     _check_stt_served_pools(cfg, result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)

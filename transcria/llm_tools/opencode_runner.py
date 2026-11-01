@@ -12,10 +12,15 @@ import shutil
 import socket
 import subprocess
 import time
+from collections import deque
 from pathlib import Path
 
 from transcria.context.meeting_type_prompts import substitute_placeholders
-from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
+from transcria.gpu.arbitrage_endpoint import (
+    describe_arbitrage_endpoint,
+    is_cloud_backend,
+    resolve_arbitrage_endpoint,
+)
 from transcria.llm_tools import llm_parsing
 from transcria.llm_tools.opencode_cli import (
     OpencodeVersion,
@@ -92,6 +97,9 @@ def correction_ranges(srt_text: str, target_size: int = 350) -> list[dict]:
     return plages
 
 
+_STDERR_MAX_LINES = 5000
+
+
 def stop_on_pure_idle(idle_s: float, cap_s: float, llm_busy: bool | None) -> bool:
     """Faut-il tuer un opencode silencieux sur le seul plafond de silence ?
 
@@ -106,6 +114,84 @@ def stop_on_pure_idle(idle_s: float, cap_s: float, llm_busy: bool | None) -> boo
     garde-fou de dernier recours pour un agent qui occuperait la LLM indéfiniment.
     """
     return idle_s >= cap_s and llm_busy is not True
+
+
+def format_opencode_error_event(ev: dict) -> str:
+    """Rend lisible un événement d'erreur ``--format json`` d'opencode — fonction PURE.
+
+    Deux formes coexistent (docs/LLM_CLOUD.md § 2.3) :
+
+    - **v1** : ``{"type": "error", "error": {"name": "UnknownError", "data": {"message": "…"}}}`` ;
+    - **v2** : ``{"type": "error", "error": {"type": "ModelUnavailableError", "message": "…"}}``
+      (fournisseur sans connexion, ``provider.auth`` sur 401/403…).
+
+    Le parseur historique ne lisait que la v1 : une erreur v2 devenait « error » tout court,
+    sans le message du fournisseur. Jamais d'exception : un événement malformé rend
+    ``"error"``.
+
+    Args:
+        ev: événement JSON décodé (normalement de type ``error``).
+
+    Returns:
+        ``"<type>: <message>"``, ``"<type>"`` sans message, ou ``"error"`` faute de mieux.
+    """
+    try:
+        err = ev.get("error") if isinstance(ev, dict) else None
+        if isinstance(err, str):
+            return err.strip() or "error"
+        if not isinstance(err, dict):
+            return "error"
+        kind = err.get("name") or err.get("type") or "error"
+        data = err.get("data")
+        msg = (data.get("message") if isinstance(data, dict) else None) or err.get("message") or ""
+        kind, msg = str(kind).strip() or "error", str(msg).strip()
+        return f"{kind}: {msg}" if msg else kind
+    except Exception:  # noqa: BLE001 — parseur de diagnostic, ne doit jamais lever
+        return "error"
+
+
+def opencode_error_detail(stderr: str, events: list[dict]) -> str:
+    """Détail d'un échec opencode (exit ≠ 0) : l'événement d'erreur JSON, sinon le stderr.
+
+    L'événement passe d'abord : il porte le message du fournisseur, alors que le stderr
+    peut n'être qu'un journal (``OPENCODE_PRINT_LOGS=1`` en cloud) dont les 500 premiers
+    caractères ne disent rien de la panne.
+
+    Args:
+        stderr: sortie d'erreur du process.
+        events: événements JSON décodés de stdout.
+
+    Returns:
+        Le détail à joindre à « opencode exit N: » (chaîne vide si rien).
+    """
+    for ev in events:
+        if isinstance(ev, dict) and ev.get("type") == "error":
+            return format_opencode_error_event(ev)
+    return stderr[:500].strip()
+
+
+def parse_opencode_events(stdout: str) -> tuple[list[dict], int, int]:
+    """Décode la sortie ``--format json`` : (événements, nb de ``text``, nb de ``tool_use``)."""
+    total_text, total_tools = 0, 0
+    events: list[dict] = []
+    for line in stdout.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(ev, dict):
+            continue
+        events.append(ev)
+        etype = ev.get("type", "?")
+        if etype == "text":
+            total_text += 1
+        elif etype == "tool_use":
+            total_tools += 1
+            logger.debug("  🔧 opencode tool: %s", (ev.get("part") or {}).get("tool", "?"))
+    return events, total_text, total_tools
 
 
 class OpenCodeRunner:
@@ -258,8 +344,11 @@ class OpenCodeRunner:
         certainement rien. Le compter « inconnu » désactivait les détections rapides du
         watchdog dans le pire cas justement (serveur tombé en pleine session opencode,
         vécu au gate du 2026-08-03 : 10 min de plafond idle pur au lieu de ~2 min).
+
+        LLM cloud (``services.backend: cloud``) ⇒ None sans aucune sonde : rien à sonder
+        chez nous, et le chien de garde d'inactivité y est désactivé.
         """
-        if not self._config:
+        if not self._config or is_cloud_backend(self._config):
             return None
         try:
             import requests
@@ -411,8 +500,10 @@ class OpenCodeRunner:
         (pas de config → comportement historique). Retourne ``(host, port)`` si le port est
         toujours refused après ``wait_s`` → l'appelant renvoie une erreur transitoire (la phase
         retente) au lieu de laisser opencode figer.
+
+        LLM cloud ⇒ feu vert immédiat : aucun endpoint local à sonder (docs/LLM_CLOUD.md § 3.1.6).
         """
-        if not self._config:
+        if not self._config or is_cloud_backend(self._config):
             return None
         try:
             host, port = resolve_arbitrage_endpoint(self._config)
@@ -446,6 +537,11 @@ class OpenCodeRunner:
         - repli ``opencode_pure_idle_cap_s`` (défaut 600 s) de silence seul (si /slots
           indisponible) ;
         - ``timeout`` reste le garde-fou ABSOLU (comportement historique préservé).
+
+        LLM cloud : la mise à mort par inactivité est DÉSACTIVÉE (ni grâce d'inactivité, ni
+        premier contact, ni repli idle pur) — aucun GPU local n'attend, et opencode v1
+        n'émet ``text``/``tool_use`` qu'en fin de génération : une génération longue chez le
+        fournisseur serait tuée à tort. Seul ``timeout`` s'applique.
         Renvoie (stdout, stderr, erreur|None). L'appelant (retry A12) relance au besoin.
         """
         import threading
@@ -461,12 +557,19 @@ class OpenCodeRunner:
         # que sur un gel réel, rare (bug amont futex).
         first_contact_grace_s = float(llm_cfg.get("opencode_first_contact_grace_s", 120))
         poll_s = float(llm_cfg.get("opencode_watchdog_poll_s", 5))
+        cloud = bool(self._config) and is_cloud_backend(self._config or {})
+        if cloud:
+            logger.info(
+                "opencode watchdog : LLM cloud (%s) — chien de garde d'inactivité désactivé, "
+                "seul le plafond absolu de %ds s'applique", self._endpoint_label(), timeout)
 
         out_lines: list[str] = []
-        err_lines: list[str] = []
+        # stderr BORNÉ : avec OPENCODE_PRINT_LOGS=1 (cloud) le serveur standalone journalise
+        # pendant tout le run (jusqu'à 7200 s) ; seules les dernières lignes servent au diagnostic.
+        err_lines: deque[str] = deque(maxlen=_STDERR_MAX_LINES)
         last_activity = [time.monotonic()]  # liste = mutable partagé avec les threads
 
-        def _drain(stream, sink: list[str]) -> None:
+        def _drain(stream, sink: list[str] | deque[str]) -> None:
             if stream is None:
                 return
             for line in stream:  # bloquant par ligne, draine les DEUX pipes (anti-deadlock)
@@ -487,6 +590,8 @@ class OpenCodeRunner:
             if now - start >= timeout:
                 reason = f"timeout absolu {timeout}s"
                 break
+            if cloud:
+                continue  # cloud : seul le plafond absolu borne le run
             if stop_on_pure_idle(idle, pure_idle_cap_s, self._llm_is_processing()):
                 reason = f"aucune sortie depuis {int(idle)}s (repli idle pur)"
                 break
@@ -529,6 +634,53 @@ class OpenCodeRunner:
             return stdout, stderr, f"opencode interrompu ({reason})"
         return stdout, stderr, None
 
+    @staticmethod
+    def _is_absolute_timeout(error: str | None) -> bool:
+        """L'interruption vient-elle du plafond absolu (et non d'un gel détecté) ?"""
+        return bool(error) and "timeout absolu" in str(error)
+
+    def _endpoint_label(self) -> str:
+        """Libellé de l'endpoint d'arbitrage pour les journaux (jamais bloquant)."""
+        try:
+            return describe_arbitrage_endpoint(self._config or {})
+        except Exception:  # noqa: BLE001 — libellé de journal, best-effort
+            return "endpoint indéterminé"
+
+    def _preflight_error(self) -> dict | None:
+        """Pré-garde LLM avant lancement : un résultat d'échec TRANSITOIRE, ou None (feu vert).
+
+        opencode DEADLOCKE au boot si le provider local refuse la connexion
+        (cf. _wait_llm_endpoint_ready). On sonde d'abord — en laissant une courte fenêtre à une
+        relance VRAM en cours de binder — et on court-circuite par une erreur TRANSITOIRE
+        (« interrompu » → la boucle de retry summary/correction rejoue) plutôt que de figer ~45 s.
+        """
+        llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
+        preflight_wait_s = float(llm_cfg.get("opencode_preflight_wait_s", 10))
+        blocked = self._wait_llm_endpoint_ready(preflight_wait_s)
+        if blocked is None:
+            return None
+        host, port = blocked
+        logger.error(
+            "opencode NON lancé — LLM d'arbitrage injoignable sur %s:%d (port fermé après %.0fs) ; "
+            "opencode gèlerait au démarrage — run interrompu avant lancement.",
+            host, port, preflight_wait_s,
+        )
+        return {
+            "success": False,
+            "error": (f"opencode interrompu (LLM d'arbitrage injoignable sur {host}:{port}, "
+                      "port fermé — gel de démarrage évité)"),
+        }
+
+    def _run_extra_env(self) -> dict[str, str] | None:
+        """Variables d'env propres au mode : en cloud, ``OPENCODE_PRINT_LOGS=1``.
+
+        Le serveur standalone v2 ignore son stderr sans elle — le message du fournisseur
+        (clé révoquée, modèle indisponible) serait perdu (docs/LLM_CLOUD.md § 3.1.7).
+        """
+        if self._config and is_cloud_backend(self._config):
+            return {"OPENCODE_PRINT_LOGS": "1"}
+        return None
+
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         opencode_path = shutil.which(self.opencode_bin)
         if not opencode_path and os.path.isfile(self.opencode_bin):
@@ -547,25 +699,10 @@ class OpenCodeRunner:
         if not os.path.isfile(prompt_file):
             return {"success": False, "error": f"Prompt introuvable: {prompt_file}"}
 
-        # Pré-garde LLM : opencode DEADLOCKE au boot si le provider local refuse la connexion
-        # (cf. _wait_llm_endpoint_ready). On sonde d'abord — en laissant une courte fenêtre à une
-        # relance VRAM en cours de binder — et on court-circuite par une erreur TRANSITOIRE
-        # (« interrompu » → la boucle de retry summary/correction rejoue) plutôt que de figer ~45 s.
-        llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
-        preflight_wait_s = float(llm_cfg.get("opencode_preflight_wait_s", 10))
-        blocked = self._wait_llm_endpoint_ready(preflight_wait_s)
-        if blocked is not None:
-            host, port = blocked
-            logger.error(
-                "opencode NON lancé — LLM d'arbitrage injoignable sur %s:%d (port fermé après %.0fs) ; "
-                "opencode gèlerait au démarrage — run interrompu avant lancement.",
-                host, port, preflight_wait_s,
-            )
-            return {
-                "success": False,
-                "error": (f"opencode interrompu (LLM d'arbitrage injoignable sur {host}:{port}, "
-                          "port fermé — gel de démarrage évité)"),
-            }
+        # Pré-garde LLM (cf. _preflight_error) — sautée en cloud.
+        preflight = self._preflight_error()
+        if preflight is not None:
+            return preflight
 
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -621,7 +758,8 @@ class OpenCodeRunner:
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(self.work_dir),
-                env=build_run_env(dict(os.environ), work_dir=str(self.work_dir), data_home=str(data_home)),
+                env=build_run_env(dict(os.environ), work_dir=str(self.work_dir),
+                                  data_home=str(data_home), extra_env=self._run_extra_env()),
                 start_new_session=True,   # un groupe à nous : cf. _terminate_proc
             )
             pid_file.write_text(str(proc.pid))
@@ -629,7 +767,8 @@ class OpenCodeRunner:
 
             stdout, stderr, watchdog_error = self._communicate_with_watchdog(proc, timeout)
             if watchdog_error is not None:
-                return {"success": False, "error": watchdog_error}
+                kind = "absolute_timeout" if self._is_absolute_timeout(watchdog_error) else "watchdog"
+                return {"success": False, "error": watchdog_error, "error_kind": kind}
 
         except Exception as exc:
             if proc is not None:
@@ -638,41 +777,17 @@ class OpenCodeRunner:
         finally:
             pid_file.unlink(missing_ok=True)
 
-        total_text, total_tools = 0, 0
-        events: list[dict] = []
-
-        for line in stdout.strip().split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                ev = json.loads(line)
-                events.append(ev)
-                etype = ev.get("type", "?")
-                if etype == "text":
-                    total_text += 1
-                elif etype == "tool_use":
-                    total_tools += 1
-                    tool_name = ev.get("part", {}).get("tool", "?")
-                    logger.debug("  🔧 opencode tool: %s", tool_name)
-            except json.JSONDecodeError:
-                pass
+        events, total_text, total_tools = parse_opencode_events(stdout)
 
         logger.info("opencode exit %d — %d textes, %d outils, %d events",
                      proc.returncode, total_text, total_tools, len(events))
 
         if proc.returncode != 0:
-            detail = stderr[:500].strip()
-            if not detail:
-                # L'erreur opencode arrive souvent comme événement JSON sur stdout
-                # (ex. modèle non résolu → « UnknownError: Unexpected server error »),
-                # pas sur stderr — sans ça le message d'erreur serait vide.
-                for ev in events:
-                    if ev.get("type") == "error":
-                        e = ev.get("error", {}) or {}
-                        msg = (e.get("data") or {}).get("message") or ""
-                        detail = f"{e.get('name', 'error')}: {msg}".strip().rstrip(":").strip()
-                        break
+            # L'erreur opencode arrive souvent comme événement JSON sur stdout (v1 : modèle non
+            # résolu → « UnknownError: … » ; v2 : « ModelUnavailableError: … », provider.auth).
+            detail = opencode_error_detail(stderr, events)
+            if stderr.strip():
+                logger.warning("opencode stderr (fin) : %s", stderr[-2000:].strip())
             return {"success": False, "error_kind": "opencode_error",
                     "error": f"opencode exit {proc.returncode}: {detail}".rstrip()}
 

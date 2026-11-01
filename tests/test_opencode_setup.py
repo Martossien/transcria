@@ -109,7 +109,9 @@ def test_ensure_preserves_other_keys_and_providers(tmp_path):
     }))
     ensure_local_provider(cfg, "http://node:8080/v1", "m")
     d = json.loads(cfg.read_text())
-    assert d["share"] == "manual"                 # autre clé préservée
+    # `share` n'est PAS préservé : c'est une politique posée (une session d'agent ne part
+    # jamais vers le service en ligne d'opencode — docs/LLM_CLOUD.md § 3.1.9).
+    assert d["share"] == "disabled"
     assert d["permission"] == {"bash": "allow"}    # préservé
     assert d["provider"]["openai"] == {"npm": "x"} # autre provider préservé
     assert d["provider"]["local"]["options"]["baseURL"] == "http://node:8080/v1"

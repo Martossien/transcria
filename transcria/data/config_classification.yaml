@@ -88,6 +88,8 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
+- workflow.llm_cloud.api_key_env
+- workflow.llm_cloud.extra_request_fields
 - auth.ldap.allow_plaintext
 - auth.ldap.connect_timeout_s
 - auth.ldap.display_name_attr

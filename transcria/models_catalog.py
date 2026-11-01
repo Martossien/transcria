@@ -23,6 +23,7 @@ from pathlib import Path
 
 from transcria.config.local_dirs import resolve_models_dir, resolve_runtimes_dir
 from transcria.gpu.arbitrage_endpoint import (
+    is_cloud_backend,
     is_ollama_backend,
     ollama_model_name,
     ollama_name_matches,
@@ -210,8 +211,9 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
                 license_url=f"https://ollama.com/library/{model.split(':')[0]}",
                 est_gb=0.0,
             ))
-    # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort).
-    elif total_vram_mb:
+    # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort). JAMAIS en cloud :
+    # le fournisseur externe sert le modèle, aucun GGUF à télécharger (ligne cloud : lot C).
+    elif total_vram_mb and not is_cloud_backend(cfg):
         try:
             tier = recommend_tier(total_vram_mb)
             meta = get_tier_metadata(tier)

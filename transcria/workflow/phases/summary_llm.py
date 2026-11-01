@@ -13,7 +13,6 @@ from transcria.context.invite_parser import render_invite_markdown
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.meeting_context import synthese_section
 from transcria.context.meeting_type_prompts import build_prompt_substitutions
-from transcria.gpu.arbitrage_endpoint import resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import (
     _SUMMARY_MARKERS,
@@ -22,6 +21,12 @@ from transcria.llm_tools.opencode_runner import (
     summary_markers,
 )
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+from transcria.workflow.llm_readiness import (
+    cloud_unavailable_error,
+    describe_arbitrage_endpoint,
+    ensure_llm_ready,
+    is_cloud_backend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +49,10 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
     fs = runner._get_fs(config, job.id)
 
     api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-    arbitrage_port = resolve_arbitrage_endpoint(config)[1]  # backend-aware (Ollama=11434, llama.cpp=8080)
     sl.info(
-        "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
+        "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, endpoint %s)",
         api_model_id or "non contraint",
-        arbitrage_port,
+        describe_arbitrage_endpoint(config),  # « 127.0.0.1:8080 » en local, le fournisseur en cloud
     )
     if not runner.allocator.try_acquire_llm(job.id, timeout_s=300):
         # LLM occupée par un autre job (transitoire) : attente + reprise, JAMAIS un
@@ -85,12 +89,14 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
                 return
             llm_phase_reserved = True
 
-        launched = runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
+        # Cloud : une reprise automatique incluse, jamais `vram_wait` (LLM_CLOUD.md § 3.1.7).
+        launched = ensure_llm_ready(runner.vram, config, api_model_id)
 
         if not launched:
             # Panne de lancement LLM : même famille que « 0 texte » (e62295c1) —
             # signaler + bloquer relançable, pas de SUMMARY_DONE avec placeholder.
-            sl.warning("LLM d'arbitrage non disponible — résumé signalé en échec (relançable)")
+            sl.warning(cloud_unavailable_error(config) if is_cloud_backend(config)
+                       else "LLM d'arbitrage non disponible — résumé signalé en échec (relançable)")
             result["summary_llm_failed"] = True
             return
 
@@ -132,6 +138,7 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
             prompt_subs=prompt_subs,
             extract_keys=extract_keys,
             api_model_id=api_model_id,
+            config=config,
         )
 
         workspace.verify_and_restore_sources()
@@ -227,7 +234,7 @@ def _invoke_llm_with_retries(
     staged_transcript: str, staged_context: str, staged_diar_ctx: str,
     staged_invite: str | None, prompt_subs: dict[str, str],
     extract_keys: tuple[str, ...], api_model_id: str | None,
-    audio_duration_s: float | None = None,
+    audio_duration_s: float | None = None, config: dict | None = None,
 ) -> dict:
     """Retente la SEULE sous-étape LLM jusqu'à ``_MAX_LLM_ATTEMPTS`` fois."""
     parsed: dict = {}
@@ -245,6 +252,13 @@ def _invoke_llm_with_retries(
         if runner._summary_usable(parsed):
             if attempt > 1:
                 sl.info("LLM résumé produit à la tentative %d/%d", attempt, _MAX_LLM_ATTEMPTS)
+            break
+        if (parsed.get("_failure_kind") == "opencode_error"
+                and "timeout absolu" in str(parsed.get("_failure_detail", ""))
+                and is_cloud_backend(config or {})):
+            # Cloud : plafond absolu = seule garde (chien de garde d'inactivité désactivé) ;
+            # ne pas rejouer 3 × 2 h — échec explicite relançable (summary_llm_failed).
+            sl.error("LLM résumé : plafond absolu atteint chez le fournisseur cloud — pas de nouvel essai")
             break
         if attempt < _MAX_LLM_ATTEMPTS:
             # « produit mais inexploitable » (gabarit non suivi, reasoning déversé →

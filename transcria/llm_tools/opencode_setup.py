@@ -144,6 +144,25 @@ def _dump_opencode_config(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+# `share` ∈ manual | auto | disabled (schéma opencode) : contrôle l'ENVOI d'une session vers le
+# service en ligne d'opencode. Une session d'agent porte la transcription d'une réunion : elle
+# ne part JAMAIS vers ce service, en local comme en cloud (docs/LLM_CLOUD.md § 3.1.9).
+SHARE_POLICY = "disabled"
+
+
+def _apply_share_policy(data: dict) -> None:
+    data["share"] = SHARE_POLICY
+
+
+def ensure_share_disabled(config_path: str | Path) -> dict:
+    """Pose ``share: disabled`` dans opencode.json (idempotent, ne touche à rien d'autre)."""
+    path = Path(config_path)
+    data = _load_opencode_config(path)
+    _apply_share_policy(data)
+    _dump_opencode_config(path, data)
+    return data
+
+
 def ensure_local_provider(
     config_path: str | Path,
     base_url: str,
@@ -176,7 +195,45 @@ def ensure_local_provider(
     provider["local"] = local_provider_block(
         base_url, model_id, display_name=display_name, context=ctx, output=out
     )
+    _apply_share_policy(data)
 
+    _dump_opencode_config(path, data)
+    return data
+
+
+def cloud_provider_block(base_url: str, api_key_env: str, model_id: str, *, display_name: str) -> dict:
+    """Bloc ``provider.<id>`` d'un fournisseur cloud HORS TABLE (openai-compatible).
+
+    La clé n'est JAMAIS écrite : ``{env:VAR}`` est résolu par opencode dans l'environnement du
+    run (docs/LLM_CLOUD.md § 2.1). Un fournisseur du catalogue opencode n'a besoin d'aucun bloc.
+    """
+    return {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": display_name,
+        "options": {"baseURL": base_url, "apiKey": "{env:" + api_key_env + "}", "timeout": 9999999},
+        "models": {model_id: {"name": display_name}},
+    }
+
+
+def ensure_cloud_provider(
+    config_path: str | Path, provider_id: str, base_url: str, api_key_env: str, model_id: str,
+) -> dict:
+    """Déclare dans opencode.json un fournisseur cloud HORS TABLE, idempotent, sans rien casser.
+
+    Sans ce bloc, ``opencode run --model <id>/<modèle>`` rend « Model unavailable » : les quatre
+    phases agentiques échoueraient alors que les appels directs fonctionnent (relecture lot A).
+    Préserve ``$schema``, ``provider.local`` et les autres clés ; pose ``share: disabled``.
+    """
+    path = Path(config_path)
+    data = _load_opencode_config(path)
+    provider = data.setdefault("provider", {})
+    if not isinstance(provider, dict):
+        provider = {}
+        data["provider"] = provider
+    provider[provider_id] = cloud_provider_block(
+        base_url, api_key_env, model_id, display_name=f"LLM d'arbitrage (cloud : {provider_id})",
+    )
+    _apply_share_policy(data)
     _dump_opencode_config(path, data)
     return data
 
@@ -214,5 +271,6 @@ def ensure_agent_permissions(config_path: str | Path, agent_work_root: str) -> d
         permission = {}
         data["permission"] = permission
     permission["external_directory"] = {"*": "deny", f"{root}/**": "allow"}
+    _apply_share_policy(data)
     _dump_opencode_config(path, data)
     return data

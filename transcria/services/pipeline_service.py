@@ -382,6 +382,9 @@ class PipelineService:
         # de 3 jobs). L'arrêt n'a lieu que s'il PREND le verrou : détenu ailleurs → on
         # saute (le détenteur ou le prochain pipeline arrêtera) ; pris → aucun job ne
         # peut lancer la LLM pendant l'arrêt (il patiente sur le verrou puis relance).
+        if not pipeline_admission.llm_uses_local_resources(self.config):
+            # Fournisseur externe : rien ne tourne ici — ni verrou, ni sonde, ni arrêt.
+            return
         allocator = self.runner.allocator
         if not allocator.try_acquire_llm(self._LLM_STOP_OWNER):
             logger.info("[pipeline] LLM arbitrage utilisée par un autre job — arrêt de fin de pipeline sauté")

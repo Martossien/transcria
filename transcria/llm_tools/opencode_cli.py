@@ -99,11 +99,21 @@ def build_run_command(
     ]
 
 
-def build_run_env(base_env: dict[str, str], *, work_dir: str, data_home: str) -> dict[str, str]:
+def build_run_env(
+    base_env: dict[str, str],
+    *,
+    work_dir: str,
+    data_home: str,
+    extra_env: dict[str, str] | None = None,
+) -> dict[str, str]:
     """Environnement du run — identique pour les deux lignes.
 
     ``PWD`` = le scratch : la v2 y lit sa racine de projet (la v1 l'ignore au profit de
     ``--dir``). ``TMPDIR`` et ``XDG_DATA_HOME`` : cf. ``OpenCodeRunner.run`` (temporaires
     dans le projet ; une base de données opencode par invocation).
+
+    ``extra_env`` est fusionné EN DERNIER (ex. ``OPENCODE_PRINT_LOGS=1`` en cloud : le
+    serveur standalone v2 ignore son stderr sans elle).
     """
-    return {**base_env, "PWD": work_dir, "TMPDIR": work_dir, "XDG_DATA_HOME": data_home}
+    return {**base_env, "PWD": work_dir, "TMPDIR": work_dir, "XDG_DATA_HOME": data_home,
+            **(extra_env or {})}

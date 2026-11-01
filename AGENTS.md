@@ -145,6 +145,7 @@ transcria/
       config_schema.py      # validate_config() — FAÇADE + dispatcher (ré-exporte tout)
       checks/               # vérificateurs PAR DOMAINE (vague 0) : base (ValidationResult+primitives), platform, auth, stt, audio, orchestration — golden tests/test_config_schema_golden.py
       llm_profiles.py       # catalogue de profils LLM (data/llm_profiles.yaml) + select_profile piloté matériel (mono/multi) ; cf. docs/LLM_BACKENDS.md
+      llm_providers.py      # table des fournisseurs LLM CLOUD (data/llm_providers.yaml : URL, variable de clé, faits à afficher) + ARBITRAGE_BACKENDS (valeurs reconnues de services.backend) — docs/LLM_CLOUD.md ; checks/llm_cloud.py = cohérence du mode cloud (model_id <fournisseur>/<modèle>, mélange refusé)
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque ; _resolve_binary = PATH + emplacements connus hors PATH (nvcc/llama-server introuvables via PATH réduit du service root)
       loader.py (i18n)      # override env TRANSCRIA_DEFAULT_LOCALE → i18n.default_locale (ergonomie Docker/CI)
       views.py              # C3 : vues typées gelées de la config (GpuView/QueueView/WorkflowView/SttView — from_config = l'UNIQUE endroit des .get() en chaîne)
@@ -254,6 +255,7 @@ transcria/
       concurrency_profile.py # profil de concurrence du workflow + observabilité du goulot
       refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables), extract_proposal (label contractuel tolérant)
       refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>)
+      llm_readiness.py      # ensure_llm_ready/llm_running_before_phase : règle UNIQUE « LLM prête ? » des phases ; en CLOUD une seule reprise puis échec explicite (jamais vram_wait), en local/distant inchangé
       multi_stt_review.py   # Multi-STT ciblé — LOGIQUE PURE (sélection/arbitrage/application) ; l'orchestration vit dans phases/multi_stt_review.py (workflow.multi_stt, ON par défaut depuis 0.3.4, best-effort)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
@@ -335,11 +337,12 @@ transcria/
       kill_patterns.py      # B3 : patterns de préemption uniques (kill_patterns_from_config + matches_kill_pattern, protection NEVER_KILL Ollama) — même clé de config, plus deux copies divergentes
       vram_manager.py       # VRAMManager — orchestration cycle GPU + recalage VRAM mesuré au 1er load (Ollama /api/ps)
       gpu_session.py        # GPUSession — context manager
-      llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded()/measured_vram_mb() ; cf. docs/LLM_BACKENDS.md
+      llm_backend.py        # LLMBackend (script/ollama/http/cloud) + cycle de vie unifié unload()/is_loaded()/measured_vram_mb() ; CloudLLMBackend = passe-plat vers un fournisseur externe (Bearer par variable d'env, GET /models, aucune VRAM) ; cf. docs/LLM_BACKENDS.md, docs/LLM_CLOUD.md
       llm_footprint.py      # empreinte VRAM DÉRIVÉE (poids réel du fichier + KV calculé archi×contexte) — jamais de taille en dur
       llm_prelaunch.py      # lot 2 : pré-lancement opt-in de la LLM à l'étape analyse (sous verrou LLM, jamais de préemption)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI (prompts → prompt_locator.py, parsing pur → llm_parsing.py, vague C2)
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
+      arbitrage_endpoint.py # SOURCE UNIQUE hôte/port/URL de la LLM d'arbitrage + prédicats is_ollama_backend / is_remote_arbitrage / is_cloud_backend (services.backend: cloud ⇒ distante : ni lancement, ni VRAM, ni chien de garde d'inactivité) + describe_arbitrage_endpoint (journaux)
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
       stt_vram_planner.py   # SttVramPlanner — pré-check VRAM (fraction×total vLLM) + relocalisation GPU

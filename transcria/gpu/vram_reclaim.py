@@ -15,6 +15,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,9 +33,15 @@ def stop_idle_arbitrage_llm(allocator: _LLMLock, vram: Any, *, log: Any = logger
     notre process géré (PID tracké, arrêt propre) — relancé à la demande par la phase
     LLM suivante. Retourne True si on l'a stoppée (VRAM potentiellement libérée).
 
+    LLM DISTANTE ou CLOUD : sortie en tête (False) — rien à arrêter ici, et surtout pas
+    une sonde de l'hôte distant / du fournisseur à chaque tentative d'admission.
+
     Best-effort : ne lève jamais.
     """
     try:
+        cfg = getattr(vram, "config", None)
+        if isinstance(cfg, dict) and is_remote_arbitrage(cfg):
+            return False
         if not vram.is_arbitrage_llm_running():
             return False
         # try_acquire_llm(timeout_s=0) ne réussit que si le verrou est libre.

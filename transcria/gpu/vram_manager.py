@@ -10,7 +10,12 @@ from transcria.config.loader import default_at
 from transcria.gpu import inventory, pid_registry
 from transcria.gpu._port_utils import generation_confirmed, kill_port_listeners
 from transcria.gpu._port_utils import is_port_open as _check_port_open
-from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage, resolve_arbitrage_endpoint
+from transcria.gpu.arbitrage_endpoint import (
+    describe_arbitrage_endpoint,
+    is_cloud_backend,
+    is_remote_arbitrage,
+    resolve_arbitrage_endpoint,
+)
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
@@ -90,6 +95,14 @@ class VRAMManager:
         if self._backend is None:
             self._backend = create_llm_backend(self.config)
         return self._backend
+
+    def _backend_is_cloud(self) -> bool:
+        """La LLM d'arbitrage est-elle chez un fournisseur externe (``services.backend: cloud``) ?
+
+        Prédicat UNIQUE (``is_cloud_backend``) : jamais déduit du backend construit ni d'un
+        hôte. En cloud, ce process ne lance, n'arrête, ne sonde localement ni ne réserve RIEN.
+        """
+        return is_cloud_backend(self.config)
 
     def _backend_is_ollama(self) -> bool:
         """Le backend d'arbitrage est-il le démon Ollama (cycle de vie ≠ process local) ?"""
@@ -237,6 +250,10 @@ class VRAMManager:
         `lsof` peut être indisponible ou incomplet selon le contexte systemd/sandbox.
         L'autorité fonctionnelle est donc l'API OpenAI-compatible elle-même.
         """
+        # LLM CLOUD : l'autorité est le fournisseur lui-même (`GET {base}/models` avec la clé,
+        # en https) — jamais un `http://hôte:port/v1/models` fabriqué ci-dessous.
+        if self._backend_is_cloud():
+            return self._arbitrage_backend().is_available()
         # LLM DISTANTE (topologie split) : pas de port local — l'autorité est l'API sur
         # l'hôte configuré. Sans ça, l'admission du scheduler la croit éteinte et exige la
         # VRAM locale pour la (re)lancer → job différé à l'infini alors qu'elle tourne.
@@ -285,6 +302,9 @@ class VRAMManager:
 
     def stop_cleanup_llm_ports(self) -> bool:
         """Libère les ports de backends LLM concurrents configurés."""
+        if self._backend_is_cloud():
+            # Aucun backend LLM local à évincer pour un fournisseur externe : ne tuer AUCUN port.
+            return True
         ok = True
         for port in self.llm_cleanup_ports:
             logger.info("Arrêt backend LLM concurrent port %d...", port)
@@ -378,6 +398,15 @@ class VRAMManager:
 
     def launch_arbitrage_llm(self) -> bool:
         """Lance la LLM d'arbitrage via le script configuré."""
+        if self._backend_is_cloud():
+            # Fournisseur externe : il n'y a RIEN à lancer ici (jamais de llama-server, de
+            # préflight VRAM ni de nettoyage de port pour une LLM qui ne tourne pas ici).
+            logger.error(
+                "Lancement LLM d'arbitrage REFUSÉ — backend cloud (%s) : rien à lancer "
+                "localement, la LLM est servie par le fournisseur",
+                describe_arbitrage_endpoint(self.config),
+            )
+            return False
         if self._backend_is_ollama():
             # Ollama : pas de script à lancer — le démon est persistant. « Lancer » =
             # s'assurer que le modèle est chargé en VRAM (délégué au backend).
@@ -497,7 +526,13 @@ class VRAMManager:
           A — LLM saine + bon modèle  → réutilisation directe, zéro redémarrage
           B — LLM saine + mauvais modèle → redémarrage (warning logué)
           C — LLM absente ou non saine → libération GPU + lancement depuis zéro
+
+        Backend CLOUD : ni A/B/C, ni comparaison du modèle servi, ni test-inférence, ni
+        arrêt/lancement — « prêt » = le fournisseur répond avec la clé (cf.
+        :meth:`_ensure_cloud_ready`).
         """
+        if self._backend_is_cloud():
+            return self._ensure_cloud_ready()
         if self._backend_is_ollama():
             # Ollama gère lui-même le (dé)chargement et le choix de modèle : « prêt » =
             # modèle tiré + chargé en VRAM. Pas de test-inférence ni de redémarrage
@@ -601,6 +636,31 @@ class VRAMManager:
         self.stop_cleanup_llm_ports()
         self.stop_arbitrage_llm()
         return self.launch_arbitrage_llm()
+
+    def _ensure_cloud_ready(self) -> bool:
+        """Le fournisseur cloud répond-il ? (une requête réseau, côté worker uniquement).
+
+        Le choix du modèle n'est PAS vérifié ici (``data[0]`` d'un fournisseur liste tout son
+        catalogue) : c'est le rôle du doctor. La cause précise d'un échec (clé absente, HTTP
+        401, DNS…) est journalisée par le backend cloud lui-même.
+        """
+        backend = self._arbitrage_backend()
+        provider = getattr(backend, "provider_id", "") or "?"
+        endpoint = describe_arbitrage_endpoint(self.config)
+        try:
+            ready = bool(backend.ensure_available())
+        except Exception as exc:  # noqa: BLE001 — une sonde ne doit jamais faire tomber une phase
+            logger.error("[arbitrage_llm] LLM cloud %s injoignable : %s", provider, exc)
+            return False
+        if ready:
+            logger.info("[arbitrage_llm] LLM cloud %s joignable — %s", provider, endpoint)
+        else:
+            logger.error(
+                "[arbitrage_llm] LLM cloud %s injoignable : le fournisseur ne répond pas avec "
+                "la clé configurée (%s ; cause détaillée ci-dessus) — aucun lancement local",
+                provider, endpoint,
+            )
+        return ready
 
     def stop_arbitrage_llm(self) -> bool:
         """Arrête la LLM d'arbitrage via le script d'arrêt, puis kill port en fallback."""

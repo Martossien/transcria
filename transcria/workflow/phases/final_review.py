@@ -22,6 +22,7 @@ from transcria.llm_tools.opencode_runner import (
     summary_markers,
 )
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+from transcria.workflow.llm_readiness import ensure_llm_ready, llm_running_before_phase
 from transcria.workflow.progress import progress_msg
 from transcria.workflow.refine_llm import chat_completion
 from transcria.workflow.type_field_extraction import (
@@ -154,7 +155,7 @@ def run(runner, job: Job, config: dict) -> dict:
         return {"success": True, "skipped": True, "retryable": True, "reason": "llm_busy"}
 
     llm_phase_reserved = False
-    llm_was_already_running = runner.vram.is_arbitrage_llm_running()
+    llm_was_already_running = llm_running_before_phase(runner.vram, config)
     try:
         if runner._should_reserve_llm_vram() and not llm_was_already_running:
             llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
@@ -172,7 +173,7 @@ def run(runner, job: Job, config: dict) -> dict:
             llm_phase_reserved = True
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+        if not ensure_llm_ready(runner.vram, config, api_model_id):
             logger.warning("Relecture finale sautée — LLM d'arbitrage non disponible (job=%s)", job.id)
             return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
 
@@ -366,7 +367,7 @@ def run_type_field_extraction(runner, job: Job, config: dict) -> dict:
             llm_phase_reserved = True
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+        if not ensure_llm_ready(runner.vram, config, api_model_id):
             logger.warning("extract_type_fields: LLM d'arbitrage indisponible — champs de type non extraits")
             return {"success": True, "skipped": True, "reason": "llm_unavailable"}
 

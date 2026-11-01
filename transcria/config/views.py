@@ -15,7 +15,9 @@ le stock de chaînes ``.get("x", {}).get(...)`` fond par opportunité, jamais
 par campagne. Les vues sont en lecture seule (frozen) — les écritures de
 config (injections lexique, backend forcé) restent sur le dict.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from transcria.config.llm_providers import LOCAL_PROVIDER_ID, get_llm_provider
 
 
 def _section(cfg: dict, *path: str) -> dict:
@@ -171,4 +173,68 @@ class SttView:
             fallback_stt_model=str(models.get("fallback_stt_model", "")),
             cohere_model_path=str(models.get("cohere_model_path", "")),
             pyannote_model=str(models.get("pyannote_model", "")),
+        )
+
+
+def _split_model_ref(model_id: str) -> tuple[str, str]:
+    """``<fournisseur>/<modèle>`` opencode → (fournisseur, modèle) ; sans ``/`` → ("", id)."""
+    raw = str(model_id or "").strip()
+    if "/" not in raw:
+        return "", raw
+    provider, model = raw.split("/", 1)
+    return provider.strip().lower(), model.strip()
+
+
+@dataclass(frozen=True)
+class LlmCloudView:
+    """LLM d'arbitrage chez un FOURNISSEUR EXTERNE (``services.backend: cloud``, docs/LLM_CLOUD.md).
+
+    L'UNIQUE endroit qui lit ``workflow.llm_cloud.*`` et découpe les deux ``model_id``
+    (``<fournisseur>/<modèle>``). Résolution de l'URL et de la variable de clé : table des
+    fournisseurs (``transcria/data/llm_providers.yaml``) > dérogations de config pour un
+    fournisseur NON listé (``workflow.arbitration_llm.api_base`` + ``workflow.llm_cloud.api_key_env``).
+    La vue ne dit PAS si le backend cloud est actif (c'est ``arbitrage_endpoint.is_cloud_backend``).
+    """
+
+    provider: str                 # premier segment du model_id d'arbitrage ("" si absent)
+    model: str                    # modèle nu pour l'API directe (premier segment retiré)
+    summary_provider: str         # premier segment du model_id de résumé
+    summary_model: str
+    known_provider: bool          # le fournisseur est dans la table
+    base_url: str                 # URL OpenAI-compatible effective ("" si indéterminable)
+    api_key_env: str              # variable d'environnement qui porte la clé ("" si inconnue)
+    extra_request_fields: dict = field(default_factory=dict)
+
+    @property
+    def is_local_provider(self) -> bool:
+        return self.provider == LOCAL_PROVIDER_ID
+
+    @classmethod
+    def from_config(cls, cfg: dict) -> "LlmCloudView":
+        cloud = _section(cfg, "workflow", "llm_cloud")
+        arb = _section(cfg, "workflow", "arbitration_llm")
+        summ = _section(cfg, "workflow", "summary_llm")
+        provider, model = _split_model_ref(str(arb.get("model_id") or ""))
+        s_provider, s_model = _split_model_ref(str(summ.get("model_id") or ""))
+        arb_enabled = arb.get("enabled") is not False
+        if s_provider and (not provider or (not arb_enabled and summ.get("enabled"))):
+            # Le fournisseur vient d'une section ACTIVÉE : correction coupée (`enabled: false`,
+            # model_id résiduel `local/arbitrage`) et résumé en cloud ⇒ le résumé fait foi.
+            # Sinon un résumé cloud lirait le fournisseur « local » et échouerait toujours.
+            provider, model = s_provider, s_model
+        listed = get_llm_provider(provider)
+        api_base = str(arb.get("api_base") or "").strip().rstrip("/")
+        key_env = str(cloud.get("api_key_env") or "").strip()
+        extra = cloud.get("extra_request_fields")
+        return cls(
+            provider=provider,
+            model=model,
+            summary_provider=s_provider,
+            summary_model=s_model,
+            known_provider=listed is not None,
+            # Fournisseur listé : la table fait foi (api_base garde son défaut local, non lu).
+            # Non listé : la dérogation api_base est l'UNIQUE source. Aucun fournisseur : "".
+            base_url=listed.base_url if listed else (api_base if provider else ""),
+            api_key_env=(listed.api_key_env if listed else "") or key_env,
+            extra_request_fields=dict(extra) if isinstance(extra, dict) else {},
         )

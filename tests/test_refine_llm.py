@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from transcria.workflow.refine_llm import build_discuss_messages, chat_completion
+import pytest
+from builders import make_config
+
+from transcria.gpu.llm_backend import CloudCredentialsMissing
+from transcria.workflow.refine_llm import (
+    CloudLLMError,
+    build_discuss_messages,
+    chat_completion,
+    compute_transcript_budget_chars,
+)
 
 
 def _messages(**overrides):
@@ -186,3 +195,68 @@ class TestBudgetEtTroncatureHonnete:
         import transcria.workflow.refine_llm as m
         monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
         assert m.compute_transcript_budget_chars({}) == m.DEFAULT_MAX_TRANSCRIPT_CHARS
+
+
+class _CloudResp:
+    def __init__(self, status=200, payload=None, text=""):
+        self.status_code = status
+        self._payload = payload if payload is not None else {}
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+
+class TestChatCompletionCloud:
+    def _config(self):
+        return make_config({
+            "services": {"backend": "cloud"},
+            "workflow": {
+                "arbitration_llm": {"enabled": True, "model_id": "mistral/mistral-large-4"},
+                "llm_cloud": {"extra_request_fields": {"reasoning_effort": "none"}},
+            },
+        })
+
+    def test_cloud_payload_headers_et_champs_admin(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        seen = {}
+
+        def post(url, json=None, headers=None, timeout=None):
+            seen.update(url=url, payload=json, headers=headers)
+            return _CloudResp(payload={"choices": [{"message": {"content": "<think>x</think>Ok cloud."}}]})
+
+        assert chat_completion(self._config(), [{"role": "user", "content": "?"}], post=post) == "Ok cloud."
+        assert seen["url"] == "https://api.mistral.ai/v1/chat/completions"
+        assert seen["headers"] == {"Authorization": "Bearer test-key"}
+        assert seen["payload"]["model"] == "mistral-large-4"
+        assert "chat_template_kwargs" not in seen["payload"]
+        assert seen["payload"]["reasoning_effort"] == "none"
+
+    def test_cle_absente(self, monkeypatch):
+        monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+        with pytest.raises(CloudCredentialsMissing):
+            chat_completion(self._config(), [], post=lambda *a, **k: _CloudResp())
+
+    def test_401_sans_retry(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        calls = []
+
+        def post(url, json=None, headers=None, timeout=None):
+            calls.append(1)
+            return _CloudResp(401, text='{"error": "clé\n invalide"}')
+
+        with pytest.raises(CloudLLMError) as exc:
+            chat_completion(self._config(), [], post=post)
+        assert "401" in str(exc.value) and "invalide" in str(exc.value)
+        assert "test-key" not in str(exc.value)
+        assert len(calls) == 1
+
+    def test_reponse_vide(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        for payload in ({"choices": []}, {"choices": [{"message": {"content": ""}}]}):
+            with pytest.raises(CloudLLMError, match="réponse vide"):
+                chat_completion(self._config(), [],
+                                post=lambda *a, payload=payload, **k: _CloudResp(payload=payload))
+
+    def test_budget_cloud_defaut(self):
+        assert compute_transcript_budget_chars(self._config()) == 60000

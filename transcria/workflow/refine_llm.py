@@ -16,7 +16,7 @@ import re
 
 from transcria.config.llm_profiles import load_llm_profiles, select_profile
 from transcria.gpu import inventory
-from transcria.gpu.llm_backend import create_llm_backend
+from transcria.gpu.llm_backend import CloudLLMBackend, create_llm_backend, is_cloud_backend
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,15 @@ _CHARS_PER_TOKEN = 3
 # Tokens réservés hors transcription : prompt système + synthèse + JSON + historique + réponse.
 _RESERVED_TOKENS = 24000
 _TIMESTAMP_RE = re.compile(r"(\d{2}:\d{2}:\d{2}),\d{3}")
+_ERROR_EXCERPT_CHARS = 200
+
+
+class CloudLLMError(RuntimeError):
+    """Échec d'un appel direct au fournisseur LLM externe (statut HTTP, réponse vide).
+
+    Le message est en français, contient le statut et un court extrait de la réponse du
+    fournisseur — jamais la clé d'API.
+    """
 
 
 def compute_transcript_budget_chars(config: dict) -> int:
@@ -42,6 +51,9 @@ def compute_transcript_budget_chars(config: dict) -> int:
     explicit = refine_cfg.get("max_transcript_chars")
     if explicit is not None:
         return int(explicit)
+    if is_cloud_backend(config):
+        # Modèles cloud : 128K-1M de contexte, aucun GPU local à sonder.
+        return DEFAULT_MAX_TRANSCRIPT_CHARS
     try:
         states = inventory.snapshot()
         if states:
@@ -127,6 +139,57 @@ def build_discuss_messages(
     return messages
 
 
+def _error_excerpt(resp) -> str:
+    """Extrait court (une ligne, ≤ 200 caractères) du corps d'une réponse d'erreur."""
+    try:
+        body = str(getattr(resp, "text", "") or "")
+    except Exception:  # noqa: BLE001 — corps illisible : pas d'extrait
+        body = ""
+    line = " ".join(body.split())
+    return line[:_ERROR_EXCERPT_CHARS]
+
+
+# Champs du corps que `workflow.llm_cloud.extra_request_fields` ne peut JAMAIS écraser.
+_PROTECTED_FIELDS = frozenset({"model", "messages", "stream"})
+
+
+def _cloud_completion(backend: CloudLLMBackend, payload: dict, post, timeout_s: int) -> str:
+    """Complétion chez le fournisseur externe : clé en en-tête, champs admin fusionnés,
+    AUCUN retry. Lève :class:`CloudLLMError` sur statut non-2xx ou réponse vide.
+
+    Raises:
+        CloudCredentialsMissing: clé d'API absente de l'environnement.
+        CloudLLMError: refus du fournisseur ou réponse vide.
+    """
+    headers = backend.auth_headers()
+    url = f"{backend.base_url.rstrip('/')}/chat/completions"
+    extra = backend.extra_request_fields
+    # `stream` est protégé aussi : une réponse SSE ne serait pas lue (« réponse vide » trompeur).
+    body = {**payload, **{k: v for k, v in extra.items() if k not in _PROTECTED_FIELDS}}
+    logger.info("Affinage discuss : complétion directe chez le fournisseur %s sur %s (model=%s)",
+                backend.provider_id or "?", url, body["model"])
+    resp = post(url, json=body, headers=headers, timeout=timeout_s)
+    status = getattr(resp, "status_code", 200)
+    if isinstance(status, int) and not 200 <= status < 300:
+        excerpt = _error_excerpt(resp)
+        raise CloudLLMError(
+            f"le fournisseur « {backend.provider_id or '?'} » a refusé la requête "
+            f"(HTTP {status})" + (f" : {excerpt}" if excerpt else "")
+        )
+    content = ""
+    try:
+        data = resp.json()
+        content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    except (ValueError, AttributeError, IndexError, TypeError):
+        content = ""
+    text = _THINK_BLOCK.sub("", str(content)).strip()
+    if not text:
+        raise CloudLLMError(
+            f"réponse vide du fournisseur « {backend.provider_id or '?'} » (aucun contenu généré)"
+        )
+    return text
+
+
 def chat_completion(
     config: dict,
     messages: list[dict],
@@ -142,14 +205,23 @@ def chat_completion(
     """
 
     backend = create_llm_backend(config)
+    if post is None:
+        import requests
+        post = requests.post
+    if isinstance(backend, CloudLLMBackend):
+        payload = {
+            "model": backend.api_model,
+            "messages": messages,
+            "temperature": 0.4,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        return _cloud_completion(backend, payload, post, timeout_s)
     model = backend.model_id or "arbitrage"
     # opencode consomme « local/<modèle> » ; l'API OpenAI-compatible attend le nom nu.
     if model.startswith("local/"):
         model = model[len("local/"):]
     url = f"{backend.base_url.rstrip('/')}/chat/completions"
-    if post is None:
-        import requests
-        post = requests.post
     logger.info("Affinage discuss : complétion directe sur %s (model=%s)", url, model)
     payload = {
         "model": model,

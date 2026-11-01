@@ -13,6 +13,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import OpenCodeRunner, resolve_output_language, resolve_prompt_file
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+from transcria.workflow.llm_readiness import ensure_llm_ready, llm_running_before_phase
 from transcria.workflow.refine_llm import build_discuss_messages, chat_completion, compute_transcript_budget_chars, truncate_transcript
 from transcria.workflow.refine_store import RefineStore, extract_proposal
 
@@ -161,6 +162,48 @@ def refine_messages(language: str | None) -> dict[str, str]:
     return _REFINE_MESSAGES.get((language or "fr"), _REFINE_MESSAGES["fr"])
 
 
+
+def _prepare_llm(runner, job: Job, config: dict, *, llm_was_already_running: bool) -> tuple[str | None, bool]:
+    """Réserve la VRAM LLM (si locale et éteinte) puis s'assure que la LLM répond.
+
+    Args:
+        runner: le ``WorkflowRunner`` (allocateur, VRAM, coutures GPU).
+        job: le job affiné.
+        config: configuration effective.
+        llm_was_already_running: état de la LLM avant le tour (aucune réservation si active).
+
+    Returns:
+        ``(motif d'échec ou None, réservation posée)`` — motif ``vram_insufficient`` ou
+        ``llm_unavailable`` ; la réservation est libérée par l'appelant (``finally``).
+    """
+    if runner._should_reserve_llm_vram() and not llm_was_already_running:
+        llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+        # Réservation MULTI-GPU (total ÷ GPU du placement, tout-ou-rien) — comme la
+        # correction. Le try_reserve mono-GPU échouerait TOUJOURS ici : la LLM est
+        # déchargée en fin de job (reclaim), donc l'affinage doit pouvoir la relancer.
+        reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+        if not reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+            # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+            # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+            reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+        if not reserved:
+            return "vram_insufficient", False
+        llm_phase_reserved = True
+    else:
+        llm_phase_reserved = False
+    api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+    # Cloud : une reprise automatique incluse avant l'échec (docs/LLM_CLOUD.md § 3.1.7).
+    try:
+        ready = ensure_llm_ready(runner.vram, config, api_model_id)
+    except Exception:
+        # L'appelant ne connaît pas encore la réservation : on la rend avant de propager.
+        if llm_phase_reserved:
+            runner.allocator.release_phase(job.id, "refine")
+        raise
+    if not ready:
+        return "llm_unavailable", llm_phase_reserved
+    return None, llm_phase_reserved
+
 def run(runner, job: Job, config: dict) -> dict:
     """Tour du chat d'affinage des livrables (post-workflow, job terminé).
 
@@ -219,32 +262,17 @@ def run(runner, job: Job, config: dict) -> dict:
 
     fs = JobFilesystem(jobs_dir, job.id)
     llm_phase_reserved = False
-    llm_was_already_running = runner.vram.is_arbitrage_llm_running()
+    llm_was_already_running = llm_running_before_phase(runner.vram, config)
     try:
-        if runner._should_reserve_llm_vram() and not llm_was_already_running:
-            llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-            # Réservation MULTI-GPU (total ÷ GPU du placement, tout-ou-rien) — comme la
-            # correction. Le try_reserve mono-GPU échouerait TOUJOURS ici : la LLM est
-            # déchargée en fin de job (reclaim), donc l'affinage doit pouvoir la relancer.
-            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
-            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
-                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
-                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
-                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
-            if not _llm_reserved:
-                store.append_turn(
-                    role="assistant", kind=kind, max_turns=max_turns,
-                    text=rmsg["vram"],
-                )
-                return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
-            llm_phase_reserved = True
-        api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+        failure, llm_phase_reserved = _prepare_llm(
+            runner, job, config, llm_was_already_running=llm_was_already_running,
+        )
+        if failure:
             store.append_turn(
                 role="assistant", kind=kind, max_turns=max_turns,
-                text=rmsg["no_start"],
+                text=rmsg["vram" if failure == "vram_insufficient" else "no_start"],
             )
-            return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
+            return {"success": True, "skipped": True, "retryable": True, "reason": failure}
 
         meeting_ctx = fs.load_json("context/meeting_context.json") or {}
         effective_summary = (

@@ -11,6 +11,7 @@ from transcria.audio.track_fusion import overlapping_indices
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import resolve_output_language
 from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
+from transcria.workflow.llm_readiness import ensure_llm_ready
 from transcria.workflow.multi_stt_review import (
     apply_secondary_texts,
     build_arbitration_messages,
@@ -140,7 +141,7 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
                 llm_phase_reserved = True
 
             api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-            if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+            if not ensure_llm_ready(runner.vram, config, api_model_id):
                 logger.warning("multi_stt: LLM d'arbitrage indisponible — arbitrage sauté")
                 return {"success": True, "skipped": True, "reason": "llm_unavailable"}
 

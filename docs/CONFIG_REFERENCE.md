@@ -1221,6 +1221,30 @@ Configuration du LLM d'arbitrage/correction SRT.
 
 **État actuel :** la correction SRT utilise `OpenCodeRunner.run_correction()` et lit `model_id`, `timeout_seconds` et `opencode_bin` depuis cette section.
 
+#### `workflow.llm_cloud`
+
+LLM d'arbitrage chez un **fournisseur externe** (`services.backend: cloud`, plan et gouvernance dans
+[LLM_CLOUD.md](LLM_CLOUD.md)). TranscrIA est un passe-plat : les deux `model_id` (`summary_llm`,
+`arbitration_llm`) s'écrivent `<fournisseur>/<modèle>` avec l'identifiant du catalogue opencode
+(`mistral`, `ollama-cloud`, `openrouter`, `opencode` — table `transcria/data/llm_providers.yaml` :
+URL de base, variable d'environnement qui porte la clé, faits à afficher). **La clé d'API n'est
+jamais dans `config.yaml`** : variable d'environnement du fournisseur dans le `.env` du service
+(`MISTRAL_API_KEY`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`), lue par opencode et
+par les appels directs. En cloud : aucune VRAM réservée, aucun lancement/arrêt local, verrou LLM
+no-op, chien de garde d'inactivité d'opencode désactivé (plafond `timeout_seconds` seul), panne du
+fournisseur = une reprise automatique puis échec explicite relançable (jamais d'attente VRAM).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `api_key_env` | string | `""` | Nom de la variable d'environnement portant la clé, **uniquement pour un fournisseur hors table** (avec `workflow.arbitration_llm.api_base` en `https://` non locale). Pour un fournisseur de la table, la variable est imposée par la table et cette clé est ignorée. Majuscules, chiffres et `_` seulement |
+| `extra_request_fields` | objet | `{}` | Champs fusionnés dans le corps des **appels directs** (`/chat/completions` du chat d'affinage, arbitrage multi-STT, extraction des champs de type) — ex. `{reasoning_effort: none}` chez Ollama cloud (qui rejette la requête sur un modèle sans raisonnement), `{zdr: true}` chez OpenRouter. `model`, `messages` et `stream` ne sont jamais écrasés. Les phases agentiques (opencode) ne le lisent pas |
+
+**Redémarrage requis :** oui — la bascule local ↔ cloud est capturée au démarrage par l'exécuteur et
+l'ordonnanceur (en split, l'ordonnanceur est un autre process).
+
+**Validation :** mélange refusé (`model_id` d'un fournisseur de la table sans `services.backend: cloud`,
+ou `local/…` en cloud) ; les deux `model_id` activés doivent viser le **même** fournisseur, en minuscules.
+
 #### `workflow.refine_chat`
 
 Chat d'affinage des livrables (page résultats d'un job **terminé**, tous profils) : l'utilisateur
@@ -1614,7 +1638,7 @@ Limites :
 | `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
 | `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
-| `services.backend` | absent (auto) | Backend de la LLM d'arbitrage : `script` (llama.cpp/vLLM via `arbitrage_script`), `ollama` (démon), `http` (serveur OpenAI externe). Absent ⇒ auto-détection (`ollama_url` ⇒ ollama ; `arbitrage_script` ⇒ script ; sinon http). Cf. [LLM_BACKENDS.md](LLM_BACKENDS.md) |
+| `services.backend` | absent (auto) | Backend de la LLM d'arbitrage : `script` (llama.cpp/vLLM via `arbitrage_script`), `ollama` (démon), `http` (serveur OpenAI externe), `cloud` (fournisseur externe, cf. `workflow.llm_cloud` et [LLM_CLOUD.md](LLM_CLOUD.md)). Absent ou `""` ⇒ auto-détection (`ollama_url` ⇒ ollama ; `arbitrage_script` ⇒ script ; sinon http). **Toute autre valeur est REFUSÉE** par la validation (jamais de repli silencieux). Cf. [LLM_BACKENDS.md](LLM_BACKENDS.md) |
 | `services.ollama_url` | `http://127.0.0.1:11434` | Endpoint du démon Ollama (source unique de l'endpoint pour ce backend ; port custom via cette URL, PAS via `arbitrage_llm_port`) |
 | `services.ollama_model` | absent | Nom NATIF du modèle Ollama (ex. `qwen3.6:35b`) ; opencode le voit `local/<modèle>`. Écrit par la phase d'install selon le matériel (catalogue de profils) |
 | `services.ollama_num_ctx` | absent | Contexte du palier appliqué au démon (`OLLAMA_CONTEXT_LENGTH`) — variable par palier |

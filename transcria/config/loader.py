@@ -734,6 +734,16 @@ _DEFAULT_CONFIG = {
             # démarrage s'absorbent pendant la saisie. false = comportement historique.
             "prelaunch_at_analyze": False,
         },
+        # LLM d'arbitrage chez un FOURNISSEUR EXTERNE (services.backend: cloud, docs/LLM_CLOUD.md).
+        # La clé d'API n'est JAMAIS ici : variable d'environnement du fournisseur (.env du
+        # service), nommée par la table transcria/data/llm_providers.yaml ; `api_key_env` ne
+        # sert qu'à un fournisseur NON listé (avec workflow.arbitration_llm.api_base).
+        "llm_cloud": {
+            "api_key_env": "",
+            # Champs fusionnés dans le corps des appels DIRECTS (ex. {"reasoning_effort": "none"}
+            # chez Ollama cloud, {"zdr": true} chez OpenRouter). Vide = corps standard.
+            "extra_request_fields": {},
+        },
     },
     "quality": {
         "asr_noise_markers": [

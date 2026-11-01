@@ -80,3 +80,14 @@ class TestRunEnv:
         base = {"PWD": "/ailleurs"}
         build_run_env(base, work_dir="/w", data_home="/d")
         assert base == {"PWD": "/ailleurs"}
+
+    def test_extra_env_is_merged_last(self):
+        env = build_run_env({"PATH": "/bin", "OPENCODE_PRINT_LOGS": "0"}, work_dir="/w", data_home="/d",
+                            extra_env={"OPENCODE_PRINT_LOGS": "1"})
+        assert env == {"PATH": "/bin", "OPENCODE_PRINT_LOGS": "1", "PWD": "/w", "TMPDIR": "/w",
+                       "XDG_DATA_HOME": "/d"}
+
+    def test_without_extra_env_nothing_is_added(self):
+        env = build_run_env({"PATH": "/bin"}, work_dir="/w", data_home="/d", extra_env=None)
+        assert "OPENCODE_PRINT_LOGS" not in env
+        assert env == build_run_env({"PATH": "/bin"}, work_dir="/w", data_home="/d")

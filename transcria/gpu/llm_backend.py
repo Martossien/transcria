@@ -8,8 +8,17 @@ from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu._port_utils import kill_port_listeners
-from transcria.gpu.arbitrage_endpoint import ollama_model_name, ollama_name_matches
+from transcria.gpu.arbitrage_endpoint import (
+    ARBITRAGE_BACKENDS,
+    CLOUD_BACKEND,
+    cloud_view,
+    is_cloud_backend,
+    ollama_model_name,
+    ollama_name_matches,
+)
 from transcria.gpu.script_guard import ScriptRefuse, safe_script_path
+
+__all__ = ["CloudCredentialsMissing", "CloudLLMBackend", "LLMBackend", "create_llm_backend", "is_cloud_backend"]
 
 logger = logging.getLogger(__name__)
 
@@ -73,15 +82,16 @@ class LLMBackend(ABC):
         return None
 
     @staticmethod
-    def _http_get_json(url: str, timeout: int = 5) -> dict | None:
+    def _http_get_json(url: str, timeout: int = 5, headers: dict[str, str] | None = None) -> dict | None:
         """GET JSON tolérant MAIS diagnostiquable (C2.4 — plus d'échec silencieux).
 
         L'appelant garde son contrat historique (``None`` = indisponible), mais la
         NATURE de l'échec (timeout / connexion refusée / DNS / statut HTTP / JSON
         invalide) est journalisée — throttlée par (url, nature) pour ne pas inonder
-        les logs quand un poll interroge un démon éteint.
+        les logs quand un poll interroge un démon éteint. ``headers`` : en-têtes
+        d'authentification (cloud) — jamais journalisés.
         """
-        data, err = LLMBackend._http_get_json_result(url, timeout=timeout)
+        data, err = LLMBackend._http_get_json_result(url, timeout=timeout, headers=headers)
         if err:
             LLMBackend._log_network_error_throttled(url, err)
         return data
@@ -90,14 +100,21 @@ class LLMBackend(ABC):
     _NETWORK_ERROR_LOG_EVERY_S = 300.0
 
     @staticmethod
-    def _http_get_json_result(url: str, timeout: int = 5) -> tuple[dict | None, str | None]:
+    def _http_get_json_result(
+        url: str, timeout: int = 5, headers: dict[str, str] | None = None,
+    ) -> tuple[dict | None, str | None]:
         """Renvoie (données, None) ou (None, "nature: détail") — typé, testable."""
         try:
             import requests
             from requests import exceptions as rexc
 
             try:
-                r = requests.get(url, timeout=timeout)
+                # `headers` seulement si fournis : les doublures de test historiques
+                # (lambda url, timeout) et les sondes locales restent inchangées.
+                if headers:
+                    r = requests.get(url, timeout=timeout, headers=headers)
+                else:
+                    r = requests.get(url, timeout=timeout)
             except rexc.ConnectTimeout as exc:
                 return None, f"timeout de connexion ({timeout}s): {exc}"
             except rexc.ReadTimeout as exc:
@@ -108,12 +125,20 @@ class LLMBackend(ABC):
                     return None, f"résolution DNS impossible: {detail[:160]}"
                 return None, f"connexion refusée/coupée: {detail[:160]}"
             if r.status_code != 200:
-                return None, f"statut HTTP {r.status_code}"
+                # Le corps d'erreur d'un fournisseur (clé invalide, modèle retiré…) est le
+                # diagnostic n°1 de l'admin : on le garde, court et sur une ligne (les
+                # fournisseurs n'y renvoient jamais la clé).
+                snippet = " ".join(str(getattr(r, "text", "") or "").split())[:160]
+                return None, f"statut HTTP {r.status_code}" + (f": {snippet}" if snippet else "")
             try:
                 return r.json(), None
             except ValueError as exc:
                 return None, f"réponse non-JSON: {exc}"
         except Exception as exc:  # noqa: BLE001 — jamais de crash sur un poll réseau
+            if headers:
+                # Avec des en-têtes d'authentification, le texte d'une exception (ex. InvalidHeader)
+                # peut contenir la valeur de l'en-tête : on ne journalise que sa nature.
+                return None, f"erreur inattendue: {type(exc).__name__}"
             return None, f"erreur inattendue: {exc}"
 
     @staticmethod
@@ -190,6 +215,8 @@ def create_llm_backend(config: dict, backend_type: str | None = None) -> LLMBack
     wf = config.get("workflow", {})
     llm = wf.get("arbitration_llm", {})
 
+    if backend_type == CLOUD_BACKEND:
+        return CloudLLMBackend(config)
     if backend_type == "ollama" or "ollama" in backend_type.lower():
         return OllamaLLMBackend(config)
     elif backend_type == "script":
@@ -209,10 +236,11 @@ def create_llm_backend(config: dict, backend_type: str | None = None) -> LLMBack
 
 def _detect_backend_type(config: dict) -> str:
     services = config.get("services", {})
-    # `services.backend` explicite fait autorité (ollama|script|http) ; sinon auto-détection
+    # `services.backend` explicite fait autorité (ollama|script|http|cloud) ; sinon auto-détection
     # rétro-compatible : ollama_url ⇒ ollama, arbitrage_script ⇒ script, défaut ⇒ http.
+    # (Une valeur INCONNUE est refusée par le schéma — jamais rabattue en silence.)
     explicit = str(services.get("backend", "") or "").strip().lower()
-    if explicit in ("ollama", "script", "http"):
+    if explicit in ARBITRAGE_BACKENDS:
         return explicit
     if services.get("ollama_url"):
         return "ollama"
@@ -469,6 +497,127 @@ class HTTPLLMBackend(LLMBackend):
             return True
         logger.warning("LLM (http): %s non joignable. Démarrez le serveur manuellement.", self.base_url)
         return False
+
+    def shutdown(self) -> bool:
+        return True
+
+
+class CloudCredentialsMissing(RuntimeError):
+    """La variable d'environnement qui porte la clé du fournisseur est absente ou vide."""
+
+
+class CloudLLMBackend(LLMBackend):
+    """LLM d'arbitrage chez un FOURNISSEUR EXTERNE (``services.backend: cloud``).
+
+    TranscrIA est un passe-plat (docs/LLM_CLOUD.md) : ce backend ne lance, n'arrête et ne
+    réserve RIEN — il sait seulement joindre le fournisseur (URL de la table des fournisseurs,
+    clé lue dans la variable d'environnement du catalogue opencode) et dire s'il répond
+    (``GET {base}/models`` avec ``Authorization: Bearer``). Les phases agentiques passent par
+    opencode, qui résout la MÊME variable ; les appels directs (``refine_llm.chat_completion``)
+    réutilisent ``base_url`` + ``auth_headers()``. La clé n'apparaît jamais dans un journal.
+    """
+
+    backend_type = CLOUD_BACKEND
+
+    def __init__(self, config: dict, port: int | None = None):
+        super().__init__(config, port)
+        self.view = cloud_view(config)
+
+    @property
+    def model_id(self) -> str:
+        # Référence opencode complète (`<fournisseur>/<modèle>`), comme les autres backends.
+        return self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
+
+    @property
+    def provider_id(self) -> str:
+        return self.view.provider
+
+    @property
+    def api_model(self) -> str:
+        """Nom du modèle pour l'API directe : premier segment (fournisseur) retiré, RIEN d'autre
+        (``openrouter/qwen/qwen3`` → ``qwen/qwen3``)."""
+        return self.view.model
+
+    @property
+    def base_url(self) -> str:
+        return self.view.base_url
+
+    @property
+    def api_key_env(self) -> str:
+        return self.view.api_key_env
+
+    @property
+    def extra_request_fields(self) -> dict:
+        """Champs admin fusionnés dans le corps des appels directs (``workflow.llm_cloud.extra_request_fields``)."""
+        return dict(self.view.extra_request_fields)
+
+    def api_key(self) -> str | None:
+        """Clé lue dans l'environnement — ``None`` si absente OU mal formée.
+
+        Une clé contenant un blanc ou un caractère de contrôle (ex. ``"sk-…\\n…"`` : python-dotenv
+        interprète les échappements entre guillemets doubles) ferait lever ``InvalidHeader`` par
+        ``requests`` avec la valeur EN CLAIR dans le message : on la refuse ici, en amont de tout
+        en-tête, et le message d'erreur ne nomme que la variable.
+        """
+        env = self.api_key_env
+        value = (os.environ.get(env) or "").strip() if env else ""
+        if not value:
+            return None
+        if any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            logger.error(
+                "LLM cloud %s : la variable %s contient un blanc ou un caractère de contrôle — "
+                "clé IGNORÉE (vérifier les guillemets/échappements dans le .env)",
+                self.provider_id or "?", env,
+            )
+            return None
+        return value
+
+    def auth_headers(self) -> dict[str, str]:
+        """En-têtes d'authentification ; lève :class:`CloudCredentialsMissing` (message FR qui
+        nomme la variable, jamais la valeur) si la clé manque."""
+        key = self.api_key()
+        if not key:
+            env = self.api_key_env or "(variable inconnue : fournisseur hors table sans workflow.llm_cloud.api_key_env)"
+            raise CloudCredentialsMissing(
+                f"clé d'API du fournisseur « {self.provider_id or '?'} » absente : "
+                f"définir la variable d'environnement {env} dans le .env du service"
+            )
+        return {"Authorization": f"Bearer {key}"}
+
+    def list_models(self, timeout: int = 10) -> tuple[list[str] | None, str | None]:
+        """Identifiants servis par le fournisseur (``GET /models``), ou (None, raison lisible)."""
+        if not self.base_url:
+            return None, (f"URL du fournisseur « {self.provider_id or '?'} » non résolue "
+                          "(hors table : renseigner workflow.arbitration_llm.api_base)")
+        try:
+            headers = self.auth_headers()
+        except CloudCredentialsMissing as exc:
+            return None, str(exc)
+        data, err = self._http_get_json_result(f"{self.base_url}/models", timeout=timeout, headers=headers)
+        if err:
+            return None, err
+        items = (data or {}).get("data") if isinstance(data, dict) else None
+        ids = [str(m.get("id")) for m in (items or []) if isinstance(m, dict) and m.get("id")]
+        return ids, None
+
+    def is_available(self) -> bool:
+        """Le fournisseur répond-il avec cette clé ? (une requête réseau — JAMAIS depuis une page web)."""
+        ids, err = self.list_models()
+        if err:
+            logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", err)
+            return False
+        return ids is not None
+
+    def ensure_available(self) -> bool:
+        # Rien à lancer : « prêt » = le fournisseur répond. Le choix du modèle est vérifié
+        # par le doctor (catalogue opencode + fournisseur), pas ici à chaque phase.
+        return self.is_available()
+
+    def is_loaded(self) -> bool:
+        return False  # aucune VRAM locale, jamais
+
+    def unload(self) -> bool:
+        return True
 
     def shutdown(self) -> bool:
         return True
