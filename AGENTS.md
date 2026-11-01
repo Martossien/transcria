@@ -988,6 +988,8 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/STT_BENCHMARK_REAL_MEETINGS.md` | Banc sur réunions réelles (anonymisé) : WER/CER par backend |
 | `docs/STT_CORPUS.md` | Constitution du corpus de référence |
 | `docs/PISTES_AMELIORATION.md` | Backlog technique : ce qui est identifié, pas encore décidé |
+| `docs/LLM_CLOUD.md` | **Plan, rien codé** : LLM d'arbitrage chez un fournisseur externe (passe-plat) — `services.backend: cloud`, clé par variable d'env, validation admin en base, bandeau permanent, interdiction par groupe, provenance par job, palier zéro GPU |
+| `docs/DISCUTER_REUNIONS.md` | **Plan, rien codé** : « discuter avec mes réunions » — demandes consommées par le worker (jamais de LLM depuis le web), fiches `job_cards`, escalade fiches → synthèse effective → SRT, citations vérifiées, vue « Mes actions » |
 | `docs/ATTRIBUTION_LOCUTEURS_RESUME.md` | Descriptions LLM sur le mauvais SPEAKER_XX à l'étape Résumé : cause (transcription rapide sans étiquettes), contraintes (> 8 voix, numéros stables), 5 options, **mesure sur 3 réunions réelles** (option A `workflow.summary_by_turns` : 18/19 justes contre 11/19, +15 à +25 % de durée) — activée PAR DÉFAUT (0.4.8), `false` = repli rapide |
 | `docs/TESTERS.md` | Guide des testeurs externes |
 | `docs/PRESENTATION.md` / `.en.md` | Présentation non technique (français / anglais) |
