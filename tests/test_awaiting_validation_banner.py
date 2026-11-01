@@ -19,8 +19,10 @@ def _admin_id(app):
 
 
 def test_count_ne_compte_que_les_etats_d_attente_du_proprietaire(app):
+    # Base PARTAGÉE entre modules (fixture app de session) : un propriétaire NEUF, sinon les
+    # jobs laissés par d'autres tests faussent le compte.
     with app.app_context():
-        owner = _admin_id(app)
+        owner = UserStore.create_user(username="compteur", password="x" * 8, display_name="C").id
         make_job(owner, state=JobState.SUMMARY_DONE)
         make_job(owner, state=JobState.LEXICON_DONE)
         make_job(owner, state=JobState.COMPLETED)

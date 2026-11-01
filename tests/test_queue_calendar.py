@@ -172,8 +172,11 @@ def test_admin_can_purge_e2e_test_jobs(admin_client, app, owner_id):
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["deleted_count"] == 4
-    assert payload["skipped_count"] == 0
+    # Base PARTAGÉE entre modules de test (fixture app de session) : d'autres tests laissent des
+    # jobs « E2E … » — on raisonne sur NOS identifiants, pas sur un compte absolu.
+    deleted_ids = {item["id"] for item in payload["deleted"]}
+    assert payload["deleted_count"] >= 4 and {e2e_job_id, *gone_ids} <= deleted_ids
+    assert not ({normal_job_id, *kept_ids} & deleted_ids)
     assert payload["prefixes"] == ["E2E", "BENCH", "BANC"]
     with app.app_context():
         assert JobStore.get_by_id(e2e_job_id) is None
