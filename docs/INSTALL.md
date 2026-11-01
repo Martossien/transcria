@@ -995,7 +995,11 @@ part jamais vers le service en ligne d'opencode.
 le fournisseur et les deux `model_id`, la présence et la forme de la clé (la variable est
 nommée, jamais la valeur), `opencode.json`, l'absence d'identifiant stocké qui primerait, la
 présence du modèle dans le catalogue d'opencode puis chez le fournisseur (`GET /models`, seul
-appel réseau du doctor) et une validation non caduque. Les checks de la LLM locale (script,
+appel réseau du doctor) et une validation non caduque. Ce que cette sonde **prouve** dépend du
+fournisseur : chez Mistral la liste exige la clé, un succès vaut « clé acceptée » ; chez Ollama
+cloud et OpenRouter la liste est **publique**, le doctor écrit alors « clé présente mais NON
+vérifiée » (la clé n'est contrôlée qu'à l'inférence : `--llm-smoke`) ; le fournisseur d'opencode
+n'a pas de liste, rien n'est vérifiable avant le premier appel. Les checks de la LLM locale (script,
 placement, GPU) sont « sans objet ». `--llm-smoke` y est un **appel payant**, annoncé avant le
 lancement.
 

@@ -11,6 +11,7 @@ from transcria.gpu._port_utils import kill_port_listeners
 from transcria.gpu.arbitrage_endpoint import (
     ARBITRAGE_BACKENDS,
     CLOUD_BACKEND,
+    MODELS_ENDPOINT_NONE,
     cloud_view,
     is_cloud_backend,
     ollama_model_name,
@@ -600,8 +601,39 @@ class CloudLLMBackend(LLMBackend):
         ids = [str(m.get("id")) for m in (items or []) if isinstance(m, dict) and m.get("id")]
         return ids, None
 
+    @property
+    def models_endpoint(self) -> str:
+        """Ce que prouve ``GET /models`` chez ce fournisseur (``llm_providers.MODELS_ENDPOINT_*``)."""
+        return self.view.models_endpoint
+
+    def is_reachable(self, timeout: int = 10) -> tuple[bool, str | None]:
+        """Le serveur du fournisseur RÉPOND-il ? (toute réponse HTTP compte, même 404 — pour un
+        fournisseur sans liste de modèles ; seules les pannes de transport sont une indisponibilité)."""
+        if not self.base_url:
+            return False, f"URL du fournisseur « {self.provider_id or '?'} » non résolue"
+        try:
+            headers = self.auth_headers()
+        except CloudCredentialsMissing as exc:
+            return False, str(exc)
+        _data, err = self._http_get_json_result(f"{self.base_url}/models", timeout=timeout, headers=headers)
+        if err and not err.startswith("statut HTTP") and not err.startswith("réponse non-JSON"):
+            return False, err
+        return True, None
+
     def is_available(self) -> bool:
-        """Le fournisseur répond-il avec cette clé ? (une requête réseau — JAMAIS depuis une page web)."""
+        """Le fournisseur répond-il ? (une requête réseau — JAMAIS depuis une page web).
+
+        Fournisseur avec liste de modèles : ``GET /models`` doit réussir (chez un fournisseur
+        dont la liste exige la clé, c'est aussi la preuve que la clé est acceptée ; chez un
+        fournisseur à liste publique, la clé n'est contrôlée qu'à l'inférence). Fournisseur SANS
+        liste (``models_endpoint: none``, ex. opencode : 404) : « répond » suffit — exiger un
+        200 rendrait ce fournisseur inutilisable à chaque phase.
+        """
+        if self.models_endpoint == MODELS_ENDPOINT_NONE:
+            ok, err = self.is_reachable()
+            if not ok:
+                logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", err)
+            return ok
         ids, err = self.list_models()
         if err:
             logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", err)

@@ -27,7 +27,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   provenance par job (`metadata/llm_provenance.json`, pied de page du DOCX, audit
   `job_external_llm`). Migration `a7c3e9f1b2d4`. `share: disabled` posé dans `opencode.json`.
 - **Doctor** : check « LLM d'arbitrage cloud » (clé, `opencode.json`, catalogue, `GET /models`,
-  validation non caduque) ; `--llm-smoke` annoncé comme appel payant. **Docker** : entrypoint
+  validation non caduque) ; `--llm-smoke` annoncé comme appel payant. Le verdict sur la clé dit
+  ce que la sonde prouve vraiment (`models_endpoint` par fournisseur, mesuré) : « acceptée »
+  seulement si la liste des modèles exige la clé (Mistral) ; « présente mais NON vérifiée » quand
+  la liste est publique (Ollama cloud, OpenRouter) ; un fournisseur sans liste (opencode) n'est
+  pas sondé et reste disponible dès que son serveur répond. **Docker** : entrypoint
   sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
   phases LLM cloud historisées à part dans le modèle de temps.
 - **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation

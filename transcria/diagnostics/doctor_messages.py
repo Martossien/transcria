@@ -227,7 +227,17 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_ack_stale": "validation administrateur caduque (texte « {version} », texte courant « {current} ») — "
                         "les phases LLM sont refusées",
         "lc_ack_hint": "Administration → LLM cloud : lire l'information et valider ce fournisseur/modèle.",
-        "lc_ok": "{provider} / {model} — {url} (clé via {env}, validation administrateur à jour)",
+        "lc_ok": "{provider} / {model} — {url} ({key} ; validation administrateur à jour)",
+        "lc_key_accepted": "clé {env} acceptée par le fournisseur",
+        "lc_key_unverified_public_list": "clé {env} présente mais NON vérifiée : la liste des modèles de ce "
+                                         "fournisseur est publique, la clé n'est contrôlée qu'à l'inférence "
+                                         "(--llm-smoke = un appel facturé)",
+        "lc_key_unverifiable_no_list": "clé {env} présente ; ce fournisseur n'expose pas de liste des modèles : "
+                                       "ni la clé ni le modèle ne sont vérifiables avant le premier appel "
+                                       "(--llm-smoke = un appel facturé)",
+        "lc_key_unverified_unknown_provider": "clé {env} présente ; fournisseur hors table : la liste des modèles "
+                                              "répond, sans garantie qu'elle exige la clé",
+        "lc_key_unverified_unreachable": "clé {env} présente, non vérifiée (fournisseur non sondé)",
         "lc_ok_web": "{provider} / {model} — validation administrateur à jour (tier web : clé et fournisseur "
                      "vérifiés côté ordonnanceur)",
         "mr_cloud_no_provider": "aucun fournisseur cloud exploitable dans le model_id (« {model_id} »)",
@@ -631,7 +641,17 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_ack_stale": "administrator approval outdated (text “{version}”, current text “{current}”) — "
                         "LLM phases are refused",
         "lc_ack_hint": "Administration → Cloud LLM: read the notice and approve this provider/model.",
-        "lc_ok": "{provider} / {model} — {url} (key via {env}, administrator approval up to date)",
+        "lc_ok": "{provider} / {model} — {url} ({key}; administrator approval up to date)",
+        "lc_key_accepted": "key {env} accepted by the provider",
+        "lc_key_unverified_public_list": "key {env} present but NOT verified: this provider's model list is "
+                                         "public, the key is only checked at inference time "
+                                         "(--llm-smoke = one billed call)",
+        "lc_key_unverifiable_no_list": "key {env} present; this provider exposes no model list: neither the key "
+                                       "nor the model can be verified before the first call "
+                                       "(--llm-smoke = one billed call)",
+        "lc_key_unverified_unknown_provider": "key {env} present; provider not in the table: the model list "
+                                              "answers, with no guarantee that it requires the key",
+        "lc_key_unverified_unreachable": "key {env} present, not verified (provider not probed)",
         "lc_ok_web": "{provider} / {model} — administrator approval up to date (web tier: key and provider "
                      "checked on the scheduler)",
         "mr_cloud_no_provider": "no usable cloud provider in model_id (“{model_id}”)",

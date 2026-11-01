@@ -1,6 +1,6 @@
 # LLM d'arbitrage « cloud » (fournisseur externe, passe-plat) — plan directeur
 
-> Statut (2026-11-01) : **lots A, B, C livrés** (5729b19, 9266dc9, e94fdfa), **lot D en cours** (documentation ; installateur `llm-cloud` et zéro GPU Docker selon le tableau § 6), **lot E à faire** (qualification réelle). Plan validé dans ses décisions. Rédigé après une étude
+> Statut (2026-11-01) : **lots A, B, C, D livrés** (5729b19, 9266dc9, e94fdfa, 4b70384 ; correctif de migration 8c54f14), **lot E à faire** (qualification réelle — premier constat déjà intégré : ce que prouve `GET /models` dépend du fournisseur, § 3.3.1 et § 8). Plan validé dans ses décisions. Rédigé après une étude
 > de code par sous-agent, la lecture des sources d'opencode (v1.19.5 et v2.2.5, clones locaux),
 > des sondes réelles, deux vérifications indépendantes (sources opencode ; inventaire de notre
 > code), puis une **relecture critique** (17 références contrôlées, trous et contradictions
@@ -279,7 +279,15 @@ appels directs.
 1. **Doctor révisé** : nouveau check « LLM cloud » (variable présente, modèle présent dans le
    catalogue d'opencode ET chez le fournisseur via `GET {base}/models` Bearer, validation en base
    non caduque, `share: disabled`, aucun `options.apiKey` résiduel, pas d'identifiant stocké qui
-   primerait) ; `check_opencode_model_resolution` tolère un fournisseur du catalogue ; checks LLM
+   primerait). **Ce que prouve `GET /models` dépend du fournisseur** (champ `models_endpoint` de
+   `llm_providers.yaml`, MESURÉ le 2026-11-01 avec une clé bidon) : Mistral exige la clé (401
+   sinon) ⇒ un 200 vaut « clé acceptée » ; **Ollama cloud et OpenRouter répondent 200 à tout le
+   monde** ⇒ la sonde ne prouve que la joignabilité et la présence du modèle, la clé n'est
+   contrôlée qu'à l'inférence — le doctor écrit « clé présente mais NON vérifiée » et renvoie à
+   `--llm-smoke` (appel facturé), jamais « clé valide » ; le fournisseur d'opencode n'a **pas** de
+   liste (404) ⇒ aucune sonde, « ni clé ni modèle vérifiables avant le premier appel », et la
+   disponibilité avant une phase (`CloudLLMBackend.is_available`) se réduit à « le serveur
+   répond » (exiger un 200 rendait ce fournisseur inutilisable à chaque phase) ; `check_opencode_model_resolution` tolère un fournisseur du catalogue ; checks LLM
    locale (`check_arbitrage_llm`, `check_arbitrage_script`, `check_llm_placement_declaration`,
    GPU requis) **neutralisés en cloud** ; **`--llm-smoke` en cloud est un appel payant, dit
    explicitement**. La sonde `GET /models` n'est **jamais** appelée depuis une page web
@@ -341,8 +349,8 @@ Compte des phases mis à jour dans AGENTS.md.
 | A — que ça marche — **livré** (5729b19) | `is_cloud_backend` + tuples + `CloudLLMBackend` (base_url, `auth_headers()`, en-têtes dans `_http_get_json*`), `llm_providers.yaml` + contrat, défauts `loader.py` + vue typée + classification, validateur (mélange refusé), tous les sites du § 7.2, runner (§ 3.1.6-7, parseur v2, `OPENCODE_PRINT_LOGS`), `chat_completion` (§ 3.1.5), `share: disabled` | tests backend (`cloud` gagne malgré `ollama_url`/`arbitrage_script` résiduels), admission sans GPU, `test_refine_llm` cas cloud, faux serveur `integration` (401/429/5xx, modèle inconnu), `test_opencode_runner` (erreur v2 lisible, pas de kill par inactivité), goldens schéma + contrat des vues régénérés |
 | B — que ce soit dit — **livré** (9266dc9) | table de validation + caducité, colonne groupe + migration, écran, case connecteurs, bandeau permanent, refus à la soumission (5 entrées) + rempart worker, `profile_availability`, provenance + bandeau résultat + pied DOCX + audit, ligne E2E | Playwright gestes réels + revue visuelle ; tests aux limites ; DOCX local inchangé ; `DATA_MODEL.md`, `API_REFERENCE.md` |
 | C — que ça ne casse rien — **livré** (e94fdfa) | doctor révisé (§ 3.3.1), gardes UI/provisioning (§ 3.3.2), Docker/scripts (§ 3.3.3), `timing_model` | golden registre doctor ; tests par rôle ; `docker compose config` |
-| D — zéro GPU + install + docs — **en cours** | branche installateur/express, `audiocpp_cli` dans l'image CPU, assistant `llm-cloud`, INSTALL/DOCKER (fr+en), CONFIG_REFERENCE (chaque clé feuille), LLM_BACKENDS, SECURITY_MODEL, AUDIT_DPO, UPGRADE, **`docs/README.md` + AGENTS.md** (index documentaire exigé par `release_check`) ; i18n **6 langues** (fr/en/de/es/it/pt) | `i18n_check`, `release_check`, gate d'installation vierge avec `--llm-cloud`, build de l'image CPU (règle C7) |
-| E — qualification réelle — **à faire** | E2E complet 17/17 avec **Mistral** (`mistral-large-4` ou `zai-glm-5-3`, UE) puis **Ollama cloud** ; échecs : clé révoquée, modèle retiré, fournisseur injoignable, groupe interdit, connecteur refusé ; proxy ; relecture humaine du DOCX ; réseau coupé + `XDG_DATA_HOME` vide + une variable d'env (catalogue embarqué) ; rotation des clés de banc après coup | journal dans ce document |
+| D — zéro GPU + install + docs — **livré** (4b70384) | branche installateur/express, `audiocpp_cli` dans l'image CPU, assistant `llm-cloud`, INSTALL/DOCKER (fr+en), CONFIG_REFERENCE (chaque clé feuille), LLM_BACKENDS, SECURITY_MODEL, AUDIT_DPO, UPGRADE, **`docs/README.md` + AGENTS.md** (index documentaire exigé par `release_check`) ; i18n **6 langues** (fr/en/de/es/it/pt) | `i18n_check`, `release_check`, gate d'installation vierge avec `--llm-cloud`, build de l'image CPU (règle C7) |
+| E — qualification réelle — **à faire** | E2E complet 17/17 avec **Mistral** (`mistral-large-4` ou `zai-glm-5-3`, UE) puis **Ollama cloud** ; échecs : clé révoquée, modèle retiré, fournisseur injoignable, groupe interdit, connecteur refusé ; proxy ; relecture humaine du DOCX ; réseau coupé + `XDG_DATA_HOME` vide + une variable d'env (catalogue embarqué) ; rotation des clés de banc après coup. **Fait le 2026-11-01 (avant le banc)** : mesure de `GET /models` par fournisseur avec une clé bidon → table `models_endpoint`, verdict doctor honnête, disponibilité d'un fournisseur sans liste ; **les clés du banc se lisent dans le magasin opencode de l'opérateur** (`installer.cli llm-cloud --user-home`), jamais collées dans un échange | journal dans ce document |
 
 Ratchets et gardes : `deep_config_chains` 196 (nouvelles lectures `llm_cloud.*` **par vue typée**,
 `tests/contracts/test_config_views_contract.py` à régénérer) ; `test_config_classification`
@@ -398,6 +406,12 @@ Voix (patron) : `voice/models.py:78`, `voice/routes.py:48,194`. Groupes : `auth/
 `scripts/switch_arbitrage_llm.sh:47`.
 
 ## 8. Questions ouvertes
-- Le fournisseur d'opencode et OpenRouter exposent-ils `GET /v1/models` avec la même clé ?
+- ~~Le fournisseur d'opencode et OpenRouter exposent-ils `GET /v1/models` avec la même clé ?~~
+  **Répondu le 2026-11-01 (sondes réelles, clé bidon)** : OpenRouter `GET /api/v1/models` → 200
+  sans clé comme avec une clé bidon (liste publique) ; opencode
+  `GET /inference/openai/v1/models` → 404 (pas de liste) ; Ollama cloud `GET /v1/models` → 200
+  avec une clé bidon, `/v1/chat/completions` → 401 (la clé n'est contrôlée qu'à l'inférence) ;
+  Mistral `GET /v1/models` → 401 sans clé valide. Porté dans `llm_providers.yaml`
+  (`models_endpoint`), le doctor et `CloudLLMBackend.is_available` (§ 3.3.1).
 - Bun/opencode et le proxy d'entreprise (`https_proxy`, `no_proxy`) : à tester au lot E.
 - Le binaire opencode peut-il lister les URL de base (→ table réduite aux faits à afficher) ?

@@ -36,7 +36,7 @@ démarrer, à sonder par port ni à libérer.
 | Démarrer / arrêter | sans objet (jamais de script, de process ni de `stop_script`) |
 | VRAM | aucune réservation, aucune préemption, aucune part LLM à l'admission |
 | Verrou LLM de l'allocateur | no-op (comme une LLM distante) |
-| Santé | `GET /models` avec `Authorization: Bearer` (clé = variable d'environnement du fournisseur) |
+| Santé | `GET /models` avec `Authorization: Bearer` (clé = variable d'environnement du fournisseur). Ce qu'il prouve suit `models_endpoint` de la table : liste exigeant la clé (Mistral) = clé acceptée ; liste publique (Ollama cloud, OpenRouter) = joignable + modèle servi, clé jugée à l'inférence ; pas de liste (opencode) = « le serveur répond » suffit |
 | Chien de garde d'opencode | inactivité **désactivée** (pas de sonde `/slots`) ; seul le plafond absolu s'applique |
 | Panne / clé révoquée | **une** reprise automatique de la phase, puis échec explicite et relançable (jamais `vram_wait`) |
 | Appels directs | clé + URL de la table, pas de `chat_template_kwargs`, pas de retry sur 401/403/429/5xx, `workflow.llm_cloud.extra_request_fields` fusionné |

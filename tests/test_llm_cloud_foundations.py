@@ -89,6 +89,13 @@ class TestLlmCloudView:
     def test_is_local_provider(self):
         assert LlmCloudView.from_config(_cloud("local/arbitrage")).is_local_provider is True
 
+    def test_models_endpoint_table_ou_unknown(self):
+        assert LlmCloudView.from_config(_cloud()).models_endpoint == "authenticated"
+        assert LlmCloudView.from_config(_cloud("ollama-cloud/glm-5.2")).models_endpoint == "public"
+        assert LlmCloudView.from_config(_cloud("opencode/un-modele")).models_endpoint == "none"
+        assert LlmCloudView.from_config(_cloud("fakeprov/x")).models_endpoint == "unknown"
+        assert LlmCloudView.from_config({}).models_endpoint == "unknown"
+
     @pytest.mark.parametrize("raw,exp", [("", ("", "")), ("abc", ("", "abc")), ("A/B", ("a", "B")), (None, ("", ""))])
     def test_split(self, raw, exp):
         assert _split_model_ref(raw) == exp
@@ -315,6 +322,46 @@ class TestCloudBackend:
     def test_cycle_de_vie_neutre(self):
         b = lb.CloudLLMBackend(_cloud())
         assert b.is_loaded() is False and b.unload() is True and b.shutdown() is True
+
+    def test_models_endpoint_suit_la_table(self):
+        assert lb.CloudLLMBackend(_cloud()).models_endpoint == "authenticated"
+        assert lb.CloudLLMBackend(_cloud("ollama-cloud/glm-5.2")).models_endpoint == "public"
+        assert lb.CloudLLMBackend(_cloud("opencode/un-modele")).models_endpoint == "none"
+        assert lb.CloudLLMBackend(_cloud("fakeprov/modele-test")).models_endpoint == "unknown"
+
+    def test_fournisseur_sans_liste_disponible_des_que_le_serveur_repond(self, monkeypatch):
+        """opencode : GET /models → 404 (mesuré 2026-11-01). Exiger un 200 rendrait ce fournisseur
+        indisponible à CHAQUE phase ; « le serveur répond » suffit, la clé est jugée à l'inférence."""
+        monkeypatch.setenv("OPENCODE_API_KEY", "sk-secret")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(404, text="Not Found"))
+        b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
+        assert b.is_reachable() == (True, None)
+        assert b.is_available() is True and b.ensure_available() is True
+
+    def test_fournisseur_sans_liste_injoignable_reste_indisponible(self, monkeypatch, caplog):
+        monkeypatch.setenv("OPENCODE_API_KEY", "sk-secret-valeur")
+
+        def boom(url, timeout=5, **kw):
+            raise requests.exceptions.ConnectionError("connexion refusée vers opencode.ai")
+
+        monkeypatch.setattr(requests, "get", boom)
+        b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
+        ok, err = b.is_reachable()
+        assert ok is False and "connexion" in err
+        with caplog.at_level(logging.ERROR):
+            assert b.is_available() is False
+        assert "sk-secret-valeur" not in caplog.text
+
+    def test_fournisseur_avec_liste_un_404_reste_une_indisponibilite(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(404, text="Not Found"))
+        assert lb.CloudLLMBackend(_cloud()).is_available() is False
+
+    def test_sans_cle_meme_sans_liste_indisponible_sans_reseau(self, monkeypatch):
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        monkeypatch.setattr(requests, "get", lambda *a, **k: pytest.fail("pas de réseau sans clé"))
+        b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
+        assert b.is_reachable()[0] is False and b.is_available() is False
 
     def test_http_get_sans_headers_compat_doublures(self, monkeypatch):
         seen = {}

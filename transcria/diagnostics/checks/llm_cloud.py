@@ -10,6 +10,12 @@ les ``warn`` s'accumulent.
 Toutes les sondes sont injectables. L'appel réseau au fournisseur (``GET {base}/models``) n'a
 lieu QUE dans le doctor — jamais depuis une page web. La valeur de la clé n'apparaît dans
 aucun détail ni conseil (elle est en plus masquée défensivement en sortie).
+
+Ce que la sonde PROUVE dépend du fournisseur (``models_endpoint`` de la table, mesuré) : liste
+qui exige la clé ⇒ « clé acceptée » ; liste publique (Ollama cloud, OpenRouter) ⇒ seulement
+« joignable, modèle servi », la clé n'étant contrôlée qu'à l'inférence ; pas de liste (opencode)
+⇒ aucune sonde, rien de vérifiable avant le premier appel. Le verdict l'écrit noir sur blanc :
+le doctor ne dit JAMAIS qu'une clé est valide quand il ne l'a pas vue acceptée.
 """
 from __future__ import annotations
 
@@ -32,7 +38,15 @@ from transcria.diagnostics.checks.common import (
     _resolve_database_uri,
     _t,
 )
-from transcria.gpu.arbitrage_endpoint import cloud_view, is_cloud_backend
+
+# Constantes ré-exportées par arbitrage_endpoint (module déjà importé : fan-out inchangé).
+from transcria.gpu.arbitrage_endpoint import (
+    MODELS_ENDPOINT_AUTHENTICATED,
+    MODELS_ENDPOINT_NONE,
+    MODELS_ENDPOINT_PUBLIC,
+    cloud_view,
+    is_cloud_backend,
+)
 from transcria.gpu.llm_backend import CloudLLMBackend
 from transcria.llm_cloud.policy import CLOUD_NOTICE_TEXT_VERSION, ack_is_valid
 from transcria.llm_tools.opencode_cli import parse_opencode_version
@@ -285,7 +299,16 @@ def _step_catalog(cfg: dict, model_id: str, view: LlmCloudView,
 
 
 def _step_provider_models(cfg: dict, view: LlmCloudView,
-                          probe: Callable[[dict], tuple[list[str] | None, str | None]], warns: list) -> None:
+                          probe: Callable[[dict], tuple[list[str] | None, str | None]], warns: list) -> str:
+    """Sonde ``GET /models`` ; renvoie le VERDICT sur la clé (clé de message ``lc_key_*``).
+
+    ``none`` (fournisseur sans liste) : aucune sonde, verdict « rien de vérifiable ». Sinon un 401/403
+    est un ``fail`` ; une panne de transport un ``warn`` (verdict « non vérifiée ») ; un 200 vaut
+    « acceptée » SEULEMENT si la liste exige la clé (``authenticated``), « présente, non vérifiée »
+    pour une liste publique ou un fournisseur hors table (rien n'est présumé).
+    """
+    if view.models_endpoint == MODELS_ENDPOINT_NONE:
+        return "lc_key_unverifiable_no_list"
     try:
         ids, err = probe(cfg)
     except Exception as exc:  # noqa: BLE001 — sonde réseau : jamais de crash
@@ -304,10 +327,15 @@ def _step_provider_models(cfg: dict, view: LlmCloudView,
         else:
             warns.append((_t("lc_provider_unreachable", provider=view.provider, reason=reason),
                           _t("lc_provider_unreachable_hint", url=view.base_url)))
-        return
+        return "lc_key_unverified_unreachable"
     if ids and view.model not in ids:
         raise _Stop(_t("lc_provider_model_missing", model=view.model, provider=view.provider, count=len(ids)),
                     _t("lc_provider_model_missing_hint", provider=view.provider))
+    if view.models_endpoint == MODELS_ENDPOINT_AUTHENTICATED:
+        return "lc_key_accepted"
+    if view.models_endpoint == MODELS_ENDPOINT_PUBLIC:
+        return "lc_key_unverified_public_list"
+    return "lc_key_unverified_unknown_provider"
 
 
 def _step_ack(cfg: dict, view: LlmCloudView, reader: Callable[[dict, str, str], dict | None]) -> None:
@@ -377,6 +405,7 @@ def check_llm_cloud(
     view = cloud_view(cfg)
     model_id = f"{view.provider}/{view.model}"
     key: str | None = None
+    key_verdict = "lc_key_unverified_unreachable"
     warns: list[tuple[str, str]] = []
     try:
         _step_provider(cfg, view)
@@ -390,14 +419,15 @@ def check_llm_cloud(
             _step_stored_credential_v2(view, db_path or _opencode_db_path(),
                                        db_reader or _read_v2_credential_providers, warns)
             _step_catalog(cfg, model_id, view, catalog_probe or _probe_opencode_catalog, warns)
-            _step_provider_models(cfg, view, provider_probe or _probe_provider_models, warns)
+            key_verdict = _step_provider_models(cfg, view, provider_probe or _probe_provider_models, warns)
         _step_ack(cfg, view, ack_reader or _read_cloud_ack)
     except _Stop as stop:
         return _scrub(CheckResult(name, FAIL, stop.detail, hint=stop.hint), key)
 
     if not network:
         return _scrub(CheckResult(name, OK, _t("lc_ok_web", provider=view.provider, model=view.model)), key)
-    ok_detail = _t("lc_ok", provider=view.provider, model=view.model, url=view.base_url, env=view.api_key_env)
+    ok_detail = _t("lc_ok", provider=view.provider, model=view.model, url=view.base_url,
+                   key=_t(key_verdict, env=view.api_key_env))
     if warns:
         return _scrub(CheckResult(name, WARN, ok_detail + " ; " + " ; ".join(d for d, _ in warns),
                                   hint=" | ".join(h for _, h in warns)), key)

@@ -17,7 +17,7 @@ config (injections lexique, backend forcé) restent sur le dict.
 """
 from dataclasses import dataclass, field
 
-from transcria.config.llm_providers import LOCAL_PROVIDER_ID, get_llm_provider
+from transcria.config.llm_providers import LOCAL_PROVIDER_ID, MODELS_ENDPOINT_UNKNOWN, get_llm_provider
 
 
 def _section(cfg: dict, *path: str) -> dict:
@@ -204,6 +204,9 @@ class LlmCloudView:
     base_url: str                 # URL OpenAI-compatible effective ("" si indéterminable)
     api_key_env: str              # variable d'environnement qui porte la clé ("" si inconnue)
     extra_request_fields: dict = field(default_factory=dict)
+    # Ce que prouve `GET /models` chez ce fournisseur (table : authenticated/public/none ;
+    # hors table : unknown — rien n'est présumé sur la clé). Cf. llm_providers.MODELS_ENDPOINT_*.
+    models_endpoint: str = MODELS_ENDPOINT_UNKNOWN
 
     @property
     def is_local_provider(self) -> bool:
@@ -237,4 +240,5 @@ class LlmCloudView:
             base_url=listed.base_url if listed else (api_base if provider else ""),
             api_key_env=(listed.api_key_env if listed else "") or key_env,
             extra_request_fields=dict(extra) if isinstance(extra, dict) else {},
+            models_endpoint=listed.models_endpoint if listed else MODELS_ENDPOINT_UNKNOWN,
         )

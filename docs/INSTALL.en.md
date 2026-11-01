@@ -165,7 +165,11 @@ provider **the administrator chose, contracted and monitors**. TranscrIA is a **
   provenance in `metadata/llm_provenance.json` and in the DOCX footer.
 - **Behavior**: no VRAM, no local start/stop, no idle watchdog. Provider outage or revoked key =
   one automatic retry, then an explicit, relaunchable failure.
-- **Check**: `scripts/doctor.py` ("Cloud arbitration LLM"); `--llm-smoke` is a paid call.
+- **Check**: `scripts/doctor.py` ("Cloud arbitration LLM"); `--llm-smoke` is a paid call. What the
+  `GET /models` probe proves depends on the provider: Mistral's list requires the key (success =
+  "key accepted"); Ollama cloud's and OpenRouter's lists are **public**, so the doctor reports
+  "key present but NOT verified" (the key is only checked at inference); opencode's provider has
+  no list at all (nothing verifiable before the first call).
 - **Zero-GPU tier**: cloud LLM + Kroko CPU STT + Nemotron 3 CPU diarization = a complete
   install without a graphics card (slower, less accurate STT; no local LLM fallback).
 - **`install.sh --llm-cloud`** (opt-in): installer phase that writes the key variable to `.env`

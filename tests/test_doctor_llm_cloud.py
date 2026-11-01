@@ -98,6 +98,75 @@ def test_nominal_ok_names_provider_model_url():
     _assert_no_secret(res)
 
 
+# ── Ce que la sonde GET /models PROUVE, selon le fournisseur (mesuré 2026-11-01) ──
+
+
+def test_liste_exigeant_la_cle_un_200_vaut_cle_acceptee():
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes())
+    assert res.status == doc.OK
+    assert "clé MISTRAL_API_KEY acceptée" in res.detail
+    assert "NON vérifiée" not in res.detail
+
+
+def _ollama_cfg():
+    mid = "ollama-cloud/glm-5.2"
+    return _cloud_cfg(workflow={"arbitration_llm": {"model_id": mid}, "summary_llm": {"model_id": mid}})
+
+
+def test_liste_publique_ne_dit_jamais_cle_valide(monkeypatch):
+    """Ollama cloud : GET /v1/models répond 200 même avec une clé bidon. Un doctor qui en
+    déduirait « clé valide » mentirait sur une clé révoquée — il dit « présente, NON vérifiée »."""
+    monkeypatch.setenv("OLLAMA_API_KEY", SECRET)
+    res = lc.check_llm_cloud(_ollama_cfg(), **_probes(
+        catalog_probe=lambda c: ["ollama-cloud/glm-5.2"], provider_probe=lambda c: (["glm-5.2", "kimi-k3"], None)))
+    assert res.status == doc.OK, res
+    assert "clé OLLAMA_API_KEY présente mais NON vérifiée" in res.detail
+    assert "acceptée" not in res.detail
+    assert "--llm-smoke" in res.detail
+    _assert_no_secret(res)
+
+
+def test_liste_publique_garde_ses_verdicts_modele_et_401(monkeypatch):
+    monkeypatch.setenv("OLLAMA_API_KEY", SECRET)
+    probes = _probes(catalog_probe=lambda c: ["ollama-cloud/glm-5.2"])
+    absent = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: (["autre"], None)})
+    assert absent.status == doc.FAIL and "glm-5.2" in absent.detail
+    refuse = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: (None, "statut HTTP 401")})
+    assert refuse.status == doc.FAIL and "refuse la clé" in refuse.detail
+
+
+def test_fournisseur_sans_liste_ne_sonde_pas_et_le_dit(monkeypatch):
+    """opencode : pas de GET /models (404 mesuré). Aucune sonde ; ni clé ni modèle vérifiables."""
+    monkeypatch.setenv("OPENCODE_API_KEY", SECRET)
+    mid = "opencode/un-modele"
+    cfg = _cloud_cfg(workflow={"arbitration_llm": {"model_id": mid}, "summary_llm": {"model_id": mid}})
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: [mid], provider_probe=_boom))
+    assert res.status == doc.OK, res
+    assert "n'expose pas de liste des modèles" in res.detail
+    assert "--llm-smoke" in res.detail
+    assert "acceptée" not in res.detail
+    _assert_no_secret(res)
+
+
+def test_fournisseur_hors_table_ne_presume_rien_sur_la_cle(monkeypatch):
+    monkeypatch.setenv("MAISON_KEY", SECRET)
+    cfg = _cloud_cfg(workflow={
+        "arbitration_llm": {"model_id": "maison/m1", "api_base": "https://llm.exemple.test/v1"},
+        "summary_llm": {"model_id": "maison/m1"},
+        "llm_cloud": {"api_key_env": "MAISON_KEY"},
+    })
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: ["maison/m1"], provider_probe=lambda c: (["m1"], None)))
+    assert res.status == doc.OK, res
+    assert "hors table" in res.detail and "acceptée" not in res.detail
+
+
+def test_fournisseur_non_sonde_verdict_non_verifiee():
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: (None, "connexion refusée/coupée: x")))
+    assert res.status == doc.WARN
+    assert "non vérifiée (fournisseur non sondé)" in res.detail
+    assert "acceptée" not in res.detail
+
+
 def test_web_variant_skips_key_opencode_and_network(monkeypatch):
     monkeypatch.delenv("MISTRAL_API_KEY")
     res = lc.check_llm_cloud_web(_cloud_cfg(), **_probes(

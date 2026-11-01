@@ -7,7 +7,12 @@ from transcria.config.llm_providers import (
     ARBITRAGE_BACKENDS,
     CLOUD_BACKEND,
     LOCAL_PROVIDER_ID,
+    MODELS_ENDPOINT_AUTHENTICATED,
+    MODELS_ENDPOINT_KINDS,
+    MODELS_ENDPOINT_NONE,
+    MODELS_ENDPOINT_PUBLIC,
     LlmProvider,
+    _parse_provider,
     get_llm_provider,
     known_provider_ids,
     load_llm_providers,
@@ -42,6 +47,28 @@ def test_contrat_fournisseur(pid):
         assert p.hosting.get(lang, "").strip()
         assert p.facts.get(lang)
         assert all(f.strip() for f in p.facts[lang])
+    assert p.models_endpoint in MODELS_ENDPOINT_KINDS
+
+
+def test_models_endpoint_mesure_le_2026_11_01():
+    """Ce que prouve `GET /models` chez chaque fournisseur — MESURÉ avec une clé bidon : Mistral
+    401 (la liste exige la clé), Ollama cloud et OpenRouter 200 (liste publique, clé contrôlée
+    à l'inférence seulement), opencode 404 (pas de liste). Changer une valeur ici = refaire la mesure."""
+    assert PROVIDERS["mistral"].models_endpoint == MODELS_ENDPOINT_AUTHENTICATED
+    assert PROVIDERS["mistral"].models_list_proves_key and PROVIDERS["mistral"].has_models_list
+    for pid in ("ollama-cloud", "openrouter"):
+        assert PROVIDERS[pid].models_endpoint == MODELS_ENDPOINT_PUBLIC
+        assert not PROVIDERS[pid].models_list_proves_key and PROVIDERS[pid].has_models_list
+    assert PROVIDERS["opencode"].models_endpoint == MODELS_ENDPOINT_NONE
+    assert not PROVIDERS["opencode"].models_list_proves_key and not PROVIDERS["opencode"].has_models_list
+
+
+def test_models_endpoint_absent_vaut_authenticated_et_inconnu_refuse():
+    base = {"label": "X", "base_url": "https://x.example", "api_key_env": "X_KEY"}
+    assert _parse_provider("x", base).models_endpoint == MODELS_ENDPOINT_AUTHENTICATED
+    assert _parse_provider("x", {**base, "models_endpoint": " Public "}).models_endpoint == MODELS_ENDPOINT_PUBLIC
+    with pytest.raises(ValueError, match="models_endpoint"):
+        _parse_provider("x", {**base, "models_endpoint": "peut-etre"})
 
 
 def test_get_llm_provider_insensible_casse_et_inconnu():

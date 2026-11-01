@@ -25,6 +25,14 @@ CLOUD_BACKEND = "cloud"
 # Préfixe opencode de la LLM LOCALE (alias générique `arbitrage`, cf. AGENTS.md) : jamais
 # un fournisseur cloud.
 LOCAL_PROVIDER_ID = "local"
+# Ce que prouve `GET {base_url}/models` chez le fournisseur (champ `models_endpoint` de la
+# table, mesuré avec une clé bidon) : la liste exige la clé / répond à tout le monde / n'existe
+# pas. Un fournisseur HORS table est `unknown` : rien n'est présumé sur sa clé.
+MODELS_ENDPOINT_AUTHENTICATED = "authenticated"
+MODELS_ENDPOINT_PUBLIC = "public"
+MODELS_ENDPOINT_NONE = "none"
+MODELS_ENDPOINT_UNKNOWN = "unknown"
+MODELS_ENDPOINT_KINDS = (MODELS_ENDPOINT_AUTHENTICATED, MODELS_ENDPOINT_PUBLIC, MODELS_ENDPOINT_NONE)
 
 _DEFAULT_PROVIDERS_PATH = Path(__file__).resolve().parent.parent / "data" / "llm_providers.yaml"
 
@@ -41,6 +49,16 @@ class LlmProvider:
     verified_on: str
     hosting: dict[str, str]
     facts: dict[str, tuple[str, ...]]
+    models_endpoint: str = MODELS_ENDPOINT_AUTHENTICATED
+
+    @property
+    def models_list_proves_key(self) -> bool:
+        """Un 200 sur ``GET /models`` prouve-t-il que la clé est acceptée ?"""
+        return self.models_endpoint == MODELS_ENDPOINT_AUTHENTICATED
+
+    @property
+    def has_models_list(self) -> bool:
+        return self.models_endpoint != MODELS_ENDPOINT_NONE
 
     def hosting_text(self, lang: str) -> str:
         return self.hosting.get(lang) or self.hosting.get("fr") or ""
@@ -56,6 +74,12 @@ def providers_path() -> Path:
 def _parse_provider(provider_id: str, raw: dict) -> LlmProvider:
     hosting = raw.get("hosting") or {}
     facts = raw.get("facts") or {}
+    models_endpoint = str(raw.get("models_endpoint") or MODELS_ENDPOINT_AUTHENTICATED).strip().lower()
+    if models_endpoint not in MODELS_ENDPOINT_KINDS:
+        raise ValueError(
+            f"fournisseur LLM cloud « {provider_id} » : models_endpoint « {models_endpoint} » inconnu "
+            f"(attendu : {', '.join(MODELS_ENDPOINT_KINDS)})"
+        )
     return LlmProvider(
         id=str(provider_id),
         label=str(raw.get("label") or provider_id),
@@ -68,6 +92,7 @@ def _parse_provider(provider_id: str, raw: dict) -> LlmProvider:
             str(k): tuple(str(f) for f in (v or []))
             for k, v in facts.items()
         } if isinstance(facts, dict) else {},
+        models_endpoint=models_endpoint,
     )
 
 
