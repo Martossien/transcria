@@ -208,7 +208,7 @@ jobs:
         with:
           node-version: "22"
       - name: Dépendances front
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Lint JavaScript
         run: npm run lint
       - name: Tests JavaScript

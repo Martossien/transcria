@@ -1,21 +1,27 @@
 flask>=3.0,<4.0
 flask-login>=0.6,<1.0
 # Chantier identité (docs/GESTION_IDENTITE.md) : client OIDC (lot 1).
-authlib>=1.7,<2.0
+authlib>=1.9.1,<2.0             # ≥ 1.9.1 : PYSEC-2026-4355…4359 (nonce de l'ID token lu dans le jeton non vérifié, scope, import de clé) — connecteur OIDC
+joserfc>=1.7.6,<2.0             # ≥ 1.7.6 : CVE-2026-119283/119284 (JWE recipients non borné, JWS découpé avant validation) — JOSE d'authlib, jetons du fournisseur OIDC
 # Chantier identité : connecteur LDAP / Active Directory direct (lot 2). Pur-Python
 # (tire pyasn1) → images Docker inchangées ; importé de façon différée (aucun coût
 # pour les installations en backend local/oidc/proxy).
 ldap3>=2.9,<3.0
+pyasn1>=0.6.5,<0.7              # ≥ 0.6.5 : CVE-2026-119194…119197 (décodage BER/DER quadratique) — tiré par ldap3, réponses du serveur LDAP
 flask-sqlalchemy>=3.1,<4.0
 # i18n (interface multilingue FR/EN) : gettext + négociation Accept-Language + formats
 # date/nombre localisés. Pur-Python (tire Babel) → images Docker inchangées. Catalogues
 # dans transcria/web/translations/, compilés en CI + build Docker + entrypoint.
 flask-babel>=4.0,<5.0
-werkzeug>=3.0,<4.0
+werkzeug>=3.1.9,<4.0            # ≥ 3.1.9 : PYSEC-2026-4312 (safe_join, noms de périphériques Windows)
 gunicorn>=21.2,<24.0        # serveur WSGI du tier web (rôle web/all en prod)
 pyyaml>=6.0,<7.0
 python-dotenv>=1.0,<2.0
 requests>=2.31,<3.0
+urllib3>=2.8.0,<3.0             # ≥ 2.8.0 : PYSEC-2026-4175/4176/4177 (bombes de décompression en streaming, TLS du proxy)
+certifi>=2026.10.18             # ≥ 2026.10.18 : PYSEC-2026-4320 (racine emSign ECC G3 retirée, intermédiaires compromis) — magasin TLS de requests/httpx
+aiohttp>=3.14.4,<4.0            # ≥ 3.14.4 : PYSEC-2026-2104…2107 (CookieJar.load, cookies après redirection, pipelining) — tiré par huggingface_hub
+pillow>=12.3.0,<14              # ≥ 12.3.0 : PYSEC-2026-2253…2257 (polices PCF/BDF, WindowsViewer) — tiré par python-pptx/matplotlib
 sqlalchemy>=2.0,<3.0
 
 # Base de données
@@ -49,6 +55,7 @@ sherpa-onnx>=1.12,<2.0
 
 # Speaker diarization
 pyannote.audio>=4.0,<5.0
+pytorch-lightning>=2.6.6,<3.0   # ≥ 2.6.6 : PYSEC-2026-3967 (RCE par checkpoint forgé). Le méta-paquet `lightning` reste à 2.4.0 : nemo-toolkit l'exige (<=2.4.0) et 2.6.6 casse l'import pyannote→NeMo (OneLoggerPTLTrainer)
 # Décodeur audio requis par pyannote.audio 4.x (AudioDecoder). Couplé à l'ABI de torch
 # (torchcodec 0.12 ↔ torch 2.12) → installé depuis l'index torch par l'install/Docker pour
 # garantir un wheel apparié ; requiert aussi les libs FFmpeg système au runtime (déjà exigées).
@@ -64,6 +71,6 @@ python-docx>=1.1,<2.0
 # Formats XML modernes uniquement, 100 % pur-Python (aucune dépendance système) :
 # .docx via python-docx (ci-dessus), .pdf via pypdf, .pptx via python-pptx (tire Pillow/lxml,
 # déjà présents). Les .doc/.ppt binaires hérités ne sont pas gérés (message dans l'UI).
-pypdf>=5,<6
+pypdf>=6.21.4,<7                # ≥ 6.21.4 : série de dénis de service par PDF forgé (PYSEC-2026-1827…1833, CVE-2026-1192xx) — les PDF joints viennent des utilisateurs
 python-pptx>=1,<2
 psutil>=5.9        # métriques CPU/RAM de la page Système (source locale, C2.3)

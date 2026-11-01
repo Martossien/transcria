@@ -175,6 +175,29 @@ la nouvelle version. Seul le **tag vérifié** peut être déployé (jamais une 
 En **conteneur**, la carte affiche à la place la marche à suivre (`docker compose pull`,
 cf. `docs/DOCKER.md`) : l'image est immuable, le portail ne se réécrit pas lui-même.
 
+### Notes spécifiques 0.4.7 → 0.4.8
+
+Aucune migration de base. Trois choses à savoir :
+
+- **Étape Résumé plus lente, mais juste.** La diarisation passe désormais AVANT la
+  transcription rapide (`workflow.summary_by_turns`, activé par défaut) : les descriptions des
+  « Participants probables » tombent sur la bonne voix (mesure : 18/19 contre 11/19 sur trois
+  réunions réelles), pour **+15 à +25 % sur la durée de cette seule étape**. Pour retrouver
+  l'ordre historique : `workflow: { summary_by_turns: false }` dans `config.yaml`.
+- **Portugais (variante brésilienne)**, contribution native : interface, prompts et livrables.
+  Proposé d'office aux configurations neuves ; sur une installation existante, ajouter `"pt"`
+  à `i18n.available_locales` puis recompiler les catalogues
+  (`venv/bin/python -m transcria.installer.cli i18n-compile`, fait par `install.sh`).
+- **Planchers de dépendances relevés pour des correctifs de sécurité** (`requirements.txt` :
+  pypdf 6, authlib 1.9.1, urllib3 2.8, certifi, aiohttp, pillow, pytorch-lightning 2.6.6 ;
+  `requirements-connectors.txt` : cryptography 50, PyJWT 2.15, msgpack 1.2.3). Le
+  `pip install -r requirements.txt` de la procédure ci-dessus les applique : pip remplace tout
+  paquet installé qui ne satisfait plus le plancher. **Ce qu'il ne fait pas** : remonter les
+  autres paquets transitifs d'une installation ancienne (il n'installe que ce qui manque). Pour
+  les connaître : `venv/bin/pip install pip-audit && venv/bin/pip-audit`. Ne lancez PAS
+  `pip install --upgrade -r requirements.txt` : il réinstallerait `torch` depuis PyPI sans la
+  variante CUDA choisie à l'installation.
+
 ### Notes spécifiques 0.4.6 → 0.4.7
 
 Aucune migration de base. **Rien ne change tout seul** dans une installation existante :
