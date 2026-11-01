@@ -41,8 +41,9 @@ scripts/generated/
 # Audit interne (document de travail)
 AUDIT_INTERNE.md
 
-# Agent internal data
-.claude/
+# Agent internal data (.claude/skills/ est VERSIONNÉ : skills du dépôt référencés par AGENTS.md)
+.claude/*
+!.claude/skills/
 .agents/
 .codex/
 
