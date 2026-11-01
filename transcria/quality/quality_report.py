@@ -625,19 +625,26 @@ class QualityReporter:
             checks.append({"type": "unmapped_speakers", "count": unmapped_count, "severity": "warning"})
             review_points.append(self.S["unmapped"].format(n=unmapped_count))
 
-        # 7. Termes du lexique normalisés absents
+        # 7. Cibles du lexique absentes : une variante VALIDÉE a été vue dans le brut, mais la
+        #    forme attendue (`replace_by`, sinon le terme) n'apparaît pas dans le corrigé —
+        #    le vrai « lexique pas pris en compte » (mesure 2026-11 : `replace_by` n'était
+        #    jamais saisi, ce contrôle ne se déclenchait donc jamais). Les formes ambiguës
+        #    « A / B » ne sont jamais substituées : exclues, elles sont signalées ailleurs.
         total_checks += 1
         corrected_srt = fs.load_text("metadata/transcription_corrigee.srt") or srt_content
         missing_corrected = []
         for t in lexicon:
             replace_by = t.get("replace_by", "").strip()
             term = t.get("term", "").strip()
-            if not replace_by:
+            target = replace_by or term
+            if not target or " / " in term:
                 continue
-            if replace_by == term:
+            variant_seen = any(LexiconChecker._contains_phrase(srt_content, v)
+                               for v in (t.get("variants") or []) if str(v or "").strip())
+            if not variant_seen and not replace_by:
                 continue
-            if replace_by.lower() not in corrected_srt.lower():
-                missing_corrected.append(replace_by)
+            if not LexiconChecker._contains_phrase(corrected_srt, target):
+                missing_corrected.append(target)
         if missing_corrected:
             checks.append({"type": "missing_lexicon_terms",
                            "terms": missing_corrected,

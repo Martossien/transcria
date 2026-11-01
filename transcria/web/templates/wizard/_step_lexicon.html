@@ -53,6 +53,11 @@
       </div>
       {% endif %}
     {% endif %}
+    <div class="alert alert-light border small mb-3" data-lexicon-help>
+      <i class="bi bi-info-circle"></i>
+      {{ _("Comment ce lexique est appliqué : la correction remplace une forme suspecte par la forme validée seulement quand le contexte le confirme (jamais un homonyme). « Forme à écrire » sert quand l'orthographe finale diffère de la forme reconnue. Priorité critique ou importante = l'entrée est transmise à la correction même si elle n'est pas encore détectée ; normale = seulement si elle l'est.") }}
+      <strong>{{ _("Une forme validée écrite « A / B » n'est jamais remplacée, seulement signalée : choisissez une seule graphie.") }}</strong>
+    </div>
     <div id="lexicon-list">
       {% for t in lexicon %}
       <div class="lexicon-row lexicon-card">
@@ -70,7 +75,13 @@
             {% endfor %}
           </select>
         </div>
-        <input type="hidden" class="lex-replace" value="{{ t.replace_by or '' }}">
+        <div class="mt-2">
+          <label class="form-label small mb-1">{{ _("Forme à écrire dans la transcription (si différente de la forme validée)") }}</label>
+          <input type="text" class="form-control form-control-sm lex-replace" placeholder="{{ _("Ex. sigle développé, orthographe officielle") }}" value="{{ t.replace_by or '' }}">
+        </div>
+        {% if ' / ' in (t.term or '') %}
+        <div class="mt-2"><span class="badge text-bg-warning-subtle border text-warning-emphasis">{{ _("Forme ambiguë « A / B » : jamais remplacée, seulement signalée — gardez une seule graphie") }}</span></div>
+        {% endif %}
         <input type="hidden" class="lex-source" value="{{ t.source or '' }}">
         <input type="hidden" class="lex-central-entry-id" value="{{ t.central_entry_id or '' }}">
         <input type="hidden" class="lex-central-lexicon-id" value="{{ t.central_lexicon_id or '' }}">

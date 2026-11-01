@@ -1,7 +1,7 @@
 import logging
 import unicodedata
 
-from transcria.context.lexicon import LEXICON_PRIORITIES, LexiconManager
+from transcria.context.lexicon import LEXICON_PRIORITIES, LexiconManager, normalize_priority  # noqa: F401 — ré-export
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +12,6 @@ _SOURCE_RANK = {"session": 4, "llm": 3, "merged": 2, "central": 1}
 def normalize_match_text(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", str(value or "").casefold())
     return "".join(char for char in decomposed if not unicodedata.combining(char))
-
-
-def normalize_priority(value: str) -> str:
-    text = str(value or "").strip().lower()
-    return text if text in LEXICON_PRIORITIES else "normale"
 
 
 def entry_key(entry: dict) -> str:

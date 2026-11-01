@@ -197,6 +197,12 @@ Aucune migration de base. Trois choses à savoir :
   les connaître : `venv/bin/pip install pip-audit && venv/bin/pip-audit`. Ne lancez PAS
   `pip install --upgrade -r requirements.txt` : il réinstallerait `torch` depuis PyPI sans la
   variante CUDA choisie à l'installation.
+- **Lexique de session, plus lisible** : la « forme à écrire » (orthographe finale quand elle
+  diffère de la forme reconnue) est désormais un champ visible ; les priorités saisies sous une
+  autre forme (« normal », « important », « critical ») sont reconnues au lieu d'être rabattues
+  en silence ; une forme validée écrite « A / B » est signalée comme ambiguë (elle n'est jamais
+  remplacée, seulement signalée) ; le rapport qualité liste les formes attendues absentes du
+  SRT corrigé quand une variante avait été vue — c'est le signal « lexique pas appliqué ».
 - **Moteurs amont remontés** : audio.cpp v0.9.3 (précompilé CPU et build CUDA ; trois
   changements marqués cassants chez l'amont sur la normalisation des options et le routage des
   requêtes serveur, re-fumés sur nos deux usages : diarisation Nemotron 3 et STT servi

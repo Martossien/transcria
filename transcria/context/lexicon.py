@@ -11,6 +11,24 @@ LEXICON_CATEGORIES = [
 
 LEXICON_PRIORITIES = ["critique", "importante", "normale"]
 
+# Synonymes acceptés à la saisie / à l'import (mesure 2026-11 sur 17 jobs réels : 14 entrées
+# portaient « normal » ou « important » — rabattues en silence sur « normale », elles
+# perdaient la préservation que l'utilisateur croyait avoir choisie).
+_PRIORITY_SYNONYMS = {
+    "critique": "critique", "critical": "critical", "critica": "critique", "crítica": "critique",
+    "kritisch": "critique", "crítico": "critique", "critico": "critique",
+    "importante": "importante", "important": "importante", "wichtig": "importante",
+    "normale": "normale", "normal": "normale", "standard": "normale",
+}
+_PRIORITY_SYNONYMS["critical"] = "critique"
+
+
+def normalize_priority(value: object) -> str:
+    """Priorité canonique (``critique`` / ``importante`` / ``normale``) — synonymes tolérés,
+    inconnue ⇒ ``normale``."""
+    text = str(value or "").strip().lower()
+    return _PRIORITY_SYNONYMS.get(text, "normale")
+
 # Affichage localisé des priorités (axe A). La VALEUR reste la clé canonique FR (stockée,
 # comparée : _PRIORITY_RANK, keep_priorities…) ; seul le libellé visible est traduit. fr =
 # identité stricte. Même principe que les profils/types de réunion.
@@ -104,7 +122,7 @@ class LexiconManager:
                 "term": term,
                 "category": t.get("category", "mot suspect").strip() or "mot suspect",
                 "variants": LexiconManager._normalize_variants(t.get("variants", []), term=term),
-                "priority": t.get("priority", "normale"),
+                "priority": normalize_priority(t.get("priority", "normale")),
                 "replace_by": t.get("replace_by", "").strip(),
                 "comment": t.get("comment", "").strip(),
                 "contexts": LexiconManager._normalize_contexts(t.get("contexts", [])),
