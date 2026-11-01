@@ -3,6 +3,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,36 @@ _PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
 def progress_msg(language: str | None, key: str) -> str:
     """Message de progression localisé (repli français, puis clé brute)."""
     return _PROGRESS_MESSAGES.get((language or "fr"), _PROGRESS_MESSAGES["fr"]).get(key, key)
+
+
+#: États où quelque chose TOURNE réellement côté serveur : une progression persistée n'a de
+#: sens qu'ici, ou quand une exécution de file est active (queued/running/waiting_vram).
+LIVE_STATES: frozenset[str] = frozenset({
+    JobState.SUMMARY_RUNNING.value, JobState.SPEAKER_DETECTION_RUNNING.value,
+    JobState.TRANSCRIBING.value, JobState.DIARIZING.value, JobState.ARBITRATING.value,
+    JobState.QUALITY_CHECKING.value,
+})
+
+
+def effective_workflow_progress(job) -> dict | None:
+    """Progression à AFFICHER — ``None`` dès que rien ne tourne.
+
+    Retour utilisateurs 2026-11 (« des animations en cours alors que c'est terminé ») :
+    ``workflow_progress`` restait en base après un échec, une annulation ou un tour
+    d'affinage, et le bandeau du wizard affichait un spinner dès qu'un message existait.
+    L'effacement à chaque état terminal est fait par ailleurs ; ce filtre est la ceinture :
+    hors état « live » et hors exécution active, on ne montre rien.
+    """
+    progress = get_workflow_progress(job)
+    if progress is None:
+        return None
+    if job.state in LIVE_STATES:
+        return progress
+    try:
+        status = (job.get_extra_data().get("execution") or {}).get("status")
+    except Exception:  # noqa: BLE001
+        status = None
+    return progress if status in ("queued", "running", "waiting_vram") else None
 
 
 def get_workflow_progress(job) -> dict | None:

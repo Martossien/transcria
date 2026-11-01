@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-01 12:03+0100\n"
+"POT-Creation-Date: 2026-11-01 12:31+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -267,7 +267,7 @@ msgid "(créé)"
 msgstr "(erstellt)"
 
 #: transcria/i18n/js_catalog.py:33
-#: transcria/web/templates/wizard/_step_lexicon.html:140
+#: transcria/web/templates/wizard/_step_lexicon.html:151
 msgid "Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
 msgstr "Diese validierte Form zu einem zentralen Lexikon hinzufügen, das geteilt und in künftigen Jobs wiederverwendet wird"
 
@@ -298,19 +298,19 @@ msgid "Annuler le traitement"
 msgstr "Verarbeitung abbrechen"
 
 #: transcria/i18n/js_catalog.py:38
-#: transcria/web/templates/wizard/_step_lexicon.html:141
+#: transcria/web/templates/wizard/_step_lexicon.html:152
 msgid "Au lexique central"
 msgstr "Zum zentralen Lexikon"
 
 #: transcria/i18n/js_catalog.py:39
 #: transcria/web/templates/_central_lexicon_entry_fields.html:11
 #: transcria/web/templates/central_lexicon_detail.html:193
-#: transcria/web/templates/wizard/_step_lexicon.html:62
+#: transcria/web/templates/wizard/_step_lexicon.html:67
 msgid "Catégorie"
 msgstr "Kategorie"
 
 #: transcria/i18n/js_catalog.py:40
-#: transcria/web/templates/wizard/_step_lexicon.html:66
+#: transcria/web/templates/wizard/_step_lexicon.html:71
 msgid "Catégorie libre"
 msgstr "Freie Kategorie"
 
@@ -323,7 +323,7 @@ msgid "Contexte projet"
 msgstr "Projektkontext"
 
 #: transcria/i18n/js_catalog.py:43
-#: transcria/web/templates/wizard/_step_lexicon.html:101
+#: transcria/web/templates/wizard/_step_lexicon.html:112
 #, python-format
 msgid "Contexte proposé (%(n)s)"
 msgstr "Vorgeschlagener Kontext (%(n)s)"
@@ -372,12 +372,12 @@ msgid "Erreur serveur non JSON."
 msgstr "Serverfehler, kein JSON."
 
 #: transcria/i18n/js_catalog.py:54
-#: transcria/web/templates/wizard/_step_lexicon.html:65
+#: transcria/web/templates/wizard/_step_lexicon.html:70
 msgid "Ex: Forme douteuse A, forme douteuse B"
 msgstr "Z. B.: Unsichere Form A, unsichere Form B"
 
 #: transcria/i18n/js_catalog.py:55
-#: transcria/web/templates/wizard/_step_lexicon.html:64
+#: transcria/web/templates/wizard/_step_lexicon.html:69
 msgid "Ex: Forme validée"
 msgstr "Z. B.: Validierte Form"
 
@@ -414,12 +414,12 @@ msgid "Fonction"
 msgstr "Funktion"
 
 #: transcria/i18n/js_catalog.py:63
-#: transcria/web/templates/wizard/_step_lexicon.html:60
+#: transcria/web/templates/wizard/_step_lexicon.html:65
 msgid "Forme validée"
 msgstr "Validierte Form"
 
 #: transcria/i18n/js_catalog.py:64
-#: transcria/web/templates/wizard/_step_lexicon.html:61
+#: transcria/web/templates/wizard/_step_lexicon.html:66
 msgid "Formes suspectes observées"
 msgstr "Beobachtete unsichere Formen"
 
@@ -468,7 +468,7 @@ msgid "Le résumé n'a pas pu être généré (LLM sans production après 3 tent
 msgstr "Die Zusammenfassung konnte nicht erstellt werden (LLM ohne Ergebnis nach 3 Versuchen). Die Transkription bleibt erhalten — Sie können den Vorgang neu starten."
 
 #: transcria/i18n/js_catalog.py:76
-#: transcria/web/templates/wizard/_step_lexicon.html:82
+#: transcria/web/templates/wizard/_step_lexicon.html:93
 #, python-format
 msgid "Lexique central : %(name)s"
 msgstr "Zentrales Lexikon: %(name)s"
@@ -494,7 +494,7 @@ msgid "Oui, relancer"
 msgstr "Ja, neu starten"
 
 #: transcria/i18n/js_catalog.py:80
-#: transcria/web/templates/wizard/_step_lexicon.html:97
+#: transcria/web/templates/wizard/_step_lexicon.html:108
 msgid "Pourquoi cette forme doit être validée"
 msgstr "Warum diese Form validiert werden muss"
 
@@ -502,7 +502,7 @@ msgstr "Warum diese Form validiert werden muss"
 #: transcria/web/templates/_central_lexicon_entry_fields.html:15
 #: transcria/web/templates/central_lexicon_detail.html:197
 #: transcria/web/templates/queue.html:93
-#: transcria/web/templates/wizard/_step_lexicon.html:63
+#: transcria/web/templates/wizard/_step_lexicon.html:68
 msgid "Priorité"
 msgstr "Priorität"
 
@@ -511,7 +511,7 @@ msgid "Produit"
 msgstr "Produkt"
 
 #: transcria/i18n/js_catalog.py:83
-#: transcria/web/templates/wizard/_step_lexicon.html:94
+#: transcria/web/templates/wizard/_step_lexicon.html:105
 msgid "Proposé à partir d'un document que vous avez joint à la réunion"
 msgstr "Vorgeschlagen anhand eines Dokuments, das Sie der Besprechung beigefügt haben"
 
@@ -603,7 +603,7 @@ msgid "Voulez-vous relancer le traitement ? (le lexique et les corrections actue
 msgstr "Möchten Sie die Verarbeitung neu starten? (Das aktuelle Lexikon und die aktuellen Korrekturen werden angewendet)"
 
 #: transcria/i18n/js_catalog.py:104
-#: transcria/web/templates/wizard/_step_lexicon.html:94
+#: transcria/web/templates/wizard/_step_lexicon.html:105
 msgid "issu des documents fournis"
 msgstr "aus den bereitgestellten Dokumenten"
 
@@ -668,7 +668,7 @@ msgid "requête impossible"
 msgstr "Anfrage fehlgeschlagen"
 
 #: transcria/i18n/js_catalog.py:118
-#: transcria/web/templates/wizard/_step_lexicon.html:109
+#: transcria/web/templates/wizard/_step_lexicon.html:120
 msgid "sans timecode"
 msgstr "ohne Zeitcode"
 
@@ -678,7 +678,7 @@ msgid "tronqué"
 msgstr "gekürzt"
 
 #: transcria/i18n/js_catalog.py:120
-#: transcria/web/templates/wizard/_step_lexicon.html:103
+#: transcria/web/templates/wizard/_step_lexicon.html:114
 #, python-format
 msgid "· %(listened)s/%(total)s écoutés"
 msgstr "· %(listened)s/%(total)s angehört"
@@ -697,12 +697,12 @@ msgid "Échec du traitement."
 msgstr "Verarbeitung fehlgeschlagen."
 
 #: transcria/i18n/js_catalog.py:124
-#: transcria/web/templates/wizard/_step_lexicon.html:115
+#: transcria/web/templates/wizard/_step_lexicon.html:126
 msgid "Écouter 5 secondes avant et après"
 msgstr "5 Sekunden davor und danach anhören"
 
 #: transcria/i18n/js_catalog.py:125
-#: transcria/web/templates/wizard/_step_lexicon.html:128
+#: transcria/web/templates/wizard/_step_lexicon.html:139
 msgid "Écouté"
 msgstr "Gehört"
 
@@ -1301,7 +1301,7 @@ msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "Eine wiederherstellbare Version wird erstellt (Rückgängigmachen möglich)."
 
 #: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:261
-#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:43
+#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:42
 msgid "Erreur"
 msgstr "Fehler"
 
@@ -1355,61 +1355,79 @@ msgid "Supprimer tous les jobs de test ?"
 msgstr "Alle Test-Jobs löschen?"
 
 #: transcria/i18n/js_catalog.py:289
+#: transcria/web/templates/wizard/_step_lexicon.html:79
+msgid "Forme à écrire dans la transcription (si différente de la forme validée)"
+msgstr "In der Transkription zu schreibende Form (falls abweichend von der bestätigten Form)"
+
+#: transcria/i18n/js_catalog.py:290
+#: transcria/web/templates/wizard/_step_lexicon.html:80
+msgid "Ex. sigle développé, orthographe officielle"
+msgstr "z. B. ausgeschriebenes Kürzel, offizielle Schreibweise"
+
+#: transcria/i18n/js_catalog.py:291
+msgid "En attente de mémoire GPU — le traitement reprendra tout seul dès qu'elle se libère."
+msgstr "Warten auf GPU-Speicher — die Verarbeitung läuft von selbst weiter, sobald er frei wird."
+
+#: transcria/i18n/js_catalog.py:292
+msgid "En file d'attente — démarrage dès qu'une place se libère."
+msgstr "In der Warteschlange — Start, sobald ein Platz frei wird."
+
+#: transcria/i18n/js_catalog.py:293
 msgid "Les jobs en cours seront ignorés."
 msgstr "Laufende Jobs werden übersprungen."
 
-#: transcria/i18n/js_catalog.py:290
+#: transcria/i18n/js_catalog.py:294
 msgid "Nettoyage impossible."
 msgstr "Bereinigung fehlgeschlagen."
 
-#: transcria/i18n/js_catalog.py:291
+#: transcria/i18n/js_catalog.py:295
 msgid "job(s) de test supprimé(s)."
 msgstr "Test-Job(s) gelöscht."
 
-#: transcria/i18n/js_catalog.py:293
+#: transcria/i18n/js_catalog.py:297
 msgid "tout local"
 msgstr "alles lokal"
 
-#: transcria/i18n/js_catalog.py:294
+#: transcria/i18n/js_catalog.py:298
 msgid "Aucune ressource distante configurée (tout intégré)."
 msgstr "Keine Remote-Ressource konfiguriert (alles integriert)."
 
-#: transcria/i18n/js_catalog.py:295
+#: transcria/i18n/js_catalog.py:299
 msgid "injoignable"
 msgstr "nicht erreichbar"
 
-#: transcria/i18n/js_catalog.py:296
+#: transcria/i18n/js_catalog.py:300
 #, python-brace-format
 msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}."
 msgstr "Ressourcenknoten nicht erreichbar — Remote-Transkriptionen werden in die Warteschlange gestellt. Erforderlich: {reqs}."
 
-#: transcria/i18n/js_catalog.py:297
+#: transcria/i18n/js_catalog.py:301
 msgid "distant"
 msgstr "Remote"
 
-#: transcria/i18n/js_catalog.py:298
+#: transcria/i18n/js_catalog.py:302
 msgid "GPU :"
 msgstr "GPU:"
 
-#: transcria/i18n/js_catalog.py:299
+#: transcria/i18n/js_catalog.py:303
 #, python-brace-format
 msgid "GPU {i} — libre {free} / {total} Mo"
 msgstr "GPU {i} — frei {free} / {total} MB"
 
-#: transcria/i18n/js_catalog.py:300
+#: transcria/i18n/js_catalog.py:304
 msgid "Aucun moteur déclaré."
 msgstr "Keine Engine deklariert."
 
-#: transcria/i18n/js_catalog.py:301
+#: transcria/i18n/js_catalog.py:305
 msgid "erreur"
 msgstr "Fehler"
 
-#: transcria/i18n/js_catalog.py:302
+#: transcria/i18n/js_catalog.py:306
 #, python-brace-format
 msgid "Statut indisponible ({e})."
 msgstr "Status nicht verfügbar ({e})."
 
-#: transcria/i18n/js_catalog.py:304
+#: transcria/i18n/js_catalog.py:308
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
 #: transcria/web/templates/dashboard_status.html:28
@@ -1417,7 +1435,7 @@ msgstr "Status nicht verfügbar ({e})."
 msgid "Go"
 msgstr "GB"
 
-#: transcria/i18n/js_catalog.py:305
+#: transcria/i18n/js_catalog.py:309
 msgid "téléchargement…"
 msgstr "wird heruntergeladen…"
 
@@ -1642,56 +1660,56 @@ msgstr "Der Job ist nicht fehlgeschlagen: Er wird automatisch fortgesetzt, sobal
 msgid "Votre transcription a échoué."
 msgstr "Ihre Transkription ist fehlgeschlagen."
 
-#: transcria/queue/routes.py:38 transcria/web/templates/queue.html:42
+#: transcria/queue/routes.py:37 transcria/web/templates/queue.html:42
 msgid "En attente"
 msgstr "Wartend"
 
-#: transcria/queue/routes.py:39
+#: transcria/queue/routes.py:38
 msgid "En pause"
 msgstr "Pausiert"
 
-#: transcria/queue/routes.py:40 transcria/web/templates/queue.html:50
+#: transcria/queue/routes.py:39 transcria/web/templates/queue.html:50
 msgid "En cours"
 msgstr "Läuft"
 
-#: transcria/queue/routes.py:41 transcria/web/templates/job_result.html:4
+#: transcria/queue/routes.py:40 transcria/web/templates/job_result.html:4
 #: transcria/web/ui_labels.py:35
 msgid "Terminé"
 msgstr "Abgeschlossen"
 
-#: transcria/queue/routes.py:42 transcria/web/ui_labels.py:37
+#: transcria/queue/routes.py:41 transcria/web/ui_labels.py:37
 msgid "Annulé"
 msgstr "Abgebrochen"
 
-#: transcria/queue/routes.py:47
+#: transcria/queue/routes.py:46
 msgid "Bloquer les nouveaux départs"
 msgstr "Neue Starts blockieren"
 
-#: transcria/queue/routes.py:48
+#: transcria/queue/routes.py:47
 msgid "Limiter les jobs simultanés"
 msgstr "Gleichzeitige Jobs begrenzen"
 
-#: transcria/queue/routes.py:49
+#: transcria/queue/routes.py:48
 msgid "Prioriser les traitements (récupération GPU agressive)"
 msgstr "Verarbeitung priorisieren (aggressive GPU-Freigabe)"
 
-#: transcria/queue/routes.py:50
+#: transcria/queue/routes.py:49
 msgid "Aucune règle"
 msgstr "Keine Regel"
 
-#: transcria/queue/routes.py:54
+#: transcria/queue/routes.py:53
 msgid "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
 msgstr "Bereits gestartete Jobs laufen weiter, aber während dieses Zeitfensters startet kein neuer Job."
 
-#: transcria/queue/routes.py:55
+#: transcria/queue/routes.py:54
 msgid "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
 msgstr "Der Scheduler reduziert vorübergehend die maximale Anzahl gleichzeitig laufender Jobs."
 
-#: transcria/queue/routes.py:57
+#: transcria/queue/routes.py:56
 msgid "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
 msgstr "Wenn der ersten Phase VRAM fehlt, kann TranscrIA eine GPU freigeben, indem nur die in der Konfiguration erlaubten externen Prozesse beendet werden."
 
-#: transcria/queue/routes.py:60
+#: transcria/queue/routes.py:59
 msgid "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
 msgstr "Das Zeitfenster bleibt als zeitliche Orientierung erhalten, ohne das Verhalten der Warteschlange zu ändern."
 
@@ -5930,7 +5948,7 @@ msgid "Enregistrer le contexte"
 msgstr "Kontext speichern"
 
 #: transcria/web/templates/wizard/_step_context.html:114
-#: transcria/web/templates/wizard/_step_lexicon.html:153
+#: transcria/web/templates/wizard/_step_lexicon.html:164
 msgid "Enregistré"
 msgstr "Gespeichert"
 
@@ -6146,36 +6164,48 @@ msgstr "Die LLM hat zu prüfende Begriffe gemeldet, das Format konnte jedoch nic
 msgid "Aucun terme douteux détecté automatiquement."
 msgstr "Kein unsicherer Begriff automatisch erkannt."
 
-#: transcria/web/templates/wizard/_step_lexicon.html:84
+#: transcria/web/templates/wizard/_step_lexicon.html:58
+msgid "Comment ce lexique est appliqué : la correction remplace une forme suspecte par la forme validée seulement quand le contexte le confirme (jamais un homonyme). « Forme à écrire » sert quand l'orthographe finale diffère de la forme reconnue. Priorité critique ou importante = l'entrée est transmise à la correction même si elle n'est pas encore détectée ; normale = seulement si elle l'est."
+msgstr "So wird dieses Glossar angewendet: Die Korrektur ersetzt eine verdächtige Form nur dann durch die bestätigte Form, wenn der Kontext es bestätigt (nie ein Homonym). „Zu schreibende Form“ gilt, wenn die endgültige Schreibweise von der erkannten Form abweicht. Priorität kritisch oder wichtig = der Eintrag wird an die Korrektur übergeben, auch wenn er noch nicht erkannt wurde; normal = nur, wenn er erkannt wurde."
+
+#: transcria/web/templates/wizard/_step_lexicon.html:59
+msgid "Une forme validée écrite « A / B » n'est jamais remplacée, seulement signalée : choisissez une seule graphie."
+msgstr "Eine bestätigte Form in der Schreibweise „A / B“ wird nie ersetzt, nur markiert: wählen Sie eine einzige Schreibweise."
+
+#: transcria/web/templates/wizard/_step_lexicon.html:83
+msgid "Forme ambiguë « A / B » : jamais remplacée, seulement signalée — gardez une seule graphie"
+msgstr "Mehrdeutige Form „A / B“: wird nie ersetzt, nur markiert — behalten Sie eine einzige Schreibweise"
+
+#: transcria/web/templates/wizard/_step_lexicon.html:95
 msgid "trouvé dans le texte"
 msgstr "im Text gefunden"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:86
+#: transcria/web/templates/wizard/_step_lexicon.html:97
 msgid "variante détectée"
 msgstr "Variante erkannt"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:88
+#: transcria/web/templates/wizard/_step_lexicon.html:99
 #, python-format
 msgid "priorité %(p)s"
 msgstr "Priorität %(p)s"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:131
+#: transcria/web/templates/wizard/_step_lexicon.html:142
 msgid "Audio indisponible pour ce timecode"
 msgstr "Audio für diesen Timecode nicht verfügbar"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:147
+#: transcria/web/templates/wizard/_step_lexicon.html:158
 msgid "+ Ajouter un terme"
 msgstr "+ Begriff hinzufügen"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:148
+#: transcria/web/templates/wizard/_step_lexicon.html:159
 msgid "+ Importer depuis un fichier .txt"
 msgstr "+ Aus .txt-Datei importieren"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:151
+#: transcria/web/templates/wizard/_step_lexicon.html:162
 msgid "Enregistrer le lexique"
 msgstr "Lexikon speichern"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:152
+#: transcria/web/templates/wizard/_step_lexicon.html:163
 msgid "Continuer sans lexique"
 msgstr "Ohne Lexikon fortfahren"
 

@@ -724,7 +724,10 @@ var TranscrIA = window.TranscrIA || {};
             (document.getElementById('lexicon-prio-tpl') ? document.getElementById('lexicon-prio-tpl').innerHTML : '') +
             '</select>' +
             '</div>' +
-            '<input type="hidden" class="lex-replace" value="">' +
+            '<div class="mt-2">' +
+            '<label class="form-label small mb-1">' + t('Forme à écrire dans la transcription (si différente de la forme validée)') + '</label>' +
+            '<input type="text" class="form-control form-control-sm lex-replace" placeholder="' + t('Ex. sigle développé, orthographe officielle') + '" value="">' +
+            '</div>' +
             '<input type="hidden" class="lex-source" value="">' +
             '<input type="hidden" class="lex-central-entry-id" value="">' +
             '<input type="hidden" class="lex-central-lexicon-id" value="">' +
@@ -1061,10 +1064,13 @@ var TranscrIA = window.TranscrIA || {};
         return rest > 0 ? t('%(h)s h %(m)s min', { h: h, m: rest }) : t('%(h)s h', { h: h });
     }
 
-    function _renderWorkflowStatusBanner(banner, state, progress, queueInfo) {
+    function _renderWorkflowStatusBanner(banner, state, progress, queueInfo, executionStatus) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
-        if (!isLive && !(progress && progress.message) &&
-            !(queueInfo && (queueInfo.position || queueInfo.vramWaitExceeded))) {
+        var isTerminal = _TERMINAL_STATES.indexOf(state) !== -1;
+        // Un état terminal n'anime jamais rien, même si une progression résiduelle traîne
+        // encore côté serveur (retours utilisateurs 2026-11 : spinner sur un job terminé).
+        if (isTerminal || (!isLive && !(progress && progress.message) &&
+            !(queueInfo && (queueInfo.position || queueInfo.vramWaitExceeded)))) {
             banner.classList.remove('is-visible');
             banner.innerHTML = '';
             return;
@@ -1072,6 +1078,11 @@ var TranscrIA = window.TranscrIA || {};
 
         var label = _STATE_LABELS[state] ? t(_STATE_LABELS[state]) : (state || t('Traitement en cours'));
         var message = progress && progress.message ? progress.message : label;
+        if (executionStatus === 'waiting_vram') {
+            message = t("En attente de mémoire GPU — le traitement reprendra tout seul dès qu'elle se libère.");
+        } else if (executionStatus === 'queued' && !(queueInfo && queueInfo.position)) {
+            message = t("En file d'attente — démarrage dès qu'une place se libère.");
+        }
         if (queueInfo && queueInfo.position) {
             var queueText = t('Position %(n)s dans la file', { n: queueInfo.position });
             if (queueInfo.estimate) {
@@ -1132,8 +1143,15 @@ var TranscrIA = window.TranscrIA || {};
                     queueInfo = queueInfo || {};
                     queueInfo.vramWaitExceeded = true;
                 }
-                _renderWorkflowStatusBanner(banner, state, progress, queueInfo);
+                _renderWorkflowStatusBanner(banner, state, progress, queueInfo, r.data.execution_status);
                 var initialState = banner.dataset ? banner.dataset.initialState : null;
+                if (_TERMINAL_STATES.indexOf(state) !== -1 && initialState
+                        && _LIVE_STATUS_STATES.indexOf(initialState) !== -1) {
+                    // La phase suivie vient de finir (échec, annulation, fin) : recharger pour
+                    // afficher l'état réel au lieu d'un bandeau figé sur « en cours ».
+                    location.reload();
+                    return;
+                }
                 if (state === 'summary_done' && initialState && initialState !== 'summary_done'
                         && _TERMINAL_STATES.indexOf(initialState) === -1) {
                     // Le résumé (autostart ou serveur) vient de se terminer alors que la

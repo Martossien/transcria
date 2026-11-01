@@ -137,3 +137,54 @@ class TestGoldenPriorities:
             assert job.state != JobState.FAILED
             assert job.get_extra_data().get("execution", {}).get("status") == "waiting_vram"
         assert notifs == []
+
+
+class TestProgressionEffaceeAuxIssuesTerminales:
+    """Retours utilisateurs 2026-11 : la progression persistée survivait à l'échec, à
+    l'annulation et à l'étape finie — spinner sur un job terminé."""
+
+    @staticmethod
+    def _seed(app, job_id):
+        from transcria.workflow.progress import WorkflowProgressReporter
+        with app.app_context():
+            WorkflowProgressReporter({}).update(job_id, step="processing", phase="stt",
+                                                message="Transcription finale en cours", force=True)
+
+    @staticmethod
+    def _progress(app, job_id):
+        with app.app_context():
+            return JobStore.get_by_id(job_id).get_extra_data().get("workflow_progress")
+
+    @pytest.mark.parametrize("result", [{"error": "boom"}, {"cancelled": True}, {"success": True}])
+    def test_issue_terminale_efface_la_progression(self, harness, app, monkeypatch, result):
+        svc, job_id, _ = harness
+        self._seed(app, job_id)
+        _run_with_result(svc, job_id, monkeypatch, result)
+        assert self._progress(app, job_id) is None
+
+    def test_attente_vram_conserve_l_etat_mais_sans_progression_figee(self, harness, app, monkeypatch):
+        # L'attente VRAM n'est pas terminale : le pipeline a lui-même effacé sa progression ;
+        # ici l'exécuteur ne la ré-efface pas (hors de son rôle), le job reste en file.
+        svc, job_id, _ = harness
+        _run_with_result(svc, job_id, monkeypatch, {"vram_wait": True, "required_mb": 1000})
+        with app.app_context():
+            assert JobStore.get_by_id(job_id).state != JobState.CANCELLED.value
+
+    def test_annulation_pendant_l_attente_pose_cancelled_et_libere_la_file(self, harness, app, monkeypatch):
+        from transcria.workflow.transitions import get_execution_status, request_execution_cancel
+        svc, job_id, _ = harness
+        self._seed(app, job_id)
+        with app.app_context():
+            JobStore.update_state(job_id, JobState.TRANSCRIBING)   # job relancé après vram_wait
+            request_execution_cancel(job_id)
+        monkeypatch.setattr(
+            "transcria.services.pipeline_service.PipelineService.run_process",
+            lambda *a, **k: pytest.fail("le pipeline ne doit pas démarrer après une annulation"),
+        )
+        svc._run_process(job_id, "/tmp/a.wav", "quality")
+        with app.app_context():
+            job = JobStore.get_by_id(job_id)
+            assert job.state == JobState.CANCELLED.value
+            assert get_execution_status(job) == "cancelled"
+            assert QueueStore.get_entry(job_id) is None or QueueStore.get_entry(job_id).status != QUEUE_WAITING
+        assert self._progress(app, job_id) is None

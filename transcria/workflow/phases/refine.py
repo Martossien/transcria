@@ -360,10 +360,10 @@ def run(runner, job: Job, config: dict) -> dict:
         if llm_phase_reserved:
             runner.allocator.release_phase(job.id, "refine")
         runner.allocator.release_llm(job.id)
-        runner.progress.update(
-            job.id, step="processing", phase="refine",
-            message=rmsg["progress_done"], percent=100, force=True,
-        )
+        # Fin de tour : EFFACER la progression. Laisser « terminé 100 % » en base faisait
+        # tourner un spinner sur un job terminé (retour utilisateurs 2026-11) ; le chat
+        # d'affinage a sa propre indication d'occupation (`busy`).
+        runner.progress.clear(job.id)
 
 
 def apply_refine(runner, fs, store, workspace, job: Job, config: dict, *, kind: str, max_turns: int) -> dict:

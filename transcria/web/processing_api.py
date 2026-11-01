@@ -37,7 +37,7 @@ from transcria.web.request_helpers import api_stable, bearer_token_allowed
 from transcria.workflow import profiles
 from transcria.workflow.concurrency_profile import summarize_concurrency
 from transcria.workflow.profiles import profile_for_job
-from transcria.workflow.progress import get_workflow_progress
+from transcria.workflow.progress import WorkflowProgressReporter, effective_workflow_progress
 from transcria.workflow.resume import reset_resume_state
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.timing_service import estimate_remaining
@@ -233,6 +233,7 @@ def api_process(job_id: str):
     except Exception:  # noqa: BLE001 — best-effort, l'attente retombe sur le fichier sinon
         pass
     try:
+        WorkflowProgressReporter(cfg).clear(job.id)  # progression de l'ancien passage effacée
         result = executor.submit_process(
             job.id,
             str(audio_path),
@@ -245,6 +246,7 @@ def api_process(job_id: str):
     except TypeError as exc:
         if "unexpected keyword argument" not in str(exc):
             raise
+        WorkflowProgressReporter(cfg).clear(job.id)  # progression de l'ancien passage effacée
         result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": "active"}), 409
@@ -288,7 +290,7 @@ def api_job_status(job_id: str):
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response
-    progress = get_workflow_progress(job)
+    progress = effective_workflow_progress(job)
     payload = {
         "state": job.state,
         "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
@@ -414,6 +416,7 @@ def api_reprocess(job_id: str):
     except Exception:  # noqa: BLE001 — best-effort, l'attente retombe sur le fichier sinon
         pass
     try:
+        WorkflowProgressReporter(cfg).clear(job.id)  # progression de l'ancien passage effacée
         result = executor.submit_process(
             job.id, str(audio_path), mode, vram_profile=vram_profile, processing_profile_id=profile.id
         )
@@ -421,6 +424,7 @@ def api_reprocess(job_id: str):
         # Compat (skew de version de l'exécuteur) : signature sans les kwargs récents.
         if "unexpected keyword argument" not in str(exc):
             raise
+        WorkflowProgressReporter(cfg).clear(job.id)  # progression de l'ancien passage effacée
         result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours"}), 409

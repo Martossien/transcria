@@ -103,3 +103,21 @@ def test_un_job_interrompu_suit_lautre_chemin(app, owner_id):
         job = JobStore.get_by_id(job_id)
         assert job.state == JobState.FAILED.value
         assert "redémarrage" in (job.error_message or "")
+
+
+def test_phase_synchrone_interrompue_est_rendue_relancable(app, owner_id):
+    """Résumé lancé dans le thread HTTP (pas d'exécution de file) puis service redémarré :
+    l'état `summary_running` bloquait toute relance (409). La réconciliation le rend à
+    `analyzed` et efface la progression."""
+    from transcria.workflow.progress import WorkflowProgressReporter
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Résumé interrompu")
+        JobStore.update_state(job.id, JobState.SUMMARY_RUNNING, force=True)
+        WorkflowProgressReporter({}).update(job.id, step="summary", phase="llm",
+                                            message="Résumé : génération LLM en cours", force=True)
+        job_id = job.id
+    _reconcile_interrupted_jobs(app, {"storage": {"jobs_dir": "./jobs"}})
+    with app.app_context():
+        job = JobStore.get_by_id(job_id)
+        assert job.state == JobState.ANALYZED.value
+        assert "workflow_progress" not in job.get_extra_data()

@@ -76,3 +76,40 @@ def test_job_status_exposes_progress(admin_client, app):
     assert body["state"] == "transcribing"
     assert body["progress"]["message"] == "Transcription finale en cours"
     assert body["progress"]["percent"] == 42.0
+
+
+# ── Progression EFFECTIVE : rien ne tourne ⇒ rien à animer (retours utilisateurs 2026-11) ──
+
+def _seed_progress(app, owner_id, state, execution_status=None):
+    from transcria.workflow.transitions import mark_execution_queued, mark_execution_started
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Progression résiduelle")
+        JobStore.update_state(job.id, state, force=True)
+        WorkflowProgressReporter({}).update(job.id, step="processing", phase="stt",
+                                            message="Transcription finale en cours", force=True)
+        if execution_status == "queued":
+            mark_execution_queued(job.id, "quality")
+        elif execution_status == "running":
+            mark_execution_queued(job.id, "quality")
+            mark_execution_started(job.id)
+        return job.id
+
+
+def test_statut_masque_la_progression_sur_un_etat_terminal(admin_client, app, owner_id):
+    for state in (JobState.COMPLETED, JobState.FAILED, JobState.CANCELLED, JobState.EXPORT_READY):
+        job_id = _seed_progress(app, owner_id, state)
+        data = admin_client.get(f"/api/jobs/{job_id}/status").get_json()
+        assert data["progress"] is None, state
+        assert data["eta"] is None
+
+
+def test_statut_masque_la_progression_quand_le_wizard_attend_l_utilisateur(admin_client, app, owner_id):
+    job_id = _seed_progress(app, owner_id, JobState.SUMMARY_DONE)
+    assert admin_client.get(f"/api/jobs/{job_id}/status").get_json()["progress"] is None
+
+
+def test_statut_montre_la_progression_en_phase_live_ou_execution_active(admin_client, app, owner_id):
+    live = _seed_progress(app, owner_id, JobState.TRANSCRIBING)
+    assert admin_client.get(f"/api/jobs/{live}/status").get_json()["progress"]["message"]
+    queued = _seed_progress(app, owner_id, JobState.READY_TO_PROCESS, execution_status="queued")
+    assert admin_client.get(f"/api/jobs/{queued}/status").get_json()["progress"] is not None

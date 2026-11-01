@@ -94,6 +94,7 @@ class PipelineService:
         if gated is not None:
             sl.info("FIN pipeline %s (pré-vol ressources)", mode, job_id=job.id,
                     duree=round(time.monotonic() - t0, 1), status="ERROR")
+            self.progress.clear(job.id)
             return gated
 
         try:
@@ -102,14 +103,17 @@ class PipelineService:
             echec = outcome.kind is OutcomeKind.FAILED
             sl.info("FIN pipeline %s", mode, job_id=job.id,
                     duree=round(elapsed, 1), status="ERROR" if echec else "OK")
-            if not echec:
-                self.progress.clear(job.id)
+            # Effacée dans TOUS les cas : un échec laissait « … en cours » à l'écran
+            # (retour utilisateurs 2026-11) ; en attente VRAM, c'est l'exécuteur qui dit
+            # « en attente de GPU », pas une phase figée.
+            self.progress.clear(job.id)
+            if not echec and outcome.processing_seconds is None:
                 # Temps machine du traitement (pour l'email « terminé » enrichi).
-                if outcome.processing_seconds is None:
-                    outcome = replace(outcome, processing_seconds=round(elapsed, 1))
+                outcome = replace(outcome, processing_seconds=round(elapsed, 1))
             return outcome
         except Exception as exc:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
+            self.progress.clear(job.id)
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.FAILED, str(exc))
             return PhaseOutcome(OutcomeKind.FAILED, phase="pipeline", reason=str(exc))

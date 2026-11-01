@@ -79,6 +79,7 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         sl.warning("[1/3] STT rapide en attente de VRAM — résumé reporté",
                    required_vram_mb=result.get("required_mb"), backend=backend)
         _restore_prior_state(runner, job.id, prior_state)
+        runner.progress.clear(job.id)
         return result
     if result.get("error") and not result.get("transcript_text"):
         sl.error("[1/3] STT rapide ÉCHEC — abandon résumé", error=result["error"], backend=backend)
@@ -87,6 +88,7 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         current = JobStore.get_by_id(job.id)
         if current is None or current.state != JobState.FAILED.value:
             runner.store.update_state(job.id, JobState.FAILED, result["error"])
+        runner.progress.clear(job.id)
         return result
     if (result.get("segment_count", 0) == 0
             and len(str(result.get("transcript_text") or "").strip()) < 40):
@@ -98,6 +100,7 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
                "ou essayez un autre moteur STT.")
         sl.error("[1/3] STT rapide : transcript vide — abandon résumé", backend=backend)
         runner.store.update_state(job.id, JobState.FAILED, msg)
+        runner.progress.clear(job.id)
         return {"success": False, "error": msg, "no_speech": True}
 
     sl.info("[2/4] Analyse de scène audio — début")

@@ -28,6 +28,7 @@ from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow.agent_workspace import resolve_agent_work_root
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
+from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
     is_cancel_requested,
@@ -181,7 +182,7 @@ class JobExecutorService:
                     mark_execution_failed(job_id, "Job introuvable")
                     return
                 if is_cancel_requested(job):
-                    mark_execution_cancelled(job_id)
+                    self._abort_cancelled_before_start(job, job_id, mode, sl)
                     return
 
                 # Backend `pg` (split sans filesystem partagé) : matérialise les fichiers
@@ -285,6 +286,10 @@ class JobExecutorService:
                         facts = None
                     _notify(self.config, job, "completed", facts=facts)
                     self._purge_input_blobs(job_id, sl)
+                if outcome.kind not in (OutcomeKind.DEFERRED, OutcomeKind.WAITING_VRAM):
+                    # Issue TERMINALE (succès, échec, annulation, étape finie) : plus rien ne
+                    # tourne, la progression persistée ne doit plus animer l'interface.
+                    WorkflowProgressReporter(self.config).clear(job_id)
         except Exception as exc:
             with self.app.app_context():
                 QueueStore.dequeue(job_id, status="failed")
@@ -294,6 +299,7 @@ class JobExecutorService:
                 # est fermée) : _notify accède à job.owner (lazy load) → l'email
                 # d'échec serait silencieusement perdu. On recharge dans CE contexte.
                 _notify(self.config, JobStore.get_by_id(job_id), "failed", str(exc))
+                WorkflowProgressReporter(self.config).clear(job_id)
                 if mode not in STEP_MODES:
                     self._purge_input_blobs(job_id, sl)
             raise
@@ -325,6 +331,22 @@ class JobExecutorService:
                 alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
         except Exception:  # noqa: BLE001 — la borne est de l'observabilité, jamais un risque
             sl.warning("Contrôle de borne d'attente VRAM impossible (non bloquant)", job_id=job_id)
+
+    def _abort_cancelled_before_start(self, job, job_id: str, mode: str, sl) -> None:
+        """Annulation demandée pendant l'attente (file, VRAM) : le dispatch arrive trop tard.
+
+        Libère la file, pose CANCELLED pour un traitement complet (une ÉTAPE comme le résumé
+        a déjà restauré son état pré-résumé) et efface la progression — sinon le job restait
+        « transcription en cours » à vie (retour utilisateurs 2026-11).
+        """
+        QueueStore.dequeue(job_id, status="cancelled")
+        mark_execution_cancelled(job_id)
+        if not ExecutionMode.from_string(mode).is_step:
+            try:
+                JobStore.update_state(job_id, JobState.CANCELLED)
+            except Exception:  # noqa: BLE001 — transition refusée : l'état reste, la file est libre
+                sl.warning("Annulation : état non modifié", job_id=job_id, state=job.state)
+        WorkflowProgressReporter(self.config).clear(job_id)
 
     def _purge_input_blobs(self, job_id: str, sl) -> None:
         """Purge les blobs `input/` (backend `pg`) à l'état terminal du pipeline complet.
@@ -427,6 +449,20 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
                     mode = job.get_extra_data().get("execution", {}).get("mode", "fast")
                     QueueStore.enqueue(job.id, mode=mode)
                     sl.info("Réconciliation: job queued réinséré dans job_queue", job_id=job.id)
+                    continue
+                if (job.state in (JobState.SUMMARY_RUNNING.value, JobState.SPEAKER_DETECTION_RUNNING.value)
+                        and exec_status not in ("queued", "running", "waiting_vram")):
+                    # Phase SYNCHRONE (api_summary / détection manuelle dans le thread HTTP)
+                    # interrompue par le redémarrage : aucune exécution de file ne la reprendra,
+                    # et l'état « running » bloquait toute relance (409 à vie). On rend le job
+                    # à l'état d'où la phase repart, et on efface la progression.
+                    target = (JobState.ANALYZED if job.state == JobState.SUMMARY_RUNNING.value
+                              else JobState.SUMMARY_DONE)
+                    JobStore.update_state(job.id, target, force=True)
+                    WorkflowProgressReporter(config).clear(job.id)
+                    sl.warning("Réconciliation: phase synchrone interrompue, relançable",
+                               job_id=job.id, depuis=job.state, vers=target.value)
+                    recovered += 1
                     continue
                 if exec_status != "running":
                     # Le job n'est plus en cours, mais son entrée de file peut l'être
