@@ -52,3 +52,41 @@ def test_migrations_match_models(postgresql_proc):
             os.environ.pop("TRANSCRIA_DATABASE_URL", None)
 
     assert diff == [], f"Migrations désynchronisées des modèles : {diff}"
+
+
+def test_llm_cloud_migration_tolerates_table_created_by_create_all(postgresql_proc):
+    """Cas réel 2026-11-01 : `db.create_all()` a posé `llm_cloud_acknowledgements` (et son
+    index) AVANT `alembic upgrade head`, sans la colonne `groups.llm_cloud_forbidden` (create_all
+    n'altère jamais une table existante). La migration doit rattraper cet état, pas planter sur
+    « la relation existe déjà » — sinon le service ne redémarre plus."""
+    dbname = "alembic_llm_cloud_idempotent"
+    auth = postgresql_proc.user if not postgresql_proc.password else f"{postgresql_proc.user}:{postgresql_proc.password}"
+    url = f"postgresql+psycopg://{auth}@{postgresql_proc.host}:{postgresql_proc.port}/{dbname}"
+
+    with DatabaseJanitor(
+        user=postgresql_proc.user,
+        host=postgresql_proc.host,
+        port=postgresql_proc.port,
+        version=postgresql_proc.version,
+        dbname=dbname,
+        password=postgresql_proc.password,
+    ):
+        os.environ["TRANSCRIA_DATABASE_URL"] = url
+        try:
+            command.upgrade(Config("alembic.ini"), "e5a9c3f7b1d8")
+            engine = create_engine(url)
+            try:
+                # Même geste que create_all pour cette seule table (index compris).
+                db.metadata.tables["llm_cloud_acknowledgements"].create(engine)
+                command.upgrade(Config("alembic.ini"), "head")
+                with engine.connect() as conn:
+                    ctx = MigrationContext.configure(
+                        conn, opts={"compare_type": True, "compare_server_default": True}
+                    )
+                    diff = compare_metadata(ctx, db.metadata)
+            finally:
+                engine.dispose()
+        finally:
+            os.environ.pop("TRANSCRIA_DATABASE_URL", None)
+
+    assert diff == [], f"Schéma incohérent après rattrapage : {diff}"
