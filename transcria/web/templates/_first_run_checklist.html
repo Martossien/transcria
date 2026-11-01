@@ -34,6 +34,22 @@
           {% trans backend=it.data.configured %}Détection des locuteurs : une option plus rapide et sans token (Nemotron 3, de 1 à 8 voix) est disponible à la place de {{ backend }} seul{% endtrans %}
           — <a href="{{ url_for('web.admin_models') }}" class="alert-link">{% trans %}l'activer ou garder le réglage actuel depuis la page Modèles{% endtrans %}</a>
         </li>
+      {% elif it.key == 'notifications' %}
+        <li>
+          {% if not it.data.enabled %}
+            {% trans %}Notifications par e-mail désactivées : personne n'est prévenu quand une pré-analyse attend sa validation ni quand un traitement se termine{% endtrans %}
+            — <a href="{{ url_for('web.admin_config') }}" class="alert-link">{% trans %}activer le SMTP dans la configuration (section Notifications){% endtrans %}</a>
+          {% else %}
+            {% if not it.data.smtp_ok %}
+              {% trans %}Notifications activées mais serveur SMTP ou adresse d'expéditeur manquant : aucun e-mail ne partira{% endtrans %}
+              — <a href="{{ url_for('web.admin_config') }}" class="alert-link">{% trans %}compléter la configuration{% endtrans %}</a>{% if it.data.users_without_email %} ; {% endif %}
+            {% endif %}
+            {% if it.data.users_without_email %}
+              {% trans n=it.data.users_without_email %}{{ n }} compte actif sans adresse e-mail ne recevra aucune notification{% pluralize %}{{ n }} comptes actifs sans adresse e-mail ne recevront aucune notification{% endtrans %}
+              — <a href="/admin/users" class="alert-link">{% trans %}renseigner les adresses{% endtrans %}</a>
+            {% endif %}
+          {% endif %}
+        </li>
       {% endif %}
     {% endfor %}
   </ul>

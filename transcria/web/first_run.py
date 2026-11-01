@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from transcria.auth.store import UserStore
 from transcria.diagnostics.checks.common import OK, WARN
 from transcria.diagnostics.checks.llm import check_opencode
 from transcria.diagnostics.checks.remote import check_inference_nodes
@@ -31,7 +32,7 @@ from transcria.models_catalog import catalog_with_status, diarization_auto_recom
 class FirstRunItem:
     """Un point du bilan. ``status`` reprend les statuts doctor (ok/warn/fail)."""
 
-    key: str                                  # compute | models | opencode | diarization
+    key: str                                  # compute | models | opencode | diarization | notifications
     status: str
     data: dict = field(default_factory=dict)  # faits structurés — le template rédige
 
@@ -79,12 +80,34 @@ def _diarization_item(cfg: dict) -> FirstRunItem:
     return FirstRunItem("diarization", WARN, dict(reco))
 
 
+def _notifications_item(cfg: dict) -> FirstRunItem:
+    """Les utilisateurs seront-ils prévenus ? (retours utilisateurs 2026-11).
+
+    Les e-mails « pré-analyse prête, à valider » et « transcription terminée » existent
+    depuis longtemps, mais ``notifications.email.enabled`` est à ``false`` par défaut et
+    l'adresse des comptes est vide par défaut : le ressenti « on n'est pas prévenu » vient
+    de là, pas du code. Faits remontés : SMTP désactivé ; activé mais hôte/expéditeur
+    manquant ; comptes actifs sans adresse.
+    """
+    email = (cfg.get("notifications") or {}).get("email") or {}
+    if not bool(email.get("enabled")):
+        return FirstRunItem("notifications", WARN, {"enabled": False})
+    smtp_ok = bool(str(email.get("smtp_host") or "").strip()) and bool(str(email.get("from_address") or "").strip())
+    try:
+        without = UserStore.count_active_without_email()
+    except Exception:  # noqa: BLE001 — hors contexte DB (outillage) : on ne bloque pas le bilan
+        without = 0
+    status = OK if smtp_ok and without == 0 else WARN
+    return FirstRunItem("notifications", status, {"enabled": True, "smtp_ok": smtp_ok, "users_without_email": without})
+
+
 def first_run_report(cfg: dict, *, total_vram_mb: int | None = None) -> list[FirstRunItem]:
     return [
         _compute_item(cfg),
         _models_item(cfg, total_vram_mb),
         _opencode_item(cfg),
         _diarization_item(cfg),
+        _notifications_item(cfg),
     ]
 
 

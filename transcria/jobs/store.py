@@ -22,6 +22,29 @@ class JobStore:
     def get_by_id(job_id: str) -> Job | None:
         return db.session.get(Job, job_id)
 
+    # États où le wizard ATTEND l'utilisateur : la pré-analyse est faite (souvent lancée
+    # toute seule par l'autostart), rien ne repartira sans une validation humaine.
+    AWAITING_USER_STATES = (
+        JobState.SUMMARY_DONE.value, JobState.CONTEXT_DONE.value, JobState.PARTICIPANTS_DONE.value,
+        JobState.SPEAKER_DETECTION_DONE.value, JobState.LEXICON_DONE.value, JobState.READY_TO_PROCESS.value,
+    )
+
+    @staticmethod
+    def count_awaiting_validation(owner_id: str) -> int:
+        """Jobs de CET utilisateur qui attendent une validation du wizard.
+
+        Sert au bandeau « N réunions attendent votre validation » (retours utilisateurs
+        2026-11 : la pré-analyse se lance seule, puis l'utilisateur ne sait pas qu'on
+        l'attend). Une requête COUNT par rendu ; 0 hors contexte DB.
+        """
+        try:
+            return int(db.session.scalar(
+                db.select(db.func.count()).select_from(Job).filter(
+                    Job.owner_id == owner_id, Job.state.in_(JobStore.AWAITING_USER_STATES))
+            ) or 0)
+        except Exception:  # noqa: BLE001 — bandeau best-effort
+            return 0
+
     @staticmethod
     def count_waiting_vram() -> int:
         """Nombre de jobs en attente de VRAM (statut d'exécution transitoire).

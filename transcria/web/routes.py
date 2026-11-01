@@ -76,6 +76,21 @@ def inject_vram_waiting_count():
 
 
 @web_bp.app_context_processor
+def inject_awaiting_validation_count():
+    """Bandeau utilisateur « N réunions attendent votre validation » (toutes pages).
+
+    Pour tout utilisateur connecté, pas seulement l'admin : c'est LUI qu'on attend.
+    Best-effort, une requête COUNT.
+    """
+    try:
+        if current_user and current_user.is_authenticated:
+            return {"awaiting_validation_count": JobStore.count_awaiting_validation(current_user.get_id())}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"awaiting_validation_count": 0}
+
+
+@web_bp.app_context_processor
 def inject_update_available():
     """Expose le tag d'une nouvelle version aux templates (bandeau admin).
 

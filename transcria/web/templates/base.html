@@ -152,6 +152,16 @@
       </div>
     {% endif %}
 
+    {% if awaiting_validation_count and awaiting_validation_count > 0 and request.endpoint != 'web.job_wizard' %}
+      <div class="alert alert-info d-flex align-items-center" role="alert" data-awaiting-validation>
+        <i class="bi bi-hourglass-split me-2"></i>
+        <div>
+          {% trans count=awaiting_validation_count %}<strong>{{ count }}</strong> réunion attend votre validation : sa pré-analyse est faite, rien ne se lancera sans vous.{% pluralize %}<strong>{{ count }}</strong> réunions attendent votre validation : leur pré-analyse est faite, rien ne se lancera sans vous.{% endtrans %}
+          <a href="{{ url_for('web.index') }}" class="alert-link">{{ _('Voir mes réunions') }}</a>
+        </div>
+      </div>
+    {% endif %}
+
     {% if vram_waiting_count and vram_waiting_count > 0 %}
       <div class="alert alert-warning d-flex align-items-center" role="alert">
         <i class="bi bi-gpu-card me-2"></i>

@@ -92,9 +92,45 @@ class TestReport:
         monkeypatch.setattr(first_run, "check_opencode",
                             lambda cfg: SimpleNamespace(status="ok", detail="trouvé"))
         monkeypatch.setattr(first_run, "diarization_auto_recommendation", lambda cfg: None)
-        report = first_run.first_run_report({}, total_vram_mb=24000)
-        assert [it.key for it in report] == ["compute", "models", "opencode", "diarization"]
+        monkeypatch.setattr(first_run.UserStore, "count_active_without_email", staticmethod(lambda: 0))
+        cfg = {"notifications": {"email": {"enabled": True, "smtp_host": "smtp.example", "from_address": "a@b.c"}}}
+        report = first_run.first_run_report(cfg, total_vram_mb=24000)
+        assert [it.key for it in report] == ["compute", "models", "opencode", "diarization", "notifications"]
         assert first_run.needs_attention(report) == []
+
+
+class TestNotificationsItem:
+    """Retours utilisateurs 2026-11 : « on n'est pas prévenu » — le code sait prévenir,
+    mais le SMTP est éteint par défaut et les comptes n'ont pas d'adresse."""
+
+    def test_smtp_desactive_warn(self):
+        it = first_run._notifications_item({"notifications": {"email": {"enabled": False}}})
+        assert it.key == "notifications" and it.status == "warn" and it.data == {"enabled": False}
+
+    def test_absence_de_section_vaut_desactive(self):
+        assert first_run._notifications_item({}).status == "warn"
+
+    def test_active_mais_smtp_incomplet_warn(self, monkeypatch):
+        monkeypatch.setattr(first_run.UserStore, "count_active_without_email", staticmethod(lambda: 0))
+        it = first_run._notifications_item({"notifications": {"email": {"enabled": True, "smtp_host": "", "from_address": "a@b.c"}}})
+        assert it.status == "warn" and it.data["smtp_ok"] is False
+
+    def test_comptes_sans_adresse_warn(self, monkeypatch):
+        monkeypatch.setattr(first_run.UserStore, "count_active_without_email", staticmethod(lambda: 3))
+        it = first_run._notifications_item({"notifications": {"email": {"enabled": True, "smtp_host": "s", "from_address": "a@b.c"}}})
+        assert it.status == "warn" and it.data["users_without_email"] == 3
+
+    def test_tout_bon_ok(self, monkeypatch):
+        monkeypatch.setattr(first_run.UserStore, "count_active_without_email", staticmethod(lambda: 0))
+        it = first_run._notifications_item({"notifications": {"email": {"enabled": True, "smtp_host": "s", "from_address": "a@b.c"}}})
+        assert it.status == "ok"
+
+    def test_hors_contexte_db_ne_bloque_pas(self, monkeypatch):
+        def boom():
+            raise RuntimeError("no db")
+        monkeypatch.setattr(first_run.UserStore, "count_active_without_email", staticmethod(boom))
+        it = first_run._notifications_item({"notifications": {"email": {"enabled": True, "smtp_host": "s", "from_address": "a@b.c"}}})
+        assert it.status == "ok" and it.data["users_without_email"] == 0
 
 
 class TestRoute:

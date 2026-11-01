@@ -100,6 +100,20 @@ class UserStore:
         return True
 
     @staticmethod
+    def count_active_without_email() -> int:
+        """Comptes actifs sans adresse e-mail — ils ne recevront aucune notification.
+
+        Sert au bilan d'accueil admin (``web/first_run``) : les e-mails « pré-analyse
+        prête » et « terminé » existent, mais ne partent que vers une adresse renseignée.
+        """
+        return int(db.session.scalar(
+            db.select(db.func.count()).select_from(User).filter(
+                User.is_active.is_(True),
+                db.or_(User.email.is_(None), db.func.trim(User.email) == ""),
+            )
+        ) or 0)
+
+    @staticmethod
     def count_users() -> int:
         return db.session.scalar(db.select(func.count(User.id)))
 

@@ -15,6 +15,12 @@
     <div>
       <h1 class="h4 mb-1">{{ job.title }}
         {% with source_job = job %}{% include 'wizard/_source_badge.html' %}{% endwith %}</h1>
+      {% if job.state in ('summary_done', 'context_done', 'participants_done', 'speaker_detection_done', 'lexicon_done', 'ready_to_process') %}
+      <div class="small text-primary" data-awaiting-user>
+        <i class="bi bi-hourglass-split"></i>
+        {{ _("La pré-analyse s'est faite automatiquement. Rien ne se lance sans vous : complétez les étapes restantes, puis cliquez « Lancer le traitement ».") }}
+      </div>
+      {% endif %}
       {% if meeting_session %}
       <div id="meeting-session-banner" data-job="{{ job.id }}" data-state="{{ meeting_session.state }}"
            class="small {{ 'text-danger' if meeting_session.state in ('not_admitted','failed_final') else 'text-muted' }}">

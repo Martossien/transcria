@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 10:29+0200\n"
+"POT-Creation-Date: 2026-11-01 11:26+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -1300,8 +1300,8 @@ msgstr "Applica ai documenti:"
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "Verrà creata una versione ripristinabile (è possibile tornare indietro)."
 
-#: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:258
-#: transcria/notifications/mailer.py:306 transcria/queue/routes.py:41
+#: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:261
+#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:41
 msgid "Erreur"
 msgstr "Errore"
 
@@ -1530,8 +1530,8 @@ msgid "Bonjour %(name)s,"
 msgstr "Buongiorno %(name)s,"
 
 #: transcria/notifications/mailer.py:192 transcria/notifications/mailer.py:223
-#: transcria/notifications/mailer.py:250 transcria/notifications/mailer.py:293
-#: transcria/notifications/mailer.py:307
+#: transcria/notifications/mailer.py:253 transcria/notifications/mailer.py:296
+#: transcria/notifications/mailer.py:310
 msgid "Cet email a été envoyé automatiquement par TranscrIA."
 msgstr "Questa email è stata inviata automaticamente da TranscrIA."
 
@@ -1541,9 +1541,9 @@ msgstr "Riceve questo messaggio perché è proprietario di un lavoro di trascriz
 
 #: transcria/notifications/mailer.py:199 transcria/notifications/mailer.py:205
 #: transcria/notifications/mailer.py:219 transcria/notifications/mailer.py:230
-#: transcria/notifications/mailer.py:246 transcria/notifications/mailer.py:262
-#: transcria/notifications/mailer.py:278 transcria/notifications/mailer.py:291
-#: transcria/notifications/mailer.py:302
+#: transcria/notifications/mailer.py:249 transcria/notifications/mailer.py:265
+#: transcria/notifications/mailer.py:281 transcria/notifications/mailer.py:294
+#: transcria/notifications/mailer.py:305
 msgid "Travail"
 msgstr "Lavoro"
 
@@ -1555,7 +1555,7 @@ msgstr "La Sua trascrizione è <strong>completata con successo</strong>."
 msgid "Voir les livrables"
 msgstr "Visualizza i documenti finali"
 
-#: transcria/notifications/mailer.py:211 transcria/notifications/mailer.py:398
+#: transcria/notifications/mailer.py:211 transcria/notifications/mailer.py:401
 #, python-format
 msgid "Transcription terminée : %(title)s"
 msgstr "Trascrizione completata: %(title)s"
@@ -1568,77 +1568,77 @@ msgstr "Trascrizione completata"
 msgid "Votre transcription est terminée avec succès."
 msgstr "La Sua trascrizione è stata completata con successo."
 
-#: transcria/notifications/mailer.py:222 transcria/notifications/mailer.py:249
-#: transcria/notifications/mailer.py:292 transcria/notifications/mailer.py:303
+#: transcria/notifications/mailer.py:222 transcria/notifications/mailer.py:252
+#: transcria/notifications/mailer.py:295 transcria/notifications/mailer.py:306
 msgid "Lien"
 msgstr "Link"
 
 #: transcria/notifications/mailer.py:233
-msgid "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le contexte de la réunion, puis lancez le traitement final."
-msgstr "La <strong>pre-analisi del Suo audio è pronta</strong>. Tocca a Lei: verifichi il contesto della riunione, quindi avvii l'elaborazione finale."
+msgid "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : il reste à valider le contexte, les participants et le lexique, puis à cliquer « Lancer le traitement » — rien ne se lancera sans vous. Vous recevrez un autre e-mail quand la transcription sera terminée."
+msgstr "La <strong>pre-analisi del suo audio è pronta</strong>. Tocca a lei: restano da convalidare il contesto, i partecipanti e il glossario, poi fare clic su «Avvia l'elaborazione» — nulla partirà senza di lei. Riceverà un'altra e-mail quando la trascrizione sarà terminata."
 
-#: transcria/notifications/mailer.py:236
+#: transcria/notifications/mailer.py:238
 msgid "Vérifier et lancer le traitement"
 msgstr "Verifica e avvia l'elaborazione"
 
-#: transcria/notifications/mailer.py:237 transcria/notifications/mailer.py:394
+#: transcria/notifications/mailer.py:239 transcria/notifications/mailer.py:397
 #, python-format
 msgid "Pré-analyse prête : %(title)s"
 msgstr "Pre-analisi pronta: %(title)s"
 
-#: transcria/notifications/mailer.py:238
+#: transcria/notifications/mailer.py:240
 msgid "Pré-analyse prête — à vous de jouer"
 msgstr "Pre-analisi pronta — tocca a Lei"
 
-#: transcria/notifications/mailer.py:244
-msgid "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, puis lancez le traitement final."
-msgstr "La pre-analisi del Suo audio è pronta. Verifichi il contesto della riunione, quindi avvii l'elaborazione finale."
+#: transcria/notifications/mailer.py:246
+msgid "La pré-analyse de votre audio est prête. Il reste à valider le contexte, les participants et le lexique, puis à cliquer « Lancer le traitement » — rien ne se lancera sans vous. Vous recevrez un autre e-mail quand la transcription sera terminée."
+msgstr "La pre-analisi del suo audio è pronta. Restano da convalidare il contesto, i partecipanti e il glossario, poi fare clic su «Avvia l'elaborazione» — nulla partirà senza di lei. Riceverà un'altra e-mail quando la trascrizione sarà terminata."
 
-#: transcria/notifications/mailer.py:261
+#: transcria/notifications/mailer.py:264
 msgid "Votre transcription a <strong>échoué</strong>."
 msgstr "La Sua trascrizione è <strong>fallita</strong>."
 
-#: transcria/notifications/mailer.py:263
+#: transcria/notifications/mailer.py:266
 msgid "Voir le détail"
 msgstr "Visualizza i dettagli"
 
-#: transcria/notifications/mailer.py:264 transcria/notifications/mailer.py:402
+#: transcria/notifications/mailer.py:267 transcria/notifications/mailer.py:405
 #, python-format
 msgid "Échec de transcription : %(title)s"
 msgstr "Trascrizione non riuscita: %(title)s"
 
-#: transcria/notifications/mailer.py:265
+#: transcria/notifications/mailer.py:268
 msgid "Échec de transcription"
 msgstr "Trascrizione non riuscita"
 
-#: transcria/notifications/mailer.py:273
+#: transcria/notifications/mailer.py:276
 #, python-format
 msgid "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "Un lavoro è <strong>in attesa di VRAM</strong>: la memoria GPU disponibile è insufficiente per la fase <strong>%(phase)s</strong> (%(mb)s&nbsp;MB richiesti). Il lavoro <strong>non</strong> è fallito — riprenderà automaticamente non appena la VRAM sarà liberata. Liberi memoria GPU (arresto di una LLM, fine di un altro lavoro) per accelerare la ripresa."
 
-#: transcria/notifications/mailer.py:279
+#: transcria/notifications/mailer.py:282
 msgid "Voir le traitement"
 msgstr "Visualizza il lavoro"
 
-#: transcria/notifications/mailer.py:280 transcria/notifications/mailer.py:448
+#: transcria/notifications/mailer.py:283 transcria/notifications/mailer.py:451
 #, python-format
 msgid "En attente de VRAM : %(title)s"
 msgstr "In attesa di VRAM: %(title)s"
 
-#: transcria/notifications/mailer.py:281
+#: transcria/notifications/mailer.py:284
 msgid "Traitement en attente de VRAM"
 msgstr "Lavoro in attesa di VRAM"
 
-#: transcria/notifications/mailer.py:288
+#: transcria/notifications/mailer.py:291
 #, python-format
 msgid "Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase %(phase)s, %(mb)s Mo requis)."
 msgstr "Un lavoro è in attesa di VRAM (memoria GPU insufficiente per la fase %(phase)s, %(mb)s MB richiesti)."
 
-#: transcria/notifications/mailer.py:290
+#: transcria/notifications/mailer.py:293
 msgid "Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée."
 msgstr "Il lavoro non è fallito: riprenderà automaticamente non appena la VRAM sarà liberata."
 
-#: transcria/notifications/mailer.py:301
+#: transcria/notifications/mailer.py:304
 msgid "Votre transcription a échoué."
 msgstr "La Sua trascrizione è fallita."
 
@@ -2702,7 +2702,7 @@ msgstr "Rilevata larghezza di banda di tipo telefonico (codec)."
 msgid "Nouveau traitement créé."
 msgstr "Nuovo lavoro creato."
 
-#: transcria/web/pages_routes.py:840
+#: transcria/web/pages_routes.py:842
 msgid "Traitement supprimé."
 msgstr "Lavoro eliminato."
 
@@ -2822,7 +2822,7 @@ msgstr "Qualità verificata"
 msgid "Export prêt"
 msgstr "Esportazione pronta"
 
-#: transcria/web/templates/wizard/_step_context.html:128
+#: transcria/web/templates/wizard/_step_context.html:129
 #: transcria/web/ui_labels.py:36
 msgid "Échec"
 msgstr "Non riuscito"
@@ -2888,6 +2888,33 @@ msgstr "Rilevamento dei parlanti: è disponibile un'opzione più rapida e senza 
 #: transcria/web/templates/_first_run_checklist.html:35
 msgid "l'activer ou garder le réglage actuel depuis la page Modèles"
 msgstr "attivarla o mantenere l'impostazione attuale dalla pagina Modelli"
+
+#: transcria/web/templates/_first_run_checklist.html:40
+msgid "Notifications par e-mail désactivées : personne n'est prévenu quand une pré-analyse attend sa validation ni quand un traitement se termine"
+msgstr "Notifiche e-mail disattivate: nessuno viene avvisato quando una pre-analisi attende convalida né quando un'elaborazione termina"
+
+#: transcria/web/templates/_first_run_checklist.html:41
+msgid "activer le SMTP dans la configuration (section Notifications)"
+msgstr "attivare l'SMTP nella configurazione (sezione Notifiche)"
+
+#: transcria/web/templates/_first_run_checklist.html:44
+msgid "Notifications activées mais serveur SMTP ou adresse d'expéditeur manquant : aucun e-mail ne partira"
+msgstr "Notifiche attivate ma manca il server SMTP o l'indirizzo del mittente: nessuna e-mail partirà"
+
+#: transcria/web/templates/_first_run_checklist.html:45
+msgid "compléter la configuration"
+msgstr "completare la configurazione"
+
+#: transcria/web/templates/_first_run_checklist.html:48
+#, python-format
+msgid "%(n)s compte actif sans adresse e-mail ne recevra aucune notification"
+msgid_plural "%(n)s comptes actifs sans adresse e-mail ne recevront aucune notification"
+msgstr[0] "%(n)s account attivo senza indirizzo e-mail non riceverà alcuna notifica"
+msgstr[1] "%(n)s account attivi senza indirizzo e-mail non riceveranno alcuna notifica"
+
+#: transcria/web/templates/_first_run_checklist.html:49
+msgid "renseigner les adresses"
+msgstr "inserire gli indirizzi"
 
 #: transcria/web/templates/account_tokens.html:2
 #: transcria/web/templates/base.html:114
@@ -3848,7 +3875,7 @@ msgstr "Lavoro"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:157
+#: transcria/web/templates/job_wizard.html:163
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
@@ -3978,12 +4005,23 @@ msgstr "Vedi la pagina Manutenzione"
 
 #: transcria/web/templates/base.html:159
 #, python-format
+msgid "<strong>%(count)s</strong> réunion attend votre validation : sa pré-analyse est faite, rien ne se lancera sans vous."
+msgid_plural "<strong>%(count)s</strong> réunions attendent votre validation : leur pré-analyse est faite, rien ne se lancera sans vous."
+msgstr[0] "<strong>%(count)s</strong> riunione attende la sua convalida: la pre-analisi è fatta, nulla partirà senza di lei."
+msgstr[1] "<strong>%(count)s</strong> riunioni attendono la sua convalida: la pre-analisi è fatta, nulla partirà senza di lei."
+
+#: transcria/web/templates/base.html:160
+msgid "Voir mes réunions"
+msgstr "Vedi le mie riunioni"
+
+#: transcria/web/templates/base.html:169
+#, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> lavoro in attesa di VRAM."
 msgstr[1] "<strong>%(count)s</strong> lavori in attesa di VRAM."
 
-#: transcria/web/templates/base.html:160
+#: transcria/web/templates/base.html:170
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "La memoria GPU è insufficiente; questi lavori riprenderanno automaticamente non appena sarà liberata. Liberi della VRAM (arresto di una LLM, fine di un altro lavoro) per accelerare la ripresa."
 
@@ -4123,7 +4161,7 @@ msgstr "Aggiungi una voce"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:91
-#: transcria/web/templates/job_wizard.html:166
+#: transcria/web/templates/job_wizard.html:172
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Aggiungi"
@@ -4519,7 +4557,7 @@ msgid "Partagé par %(name)s"
 msgstr "Condiviso da %(name)s"
 
 #: transcria/web/templates/index.html:86
-#: transcria/web/templates/job_wizard.html:21
+#: transcria/web/templates/job_wizard.html:27
 msgid "Incident technique — nouvel essai prévu"
 msgstr "Incidente tecnico — nuovo tentativo previsto"
 
@@ -4659,69 +4697,73 @@ msgstr "Torna al lavoro"
 msgid "Traitement"
 msgstr "Lavoro"
 
-#: transcria/web/templates/job_wizard.html:30
+#: transcria/web/templates/job_wizard.html:21
+msgid "La pré-analyse s'est faite automatiquement. Rien ne se lance sans vous : complétez les étapes restantes, puis cliquez « Lancer le traitement »."
+msgstr "La pre-analisi è stata eseguita automaticamente. Nulla parte senza di lei: completi i passaggi rimanenti, poi faccia clic su «Avvia l'elaborazione»."
+
+#: transcria/web/templates/job_wizard.html:36
 msgid "Replanifier la captation"
 msgstr "Ripianifica la cattura"
 
-#: transcria/web/templates/job_wizard.html:40
+#: transcria/web/templates/job_wizard.html:46
 #, python-format
 msgid "%(n)s premiers tours retirés (plafond du direct atteint)"
 msgstr "%(n)s primi turni rimossi (limite del live raggiunto)"
 
-#: transcria/web/templates/job_wizard.html:42
+#: transcria/web/templates/job_wizard.html:48
 msgid "Suivi en direct — provisoire"
 msgstr "Monitoraggio in diretta — provvisorio"
 
-#: transcria/web/templates/job_wizard.html:43
+#: transcria/web/templates/job_wizard.html:49
 msgid "la transcription de référence sera produite après la réunion"
 msgstr "la trascrizione di riferimento sarà prodotta dopo la riunione"
 
-#: transcria/web/templates/job_wizard.html:47
+#: transcria/web/templates/job_wizard.html:53
 msgid "En attente des premiers tours de parole…"
 msgstr "In attesa dei primi turni di parola…"
 
-#: transcria/web/templates/job_wizard.html:52
+#: transcria/web/templates/job_wizard.html:58
 #, python-format
 msgid "Créé le %(date)s"
 msgstr "Creato il %(date)s"
 
-#: transcria/web/templates/job_wizard.html:62
+#: transcria/web/templates/job_wizard.html:68
 msgid "Le traitement a échoué."
 msgstr "Il lavoro non è riuscito."
 
-#: transcria/web/templates/job_wizard.html:66
+#: transcria/web/templates/job_wizard.html:72
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 msgstr "I suoi dati inseriti (contesto, partecipanti, lessico) sono conservati — può rilanciare il lavoro."
 
-#: transcria/web/templates/job_wizard.html:69
+#: transcria/web/templates/job_wizard.html:75
 msgid "Relancer le traitement"
 msgstr "Rilancia il lavoro"
 
-#: transcria/web/templates/job_wizard.html:139
+#: transcria/web/templates/job_wizard.html:145
 msgid "Ajouter au lexique central"
 msgstr "Aggiungi al lessico centrale"
 
-#: transcria/web/templates/job_wizard.html:140
+#: transcria/web/templates/job_wizard.html:146
 msgid "Fermer"
 msgstr "Chiudi"
 
-#: transcria/web/templates/job_wizard.html:143
+#: transcria/web/templates/job_wizard.html:149
 msgid "Forme :"
 msgstr "Forma:"
 
-#: transcria/web/templates/job_wizard.html:145
+#: transcria/web/templates/job_wizard.html:151
 msgid "Lexique existant"
 msgstr "Lessico esistente"
 
-#: transcria/web/templates/job_wizard.html:150
+#: transcria/web/templates/job_wizard.html:156
 msgid "— Nouveau lexique… —"
 msgstr "— Nuovo lessico… —"
 
-#: transcria/web/templates/job_wizard.html:154
+#: transcria/web/templates/job_wizard.html:160
 msgid "Nom du nouveau lexique"
 msgstr "Nome del nuovo lessico"
 
-#: transcria/web/templates/job_wizard.html:155
+#: transcria/web/templates/job_wizard.html:161
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "Es.: Vocabolario caseificio"
 
@@ -5812,7 +5854,7 @@ msgid "Analyser le fichier"
 msgstr "Analizza il file"
 
 #: transcria/web/templates/wizard/_step_analysis.html:131
-#: transcria/web/templates/wizard/_step_context.html:190
+#: transcria/web/templates/wizard/_step_context.html:191
 #: transcria/web/templates/wizard/_step_participants.html:216
 #: transcria/web/templates/wizard/_step_summary.html:110
 msgid "Étapes optionnelles pour ce profil"
@@ -5827,7 +5869,7 @@ msgid "Type"
 msgstr "Tipo"
 
 #: transcria/web/templates/wizard/_step_context.html:19
-#: transcria/web/templates/wizard/_step_context.html:89
+#: transcria/web/templates/wizard/_step_context.html:90
 msgid "Sujet"
 msgstr "Argomento"
 
@@ -5855,88 +5897,88 @@ msgstr "Data"
 msgid "Langue"
 msgstr "Lingua"
 
-#: transcria/web/templates/wizard/_step_context.html:57
+#: transcria/web/templates/wizard/_step_context.html:58
 msgid "Langue de la réunion ET des livrables générés (compte-rendu, corrections). Anglais = bêta."
 msgstr "Lingua della riunione E dei documenti finali generati (verbale, correzioni). Inglese = beta."
 
-#: transcria/web/templates/wizard/_step_context.html:62
+#: transcria/web/templates/wizard/_step_context.html:63
 msgid "Type de réunion"
 msgstr "Tipo di riunione"
 
-#: transcria/web/templates/wizard/_step_context.html:66
+#: transcria/web/templates/wizard/_step_context.html:67
 msgid "Types intégrés"
 msgstr "Tipi integrati"
 
-#: transcria/web/templates/wizard/_step_context.html:71
+#: transcria/web/templates/wizard/_step_context.html:72
 msgid "Mes types & partagés"
 msgstr "I miei tipi e condivisi"
 
-#: transcria/web/templates/wizard/_step_context.html:84
+#: transcria/web/templates/wizard/_step_context.html:85
 msgid "Service / Domaine"
 msgstr "Reparto / Ambito"
 
-#: transcria/web/templates/wizard/_step_context.html:93
+#: transcria/web/templates/wizard/_step_context.html:94
 msgid "Objectif"
 msgstr "Obiettivo"
 
-#: transcria/web/templates/wizard/_step_context.html:97
+#: transcria/web/templates/wizard/_step_context.html:98
 msgid "Notes / Ordre du jour"
 msgstr "Note / Ordine del giorno"
 
-#: transcria/web/templates/wizard/_step_context.html:106
+#: transcria/web/templates/wizard/_step_context.html:107
 msgid "Informations complémentaires"
 msgstr "Informazioni aggiuntive"
 
-#: transcria/web/templates/wizard/_step_context.html:112
+#: transcria/web/templates/wizard/_step_context.html:113
 msgid "Enregistrer le contexte"
 msgstr "Salva il contesto"
 
-#: transcria/web/templates/wizard/_step_context.html:113
+#: transcria/web/templates/wizard/_step_context.html:114
 #: transcria/web/templates/wizard/_step_lexicon.html:153
 msgid "Enregistré"
 msgstr "Salvato"
 
-#: transcria/web/templates/wizard/_step_context.html:122
+#: transcria/web/templates/wizard/_step_context.html:123
 msgid "Données enrichies extraites par l'IA"
 msgstr "Dati arricchiti estratti dall'IA"
 
-#: transcria/web/templates/wizard/_step_context.html:126
+#: transcria/web/templates/wizard/_step_context.html:127
 msgid "Partiel"
 msgstr "Parziale"
 
-#: transcria/web/templates/wizard/_step_context.html:130
+#: transcria/web/templates/wizard/_step_context.html:131
 msgid "— apparaîtront dans le rapport Word selon le type de réunion"
 msgstr "— compariranno nel rapporto Word in base al tipo di riunione"
 
-#: transcria/web/templates/wizard/_step_context.html:135
+#: transcria/web/templates/wizard/_step_context.html:136
 msgid "Ordre du jour"
 msgstr "Ordine del giorno"
 
-#: transcria/web/templates/wizard/_step_context.html:141
+#: transcria/web/templates/wizard/_step_context.html:142
 msgid "Décisions prises"
 msgstr "Decisioni prese"
 
-#: transcria/web/templates/wizard/_step_context.html:147
+#: transcria/web/templates/wizard/_step_context.html:148
 msgid "Actions à réaliser"
 msgstr "Azioni da svolgere"
 
-#: transcria/web/templates/wizard/_step_context.html:153
+#: transcria/web/templates/wizard/_step_context.html:154
 msgid "Points bloquants"
 msgstr "Punti bloccanti"
 
-#: transcria/web/templates/wizard/_step_context.html:159
+#: transcria/web/templates/wizard/_step_context.html:160
 msgid "Points reportés"
 msgstr "Punti rinviati"
 
-#: transcria/web/templates/wizard/_step_context.html:165
+#: transcria/web/templates/wizard/_step_context.html:166
 msgid "Votes"
 msgstr "Voti"
 
-#: transcria/web/templates/wizard/_step_context.html:171
+#: transcria/web/templates/wizard/_step_context.html:172
 msgid "Résolutions adoptées"
 msgstr "Risoluzioni adottate"
 
-#: transcria/web/templates/wizard/_step_context.html:176
+#: transcria/web/templates/wizard/_step_context.html:177
 msgid "Prochaine réunion :"
 msgstr "Prossima riunione:"
 
@@ -5978,8 +6020,8 @@ msgid "%(min)s min"
 msgstr "%(min)s min"
 
 #: transcria/web/templates/wizard/_step_file.html:20
-msgid "L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant."
-msgstr "L'audio arriverà automaticamente al termine della riunione — prepari fin da ora il contesto, i partecipanti e il lessico."
+msgid "L'audio arrivera automatiquement à la fin de la réunion et la pré-analyse se lancera seule. Le reste vous attend : contexte, participants, lexique, puis « Lancer le traitement » — préparez-les dès maintenant."
+msgstr "L'audio arriverà automaticamente alla fine della riunione e la pre-analisi partirà da sola. Il resto la aspetta: contesto, partecipanti, glossario, poi «Avvia l'elaborazione» — li prepari fin da ora."
 
 #: transcria/web/templates/wizard/_step_file.html:25
 msgid "La captation de la réunion a échoué — replanifiez-la (bandeau ci-dessus) ou déposez l'enregistrement manuellement."
@@ -6481,4 +6523,10 @@ msgstr "Genera la sintesi"
 
 #~ msgid "Détection des locuteurs (pyannote recommandé)."
 #~ msgstr "Rilevamento dei parlanti (pyannote consigliato)."
+
+#~ msgid "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le contexte de la réunion, puis lancez le traitement final."
+#~ msgstr "La <strong>pre-analisi del Suo audio è pronta</strong>. Tocca a Lei: verifichi il contesto della riunione, quindi avvii l'elaborazione finale."
+
+#~ msgid "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, puis lancez le traitement final."
+#~ msgstr "La pre-analisi del Suo audio è pronta. Verifichi il contesto della riunione, quindi avvii l'elaborazione finale."
 

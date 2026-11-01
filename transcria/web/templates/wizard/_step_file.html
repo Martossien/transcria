@@ -17,7 +17,7 @@
     {% elif meeting_session and meeting_session.state not in ('not_admitted','failed_final','cancelled') %}
       <div class="alert alert-info">
         <i class="bi bi-camera-video"></i>
-        {{ _("L'audio arrivera automatiquement à la fin de la réunion — préparez le contexte, les participants et le lexique dès maintenant.") }}
+        {{ _("L'audio arrivera automatiquement à la fin de la réunion et la pré-analyse se lancera seule. Le reste vous attend : contexte, participants, lexique, puis « Lancer le traitement » — préparez-les dès maintenant.") }}
       </div>
     {% else %}
       {% if meeting_session %}

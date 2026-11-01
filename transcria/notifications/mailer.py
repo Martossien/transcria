@@ -231,7 +231,9 @@ def _build_html_summary_ready(tr, lang, display_name, job_title, job_id, base_ur
     body = _BODY_WITH_FACTS.format(
         greeting=_greeting(tr, display_name),
         intro=tr.gettext("La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : "
-                          "vérifiez le contexte de la réunion, puis lancez le traitement final."),
+                          "il reste à valider le contexte, les participants et le lexique, puis à cliquer "
+                          "« Lancer le traitement » — rien ne se lancera sans vous. Vous recevrez un autre "
+                          "e-mail quand la transcription sera terminée."),
         facts_rows=rows, job_url=job_url, cta_bg="#2563eb",
         cta=tr.gettext("Vérifier et lancer le traitement"))
     return _html_shell(tr, lang, tr.gettext("Pré-analyse prête : %(title)s") % {"title": job_title},
@@ -241,8 +243,9 @@ def _build_html_summary_ready(tr, lang, display_name, job_title, job_id, base_ur
 def _build_text_summary_ready(tr, display_name, job_title, job_id, base_url, facts=None):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
     lines = [_greeting(tr, display_name), "",
-             tr.gettext("La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, "
-                        "puis lancez le traitement final."), "",
+             tr.gettext("La pré-analyse de votre audio est prête. Il reste à valider le contexte, les "
+                        "participants et le lexique, puis à cliquer « Lancer le traitement » — rien ne se "
+                        "lancera sans vous. Vous recevrez un autre e-mail quand la transcription sera terminée."), "",
              tr.gettext("Travail") + f" : {job_title}"]
     for label, value in (facts or []):
         lines.append(f"{tr.gettext(label)} : {value}")
