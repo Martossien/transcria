@@ -35,6 +35,7 @@ from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu import inventory
+from transcria.gpu.arbitrage_endpoint import default_base_url, is_cloud_backend
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
 from transcria.ingestion.meet_links import MeetLinkError, normalize_meeting_input
@@ -882,6 +883,9 @@ def admin_models_download():
     spec = next((it["spec"] for it in _models_view()["items"] if it["spec"].role == role), None)
     if spec is None:
         abort(404)
+    if spec.kind == "cloud":
+        flash(_("Ce modèle est servi par un fournisseur cloud, rien à télécharger."), "error")
+        return redirect(url_for("web.admin_models"))
     if spec.gated and not token:
         flash(_("« %(l)s » est un modèle *gated* : un token HuggingFace est requis "
                 "(et l'acceptation de sa licence sur huggingface.co).", l=spec.label), "error")
@@ -895,12 +899,21 @@ def admin_models_download():
     return redirect(url_for("web.admin_models"))
 
 
+def _cloud_switch_refused_message() -> str:
+    """Message de refus des bascules de modèle quand la LLM d'arbitrage est un fournisseur cloud."""
+    return _("La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml "
+             "(model_id) puis redémarrez — cette page ne pilote que la LLM locale.")
+
+
 @web_bp.route("/admin/models/activate", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_models_activate():
     # Relie le téléchargement au SERVING : bascule le profil llama.cpp sur le GGUF téléchargé
     # (scripts/switch_arbitrage_llm.sh régénère le wrapper + met à jour services.arbitrage_script).
+    if is_cloud_backend(ConfigService.get_singleton()):
+        flash(_cloud_switch_refused_message(), "error")
+        return redirect(url_for("web.admin_models"))
     item = next((it for it in _models_view()["items"] if it["spec"].role == "arbitrage_llm"), None)
     if item is None or not item["spec"].tier:
         abort(404)
@@ -934,6 +947,9 @@ def admin_models_ollama_activate():
     modèle en arrière-plan s'il est absent. Aucun redémarrage : Ollama charge à la
     demande et l'endpoint ne change pas.
     """
+    if is_cloud_backend(ConfigService.get_singleton()):
+        flash(_cloud_switch_refused_message(), "error")
+        return redirect(url_for("web.admin_models"))
     model = (request.form.get("model") or "").strip()
     choice = next((c for c in _ollama_choices(_models_view()) if c["model"] == model), None)
     if choice is None:
@@ -956,7 +972,6 @@ def admin_models_ollama_activate():
     # Réaligner le provider opencode (même patron que l'entrypoint Docker) — best-effort :
     # un échec n'annule pas la bascule, le prochain provisioning le rattrapera.
     try:
-        from transcria.gpu.arbitrage_endpoint import default_base_url
         from transcria.llm_tools import opencode_setup
 
         opencode_setup.ensure_local_provider(opencode_setup.resolve_config_path(),

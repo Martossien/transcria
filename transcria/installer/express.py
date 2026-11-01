@@ -26,7 +26,8 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
     "fr": {
         "profile": "Profil : tout-en-un (portail web + traitement sur cette machine)",
         "hw_gpus": "Matériel : {n} GPU NVIDIA, {gb} Go de VRAM au total",
-        "hw_none": "Matériel : aucun GPU NVIDIA détecté — transcription CPU possible (moteur Kroko), phases LLM indisponibles",
+        "hw_none": ("Matériel : aucun GPU NVIDIA détecté — transcription CPU possible (moteur Kroko), "
+                    "phases LLM indisponibles sans fournisseur cloud"),
         "db_pg": "Base de données : PostgreSQL local (rôle « transcria », mot de passe généré automatiquement)",
         "db_sqlite_no_psql": "Base de données : SQLite (psql introuvable — installez postgresql pour un usage en production)",
         "db_sqlite_no_admin": "Base de données : SQLite (ni root ni sudo : impossible de créer le rôle PostgreSQL)",
@@ -51,7 +52,8 @@ EXPRESS_MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "profile": "Profile: all-in-one (web portal + processing on this machine)",
         "hw_gpus": "Hardware: {n} NVIDIA GPU(s), {gb} GB of VRAM in total",
-        "hw_none": "Hardware: no NVIDIA GPU detected — CPU transcription available (Kroko engine), LLM phases unavailable",
+        "hw_none": ("Hardware: no NVIDIA GPU detected — CPU transcription available (Kroko engine), "
+                    "LLM phases unavailable without a cloud provider"),
         "db_pg": "Database: local PostgreSQL (role \"transcria\", auto-generated password)",
         "db_sqlite_no_psql": "Database: SQLite (psql not found — install postgresql for production use)",
         "db_sqlite_no_admin": "Database: SQLite (neither root nor sudo: cannot create the PostgreSQL role)",

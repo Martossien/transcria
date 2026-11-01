@@ -223,7 +223,20 @@ def ensure_cloud_provider(
     Sans ce bloc, ``opencode run --model <id>/<modèle>`` rend « Model unavailable » : les quatre
     phases agentiques échoueraient alors que les appels directs fonctionnent (relecture lot A).
     Préserve ``$schema``, ``provider.local`` et les autres clés ; pose ``share: disabled``.
+
+    Raises:
+        ValueError: un champ requis est vide — rien n'est écrit (un bloc incomplet, p. ex.
+            ``"apiKey": "{env:}"``, échouerait au premier run sans message utile).
     """
+    missing = [name for name, value in (
+        ("fournisseur", provider_id), ("llm_cloud.base_url", base_url),
+        ("llm_cloud.api_key_env", api_key_env), ("modèle", model_id),
+    ) if not str(value or "").strip()]
+    if missing:
+        raise ValueError(
+            f"fournisseur cloud hors table « {provider_id or '?'} » incomplet : "
+            f"{', '.join(missing)} vide(s) — bloc provider opencode NON écrit"
+        )
     path = Path(config_path)
     data = _load_opencode_config(path)
     provider = data.setdefault("provider", {})

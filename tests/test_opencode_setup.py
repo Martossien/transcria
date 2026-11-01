@@ -304,3 +304,47 @@ def test_is_remote_arbitrage_true_for_remote_host(monkeypatch):
 def test_is_remote_arbitrage_honors_env_override(monkeypatch):
     monkeypatch.setenv("TRANSCRIA_ARBITRAGE_LLM_HOST", "host.docker.internal")
     assert is_remote_arbitrage({}) is True
+
+
+# ── ensure_cloud_provider : bloc incomplet refusé ─────────────────────────────
+
+def test_ensure_cloud_provider_incomplet_leve_et_n_ecrit_rien(tmp_path):
+    import pytest
+
+    from transcria.llm_tools.opencode_setup import ensure_cloud_provider
+
+    p = tmp_path / "opencode.json"
+    p.write_text(json.dumps({"provider": {"local": {"name": "L"}}}))
+    before = p.read_text()
+    for base_url, key_env in (("", "FAKEPROV_API_KEY"), ("https://llm.example.org/v1", ""),
+                              ("  ", "  ")):
+        with pytest.raises(ValueError, match="incomplet"):
+            ensure_cloud_provider(p, "fakeprov", base_url, key_env, "modele-test")
+        assert p.read_text() == before
+    assert "{env:}" not in p.read_text()
+
+
+def test_setup_opencode_script_cloud_incomplet_previent_sans_ecrire(tmp_path, monkeypatch, capsys):
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parent.parent / "scripts" / "setup_opencode.py"
+    spec = importlib.util.spec_from_file_location("setup_opencode_script", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cfg = {"services": {"backend": "cloud"},
+           "workflow": {"arbitration_llm": {"model_id": "fakeprov/x",
+                                            "api_base": "https://llm.example.org/v1"},
+                        "llm_cloud": {"api_key_env": ""}},
+           "storage": {"agent_work_dir": str(tmp_path / "work")}}
+    monkeypatch.setattr("transcria.config.load_config", lambda *a, **k: cfg, raising=False)
+    monkeypatch.setattr(mod, "find_opencode_binary", lambda **kw: None)
+    oc = tmp_path / "oc.json"
+    monkeypatch.setattr(sys, "argv", ["setup_opencode.py", "--config-path", str(oc)])
+    rc = mod.main()
+    assert rc == 1
+    data = json.loads(oc.read_text())
+    assert "fakeprov" not in data.get("provider", {})
+    assert data["share"] == "disabled"
+    assert "incomplet" in capsys.readouterr().err

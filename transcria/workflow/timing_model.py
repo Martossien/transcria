@@ -19,12 +19,35 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from transcria.gpu.arbitrage_endpoint import is_cloud_backend
+
 # Nombre minimal d'échantillons pour un ajustement linéaire (pente+ordonnée) fiable ;
 # en-dessous on retombe sur le ratio médian, puis sur la formule.
 _MIN_LINEAR_SAMPLES = 5
 # Fenêtre glissante : au-delà, on ne garde que les N derniers (la machine/le palier
 # peuvent changer — les vieux points doivent s'effacer).
 WINDOW = 50
+
+# Étapes dont la durée dépend de la LLM d'arbitrage (noms RÉELLEMENT historisés). En cloud,
+# leurs durées sont enregistrées et lues sous une clé DISTINCTE (``<étape>@cloud``) : la table
+# `job_timing` n'a pas de dimension backend, et la fenêtre glissante mélangerait sinon les
+# points d'une LLM locale et ceux d'un fournisseur externe (vitesses sans rapport).
+# ``multi_stt_review`` : son arbitrage passe par des appels LLM DIRECTS (``chat_completion``).
+LLM_STAGES = frozenset({"summary", "correction", "final_review", "type_fields", "multi_stt_review"})
+CLOUD_STAGE_SUFFIX = "@cloud"
+
+
+def stage_key(stage: str, cloud: bool) -> str:
+    """Clé d'historique d'une étape : suffixée ``@cloud`` pour une étape LLM servie en cloud."""
+    stage = str(stage or "")
+    if cloud and stage in LLM_STAGES:
+        return stage + CLOUD_STAGE_SUFFIX
+    return stage
+
+
+def timing_stage_key(stage: str, config: dict | None) -> str:
+    """:func:`stage_key` résolue depuis la config (``None`` = clé locale historique)."""
+    return stage_key(stage, bool(config) and is_cloud_backend(config or {}))
 
 
 @dataclass(frozen=True)

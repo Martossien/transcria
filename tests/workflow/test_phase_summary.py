@@ -611,3 +611,40 @@ class TestTranscriptVideCourtCircuitResume:
             assert "hit" not in llm_called
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.FAILED.value
+
+
+@pytest.fixture
+def _clean_timings(app):
+    from transcria.database import db
+    from transcria.jobs.timing_store import JobTiming
+
+    def _purge():
+        with app.app_context():
+            db.session.query(JobTiming).delete()
+            db.session.commit()
+
+    _purge()
+    yield
+    _purge()
+
+
+def test_finalize_success_cloud_historise_summary_cloud(app, owner_id, monkeypatch, tmp_path, _clean_timings):
+    """Le site d'écriture du RÉSUMÉ transmet la config : `summary@cloud` en LLM cloud."""
+    import time
+    from unittest.mock import MagicMock
+
+    from transcria.jobs.timing_store import JobTiming
+    from transcria.workflow.phases import summary as summary_phase
+
+    monkeypatch.setattr(summary_phase, "notify_summary_ready", lambda *a, **kw: None)
+    cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")},
+                          services={"backend": "cloud"})
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Timing cloud")
+        runner = WorkflowRunner(JobStore, cfg)
+        JobFilesystem(cfg["storage"]["jobs_dir"], job.id).save_json(
+            "metadata/audio_analysis.json", {"duration_seconds": 600.0})
+        summary_phase._finalize_success(runner, job, {"transcript_text": "x"}, cfg,
+                                        MagicMock(), time.monotonic() - 12.0)
+        stages = [r.stage for r in JobTiming.query.all()]
+        assert stages == ["summary@cloud"]

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from transcria.config.local_dirs import resolve_models_dir, resolve_runtimes_dir
 from transcria.gpu.arbitrage_endpoint import (
+    cloud_view,
     is_cloud_backend,
     is_ollama_backend,
     ollama_model_name,
@@ -179,6 +180,7 @@ class ModelSpec:
     repo_id: str
     file: str | None     # fichier unique (GGUF) ou None = snapshot complet
     kind: str            # gguf (→ models_dir) | hf_cache (→ HF_HOME) | runtime (→ runtimes/) | ollama (→ démon)
+                         # | cloud (fournisseur externe : information seule, rien à télécharger)
                          # | prebuilt (binaire audio.cpp précompilé → runtimes/audiocpp/prebuilt/)
     target_subdir: str   # gguf : sous-dossier de models_dir
     gated: bool
@@ -211,9 +213,17 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
                 license_url=f"https://ollama.com/library/{model.split(':')[0]}",
                 est_gb=0.0,
             ))
-    # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort). JAMAIS en cloud :
-    # le fournisseur externe sert le modèle, aucun GGUF à télécharger (ligne cloud : lot C).
-    elif total_vram_mb and not is_cloud_backend(cfg):
+    # LLM d'arbitrage chez un fournisseur EXTERNE : ligne d'INFORMATION (rien à télécharger ni
+    # à activer, jamais un manque) — le GGUF du palier n'est pas proposé.
+    elif is_cloud_backend(cfg):
+        view = cloud_view(cfg)
+        specs.append(ModelSpec(
+            role="arbitrage_llm", label=f"LLM d'arbitrage (cloud : {view.provider or '?'} / {view.model or '?'})",
+            repo_id=f"{view.provider}/{view.model}", file=None, kind="cloud", target_subdir="",
+            gated=False, license="selon le fournisseur", license_url="", est_gb=0.0,
+        ))
+    # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort).
+    elif total_vram_mb:
         try:
             tier = recommend_tier(total_vram_mb)
             meta = get_tier_metadata(tier)
@@ -356,6 +366,9 @@ def model_status(
                 return {"present": True, "path": None,
                         "size_bytes": int(m.get("size") or 0), "daemon_up": True}
         return {"present": False, "path": None, "size_bytes": 0, "daemon_up": True}
+    if spec.kind == "cloud":
+        # Servie par le fournisseur externe : rien sur disque, jamais « absente ».
+        return {"present": True, "path": None, "size_bytes": 0}
     if spec.kind == "prebuilt":
         # Binaire audiocpp_cli : build CUDA (bin/) OU précompilé (prebuilt/) — l'un ou l'autre
         # suffit, le diariseur préfère le premier (cf. nemotron_diarizer.find_audiocpp_cli).
@@ -451,6 +464,9 @@ def catalog_with_status(cfg: dict, *, total_vram_mb: int | None = None) -> dict:
                 # n'est pas un manque, c'est une recommandation — l'UI et le bilan de premier
                 # démarrage ne doivent pas crier « absent » sur une LLM qui fonctionne.
                 status["served_instead"] = other
+        if spec.kind == "cloud":
+            # Information seule : jamais compté comme un manque, aucun bouton.
+            status["optional"] = True
         if spec.role.endswith("_candidate"):
             # Recommandation (diarisation « auto » proposée à une install antérieure) :
             # jamais un manque pour le bilan d'accueil, un badge « recommandé » dans l'UI.

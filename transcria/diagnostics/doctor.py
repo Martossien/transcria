@@ -69,6 +69,10 @@ from transcria.diagnostics.checks.llm import (  # noqa: F401 — façade
     check_opencode_model_resolution,
     check_opencode_smoke,
 )
+from transcria.diagnostics.checks.llm_cloud import (  # noqa: F401 — façade
+    check_llm_cloud,
+    check_llm_cloud_web,
+)
 from transcria.diagnostics.checks.probes import (  # noqa: F401 — façade
     _dir_writable,
     _probe_node_capabilities,
@@ -122,6 +126,8 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_arbitrage_llm,
     check_opencode,
     check_opencode_model_resolution,
+    # LLM cloud (docs/LLM_CLOUD.md § 3.3.1) : OK « sans objet » hors services.backend: cloud.
+    check_llm_cloud,
     check_inference_nodes,
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
@@ -145,6 +151,9 @@ _PROFILE_CHECKS: dict[str, tuple[Callable[[dict], CheckResult], ...]] = {
     "web": (
         check_database,
         check_database_encoding,
+        # Variante SANS réseau ni clé : le web n'exécute aucune phase LLM, mais sa garde
+        # d'admission lit la validation en base (fournisseur résolu + validation à jour).
+        check_llm_cloud_web,
         check_inference_nodes,
         check_remote_stt_control_plane,
         check_meeting_scheduling,

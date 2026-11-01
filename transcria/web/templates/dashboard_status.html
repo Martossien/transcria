@@ -8,7 +8,11 @@
     {{ _('mode %(m)s', m=(_('tout-en-un') if runtime_role == 'all' else _('frontale (web)') if runtime_role == 'web' else runtime_role)) }}
   </span>
 </div>
-{% if runtime_role == 'web' %}
+{% if runtime_role == 'web' and llm_cloud and llm_cloud.active %}
+<div class="alert alert-info small">
+  <i class="bi bi-info-circle"></i> {% trans provider=llm_cloud.provider_label %}Cette machine est une <strong>frontale sans GPU</strong> : la charge GPU (transcription, diarisation) est portée par le worker / serveur de ressources, et la LLM d'arbitrage est servie par un fournisseur cloud : <strong>{{ provider }}</strong>. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes ».{% endtrans %}
+</div>
+{% elif runtime_role == 'web' %}
 <div class="alert alert-info small">
   <i class="bi bi-info-circle"></i> {% trans %}Cette machine est une <strong>frontale sans GPU</strong> : toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes ».{% endtrans %}
 </div>

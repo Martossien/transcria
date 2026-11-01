@@ -703,7 +703,7 @@ def job_wizard(job_id: str):
         _audio_s = float(audio_analysis.get("duration_seconds") or 0)
         _prof = get_profile(selected_profile_id) if selected_profile_id and is_profile(selected_profile_id) else None
         if _prof is not None and _audio_s > 0:
-            timing_estimate = estimate_total_with_human(_prof, _audio_s)
+            timing_estimate = estimate_total_with_human(_prof, _audio_s, config=cfg)
     except Exception:  # noqa: BLE001 — l'estimation ne doit jamais casser le wizard
         timing_estimate = None
 

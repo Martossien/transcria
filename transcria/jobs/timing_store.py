@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from transcria.database import db
-from transcria.workflow.timing_model import WINDOW
+from transcria.workflow.timing_model import WINDOW, timing_stage_key
 
 
 class JobTiming(db.Model):
@@ -36,27 +36,34 @@ class JobTimingStore:
     """Écriture/lecture de l'historique de durées (best-effort côté écriture)."""
 
     @staticmethod
-    def record(profile_id: str, stage: str, audio_seconds: float, duration_seconds: float) -> None:
+    def record(profile_id: str, stage: str, audio_seconds: float, duration_seconds: float,
+               *, config: dict | None = None) -> None:
         """Enregistre une durée d'étape terminée. Ignore silencieusement les valeurs
-        invalides (audio ≤ 0, durée < 0) : un point aberrant ne doit pas polluer le modèle."""
+        invalides (audio ≤ 0, durée < 0) : un point aberrant ne doit pas polluer le modèle.
+
+        ``config`` fourni et LLM d'arbitrage en cloud : une étape LLM est historisée sous
+        ``<étape>@cloud`` (cf. ``timing_model.stage_key``)."""
         try:
             a, d = float(audio_seconds), float(duration_seconds)
         except (TypeError, ValueError):
             return
         if not (a > 0) or d < 0 or a != a or d != d:  # inclut NaN
             return
-        row = JobTiming(profile_id=str(profile_id or "")[:40], stage=str(stage or "")[:40],
+        row = JobTiming(profile_id=str(profile_id or "")[:40], stage=timing_stage_key(stage, config)[:40],
                         audio_seconds=a, duration_seconds=d)
         db.session.add(row)
         db.session.commit()
 
     @staticmethod
-    def recent_samples(profile_id: str, stage: str, limit: int = WINDOW) -> list[tuple[float, float]]:
+    def recent_samples(profile_id: str, stage: str, limit: int = WINDOW,
+                       *, config: dict | None = None) -> list[tuple[float, float]]:
         """Les ``limit`` derniers ``(audio_s, durée_s)`` pour un (profil, étape), du plus
-        ancien au plus récent (ordre attendu par le modèle : fenêtre glissante)."""
+        ancien au plus récent (ordre attendu par le modèle : fenêtre glissante). Même clé
+        qu'à l'écriture : en cloud, une étape LLM lit ``<étape>@cloud``."""
         rows = (
             db.session.query(JobTiming.audio_seconds, JobTiming.duration_seconds)
-            .filter(JobTiming.profile_id == str(profile_id or ""), JobTiming.stage == str(stage or ""))
+            .filter(JobTiming.profile_id == str(profile_id or ""),
+                    JobTiming.stage == timing_stage_key(stage, config))
             .order_by(JobTiming.recorded_at.desc(), JobTiming.id.desc())
             .limit(max(1, int(limit)))
             .all()
@@ -64,6 +71,8 @@ class JobTimingStore:
         return [(float(a), float(d)) for a, d in reversed(rows)]
 
     @staticmethod
-    def samples_for_stages(profile_id: str, stages: list[str], limit: int = WINDOW) -> dict[str, list[tuple[float, float]]]:
-        """Échantillons récents pour un lot d'étapes (une requête par étape, borné)."""
-        return {s: JobTimingStore.recent_samples(profile_id, s, limit) for s in stages}
+    def samples_for_stages(profile_id: str, stages: list[str], limit: int = WINDOW,
+                           *, config: dict | None = None) -> dict[str, list[tuple[float, float]]]:
+        """Échantillons récents pour un lot d'étapes (une requête par étape, borné).
+        Les clés du résultat restent les noms d'étapes NUS (la clé ``@cloud`` est interne)."""
+        return {s: JobTimingStore.recent_samples(profile_id, s, limit, config=config) for s in stages}

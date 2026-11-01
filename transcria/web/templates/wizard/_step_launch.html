@@ -10,7 +10,9 @@
     </p>
     {% else %}
     <div class="alert alert-warning">
-      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration.{% endtrans %}
+      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée, LLM cloud non validée ou interdite pour votre groupe, ou mode qualité désactivé). Voir la configuration.{% endtrans %}
+      {% set profile_reasons = processing_profiles.profiles | map(attribute='reasons') | sum(start=[]) | unique | list %}
+      {% if profile_reasons %}<ul class="mb-0 small">{% for r in profile_reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
     </div>
     {% endif %}
 

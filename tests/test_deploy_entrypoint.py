@@ -520,3 +520,132 @@ def test_provision_diarization_model_failure_is_non_blocking(tmp_path, monkeypat
         raise OSError("proxy")
 
     assert ep.provision_diarization_model(_plan(tmp_path, "scheduler"), {"MODELS_DIR": str(tmp_path)}, downloader=boom) is False
+
+
+# ── LLM cloud (docs/LLM_CLOUD.md § 3.3.3) ────────────────────────────────────
+
+_CLOUD_CFG = {
+    "services": {"backend": "cloud"},
+    "workflow": {
+        "arbitration_llm": {"model_id": "fakeprov/x", "api_base": "https://llm.example.org/v1"},
+        "llm_cloud": {"api_key_env": "FAKEPROV_API_KEY"},
+    },
+}
+
+
+def test_provision_model_cloud_downloads_nothing(tmp_path, monkeypatch):
+    import copy
+
+    import transcria.config as cfgmod
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: copy.deepcopy(_CLOUD_CFG))
+    calls: list = []
+
+    def dl(*a, **k):
+        calls.append(a)
+
+    ok = ep.provision_arbitrage_model(
+        _plan(tmp_path, "all"), {"MODELS_DIR": str(tmp_path / "m")},
+        downloader=dl, vram_probe=lambda: 24000)
+    assert ok is True
+    assert calls == []
+    assert not (tmp_path / "m").exists()
+
+
+def test_provision_only_cloud_still_runs_diarization(tmp_path, monkeypatch):
+    import copy
+
+    import transcria.config as cfgmod
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: copy.deepcopy(_CLOUD_CFG))
+    seen: list = []
+    rc = ep.main(
+        ["all", "--provision-only"],
+        env={"TRANSCRIA_CONFIG": str(_config(tmp_path)),
+             "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"},
+        model_provisioner=lambda plan, env: seen.append("model") or ep.provision_arbitrage_model(
+            plan, env, downloader=lambda *a, **k: seen.append("dl")),
+        diarization_provisioner=lambda plan, env: seen.append("diar") or True,
+    )
+    assert rc == 0
+    assert seen == ["model", "diar"]
+
+
+def test_provision_opencode_cloud_unknown_provider_writes_block_not_local(tmp_path, monkeypatch):
+    import copy
+    import json as _json
+    monkeypatch.setattr("transcria.config.load_config", lambda: copy.deepcopy(_CLOUD_CFG))
+    oc = tmp_path / "oc.json"
+    ep.provision_opencode(_plan(tmp_path, "scheduler"), {"OPENCODE_CONFIG": str(oc)})
+    data = _json.loads(oc.read_text())
+    assert "local" not in data.get("provider", {})
+    assert data["provider"]["fakeprov"]["options"]["apiKey"] == "{env:FAKEPROV_API_KEY}"
+    assert data["share"] == "disabled"
+    assert "external_directory" in data["permission"]
+
+
+def test_provision_opencode_cloud_known_provider_writes_no_provider_block(tmp_path, monkeypatch):
+    import json as _json
+    monkeypatch.setattr(
+        "transcria.config.load_config",
+        lambda: {"services": {"backend": "cloud"},
+                 "workflow": {"arbitration_llm": {"model_id": "openrouter/some-model"}}})
+    oc = tmp_path / "oc.json"
+    ep.provision_opencode(_plan(tmp_path, "all"), {"OPENCODE_CONFIG": str(oc)})
+    data = _json.loads(oc.read_text())
+    assert "local" not in data.get("provider", {})
+    assert "openrouter" not in data.get("provider", {})
+    assert data["share"] == "disabled"
+    assert "external_directory" in data["permission"]
+
+
+def test_quickstart_config_llm_backend_reads_services_block(tmp_path):
+    import subprocess
+    script = Path(__file__).resolve().parent.parent / "scripts" / "docker_quickstart.sh"
+    src = script.read_text(encoding="utf-8")
+    start = src.index("config_llm_backend() {")
+    func = src[start:src.index("\n}\n", start) + 3]
+    cases = {
+        'services:\n  # backend: "script"\n  arbitrage_llm_port: 8080\n': "",
+        'workflow:\n  backend: "x"\nservices:\n  backend: "cloud"  # fournisseur\nmodels:\n  backend: "y"\n': "cloud",
+        "services:\n  backend: script\n": "script",
+    }
+    for text, expected in cases.items():
+        cfg = tmp_path / "c.yaml"
+        cfg.write_text(text, encoding="utf-8")
+        out = subprocess.run(["bash", "-c", f'{func}\nconfig_llm_backend "{cfg}"'],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        assert out == expected, text
+
+
+def test_quickstart_cpu_cloud_intent_read_before_generation():
+    """--cpu : l'intention cloud est lue AVANT la copie de l'exemple (sinon jamais vraie)."""
+    script = Path(__file__).resolve().parent.parent / "scripts" / "docker_quickstart.sh"
+    src = script.read_text(encoding="utf-8")
+    intent = src.index('LLM_BACKEND_INTENT="${TRANSCRIA_LLM_BACKEND:-}"')
+    generation = src.index('if [[ ! -f "config.yaml" ]]; then')
+    assert intent < generation
+    gen_block = src[generation:src.index('ok "config.yaml prêt."', generation)]
+    # La branche cloud de la génération se fonde sur l'intention, pas sur la config copiée.
+    assert '"$LLM_BACKEND_INTENT" == "cloud"' in gen_block
+    assert "config_llm_backend config.yaml" not in gen_block
+    cloud_branch = gen_block[gen_block.index('"$LLM_BACKEND_INTENT" == "cloud"'):gen_block.index("TRANSCRIA_ARBITRAGE_LLM_HOST:-")]
+    assert "disable_llm_block" not in cloud_branch
+    # Sinon : désactivation + consigne pour réactiver.
+    assert "enabled: true sur workflow.summary_llm ET workflow.arbitration_llm" in gen_block
+    # La branche « config existante » garde la lecture de la config.
+    assert 'config_llm_backend config.yaml)" == "cloud"' in src[src.index('ok "config.yaml existant conservé."'):]
+
+
+def test_provision_opencode_cloud_incomplet_previent_sans_ecrire(tmp_path, monkeypatch, capsys):
+    import copy
+    import json as _json
+    cfg = copy.deepcopy(_CLOUD_CFG)
+    cfg["workflow"]["llm_cloud"]["api_key_env"] = ""
+    monkeypatch.setattr("transcria.config.load_config", lambda: cfg)
+    oc = tmp_path / "oc.json"
+    ep.provision_opencode(_plan(tmp_path, "scheduler"), {"OPENCODE_CONFIG": str(oc)})
+    data = _json.loads(oc.read_text())
+    assert "fakeprov" not in data.get("provider", {})
+    assert "{env:}" not in oc.read_text()
+    assert data["share"] == "disabled"
+    assert "external_directory" in data["permission"]
+    assert "[WARN] opencode" in capsys.readouterr().err

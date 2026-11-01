@@ -596,6 +596,17 @@ docker compose -f docker-compose.split-gpu.yml run --rm verify \
   --audio /app/tests/test2.mp3 --password "$ADMIN_PASSWORD"
 ```
 
+### Cloud arbitration LLM (external provider)
+
+Instead of embedding a local LLM, summary and correction can go through an external provider (pass-through; see `docs/LLM_CLOUD.md`). No GPU is needed for the LLM:
+
+- in `config.yaml`: `services.backend: cloud` and the **same** `<provider>/<model>` in **both** `model_id` keys — `workflow.arbitration_llm.model_id` **and** `workflow.summary_llm.model_id` (the schema rejects a leftover `local/arbitrage` as well as two different models); both blocks stay `enabled: true`;
+- the **API key** goes in `./.env` (mounted in every service), under the **variable name imposed by the provider** (provider table in `docs/LLM_CLOUD.md`) — never in `config.yaml`;
+- **no GGUF is downloaded** (the entrypoint logs "LLM cloud: no GGUF to provision") and opencode's `provider.local` is not written; a provider missing from opencode's catalogue is declared with `apiKey: {env:<VARIABLE>}` (`llm_cloud.api_key_env`);
+- use must be **validated by an administrator** in Administration → Cloud LLM, otherwise LLM phases are refused;
+- **restart** the containers (`docker compose restart`) when switching: the entrypoint re-reads the config at startup;
+- the **CPU** image is enough: `TRANSCRIA_LLM_BACKEND=cloud ./scripts/docker_quickstart.sh --cpu` — the variable declares the intent **before** `config.yaml` is generated, so the quickstart does not disable the LLM blocks (without it, `--cpu` sets them to `enabled: false`: set both blocks back to `true` together with `services.backend: cloud`). Both `model_id` keys still have to be filled in by hand; CPU Kroko STT (`sherpa-onnx`). Note: the CPU image does **not yet** ship the `audiocpp_cli` binary ("lot D"); automatic diarization (Nemotron 3) therefore falls back to pyannote, which needs an `HF_TOKEN` (gated).
+
 ## Rollback procedure
 
 - **Code rollback WITHOUT a schema change** (both versions share the same

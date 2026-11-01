@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-01 20:01+0100\n"
+"POT-Creation-Date: 2026-11-01 20:42+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -1300,8 +1300,8 @@ msgstr "Auf Dokumente anwenden:"
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "Eine wiederherstellbare Version wird erstellt (Rückgängigmachen möglich)."
 
-#: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:261
-#: transcria/notifications/mailer.py:309 transcria/queue/routes.py:42
+#: transcria/i18n/js_catalog.py:274 transcria/notifications/mailer.py:263
+#: transcria/notifications/mailer.py:323 transcria/queue/routes.py:42
 msgid "Erreur"
 msgstr "Fehler"
 
@@ -1430,8 +1430,8 @@ msgstr "Status nicht verfügbar ({e})."
 #: transcria/i18n/js_catalog.py:308
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
-#: transcria/web/templates/dashboard_status.html:28
-#: transcria/web/templates/dashboard_status.html:56
+#: transcria/web/templates/dashboard_status.html:32
+#: transcria/web/templates/dashboard_status.html:60
 msgid "Go"
 msgstr "GB"
 
@@ -1542,121 +1542,126 @@ msgstr "Verarbeitet in"
 msgid "Fiabilité de la transcription"
 msgstr "Zuverlässigkeit der Transkription"
 
-#: transcria/notifications/mailer.py:184
+#: transcria/notifications/mailer.py:186
 #, python-format
 msgid "Bonjour %(name)s,"
 msgstr "Hallo %(name)s,"
 
-#: transcria/notifications/mailer.py:192 transcria/notifications/mailer.py:223
-#: transcria/notifications/mailer.py:253 transcria/notifications/mailer.py:296
-#: transcria/notifications/mailer.py:310
+#: transcria/notifications/mailer.py:194 transcria/notifications/mailer.py:225
+#: transcria/notifications/mailer.py:255 transcria/notifications/mailer.py:310
+#: transcria/notifications/mailer.py:324
 msgid "Cet email a été envoyé automatiquement par TranscrIA."
 msgstr "Diese E-Mail wurde automatisch von TranscrIA gesendet."
 
-#: transcria/notifications/mailer.py:193
+#: transcria/notifications/mailer.py:195
 msgid "Vous recevez ce message car vous êtes propriétaire d'un travail de transcription."
 msgstr "Sie erhalten diese Nachricht, weil Sie Eigentümer eines Transkriptions-Jobs sind."
 
-#: transcria/notifications/mailer.py:199 transcria/notifications/mailer.py:205
-#: transcria/notifications/mailer.py:219 transcria/notifications/mailer.py:230
-#: transcria/notifications/mailer.py:249 transcria/notifications/mailer.py:265
-#: transcria/notifications/mailer.py:281 transcria/notifications/mailer.py:294
-#: transcria/notifications/mailer.py:305
+#: transcria/notifications/mailer.py:201 transcria/notifications/mailer.py:207
+#: transcria/notifications/mailer.py:221 transcria/notifications/mailer.py:232
+#: transcria/notifications/mailer.py:251 transcria/notifications/mailer.py:267
+#: transcria/notifications/mailer.py:295 transcria/notifications/mailer.py:308
+#: transcria/notifications/mailer.py:319
 msgid "Travail"
 msgstr "Job"
 
-#: transcria/notifications/mailer.py:208
+#: transcria/notifications/mailer.py:210
 msgid "Votre transcription est <strong>terminée avec succès</strong>."
 msgstr "Ihre Transkription ist <strong>erfolgreich abgeschlossen</strong>."
 
-#: transcria/notifications/mailer.py:210
+#: transcria/notifications/mailer.py:212
 msgid "Voir les livrables"
 msgstr "Ergebnisdokumente ansehen"
 
-#: transcria/notifications/mailer.py:211 transcria/notifications/mailer.py:401
+#: transcria/notifications/mailer.py:213 transcria/notifications/mailer.py:415
 #, python-format
 msgid "Transcription terminée : %(title)s"
 msgstr "Transkription abgeschlossen: %(title)s"
 
-#: transcria/notifications/mailer.py:212
+#: transcria/notifications/mailer.py:214
 msgid "Transcription terminée"
 msgstr "Transkription abgeschlossen"
 
-#: transcria/notifications/mailer.py:218
+#: transcria/notifications/mailer.py:220
 msgid "Votre transcription est terminée avec succès."
 msgstr "Ihre Transkription ist erfolgreich abgeschlossen."
 
-#: transcria/notifications/mailer.py:222 transcria/notifications/mailer.py:252
-#: transcria/notifications/mailer.py:295 transcria/notifications/mailer.py:306
+#: transcria/notifications/mailer.py:224 transcria/notifications/mailer.py:254
+#: transcria/notifications/mailer.py:309 transcria/notifications/mailer.py:320
 msgid "Lien"
 msgstr "Link"
 
-#: transcria/notifications/mailer.py:233
+#: transcria/notifications/mailer.py:235
 msgid "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : il reste à valider le contexte, les participants et le lexique, puis à cliquer « Lancer le traitement » — rien ne se lancera sans vous. Vous recevrez un autre e-mail quand la transcription sera terminée."
 msgstr "Die <strong>Voranalyse Ihrer Aufnahme ist fertig</strong>. Jetzt sind Sie dran: Kontext, Teilnehmer und Glossar müssen noch bestätigt werden, dann „Verarbeitung starten“ klicken — ohne Sie startet nichts. Sie erhalten eine weitere E-Mail, wenn die Transkription abgeschlossen ist."
 
-#: transcria/notifications/mailer.py:238
+#: transcria/notifications/mailer.py:240
 msgid "Vérifier et lancer le traitement"
 msgstr "Prüfen und Verarbeitung starten"
 
-#: transcria/notifications/mailer.py:239 transcria/notifications/mailer.py:397
+#: transcria/notifications/mailer.py:241 transcria/notifications/mailer.py:411
 #, python-format
 msgid "Pré-analyse prête : %(title)s"
 msgstr "Voranalyse bereit: %(title)s"
 
-#: transcria/notifications/mailer.py:240
+#: transcria/notifications/mailer.py:242
 msgid "Pré-analyse prête — à vous de jouer"
 msgstr "Voranalyse bereit — Sie sind an der Reihe"
 
-#: transcria/notifications/mailer.py:246
+#: transcria/notifications/mailer.py:248
 msgid "La pré-analyse de votre audio est prête. Il reste à valider le contexte, les participants et le lexique, puis à cliquer « Lancer le traitement » — rien ne se lancera sans vous. Vous recevrez un autre e-mail quand la transcription sera terminée."
 msgstr "Die Voranalyse Ihrer Aufnahme ist fertig. Kontext, Teilnehmer und Glossar müssen noch bestätigt werden, dann „Verarbeitung starten“ klicken — ohne Sie startet nichts. Sie erhalten eine weitere E-Mail, wenn die Transkription abgeschlossen ist."
 
-#: transcria/notifications/mailer.py:264
+#: transcria/notifications/mailer.py:266
 msgid "Votre transcription a <strong>échoué</strong>."
 msgstr "Ihre Transkription ist <strong>fehlgeschlagen</strong>."
 
-#: transcria/notifications/mailer.py:266
+#: transcria/notifications/mailer.py:268
 msgid "Voir le détail"
 msgstr "Details ansehen"
 
-#: transcria/notifications/mailer.py:267 transcria/notifications/mailer.py:405
+#: transcria/notifications/mailer.py:269 transcria/notifications/mailer.py:419
 #, python-format
 msgid "Échec de transcription : %(title)s"
 msgstr "Transkription fehlgeschlagen: %(title)s"
 
-#: transcria/notifications/mailer.py:268
+#: transcria/notifications/mailer.py:270
 msgid "Échec de transcription"
 msgstr "Transkription fehlgeschlagen"
 
-#: transcria/notifications/mailer.py:276
+#: transcria/notifications/mailer.py:280
 #, python-format
 msgid "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "Ein Job <strong>wartet auf VRAM</strong>: Der verfügbare GPU-Speicher reicht für die Phase <strong>%(phase)s</strong> nicht aus (%(mb)s&nbsp;MB erforderlich). Der Job ist <strong>nicht</strong> fehlgeschlagen — er wird automatisch fortgesetzt, sobald VRAM freigegeben wird. Geben Sie GPU-Speicher frei (eine LLM stoppen, einen anderen Job beenden), um die Fortsetzung zu beschleunigen."
 
-#: transcria/notifications/mailer.py:282
+#: transcria/notifications/mailer.py:287
+#, python-format
+msgid "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (fin d'un autre traitement, autre programme utilisant la carte) pour accélérer la reprise."
+msgstr "Ein Job <strong>wartet auf VRAM</strong>: Der verfügbare GPU-Speicher reicht für die Phase <strong>%(phase)s</strong> nicht aus (%(mb)s&nbsp;MB erforderlich). Der Job ist <strong>nicht</strong> fehlgeschlagen — er wird automatisch fortgesetzt, sobald VRAM freigegeben wird. Geben Sie GPU-Speicher frei (einen anderen Job beenden, ein anderes Programm, das die Karte nutzt), um die Fortsetzung zu beschleunigen."
+
+#: transcria/notifications/mailer.py:296
 msgid "Voir le traitement"
 msgstr "Job ansehen"
 
-#: transcria/notifications/mailer.py:283 transcria/notifications/mailer.py:451
+#: transcria/notifications/mailer.py:297 transcria/notifications/mailer.py:465
 #, python-format
 msgid "En attente de VRAM : %(title)s"
 msgstr "Wartet auf VRAM: %(title)s"
 
-#: transcria/notifications/mailer.py:284
+#: transcria/notifications/mailer.py:298
 msgid "Traitement en attente de VRAM"
 msgstr "Job wartet auf VRAM"
 
-#: transcria/notifications/mailer.py:291
+#: transcria/notifications/mailer.py:305
 #, python-format
 msgid "Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase %(phase)s, %(mb)s Mo requis)."
 msgstr "Ein Job wartet auf VRAM (unzureichender GPU-Speicher für die Phase %(phase)s, %(mb)s MB erforderlich)."
 
-#: transcria/notifications/mailer.py:293
+#: transcria/notifications/mailer.py:307
 msgid "Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée."
 msgstr "Der Job ist nicht fehlgeschlagen: Er wird automatisch fortgesetzt, sobald VRAM freigegeben wird."
 
-#: transcria/notifications/mailer.py:304
+#: transcria/notifications/mailer.py:318
 msgid "Votre transcription a échoué."
 msgstr "Ihre Transkription ist fehlgeschlagen."
 
@@ -1750,267 +1755,275 @@ msgstr "Generierung fehlgeschlagen: %(e)s"
 msgid "Voix désactivée."
 msgstr "Stimme deaktiviert."
 
-#: transcria/web/admin_routes.py:176 transcria/web/admin_routes.py:235
+#: transcria/web/admin_routes.py:177 transcria/web/admin_routes.py:236
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s Validierungsfehler. Speichern abgebrochen."
 
-#: transcria/web/admin_routes.py:180
+#: transcria/web/admin_routes.py:181
 msgid "Réglages sauvegardés."
 msgstr "Einstellungen gespeichert."
 
-#: transcria/web/admin_routes.py:185
+#: transcria/web/admin_routes.py:186
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Identitäts-Backend geändert: Starten Sie den Dienst neu, um die Änderung anzuwenden (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:211
+#: transcria/web/admin_routes.py:212
 msgid "Aucun prompt modifié."
 msgstr "Kein Prompt geändert."
 
-#: transcria/web/admin_routes.py:218
+#: transcria/web/admin_routes.py:219
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Ungültiges YAML: %(e)s"
 
-#: transcria/web/admin_routes.py:222
+#: transcria/web/admin_routes.py:223
 msgid "La configuration doit être un objet YAML racine."
 msgstr "Die Konfiguration muss ein YAML-Root-Objekt sein."
 
-#: transcria/web/admin_routes.py:238
+#: transcria/web/admin_routes.py:239
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Konfiguration gespeichert unter %(p)s."
 
-#: transcria/web/admin_routes.py:318
+#: transcria/web/admin_routes.py:319
 #, python-format
 msgid "Vérification impossible : %(e)s"
 msgstr "Prüfung fehlgeschlagen: %(e)s"
 
-#: transcria/web/admin_routes.py:322
+#: transcria/web/admin_routes.py:323
 #, python-format
 msgid "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
 msgstr "Neue Version verfügbar: %(tag)s (Sie verwenden %(cur)s)."
 
-#: transcria/web/admin_routes.py:325
+#: transcria/web/admin_routes.py:326
 #, python-format
 msgid "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
 msgstr "Sie sind auf dem neuesten Stand (%(cur)s — letzte Veröffentlichung: %(tag)s)."
 
-#: transcria/web/admin_routes.py:342
+#: transcria/web/admin_routes.py:343
 msgid "Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image (docker pull) ; sans systemd, utilisez la CLI maintenance."
 msgstr "Aktualisierung hier nicht verfügbar: Ziehen Sie im Container das neue Image (docker pull); ohne systemd verwenden Sie die Wartungs-CLI."
 
-#: transcria/web/admin_routes.py:346
+#: transcria/web/admin_routes.py:347
 msgid "Confirmation requise : la mise à niveau sauvegarde, bascule le code, migre la base et redémarre le service."
 msgstr "Bestätigung erforderlich: Die Aktualisierung sichert, wechselt den Code, migriert die Datenbank und startet den Dienst neu."
 
-#: transcria/web/admin_routes.py:356
+#: transcria/web/admin_routes.py:357
 msgid "Cible de mise à niveau invalide ou périmée — relancez « Vérifier maintenant » puis réessayez."
 msgstr "Ungültiges oder veraltetes Aktualisierungsziel — führen Sie „Jetzt prüfen“ erneut aus und versuchen Sie es dann noch einmal."
 
-#: transcria/web/admin_routes.py:369
+#: transcria/web/admin_routes.py:370
 #, python-format
 msgid "Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, migration, redémarrage. La page suit la progression."
 msgstr "Aktualisierung auf %(tag)s gestartet: Sicherung, Code-Wechsel, Migration, Neustart. Diese Seite verfolgt den Fortschritt."
 
-#: transcria/web/admin_routes.py:372
+#: transcria/web/admin_routes.py:373
 #, python-format
 msgid "Échec du déclenchement de la mise à niveau : %(e)s"
 msgstr "Auslösen der Aktualisierung fehlgeschlagen: %(e)s"
 
-#: transcria/web/admin_routes.py:403
+#: transcria/web/admin_routes.py:404
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Geplante Sicherung aktiviert (Intervall %(c)s)."
 
-#: transcria/web/admin_routes.py:408
+#: transcria/web/admin_routes.py:409
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Geplante Sicherung deaktiviert."
 
-#: transcria/web/admin_routes.py:410
+#: transcria/web/admin_routes.py:411
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Planung fehlgeschlagen: %(e)s"
 
-#: transcria/web/admin_routes.py:424
+#: transcria/web/admin_routes.py:425
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Bestätigung erforderlich: Die Wiederherstellung ersetzt die Daten und startet den Dienst neu."
 
-#: transcria/web/admin_routes.py:427
+#: transcria/web/admin_routes.py:428
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "Der erneut eingegebene Name stimmt nicht mit dem Archiv überein — Wiederherstellung abgebrochen."
 
-#: transcria/web/admin_routes.py:435
+#: transcria/web/admin_routes.py:436
 msgid "Archive invalide — restauration refusée : "
 msgstr "Ungültiges Archiv — Wiederherstellung verweigert: "
 
-#: transcria/web/admin_routes.py:447
+#: transcria/web/admin_routes.py:448
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Wiederherstellung gestartet. Der Dienst wird angehalten, stellt wieder her und startet dann neu — melden Sie sich in etwa einer Minute erneut an."
 
-#: transcria/web/admin_routes.py:450
+#: transcria/web/admin_routes.py:451
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Auslösen der Wiederherstellung fehlgeschlagen: %(e)s"
 
-#: transcria/web/admin_routes.py:501
+#: transcria/web/admin_routes.py:502
 msgid "La diarisation « auto » est déjà active (ou la recommandation a été écartée)."
 msgstr "Die „Auto“-Diarisierung ist bereits aktiv (oder die Empfehlung wurde verworfen)."
 
-#: transcria/web/admin_routes.py:504
+#: transcria/web/admin_routes.py:505
 msgid "Téléchargez d'abord le runtime audio.cpp et les poids Nemotron 3 (lignes « recommandé » ci-dessus) avant d'activer la diarisation automatique."
 msgstr "Laden Sie zuerst die audio.cpp-Laufzeit und die Nemotron-3-Gewichte herunter (Zeilen „empfohlen“ oben), bevor Sie die automatische Diarisierung aktivieren."
 
-#: transcria/web/admin_routes.py:513 transcria/web/admin_routes.py:953
+#: transcria/web/admin_routes.py:514 transcria/web/admin_routes.py:969
 msgid "Bascule refusée — configuration invalide : "
 msgstr "Wechsel verweigert — ungültige Konfiguration: "
 
-#: transcria/web/admin_routes.py:516
+#: transcria/web/admin_routes.py:517
 msgid "Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."
 msgstr "„Auto“-Diarisierung aktiviert: Nemotron 3 für 1 bis 8 Stimmen (ohne Token, in Sekunden), pyannote darüber oder bei exakter Anzahl. Kein Neustart nötig."
 
-#: transcria/web/admin_routes.py:534
+#: transcria/web/admin_routes.py:535
 msgid "Choix non enregistré — configuration invalide : "
 msgstr "Auswahl nicht gespeichert — ungültige Konfiguration: "
 
-#: transcria/web/admin_routes.py:537
+#: transcria/web/admin_routes.py:538
 msgid "Réglage conservé : la diarisation « auto » ne sera plus proposée."
 msgstr "Einstellung beibehalten: Die „Auto“-Diarisierung wird nicht mehr vorgeschlagen."
 
-#: transcria/web/admin_routes.py:646
+#: transcria/web/admin_routes.py:647
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Besprechung entfernt: %(m)s — ihr Abonnement bleibt bis zum Ablauf bestehen (7 Tage)."
 
-#: transcria/web/admin_routes.py:650
+#: transcria/web/admin_routes.py:651
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Besprechung hinzugefügt: %(m)s — der Dienst richtet das Abonnement im nächsten Zyklus ein."
 
-#: transcria/web/admin_routes.py:653
+#: transcria/web/admin_routes.py:654
 msgid "Cette réunion est déjà surveillée."
 msgstr "Diese Besprechung wird bereits überwacht."
 
-#: transcria/web/admin_routes.py:655
+#: transcria/web/admin_routes.py:656
 msgid "Aucun lien de réunion fourni."
 msgstr "Kein Besprechungslink angegeben."
 
-#: transcria/web/admin_routes.py:728
+#: transcria/web/admin_routes.py:729
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "Test %(id)s: %(verdict)s"
 
-#: transcria/web/admin_routes.py:747
+#: transcria/web/admin_routes.py:748
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Zoom-Test: %(verdict)s"
 
-#: transcria/web/admin_routes.py:777
+#: transcria/web/admin_routes.py:778
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "Datei „%(label)s“ abgelehnt: %(raison)s"
 
-#: transcria/web/admin_routes.py:814
+#: transcria/web/admin_routes.py:815
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "Anmeldedaten „%(name)s“ gespeichert — werden beim nächsten Claim an die Runner übergeben."
 
-#: transcria/web/admin_routes.py:815
+#: transcria/web/admin_routes.py:816
 msgid "Aucun changement."
 msgstr "Keine Änderung."
 
-#: transcria/web/admin_routes.py:833
+#: transcria/web/admin_routes.py:834
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Aktivieren Sie zuerst die Funktion (Schaltfläche „Aktivieren“)."
 
-#: transcria/web/admin_routes.py:838
+#: transcria/web/admin_routes.py:839
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Ungültiger Runner-Name (Buchstaben/Ziffern/._-, max. 64)."
 
-#: transcria/web/admin_routes.py:845
+#: transcria/web/admin_routes.py:846
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "Ungültige Portal-URL (%(motif)s) — geben Sie die URL an, die der REMOTE-Rechner erreichen kann."
 
-#: transcria/web/admin_routes.py:850
+#: transcria/web/admin_routes.py:851
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Dienstkonto fehlt — verwenden Sie zuerst die Schaltfläche „Aktivieren“."
 
-#: transcria/web/admin_routes.py:869
+#: transcria/web/admin_routes.py:870
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Runner „%(name)s“ widerrufen."
 
-#: transcria/web/admin_routes.py:886
+#: transcria/web/admin_routes.py:887
+msgid "Ce modèle est servi par un fournisseur cloud, rien à télécharger."
+msgstr "Dieses Modell wird von einem Cloud-Anbieter bereitgestellt, nichts herunterzuladen."
+
+#: transcria/web/admin_routes.py:890
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "„%(l)s“ ist ein *gated* Modell: Ein HuggingFace-Token ist erforderlich (sowie die Annahme seiner Lizenz auf huggingface.co)."
 
-#: transcria/web/admin_routes.py:891
+#: transcria/web/admin_routes.py:895
 msgid "Téléchargement refusé — "
 msgstr "Download verweigert — "
 
-#: transcria/web/admin_routes.py:894
+#: transcria/web/admin_routes.py:898
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download von „%(l)s“ im Hintergrund gestartet."
 
-#: transcria/web/admin_routes.py:908
+#: transcria/web/admin_routes.py:904
+msgid "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
+msgstr "Die Arbitrage-LLM ist ein Cloud-Anbieter: Ändern Sie das Modell in config.yaml (model_id) und starten Sie neu — diese Seite steuert nur die lokale LLM."
+
+#: transcria/web/admin_routes.py:921
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Laden Sie dieses Modell zuerst herunter, bevor Sie es aktivieren."
 
-#: transcria/web/admin_routes.py:917
+#: transcria/web/admin_routes.py:930
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM-Modell aktiviert (Profil %(t)s). Starten Sie den Dienst neu, um die Änderung anzuwenden: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:920
+#: transcria/web/admin_routes.py:933
 msgid "Échec de l'activation : "
 msgstr "Aktivierung fehlgeschlagen: "
 
-#: transcria/web/admin_routes.py:922
+#: transcria/web/admin_routes.py:935
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Aktivierung fehlgeschlagen: %(e)s"
 
-#: transcria/web/admin_routes.py:941
+#: transcria/web/admin_routes.py:957
 msgid "Modèle Ollama inconnu ou hors des choix proposés."
 msgstr "Unbekanntes Ollama-Modell oder außerhalb der angebotenen Auswahl."
 
-#: transcria/web/admin_routes.py:944
+#: transcria/web/admin_routes.py:960
 #, python-format
 msgid "« %(m)s » est déjà le modèle actif."
 msgstr "„%(m)s“ ist bereits das aktive Modell."
 
-#: transcria/web/admin_routes.py:965
+#: transcria/web/admin_routes.py:980
 #, python-format
 msgid "Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py."
 msgstr "opencode-Provider nicht neu ausgerichtet (%(e)s) — scripts/setup_opencode.py erneut ausführen."
 
-#: transcria/web/admin_routes.py:973
+#: transcria/web/admin_routes.py:988
 #, python-format
 msgid "Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull)."
 msgstr "Modell „%(m)s“ aktiviert — Download im Hintergrund gestartet (ollama pull)."
 
-#: transcria/web/admin_routes.py:976
+#: transcria/web/admin_routes.py:991
 #, python-format
 msgid "Modèle « %(m)s » activé — aucun redémarrage requis."
 msgstr "Modell „%(m)s“ aktiviert — kein Neustart erforderlich."
 
-#: transcria/web/admin_routes.py:999
+#: transcria/web/admin_routes.py:1014
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Sicherung im Hintergrund gestartet. Aktualisieren Sie die Seite in Kürze."
 
-#: transcria/web/admin_routes.py:1033
+#: transcria/web/admin_routes.py:1048
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nichts anzuwenden: Der Plan ist nicht mehr aktuell."
 
-#: transcria/web/admin_routes.py:1038
+#: transcria/web/admin_routes.py:1053
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Anwenden des Plans fehlgeschlagen: %(err)s"
 
-#: transcria/web/admin_routes.py:1044
+#: transcria/web/admin_routes.py:1059
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-Instanz-Plan angewendet (%(n)s Instanz(en)). Starten Sie den Dienst neu, um ihn anzuwenden: sudo systemctl restart transcria"
@@ -2176,7 +2189,7 @@ msgid "Concurrence par défaut (1 = comportement historique)."
 msgstr "Standard-Parallelität (1 = bisheriges Verhalten)."
 
 #: transcria/web/config_form.py:111
-#: transcria/web/templates/dashboard_status.html:84
+#: transcria/web/templates/dashboard_status.html:88
 msgid "Stockage des fichiers de jobs"
 msgstr "Speicherung der Job-Dateien"
 
@@ -2925,37 +2938,46 @@ msgstr "Die Korrektur-Engine (opencode) wurde nicht gefunden — die LLM-Phasen 
 
 #: transcria/web/templates/_first_run_checklist.html:34
 #, python-format
+msgid "LLM cloud (%(provider)s / %(model)s) non validée par un administrateur — traitements LLM refusés"
+msgstr "Cloud-LLM (%(provider)s / %(model)s) nicht von einem Administrator freigegeben — LLM-Verarbeitungen abgelehnt"
+
+#: transcria/web/templates/_first_run_checklist.html:35
+msgid "lire l'avertissement et valider"
+msgstr "Hinweis lesen und freigeben"
+
+#: transcria/web/templates/_first_run_checklist.html:39
+#, python-format
 msgid "Détection des locuteurs : une option plus rapide et sans token (Nemotron 3, de 1 à 8 voix) est disponible à la place de %(backend)s seul"
 msgstr "Sprechererkennung: Eine schnellere Option ohne Token (Nemotron 3, 1 bis 8 Stimmen) ist statt %(backend)s allein verfügbar"
 
-#: transcria/web/templates/_first_run_checklist.html:35
+#: transcria/web/templates/_first_run_checklist.html:40
 msgid "l'activer ou garder le réglage actuel depuis la page Modèles"
 msgstr "auf der Seite „Modelle“ aktivieren oder die aktuelle Einstellung behalten"
 
-#: transcria/web/templates/_first_run_checklist.html:40
+#: transcria/web/templates/_first_run_checklist.html:45
 msgid "Notifications par e-mail désactivées : personne n'est prévenu quand une pré-analyse attend sa validation ni quand un traitement se termine"
 msgstr "E-Mail-Benachrichtigungen sind deaktiviert: niemand wird informiert, wenn eine Voranalyse auf Bestätigung wartet oder eine Verarbeitung endet"
 
-#: transcria/web/templates/_first_run_checklist.html:41
+#: transcria/web/templates/_first_run_checklist.html:46
 msgid "activer le SMTP dans la configuration (section Notifications)"
 msgstr "SMTP in der Konfiguration aktivieren (Abschnitt Benachrichtigungen)"
 
-#: transcria/web/templates/_first_run_checklist.html:44
+#: transcria/web/templates/_first_run_checklist.html:49
 msgid "Notifications activées mais serveur SMTP ou adresse d'expéditeur manquant : aucun e-mail ne partira"
 msgstr "Benachrichtigungen sind aktiviert, aber SMTP-Server oder Absenderadresse fehlen: es wird keine E-Mail versendet"
 
-#: transcria/web/templates/_first_run_checklist.html:45
+#: transcria/web/templates/_first_run_checklist.html:50
 msgid "compléter la configuration"
 msgstr "Konfiguration vervollständigen"
 
-#: transcria/web/templates/_first_run_checklist.html:48
+#: transcria/web/templates/_first_run_checklist.html:53
 #, python-format
 msgid "%(n)s compte actif sans adresse e-mail ne recevra aucune notification"
 msgid_plural "%(n)s comptes actifs sans adresse e-mail ne recevront aucune notification"
 msgstr[0] "%(n)s aktives Konto ohne E-Mail-Adresse erhält keine Benachrichtigung"
 msgstr[1] "%(n)s aktive Konten ohne E-Mail-Adresse erhalten keine Benachrichtigung"
 
-#: transcria/web/templates/_first_run_checklist.html:49
+#: transcria/web/templates/_first_run_checklist.html:54
 msgid "renseigner les adresses"
 msgstr "Adressen eintragen"
 
@@ -3037,7 +3059,7 @@ msgid "révoqué"
 msgstr "widerrufen"
 
 #: transcria/web/templates/account_tokens.html:56
-#: transcria/web/templates/admin_models.html:160
+#: transcria/web/templates/admin_models.html:170
 #: transcria/web/templates/queue.html:69 transcria/web/templates/voices.html:40
 msgid "actif"
 msgstr "aktiv"
@@ -3066,7 +3088,7 @@ msgstr "Konfiguration"
 #: transcria/web/templates/admin_maintenance.html:6
 #: transcria/web/templates/admin_models.html:6
 #: transcria/web/templates/central_lexicon_detail.html:9
-#: transcria/web/templates/dashboard_status.html:114
+#: transcria/web/templates/dashboard_status.html:118
 #: transcria/web/templates/group_form.html:28
 #: transcria/web/templates/voice_detail.html:14
 msgid "Retour"
@@ -3501,6 +3523,7 @@ msgid "Aucune préconisation : aucun backend STT servi n'est configuré (voir la
 msgstr "Keine Empfehlung: kein bereitgestelltes STT-Backend konfiguriert (siehe Dokumentation der bereitgestellten Engines)."
 
 #: transcria/web/templates/admin_llm_cloud.html:2
+#: transcria/web/templates/admin_models.html:88
 #: transcria/web/templates/base.html:70
 msgid "LLM cloud"
 msgstr "Cloud-LLM"
@@ -3535,7 +3558,7 @@ msgstr "nicht in der Tabelle bekannter Anbieter"
 
 #: transcria/web/templates/admin_llm_cloud.html:21
 #: transcria/web/templates/admin_models.html:33
-#: transcria/web/templates/admin_models.html:153
+#: transcria/web/templates/admin_models.html:163
 msgid "Modèle"
 msgstr "Modell"
 
@@ -3814,7 +3837,7 @@ msgid "%(mb)s Mo"
 msgstr "%(mb)s MB"
 
 #: transcria/web/templates/admin_maintenance.html:178
-#: transcria/web/templates/admin_models.html:100
+#: transcria/web/templates/admin_models.html:110
 msgid "Télécharger"
 msgstr "Herunterladen"
 
@@ -3864,11 +3887,11 @@ msgstr "HuggingFace-Cache (STT, Diarisierung)"
 
 #: transcria/web/templates/admin_models.html:14
 #: transcria/web/templates/admin_models.html:21
-#: transcria/web/templates/admin_models.html:51
-#: transcria/web/templates/admin_models.html:62
-#: transcria/web/templates/admin_models.html:65
-#: transcria/web/templates/admin_models.html:76
-#: transcria/web/templates/admin_models.html:165
+#: transcria/web/templates/admin_models.html:56
+#: transcria/web/templates/admin_models.html:67
+#: transcria/web/templates/admin_models.html:70
+#: transcria/web/templates/admin_models.html:81
+#: transcria/web/templates/admin_models.html:175
 #, python-format
 msgid "%(n)s Go"
 msgstr "%(n)s GB"
@@ -3891,127 +3914,139 @@ msgid "Licence"
 msgstr "Lizenz"
 
 #: transcria/web/templates/admin_models.html:33
-#: transcria/web/templates/admin_models.html:153
+#: transcria/web/templates/admin_models.html:163
 #: transcria/web/templates/voice_detail.html:72
 msgid "Statut"
 msgstr "Status"
 
 #: transcria/web/templates/admin_models.html:33
-#: transcria/web/templates/admin_models.html:153
+#: transcria/web/templates/admin_models.html:163
 #: transcria/web/templates/audit.html:59
 msgid "Action"
 msgstr "Aktion"
 
-#: transcria/web/templates/admin_models.html:46
-#: transcria/web/templates/admin_models.html:97
+#: transcria/web/templates/admin_models.html:45
+msgid "selon le fournisseur"
+msgstr "je nach Anbieter"
+
+#: transcria/web/templates/admin_models.html:47
+#: transcria/web/templates/admin_models.html:107
 msgid "token HF"
 msgstr "HF-Token"
 
-#: transcria/web/templates/admin_models.html:50
+#: transcria/web/templates/admin_models.html:52
+msgid "fournisseur cloud"
+msgstr "Cloud-Anbieter"
+
+#: transcria/web/templates/admin_models.html:53
+msgid "Servie par le fournisseur externe : aucun modèle à télécharger. Le modèle se change dans config.yaml (model_id)."
+msgstr "Vom externen Anbieter bereitgestellt: Kein Modell herunterzuladen. Das Modell wird in config.yaml (model_id) geändert."
+
+#: transcria/web/templates/admin_models.html:55
 msgid "présent"
 msgstr "vorhanden"
 
-#: transcria/web/templates/admin_models.html:56
+#: transcria/web/templates/admin_models.html:61
 msgid "démarrage…"
 msgstr "wird gestartet…"
 
-#: transcria/web/templates/admin_models.html:58
+#: transcria/web/templates/admin_models.html:63
 msgid "échec"
 msgstr "fehlgeschlagen"
 
-#: transcria/web/templates/admin_models.html:61
-#: transcria/web/templates/admin_models.html:64
+#: transcria/web/templates/admin_models.html:66
+#: transcria/web/templates/admin_models.html:69
 msgid "recommandé"
 msgstr "empfohlen"
 
-#: transcria/web/templates/admin_models.html:66
+#: transcria/web/templates/admin_models.html:71
 #, python-format
 msgid "La LLM servie actuellement (%(name)s) fonctionne. Ce modèle est celui recommandé aujourd'hui pour votre matériel : téléchargez-le puis « Activer » pour basculer."
 msgstr "Das derzeit bediente LLM (%(name)s) funktioniert. Dieses Modell ist die heutige Empfehlung für Ihre Hardware: laden Sie es herunter und klicken Sie dann auf „Aktivieren“, um zu wechseln."
 
-#: transcria/web/templates/admin_models.html:68
+#: transcria/web/templates/admin_models.html:73
 #: transcria/web/templates/voices.html:40
 msgid "absent"
 msgstr "fehlt"
 
-#: transcria/web/templates/admin_models.html:71
+#: transcria/web/templates/admin_models.html:76
 msgid "démon Ollama injoignable — le démarrer pour connaître le statut réel"
 msgstr "Ollama-Daemon nicht erreichbar — starten Sie ihn, um den tatsächlichen Status zu erfahren"
 
-#: transcria/web/templates/admin_models.html:73
+#: transcria/web/templates/admin_models.html:78
 msgid "taille selon le modèle (magasin Ollama)"
 msgstr "Größe abhängig vom Modell (Ollama-Speicher)"
 
-#: transcria/web/templates/admin_models.html:86
+#: transcria/web/templates/admin_models.html:96
 msgid "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
 msgstr "llama.cpp-Profil auf dieses Modell umstellen (Neustart des Dienstes erforderlich)"
 
-#: transcria/web/templates/admin_models.html:87
+#: transcria/web/templates/admin_models.html:97
 msgid "Activer (servir)"
 msgstr "Aktivieren (bereitstellen)"
 
-#: transcria/web/templates/admin_models.html:103
+#: transcria/web/templates/admin_models.html:113
 msgid "token HF configuré utilisé"
 msgstr "konfiguriertes HF-Token verwendet"
 
-#: transcria/web/templates/admin_models.html:120
+#: transcria/web/templates/admin_models.html:130
 msgid "Diarisation — une détection des locuteurs plus rapide, sans token"
 msgstr "Diarisierung — schnellere Sprechererkennung, ohne Token"
 
-#: transcria/web/templates/admin_models.html:124
+#: transcria/web/templates/admin_models.html:134
 #, python-format
 msgid "Cette installation détecte les locuteurs avec <strong>%(backend)s</strong>. Depuis la 0.4.7, le réglage « auto » retient <strong>Nemotron 3</strong> de 1 à 8 voix (non gated, quelques secondes, sur CPU dès l'upload — aucune attente de carte graphique, la LLM n'est jamais interrompue) et garde pyannote au-delà de 8 voix ou pour un comptage exact saisi."
 msgstr "Diese Installation erkennt Sprecher mit <strong>%(backend)s</strong>. Seit 0.4.7 wählt die Einstellung „auto“ <strong>Nemotron 3</strong> für 1 bis 8 Stimmen (nicht gated, wenige Sekunden, auf der CPU direkt beim Hochladen — kein Warten auf eine Grafikkarte, das LLM wird nie unterbrochen) und behält pyannote über 8 Stimmen oder bei einer eingegebenen exakten Anzahl."
 
-#: transcria/web/templates/admin_models.html:127
+#: transcria/web/templates/admin_models.html:137
 msgid "Téléchargez les deux lignes « recommandé » du tableau : le runtime audio.cpp (précompilé, 55 Mo) et les poids Nemotron 3 (199 Mo)."
 msgstr "Laden Sie die beiden Zeilen „empfohlen“ der Tabelle herunter: die audio.cpp-Laufzeit (vorkompiliert, 55 MB) und die Nemotron-3-Gewichte (199 MB)."
 
-#: transcria/web/templates/admin_models.html:128
+#: transcria/web/templates/admin_models.html:138
 msgid "fait"
 msgstr "erledigt"
 
-#: transcria/web/templates/admin_models.html:129
+#: transcria/web/templates/admin_models.html:139
 msgid "Activez « auto » — sans redémarrage, le backend est choisi à chaque traitement."
 msgstr "„Auto“ aktivieren — ohne Neustart, das Backend wird bei jeder Verarbeitung gewählt."
 
-#: transcria/web/templates/admin_models.html:132
+#: transcria/web/templates/admin_models.html:142
 msgid "Téléchargez d'abord les deux lignes recommandées"
 msgstr "Laden Sie zuerst die beiden empfohlenen Zeilen herunter"
 
-#: transcria/web/templates/admin_models.html:133
+#: transcria/web/templates/admin_models.html:143
 msgid "Activer la diarisation « auto »"
 msgstr "„Auto“-Diarisierung aktivieren"
 
-#: transcria/web/templates/admin_models.html:137
+#: transcria/web/templates/admin_models.html:147
 msgid "Garder mon réglage actuel"
 msgstr "Meine aktuelle Einstellung behalten"
 
-#: transcria/web/templates/admin_models.html:148
+#: transcria/web/templates/admin_models.html:158
 msgid "LLM d'arbitrage (Ollama) — changer de modèle"
 msgstr "Arbitrage-LLM (Ollama) — Modell wechseln"
 
-#: transcria/web/templates/admin_models.html:153
+#: transcria/web/templates/admin_models.html:163
 msgid "Contexte"
 msgstr "Kontext"
 
-#: transcria/web/templates/admin_models.html:161
+#: transcria/web/templates/admin_models.html:171
 msgid "recommandé pour cette machine"
 msgstr "für diese Maschine empfohlen"
 
-#: transcria/web/templates/admin_models.html:165
+#: transcria/web/templates/admin_models.html:175
 msgid "tiré"
 msgstr "abgerufen"
 
-#: transcria/web/templates/admin_models.html:166
+#: transcria/web/templates/admin_models.html:176
 msgid "à télécharger (ollama pull)"
 msgstr "herunterzuladen (ollama pull)"
 
-#: transcria/web/templates/admin_models.html:173
+#: transcria/web/templates/admin_models.html:183
 msgid "Utiliser ce modèle"
 msgstr "Dieses Modell verwenden"
 
-#: transcria/web/templates/admin_models.html:183
+#: transcria/web/templates/admin_models.html:193
 msgid "Aucun redémarrage requis : Ollama charge le modèle à la demande. Un modèle absent est tiré en arrière-plan à l'activation."
 msgstr "Kein Neustart erforderlich: Ollama lädt das Modell bei Bedarf. Ein fehlendes Modell wird bei der Aktivierung im Hintergrund abgerufen."
 
@@ -4512,89 +4547,94 @@ msgid "frontale (web)"
 msgstr "Frontend (Web)"
 
 #: transcria/web/templates/dashboard_status.html:13
+#, python-format
+msgid "Cette machine est une <strong>frontale sans GPU</strong> : la charge GPU (transcription, diarisation) est portée par le worker / serveur de ressources, et la LLM d'arbitrage est servie par un fournisseur cloud : <strong>%(provider)s</strong>. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes »."
+msgstr "Dieser Rechner ist ein <strong>Frontend ohne GPU</strong>: Die GPU-Last (Transkription, Diarisierung) wird vom Worker / Ressourcenserver getragen, und die Arbitrage-LLM wird von einem Cloud-Anbieter bereitgestellt: <strong>%(provider)s</strong>. Die folgenden Bereiche beschreiben <em>diesen</em> Rechner; der Zustand der entfernten GPU-Ressourcen steht im Bereich „Entfernte Ressourcen“."
+
+#: transcria/web/templates/dashboard_status.html:17
 msgid "Cette machine est une <strong>frontale sans GPU</strong> : toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes »."
 msgstr "Dieser Rechner ist ein <strong>Frontend ohne GPU</strong>: Die gesamte GPU-Last (Transkription, Diarisierung, LLM) wird vom Worker / Ressourcenserver getragen. Die folgenden Panels beschreiben <em>diesen</em> Rechner; der Status der entfernten GPU-Ressourcen befindet sich im Panel „Entfernte Ressourcen“."
 
-#: transcria/web/templates/dashboard_status.html:22
+#: transcria/web/templates/dashboard_status.html:26
 msgid "Charge :"
 msgstr "Last:"
 
-#: transcria/web/templates/dashboard_status.html:28
+#: transcria/web/templates/dashboard_status.html:32
 msgid "Utilisée :"
 msgstr "Verwendet:"
 
-#: transcria/web/templates/dashboard_status.html:32
+#: transcria/web/templates/dashboard_status.html:36
 msgid "Services"
 msgstr "Dienste"
 
-#: transcria/web/templates/dashboard_status.html:42
+#: transcria/web/templates/dashboard_status.html:46
 msgid "Aucun service."
 msgstr "Kein Dienst."
 
-#: transcria/web/templates/dashboard_status.html:50
+#: transcria/web/templates/dashboard_status.html:54
 msgid "GPU (machine locale)"
 msgstr "GPU (lokaler Rechner)"
 
-#: transcria/web/templates/dashboard_status.html:56
+#: transcria/web/templates/dashboard_status.html:60
 msgid "VRAM :"
 msgstr "VRAM:"
 
-#: transcria/web/templates/dashboard_status.html:57
+#: transcria/web/templates/dashboard_status.html:61
 msgid "Utilisation :"
 msgstr "Auslastung:"
 
-#: transcria/web/templates/dashboard_status.html:57
+#: transcria/web/templates/dashboard_status.html:61
 msgid "Temp :"
 msgstr "Temp.:"
 
-#: transcria/web/templates/dashboard_status.html:61
+#: transcria/web/templates/dashboard_status.html:65
 msgid "Aucun GPU détecté."
 msgstr "Keine GPU erkannt."
 
-#: transcria/web/templates/dashboard_status.html:68
+#: transcria/web/templates/dashboard_status.html:72
 msgid "Modèle actif"
 msgstr "Aktives Modell"
 
-#: transcria/web/templates/dashboard_status.html:76
+#: transcria/web/templates/dashboard_status.html:80
 #, python-format
 msgid "Dashboard LLM indisponible sur %(url)s."
 msgstr "LLM-Dashboard nicht verfügbar unter %(url)s."
 
-#: transcria/web/templates/dashboard_status.html:77
+#: transcria/web/templates/dashboard_status.html:81
 msgid "Normal sur une frontale : le dashboard tourne sur la machine GPU."
 msgstr "Normal bei einem Frontend: Das Dashboard läuft auf dem GPU-Rechner."
 
-#: transcria/web/templates/dashboard_status.html:78
+#: transcria/web/templates/dashboard_status.html:82
 msgid "Le dashboard doit être lancé pour afficher l'état technique."
 msgstr "Das Dashboard muss gestartet sein, um den technischen Status anzuzeigen."
 
-#: transcria/web/templates/dashboard_status.html:86
+#: transcria/web/templates/dashboard_status.html:90
 #, python-format
 msgid "backend %(b)s"
 msgstr "Backend %(b)s"
 
-#: transcria/web/templates/dashboard_status.html:90
+#: transcria/web/templates/dashboard_status.html:94
 msgid "Fichiers répliqués via PostgreSQL (topologie split sans disque partagé — <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>)."
 msgstr "Dateien über PostgreSQL repliziert (Split-Topologie ohne gemeinsamen Datenträger — <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>)."
 
-#: transcria/web/templates/dashboard_status.html:92
+#: transcria/web/templates/dashboard_status.html:96
 #, python-format
 msgid "<strong>%(files)s</strong> fichier(s) en base — <strong>%(mb)s Mo</strong>. Le volume redescend après chaque traitement terminé (purge de l'audio)."
 msgstr "<strong>%(files)s</strong> Datei(en) in der Datenbank — <strong>%(mb)s MB</strong>. Das Volumen sinkt nach jedem abgeschlossenen Job (Audio-Bereinigung)."
 
-#: transcria/web/templates/dashboard_status.html:94
+#: transcria/web/templates/dashboard_status.html:98
 msgid "Volumétrie indisponible."
 msgstr "Volumendaten nicht verfügbar."
 
-#: transcria/web/templates/dashboard_status.html:97
+#: transcria/web/templates/dashboard_status.html:101
 msgid "Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>."
 msgstr "Lokaler Datenträger (<code>storage.jobs_dir</code>) — geeignet für All-in-One oder eine gemeinsame Freigabe. Bei einem Split auf zwei Rechnern <code>storage.shared_backend: pg</code> verwenden."
 
-#: transcria/web/templates/dashboard_status.html:104
+#: transcria/web/templates/dashboard_status.html:108
 msgid "Ressources distantes (inférence)"
 msgstr "Entfernte Ressourcen (Inferenz)"
 
-#: transcria/web/templates/dashboard_status.html:108
+#: transcria/web/templates/dashboard_status.html:112
 msgid "Chargement…"
 msgstr "Wird geladen…"
 
@@ -6308,11 +6348,11 @@ msgstr "Wählen Sie ein Profil…"
 
 #: transcria/web/templates/wizard/_step_file.html:106
 #: transcria/web/templates/wizard/_step_launch.html:13
-msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
-msgstr "Mit der aktuellen Konfiguration kann kein Profil gestartet werden (Arbitrierungs-LLM nicht konfiguriert oder Qualitätsmodus deaktiviert). Siehe Konfiguration."
+msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée, LLM cloud non validée ou interdite pour votre groupe, ou mode qualité désactivé). Voir la configuration."
+msgstr "Mit der aktuellen Konfiguration kann kein Profil gestartet werden (Arbitrage-LLM nicht konfiguriert, Cloud-LLM nicht freigegeben oder für Ihre Gruppe untersagt, oder Qualitätsmodus deaktiviert). Siehe Konfiguration."
 
 #: transcria/web/templates/wizard/_step_launch.html:6
-#: transcria/web/templates/wizard/_step_launch.html:20
+#: transcria/web/templates/wizard/_step_launch.html:22
 msgid "Lancer le traitement"
 msgstr "Verarbeitung starten"
 
@@ -6765,4 +6805,7 @@ msgstr "Zusammenfassung erstellen"
 
 #~ msgid "Résumé et correction par la LLM locale OpenAI-compatible."
 #~ msgstr "Zusammenfassung und Korrektur durch die lokale OpenAI-kompatible LLM."
+
+#~ msgid "Aucun GPU détecté sur cette machine — la transcription CPU reste possible, et les phases LLM sont servies par le fournisseur cloud."
+#~ msgstr "Auf diesem Rechner wurde keine GPU erkannt — die CPU-Transkription bleibt möglich, und die LLM-Phasen werden vom Cloud-Anbieter bereitgestellt."
 

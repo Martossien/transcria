@@ -257,7 +257,13 @@ def start_download(
 ) -> Path:
     """Lance la CLI ``model-download`` en sous-process DÉTACHÉ. Retourne le fichier de statut.
 
-    Le token passe par l'ENV ``HF_TOKEN`` (jamais en argv → pas de fuite dans ``ps``)."""
+    Le token passe par l'ENV ``HF_TOKEN`` (jamais en argv → pas de fuite dans ``ps``).
+
+    Raises:
+        ValueError: modèle servi par un fournisseur cloud (``kind == "cloud"``) — rien à
+            télécharger ; défense en profondeur derrière le refus de la route."""
+    if spec.kind == "cloud":
+        raise ValueError(f"modèle cloud {spec.repo_id!r} : rien à télécharger")
     models_dir = resolve_models_dir()
     status_file = status_path(models_dir, spec.role)
     _write_status(status_file, {"role": spec.role, "repo": spec.repo_id, "kind": spec.kind,

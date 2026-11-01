@@ -11,6 +11,8 @@ from dataclasses import dataclass, fields
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
+
 logger = logging.getLogger(__name__)
 
 _TRANSLATIONS_DIR = os.path.abspath(
@@ -268,16 +270,28 @@ def _build_html_failure(tr, lang, display_name, job_title, job_id, error, base_u
                        "#dc2626", "✗", tr.gettext("Échec de transcription"), body)
 
 
-def _build_html_vram_wait(tr, lang, display_name, job_title, job_id, required_mb, phase, base_url):
+def _build_html_vram_wait(tr, lang, display_name, job_title, job_id, required_mb, phase, base_url,
+                          *, llm_local: bool = True):
+    """``llm_local`` faux (LLM cloud ou sur un nœud distant) : ne pas conseiller d'arrêter une LLM
+    que cette machine ne porte pas."""
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    body = _BODY_JOB_BLOCK.format(
-        greeting=_greeting(tr, display_name),
-        intro=tr.gettext(
+    if llm_local:
+        intro = tr.gettext(
             "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est "
             "insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). "
             "Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM "
             "sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) "
-            "pour accélérer la reprise.") % {"phase": phase, "mb": required_mb},
+            "pour accélérer la reprise.")
+    else:
+        intro = tr.gettext(
+            "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est "
+            "insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). "
+            "Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM "
+            "sera libérée. Libérez de la mémoire GPU (fin d'un autre traitement, autre programme "
+            "utilisant la carte) pour accélérer la reprise.")
+    body = _BODY_JOB_BLOCK.format(
+        greeting=_greeting(tr, display_name),
+        intro=intro % {"phase": phase, "mb": required_mb},
         job_label=tr.gettext("Travail"), job_title=job_title, extra_block="",
         job_url=job_url, cta_bg="#d97706", cta=tr.gettext("Voir le traitement"))
     return _html_shell(tr, lang, tr.gettext("En attente de VRAM : %(title)s") % {"title": job_title},
@@ -449,11 +463,14 @@ def send_admin_vram_alert_async(
     tr = _translator(None, cfg)
     lang = (cfg.get("i18n", {}) or {}).get("default_locale", "fr")
     subject = "[TranscrIA] " + tr.gettext("En attente de VRAM : %(title)s") % {"title": job_title}
+    # LLM cloud ou distante : cette machine ne la porte pas — ne pas conseiller de l'arrêter.
+    llm_local = not is_remote_arbitrage(cfg)
 
     def _do_send() -> None:
         for to_email in recipients:
             name = to_email.split("@")[0]
-            html = _build_html_vram_wait(tr, lang, name, job_title, job_id, required_mb, phase, ecfg.base_url)
+            html = _build_html_vram_wait(tr, lang, name, job_title, job_id, required_mb, phase, ecfg.base_url,
+                                         llm_local=llm_local)
             text = _build_text_vram_wait(tr, name, job_title, job_id, required_mb, phase, ecfg.base_url)
             try:
                 _send_smtp(ecfg, to_email, subject, html, text)

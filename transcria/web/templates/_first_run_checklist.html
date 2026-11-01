@@ -29,6 +29,11 @@
           {% trans %}Le moteur de correction (opencode) est introuvable — les phases LLM échoueront.{% endtrans %}
           <span class="text-muted">{{ it.data.detail }}</span>
         </li>
+      {% elif it.key == 'llm_cloud' %}
+        <li>
+          {% trans provider=it.data.provider, model=it.data.model %}LLM cloud ({{ provider }} / {{ model }}) non validée par un administrateur — traitements LLM refusés{% endtrans %}
+          — <a href="{{ url_for('web.admin_llm_cloud') }}" class="alert-link">{% trans %}lire l'avertissement et valider{% endtrans %}</a>
+        </li>
       {% elif it.key == 'diarization' %}
         <li>
           {% trans backend=it.data.configured %}Détection des locuteurs : une option plus rapide et sans token (Nemotron 3, de 1 à 8 voix) est disponible à la place de {{ backend }} seul{% endtrans %}

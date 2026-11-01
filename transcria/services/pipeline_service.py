@@ -200,7 +200,7 @@ class PipelineService:
         d'écriture ne doit JAMAIS interrompre le pipeline)."""
         try:
             if audio_seconds and audio_seconds > 0:
-                JobTimingStore.record(profile_id, stage, audio_seconds, elapsed)
+                JobTimingStore.record(profile_id, stage, audio_seconds, elapsed, config=self.config)
         except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
             try:
                 db.session.rollback()

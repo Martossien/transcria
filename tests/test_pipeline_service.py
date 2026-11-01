@@ -1027,3 +1027,42 @@ class TestConfigForModeGraniteDegradedExclusion:
         effective = svc._config_for_mode("fast", None)
 
         assert effective["models"]["stt_backend"] == "granite"
+
+
+# ---------------------------------------------------------------------------
+# Modèle de temps : le site d'ÉCRITURE transmet la config (clé @cloud en LLM cloud)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _clean_timings(app):
+    from transcria.database import db
+    from transcria.jobs.timing_store import JobTiming
+
+    def _purge():
+        with app.app_context():
+            db.session.query(JobTiming).delete()
+            db.session.commit()
+
+    _purge()
+    yield
+    _purge()
+
+
+def test_record_stage_timing_cloud_ecrit_la_cle_cloud(app, _clean_timings):
+    """docs/LLM_CLOUD.md § 3.3.2 : sans `config` transmis, la correction cloud polluerait
+    la fenêtre de la LLM locale (clé `correction`)."""
+    import uuid
+
+    from transcria.jobs.timing_store import JobTiming, JobTimingStore
+
+    cloud = {"services": {"backend": "cloud"}}
+    pid = f"ps_cloud_{uuid.uuid4().hex[:8]}"
+    svc = _make_svc(cloud)
+    with app.app_context():
+        svc._record_stage_timing(pid, 600.0, "correction", 30.0)
+        svc._record_stage_timing(pid, 600.0, "transcribe", 60.0)
+        stages = {r.stage for r in JobTiming.query.filter_by(profile_id=pid).all()}
+        assert stages == {"correction@cloud", "transcribe"}
+        assert JobTimingStore.recent_samples(pid, "correction", config=cloud) == [(600.0, 30.0)]
+        assert JobTimingStore.recent_samples(pid, "correction", config={}) == []

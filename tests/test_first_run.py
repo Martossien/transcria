@@ -197,3 +197,11 @@ class TestDiarizationItem:
         html = resp.get_data(as_text=True)
         assert resp.status_code == 200
         assert "Nemotron 3" in html and "pyannote" in html and "/admin/models" in html
+
+
+def test_compute_zero_gpu_en_cloud_ne_bloque_pas_la_checklist(monkeypatch):
+    """Palier zéro GPU (LLM cloud) : l'item compute est OK, la checklist peut disparaître."""
+    monkeypatch.setattr(first_run.inventory, "snapshot", lambda: [])
+    item = first_run._compute_item({"services": {"backend": "cloud"}}, {"active": True})
+    assert item.status == "ok"
+    assert first_run.needs_attention([item]) == []

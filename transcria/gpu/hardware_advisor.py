@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from transcria.gpu.arbitrage_endpoint import is_cloud_backend
 from transcria.gpu.llm_placement import recommend
 from transcria.gpu.stt_instance_planner import (
     GpuBudget,
@@ -101,7 +102,12 @@ def stt_instances_card(config: dict, gpu_totals_mb: dict[int, int]) -> AdviceCar
 
 
 def llm_tier_card(config: dict, gpu_totals_mb: dict[int, int]) -> AdviceCard | None:
-    """Carte palier LLM — CONSULTATIVE (recommend() de llm_placement vs déclaré)."""
+    """Carte palier LLM — CONSULTATIVE (recommend() de llm_placement vs déclaré).
+
+    ``None`` en cloud : le fournisseur externe sert la LLM, aucun palier VRAM à conseiller.
+    """
+    if is_cloud_backend(config):
+        return None
     declared_mb = int((config.get("gpu", {}) or {}).get("llm_vram_mb") or 0)
     if not gpu_totals_mb:
         return None

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 from transcria.diagnostics.checks.probes import _probe_openai_models
+from transcria.gpu.arbitrage_endpoint import cloud_view, is_cloud_backend
 from transcria.installer.opencode_lib import opencode_version
 from transcria.llm_tools.opencode_cli import parse_opencode_version
 
@@ -40,6 +42,9 @@ def check_arbitrage_script(
     read_text: Callable[[str], str] | None = None,
 ) -> CheckResult:
     name = _t("chk_arb_script")
+    if is_cloud_backend(cfg):
+        # LLM chez un fournisseur externe : aucun script local à lancer (docs/LLM_CLOUD.md § 3.3.1).
+        return CheckResult(name, OK, _t("na_cloud"))
     services = cfg.get("services", {})
     script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
     if not script:
@@ -99,6 +104,8 @@ def check_llm_placement_declaration(
     La divergence était SILENCIEUSE ; ce contrôle statique la rend visible au doctor.
     """
     name = _t("chk_llm_placement")
+    if is_cloud_backend(cfg):
+        return CheckResult(name, OK, _t("na_cloud"))
     services = cfg.get("services", {})
     script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
     if not script or not is_file(script):
@@ -141,6 +148,9 @@ def check_arbitrage_llm(
     probe: Callable[[int], dict | None] | None = None,
 ) -> CheckResult:
     name = _t("chk_arb_llm")
+    if is_cloud_backend(cfg):
+        # Aucune sonde 127.0.0.1 : le fournisseur est vérifié par check_llm_cloud.
+        return CheckResult(name, OK, _t("na_cloud"))
     services = cfg.get("services", {})
     port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
     expected_model = (services.get("arbitrage_api_model_id") or "").strip()
@@ -223,6 +233,28 @@ def _read_opencode_config(path: str) -> dict | None:
         return None
     return data if isinstance(data, dict) else None
 
+def _cloud_model_resolution(config_path: str | None, reader: Callable[[str], dict | None] | None,
+                            view) -> CheckResult:
+    """Résolution en cloud : un fournisseur DE LA TABLE vient du catalogue d'opencode (aucun bloc
+    ``provider.<id>`` requis) ; un fournisseur HORS table exige le bloc écrit par
+    ``ensure_cloud_provider`` (sinon « Model unavailable » au premier run)."""
+    name = _t("chk_model_resolution_cloud")
+    model_id = f"{view.provider}/{view.model}"
+    if not view.provider or not view.model or view.is_local_provider:
+        return CheckResult(name, FAIL, _t("mr_cloud_no_provider", model_id=model_id),
+                           hint=_t("mr_cloud_no_provider_hint"))
+    if view.known_provider:
+        return CheckResult(name, OK, _t("mr_cloud_catalog", model_id=model_id, provider=view.provider))
+    path = config_path or _opencode_config_path()
+    data = (reader or _read_opencode_config)(path)
+    providers = (data or {}).get("provider") or {}
+    prov = providers.get(view.provider) if isinstance(providers, dict) else None
+    models = prov.get("models") if isinstance(prov, dict) else None
+    if not isinstance(models, dict) or view.model not in models:
+        return CheckResult(name, FAIL, _t("mr_cloud_no_block", provider=view.provider, model=view.model, path=path),
+                           hint=_t("mr_cloud_no_block_hint"))
+    return CheckResult(name, OK, _t("mr_cloud_block_ok", model_id=model_id, provider=view.provider, path=path))
+
 def check_opencode_model_resolution(
     cfg: dict,
     *,
@@ -245,6 +277,8 @@ def check_opencode_model_resolution(
     arbitration_on = workflow.get("arbitration_llm", {}).get("enabled", False)
     if not (summary_on or arbitration_on):
         return CheckResult(name, OK, _t("mr_disabled"))
+    if is_cloud_backend(cfg):
+        return _cloud_model_resolution(config_path, reader, cloud_view(cfg))
 
     model_id = ((workflow.get("arbitration_llm", {}) or {}).get("model_id") or "").strip()
     if not model_id:
@@ -289,6 +323,7 @@ def check_opencode_smoke(
     *,
     runner_factory: Callable[..., Any] | None = None,
     probe: Callable[[int], dict | None] | None = None,
+    notify: Callable[[str], None] | None = None,
 ) -> CheckResult:
     """Test RÉEL opencode → LLM → texte (opt-in `--llm-smoke`).
 
@@ -300,6 +335,9 @@ def check_opencode_smoke(
     Pré-sonde le serveur LLM (`/v1/models`) AVANT opencode : si la LLM n'écoute pas, on
     échoue **immédiatement** avec une consigne claire au lieu d'attendre le timeout
     opencode (jusqu'à 120 s).
+
+    En cloud (``services.backend: cloud``) : pas de pré-sonde locale ; l'appel est PAYANT chez le
+    fournisseur — ``notify`` le dit AVANT de lancer opencode et le détail du résultat le répète.
     """
     name = _t("chk_smoke")
     workflow = cfg.get("workflow", {})
@@ -312,18 +350,27 @@ def check_opencode_smoke(
     services = cfg.get("services", {})
     port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
     log_path = services.get("arbitrage_log_path") or f"/tmp/arbitrage_llm_{port}.log"
+    cloud = is_cloud_backend(cfg)
+    paid = ""
 
-    # Pré-vol rapide : éviter un timeout opencode de ~120 s si la LLM est down.
-    probe = probe or _probe_openai_models
-    try:
-        models = probe(port)
-    except Exception:  # noqa: BLE001
-        models = None
-    if not models:
-        return CheckResult(
-            name, FAIL, _t("smoke_down", port=port),
-            hint=_t("smoke_down_hint", log=log_path),
-        )
+    if cloud:
+        # Fournisseur externe : pas de sonde 127.0.0.1, mais l'admin est PRÉVENU avant l'appel
+        # (affiché tout de suite sur stderr, et repris dans le détail du résultat).
+        view = cloud_view(cfg)
+        paid = _t("smoke_cloud_paid", provider=view.provider or "?", model_id=f"{view.provider}/{view.model}")
+        (notify or (lambda msg: print(msg, file=sys.stderr, flush=True)))(paid)
+    else:
+        # Pré-vol rapide : éviter un timeout opencode de ~120 s si la LLM est down.
+        probe = probe or _probe_openai_models
+        try:
+            models = probe(port)
+        except Exception:  # noqa: BLE001
+            models = None
+        if not models:
+            return CheckResult(
+                name, FAIL, _t("smoke_down", port=port),
+                hint=_t("smoke_down_hint", log=log_path),
+            )
 
     if runner_factory is None:
         # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
@@ -347,8 +394,12 @@ def check_opencode_smoke(
             timeout=timeout_s,
         )
         if not result.get("success"):
+            error = result.get("error", _t("smoke_unknown_error"))
+            if cloud:
+                return CheckResult(name, FAIL, _t("smoke_cloud_failed", paid=paid, error=error),
+                                   hint=_t("smoke_cloud_hint"))
             return CheckResult(
-                name, FAIL, _t("smoke_failed", error=result.get("error", _t("smoke_unknown_error"))),
+                name, FAIL, _t("smoke_failed", error=error),
                 hint=_t("smoke_failed_hint", port=port, log=log_path),
             )
         smoke = work / "smoke.md"
@@ -356,9 +407,13 @@ def check_opencode_smoke(
             smoke.is_file() and bool(smoke.read_text(encoding="utf-8").strip())
         )
         if not produced:
+            if cloud:
+                return CheckResult(name, FAIL, _t("smoke_cloud_notext", paid=paid), hint=_t("smoke_cloud_hint"))
             return CheckResult(
                 name, FAIL,
                 _t("smoke_notext"),
                 hint=_t("smoke_notext_hint", log=log_path),
             )
+    if cloud:
+        return CheckResult(name, OK, _t("smoke_cloud_ok", paid=paid))
     return CheckResult(name, OK, _t("smoke_ok", port=port))

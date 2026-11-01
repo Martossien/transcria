@@ -359,7 +359,7 @@ def _live_eta(job, progress) -> dict | None:
         audio_s = float((fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0.0)
         if audio_s <= 0:
             return None
-        return estimate_remaining(profile, audio_s, progress.get("percent"))
+        return estimate_remaining(profile, audio_s, progress.get("percent"), config=cfg)
     except Exception:  # noqa: BLE001 — l'ETA ne doit jamais casser le polling
         return None
 

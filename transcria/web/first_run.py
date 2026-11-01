@@ -25,6 +25,7 @@ from transcria.diagnostics.checks.common import OK, WARN
 from transcria.diagnostics.checks.llm import check_opencode
 from transcria.diagnostics.checks.remote import check_inference_nodes
 from transcria.gpu import inventory
+from transcria.llm_cloud.gate import cloud_status
 from transcria.models_catalog import catalog_with_status, diarization_auto_recommendation
 
 
@@ -32,12 +33,12 @@ from transcria.models_catalog import catalog_with_status, diarization_auto_recom
 class FirstRunItem:
     """Un point du bilan. ``status`` reprend les statuts doctor (ok/warn/fail)."""
 
-    key: str                                  # compute | models | opencode | diarization | notifications
+    key: str                                  # compute | models | opencode | diarization | notifications | llm_cloud
     status: str
     data: dict = field(default_factory=dict)  # faits structurés — le template rédige
 
 
-def _compute_item(cfg: dict) -> FirstRunItem:
+def _compute_item(cfg: dict, cloud: dict | None = None) -> FirstRunItem:
     """GPU locaux, ou joignabilité des nœuds distants quand l'inférence est déportée."""
     mode = str((cfg.get("inference") or {}).get("mode", "local")).strip().lower()
     if mode != "local":
@@ -47,6 +48,11 @@ def _compute_item(cfg: dict) -> FirstRunItem:
     if states:
         total_gib = round(sum(s.total_gib for s in states), 1)
         return FirstRunItem("compute", OK, {"gpus": len(states), "vram_gib": total_gib})
+    # Palier « zéro GPU » (docs/LLM_CLOUD.md § 4) : en cloud, les phases LLM sont servies par le
+    # fournisseur et le STT/la diarisation tournent sur CPU — l'absence de GPU est un choix, pas
+    # un point à finaliser (sinon la checklist d'accueil resterait affichée à vie).
+    if (cloud or {}).get("active"):
+        return FirstRunItem("compute", OK, {"gpus": 0, "llm_cloud": True})
     return FirstRunItem("compute", WARN, {"gpus": 0})
 
 
@@ -80,6 +86,19 @@ def _diarization_item(cfg: dict) -> FirstRunItem:
     return FirstRunItem("diarization", WARN, dict(reco))
 
 
+def _llm_cloud_item(cloud: dict) -> FirstRunItem | None:
+    """LLM d'arbitrage cloud : validée par un administrateur ? (absent hors cloud).
+
+    ``cloud_status`` lit la base seulement — JAMAIS le réseau du fournisseur (ce fragment est
+    servi à chaque accueil admin ; la sonde ``GET /models`` reste au doctor et au worker).
+    """
+    if not cloud.get("active"):
+        return None
+    if cloud.get("acknowledged"):
+        return FirstRunItem("llm_cloud", OK, {"provider": cloud.get("provider_label") or "", "model": cloud.get("model") or ""})
+    return FirstRunItem("llm_cloud", WARN, {"provider": cloud.get("provider_label") or "", "model": cloud.get("model") or ""})
+
+
 def _notifications_item(cfg: dict) -> FirstRunItem:
     """Les utilisateurs seront-ils prévenus ? (retours utilisateurs 2026-11).
 
@@ -102,13 +121,18 @@ def _notifications_item(cfg: dict) -> FirstRunItem:
 
 
 def first_run_report(cfg: dict, *, total_vram_mb: int | None = None) -> list[FirstRunItem]:
-    return [
-        _compute_item(cfg),
+    """Tous les points du bilan (statut OK compris) — :func:`needs_attention` filtre."""
+    cloud = cloud_status(cfg)
+    items = [
+        _compute_item(cfg, cloud),
         _models_item(cfg, total_vram_mb),
         _opencode_item(cfg),
-        _diarization_item(cfg),
-        _notifications_item(cfg),
     ]
+    cloud_item = _llm_cloud_item(cloud)
+    if cloud_item is not None:
+        items.append(cloud_item)
+    items += [_diarization_item(cfg), _notifications_item(cfg)]
+    return items
 
 
 def needs_attention(items: list[FirstRunItem]) -> list[FirstRunItem]:

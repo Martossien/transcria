@@ -14,6 +14,9 @@
 #   scripts/docker_quickstart.sh --cpu           # sans GPU (web+scheduler, pas d'inférence locale)
 #   scripts/docker_quickstart.sh --down          # arrête et nettoie la stack
 #   HF_TOKEN=hf_xxx scripts/docker_quickstart.sh # avec modèle gated (Cohere) ; sinon whisper
+#   TRANSCRIA_LLM_BACKEND=cloud scripts/docker_quickstart.sh --cpu
+#                                                # LLM d'arbitrage chez un fournisseur cloud :
+#                                                # les blocs LLM restent actifs (cf. docs/DOCKER.md)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,6 +46,18 @@ disable_llm_block() {
         $0 ~ "^[[:space:]]*"blk":" {f=1}
         f && /^[[:space:]]*enabled:[[:space:]]*true/ {sub(/true/,"false"); f=0}
         {print}' config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
+}
+
+# Backend de la LLM d'arbitrage déclaré dans config.yaml (`services.backend`), sans dépendance
+# Python hôte : première clé `backend:` NON commentée du bloc `services:` (script|ollama|http|cloud).
+config_llm_backend() {
+    awk '
+        /^services:/ {in_s=1; next}
+        in_s && /^[^[:space:]#]/ {in_s=0}
+        in_s && /^[[:space:]]+backend:/ {
+            v=$0; sub(/^[[:space:]]+backend:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v)
+            gsub(/["\047]/, "", v); print v; exit
+        }' "${1:-config.yaml}" 2>/dev/null
 }
 
 ENV_FILE=".env.docker"
@@ -119,6 +134,9 @@ if [[ "$BUNDLED" == "1" ]]; then
 fi
 
 # ── 3. config.yaml (généré depuis l'exemple si absent) ────────────────────────
+# INTENTION de backend LLM, lue AVANT la génération : une config fraîche (copie de l'exemple)
+# ne déclare jamais `services.backend: cloud`, la lire après la copie ne servirait à rien.
+LLM_BACKEND_INTENT="${TRANSCRIA_LLM_BACKEND:-}"
 # config.example.yaml est une config all-in-one valide ; le DSN PostgreSQL est fourni
 # au runtime via TRANSCRIA_DATABASE_URL (compose). Sans token HF → backend whisper
 # (non gated) pour un test sans friction.
@@ -173,18 +191,27 @@ if [[ ! -f "config.yaml" ]]; then
             ok "Calibration LLM existante conservée (config non générée par ce script)."
         fi
         ok "LLM d'arbitrage embarquée (palier ${_llm_tier} Go, llm_vram_mb=${_llm_vram}) → résumé/correction/qualité actifs."
+    elif [[ "$LLM_BACKEND_INTENT" == "cloud" ]]; then
+        ok "LLM d'arbitrage : fournisseur cloud (cloud) — clé attendue dans .env (variable du fournisseur)."
+        warn "  À compléter dans config.yaml avant le 1er traitement : services.backend: cloud ET le MÊME"
+        warn "  <fournisseur>/<modèle> dans workflow.arbitration_llm.model_id ET workflow.summary_llm.model_id."
     elif [[ -n "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
         ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."
     else
         warn "Mode CPU sans LLM d'arbitrage externe → résumé + correction désactivés (profils grisés)."
         warn "  Pour les activer : LLM OpenAI-compatible (:8080) + TRANSCRIA_ARBITRAGE_LLM_HOST"
         warn "  (ou host.docker.internal). Détails : docs/DOCKER.md."
+        warn "  Ou LLM cloud : relancer avec TRANSCRIA_LLM_BACKEND=cloud (config à régénérer), ou remettre"
+        warn "  enabled: true sur workflow.summary_llm ET workflow.arbitration_llm + services.backend: cloud."
         disable_llm_block summary_llm
         disable_llm_block arbitration_llm
     fi
     ok "config.yaml prêt."
 else
     ok "config.yaml existant conservé."
+    if [[ "$(config_llm_backend config.yaml)" == "cloud" ]]; then
+        ok "LLM d'arbitrage : fournisseur cloud (cloud) — clé attendue dans .env (variable du fournisseur)."
+    fi
 fi
 
 # Secret Flask dans .env applicatif (monté) — INDÉPENDANT de la (re)génération de config.yaml :

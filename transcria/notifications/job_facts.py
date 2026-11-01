@@ -50,7 +50,7 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
 
     profile = profiles.profile_for_job(job)
     if profile is not None and audio_s > 0:
-        est = timing_service.estimate_processing(profile, audio_s)
+        est = timing_service.estimate_processing(profile, audio_s, config=config)
         suffix = "" if est.basis == "measured" else " (estimation initiale)"
         facts.append((N_("Traitement estimé"), timing_model.format_range_fr(est) + suffix))
     return facts

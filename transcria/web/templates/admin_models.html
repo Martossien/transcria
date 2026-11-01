@@ -42,11 +42,16 @@
             <div class="font-monospace small text-muted">{{ s.repo_id }}{% if s.file %} · {{ s.file }}{% endif %}</div>
           </td>
           <td class="small">
-            <a href="{{ s.license_url }}" target="_blank" rel="noopener">{{ s.license }}</a>
+            {% if s.kind == 'cloud' %}{{ _('selon le fournisseur') }}{% else %}
+            <a href="{{ s.license_url }}" target="_blank" rel="noopener">{{ s.license }}</a>{% endif %}
             {% if s.gated %}<span class="badge bg-warning text-dark ms-1">{{ _('token HF') }}</span>{% endif %}
           </td>
           <td style="min-width:16rem">
-            {% if it.present %}
+            {% if s.kind == 'cloud' %}
+              {# Information seule : servie par le fournisseur externe, rien à télécharger. #}
+              <span class="badge bg-info text-dark">{{ _('fournisseur cloud') }}</span>
+              <div class="small text-muted">{{ _('Servie par le fournisseur externe : aucun modèle à télécharger. Le modèle se change dans config.yaml (model_id).') }}</div>
+            {% elif it.present %}
               <span class="badge bg-success">{{ _('présent') }}</span>
               <span class="small text-muted">{{ _('%(n)s Go', n=(it.size_bytes / 1e9)|round(1)) }}</span>
             {% elif inprog %}
@@ -78,6 +83,11 @@
             {% endif %}
           </td>
           <td class="text-end">
+            {% if s.kind == 'cloud' %}
+            <a href="{{ url_for('web.admin_llm_cloud') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-cloud"></i> {{ _('LLM cloud') }}
+            </a>
+            {% endif %}
             {# « Activer (servir) » bascule le profil llama.cpp : réservé aux GGUF —
                un modèle Ollama est servi par le démon, rien à basculer ici. #}
             {% if it.present and s.role == 'arbitrage_llm' and s.kind == 'gguf' %}

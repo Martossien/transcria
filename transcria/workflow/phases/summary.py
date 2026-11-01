@@ -200,7 +200,7 @@ def _finalize_success(runner, job: Job, result: dict, config: dict, sl, t0: floa
         from transcria.jobs.timing_store import JobTimingStore
 
         JobTimingStore.record(prof.id if prof is not None else "", "summary",
-                              audio_s, summary_elapsed)
+                              audio_s, summary_elapsed, config=config)
     except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
         pass
     # Email « pré-analyse prête, à vous de jouer » : point UNIQUE (couvre le résumé

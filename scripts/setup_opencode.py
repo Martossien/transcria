@@ -18,10 +18,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from transcria.gpu.arbitrage_endpoint import default_base_url  # noqa: E402
+from transcria.gpu.arbitrage_endpoint import cloud_view, default_base_url, is_cloud_backend  # noqa: E402
 from transcria.llm_tools.opencode_setup import (  # noqa: E402
     ensure_agent_permissions,
+    ensure_cloud_provider,
     ensure_local_provider,
+    ensure_share_disabled,
     find_opencode_binary,
 )
 from transcria.workflow.agent_workspace import resolve_agent_work_root  # noqa: E402
@@ -55,6 +57,28 @@ def main() -> int:
     print(f"opencode binaire : {binary or 'INTROUVABLE (installez opencode, cf. docs/INSTALL.md §5)'}")
 
     path = Path(args.config_path).expanduser()
+    if is_cloud_backend(cfg):
+        # Fournisseur externe : le provider `local` n'a pas de sens. Un fournisseur du catalogue
+        # opencode se résout seul (clé par variable d'env) ; HORS table, on déclare le bloc.
+        view = cloud_view(cfg)
+        incomplete = False
+        if not view.known_provider and view.provider:
+            try:
+                ensure_cloud_provider(path, view.provider, view.base_url, view.api_key_env, view.model)
+                print(f"provider cloud hors table '{view.provider}' écrit dans {path} (clé via {{env:{view.api_key_env}}})")
+            except ValueError as exc:
+                incomplete = True
+                ensure_share_disabled(path)
+                print(f"⚠️  {exc}. Renseignez llm_cloud.base_url et llm_cloud.api_key_env "
+                      "dans config.yaml puis relancez ce script.", file=sys.stderr)
+        else:
+            ensure_share_disabled(path)
+            print(f"fournisseur cloud '{view.provider}' du catalogue opencode : aucun bloc provider à écrire")
+        ensure_agent_permissions(path, resolve_agent_work_root(cfg))
+        if incomplete:
+            return 1
+        print("✅ opencode configuré pour la LLM cloud. Vérifiez avec scripts/doctor.py.")
+        return 0
     data = ensure_local_provider(path, base_url, model, context=args.context, output=args.output)
     limit = data["provider"]["local"]["models"][model].get("limit", {})
     # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch des

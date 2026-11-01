@@ -417,5 +417,7 @@ def test_build_catalog_cloud_sans_gguf_de_palier():
     cfg = {**_cfg(), "services": {"backend": "cloud"},
            "workflow": {"arbitration_llm": {"model_id": "mistral/mistral-large-4"}}}
     specs = build_catalog(cfg, total_vram_mb=64000)
-    assert not [s for s in specs if s.role == "arbitrage_llm"]
-    assert {s.role for s in specs if not s.role.endswith("_candidate")} == {"stt", "diarization"}
+    llm = [s for s in specs if s.role == "arbitrage_llm"]
+    # Une seule ligne LLM : l'INFORMATION cloud (lot C), jamais un GGUF à télécharger.
+    assert [s.kind for s in llm] == ["cloud"] and llm[0].file is None
+    assert {s.role for s in specs if not s.role.endswith("_candidate")} == {"arbitrage_llm", "stt", "diarization"}

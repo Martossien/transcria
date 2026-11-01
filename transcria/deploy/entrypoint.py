@@ -225,18 +225,39 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         from transcria.workflow import agent_workspace
 
         cfg = load_config()
+        # Résolution partagée (source unique) — l'entrypoint honore aussi OPENCODE_CONFIG
+        # passé par l'environnement du conteneur.
+        config_path = env.get("OPENCODE_CONFIG") or opencode_setup.resolve_config_path()
+        work_root = agent_workspace.resolve_agent_work_root(cfg)
+        if arbitrage_endpoint.is_cloud_backend(cfg):
+            # Fournisseur externe : jamais de provider `local`. Un fournisseur du catalogue opencode
+            # se résout seul (clé par variable d'env) ; HORS table on déclare le bloc.
+            view = arbitrage_endpoint.cloud_view(cfg)
+            if not view.known_provider and view.provider:
+                try:
+                    opencode_setup.ensure_cloud_provider(
+                        config_path, view.provider, view.base_url, view.api_key_env, view.model)
+                except ValueError as exc:
+                    # Bloc incomplet : on prévient et on n'écrit RIEN de bancal (share/permissions
+                    # restent posés) — le doctor le signale aussi.
+                    print(f"[WARN] opencode : {exc} (llm_cloud.base_url / llm_cloud.api_key_env)",
+                          file=sys.stderr, flush=True)
+                    opencode_setup.ensure_share_disabled(config_path)
+            else:
+                opencode_setup.ensure_share_disabled(config_path)
+            opencode_setup.ensure_agent_permissions(config_path, work_root)
+            print(f"[INFO] opencode : LLM cloud {view.provider}/{view.model} "
+                  f"(clé via {view.api_key_env or 'variable du fournisseur'}) ({config_path}) "
+                  f"| external_directory allow={work_root}", file=sys.stderr, flush=True)
+            return
         base_url = arbitrage_endpoint.default_base_url(cfg)
         llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
         model = llm.get("model_id") or "arbitrage"
         if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"
             model = model.split("/", 1)[1]
-        # Résolution partagée (source unique) — l'entrypoint honore aussi OPENCODE_CONFIG
-        # passé par l'environnement du conteneur.
-        config_path = env.get("OPENCODE_CONFIG") or opencode_setup.resolve_config_path()
         opencode_setup.ensure_local_provider(config_path, base_url, model)
         # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch
         # des agents, deny ailleurs) — sinon le défaut opencode `ask` suspend `opencode run`.
-        work_root = agent_workspace.resolve_agent_work_root(cfg)
         opencode_setup.ensure_agent_permissions(config_path, work_root)
         print(f"[INFO] opencode provider 'local' → {base_url} ({config_path}) "
               f"| external_directory allow={work_root}", file=sys.stderr, flush=True)
@@ -354,12 +375,16 @@ def provision_arbitrage_model(
     try:
         # Différés §8.3(c) : point d'entrée best-effort — l'ImportError est un cas géré.
         from transcria.config import load_config
+        from transcria.gpu.arbitrage_endpoint import is_cloud_backend
         from transcria.installer.tiers import find_tier_profile, get_tier_metadata
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort
         print(f"[WARN] provisioning modèle d'arbitrage ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
         return False
 
     cfg = load_config()
+    if is_cloud_backend(cfg):
+        print("[INFO] LLM cloud : aucun GGUF à provisionner.", file=sys.stderr, flush=True)
+        return True
     llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
     if llm.get("enabled") is False:
         print("[INFO] arbitration_llm désactivée — aucun modèle d'arbitrage à provisionner.", file=sys.stderr, flush=True)

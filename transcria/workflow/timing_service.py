@@ -40,29 +40,39 @@ def processing_stages(profile) -> list[str]:
     return stages
 
 
-def _estimate_stages(profile_id: str, stages: list[str], audio_seconds: float) -> Estimate:
-    samples = JobTimingStore.samples_for_stages(profile_id, stages)
+def _effective_config(config: dict | None) -> dict | None:
+    """Config qui décide de la clé d'historique (LLM locale vs cloud) — passée par l'appelant
+    (règle n°3 d'AGENTS.md : jamais de ``get_config()`` dans le moteur) ; ``None`` = clé locale."""
+    return config
+
+
+def _estimate_stages(profile_id: str, stages: list[str], audio_seconds: float,
+                     config: dict | None = None) -> Estimate:
+    # En cloud, les étapes LLM lisent `<étape>@cloud` : sans échantillon cloud, l'estimation
+    # retombe sur la formule — jamais sur les points d'une LLM locale (et inversement).
+    samples = JobTimingStore.samples_for_stages(profile_id, stages, config=_effective_config(config))
     return estimate_machine(stages, samples, audio_seconds)
 
 
-def estimate_processing(profile, audio_seconds: float) -> Estimate:
+def estimate_processing(profile, audio_seconds: float, *, config: dict | None = None) -> Estimate:
     """Temps machine du TRAITEMENT (post-résumé) — calibré si historique, sinon formule."""
-    return _estimate_stages(profile.id, processing_stages(profile), audio_seconds)
+    return _estimate_stages(profile.id, processing_stages(profile), audio_seconds, config)
 
 
-def estimate_summary(profile, audio_seconds: float) -> Estimate:
+def estimate_summary(profile, audio_seconds: float, *, config: dict | None = None) -> Estimate:
     """Temps machine de la phase RÉSUMÉ (STT+diarisation+LLM)."""
-    return _estimate_stages(profile.id, [SUMMARY_STAGE], audio_seconds)
+    return _estimate_stages(profile.id, [SUMMARY_STAGE], audio_seconds, config)
 
 
-def estimate_total_machine(profile, audio_seconds: float) -> Estimate:
+def estimate_total_machine(profile, audio_seconds: float, *, config: dict | None = None) -> Estimate:
     """Temps machine TOTAL (résumé + traitement) — pour l'estimation du wizard.
 
     Combine les deux phases ; si l'une retombe sur la formule, le total reste cohérent
     (les fourchettes s'additionnent). Un profil sans résumé n'ajoute que le traitement.
     """
-    summ = estimate_summary(profile, audio_seconds) if profile.requires_summary else Estimate(0, "measured", 0, 0, 0)
-    proc = estimate_processing(profile, audio_seconds)
+    summ = (estimate_summary(profile, audio_seconds, config=config) if profile.requires_summary
+            else Estimate(0, "measured", 0, 0, 0))
+    proc = estimate_processing(profile, audio_seconds, config=config)
     basis = "measured" if summ.basis == "measured" and proc.basis == "measured" else "initial"
     if basis == "initial":
         est = legacy_machine_seconds(audio_seconds)
@@ -74,11 +84,12 @@ def estimate_total_machine(profile, audio_seconds: float) -> Estimate:
     )
 
 
-def estimate_remaining(profile, audio_seconds: float, percent: float | None) -> dict:
+def estimate_remaining(profile, audio_seconds: float, percent: float | None,
+                       *, config: dict | None = None) -> dict:
     """Temps de TRAITEMENT restant (ETA live) : estimation calibrée × fraction restante
     d'après ``percent`` de progression. Renvoie un dict prêt pour le polling de statut."""
 
-    est = estimate_processing(profile, audio_seconds)
+    est = estimate_processing(profile, audio_seconds, config=config)
     frac = max(0.0, min(1.0, 1.0 - (float(percent or 0) / 100.0)))
     remaining = est.seconds * frac
     return {
@@ -88,20 +99,20 @@ def estimate_remaining(profile, audio_seconds: float, percent: float | None) -> 
     }
 
 
-def estimate_queue_wait_seconds(profile, audio_seconds: float) -> float:
+def estimate_queue_wait_seconds(profile, audio_seconds: float, *, config: dict | None = None) -> float:
     """Durée machine TOTALE (résumé + traitement) d'un job en file — pour cumuler le
     temps d'attente des jobs en amont."""
-    return estimate_total_machine(profile, audio_seconds).seconds
+    return estimate_total_machine(profile, audio_seconds, config=config).seconds
 
 
-def estimate_total_with_human(profile, audio_seconds: float) -> dict:
+def estimate_total_with_human(profile, audio_seconds: float, *, config: dict | None = None) -> dict:
     """Estimation affichée au wizard : machine (calibré) + validation humaine.
 
     Renvoie un dict prêt pour le template : minutes totales, fourchette lisible, base de
     confiance (« measured »/« initial ») — pour un affichage honnête.
     """
 
-    machine = estimate_total_machine(profile, audio_seconds)
+    machine = estimate_total_machine(profile, audio_seconds, config=config)
     human_min = human_review_minutes(audio_seconds)
     total_min = round(machine.seconds / 60 + human_min, 1) if audio_seconds > 0 else None
     return {

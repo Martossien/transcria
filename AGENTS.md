@@ -159,7 +159,7 @@ transcria/
     app_services.py         # C4 : fabriques explicites de create_app (resolve_app_config, configure_*, build_*, register_*, start_runtime) — create_app(config=None|chemin|dict, start_background_services=False pour tests/outils
     diagnostics/
       doctor.py             # Préflight GPU-free — FAÇADE (ré-exporte tout) + registre par profil + CLI ; sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
-      checks/               # les vérifications PAR DOMAINE (vague 0) : common (socle), probes (sondes injectables), database, llm, remote, storage, deployment, identity — golden tests/test_doctor_registry_golden.py
+      checks/               # les vérifications PAR DOMAINE (vague 0) : common (socle), probes (sondes injectables), database, llm, llm_cloud (fournisseur externe : clé, opencode.json share/apiKey, catalogue opencode, GET /models Bearer — SEUL appel réseau vers le fournisseur hors worker —, validation admin en base ; variante web sans réseau), remote, storage, deployment, identity — golden tests/test_doctor_registry_golden.py ; en cloud les checks LLM locale répondent « sans objet »
       doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
     installer/              # TOUTE la logique d'installation (C6 : plus aucun install_*.py à la racine)
       cli.py                # `python -m transcria.installer.cli <phase|helper>` — SEUL point d'entrée Python d'install.sh : 15 phases (python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, recommend-llm, express, moss-site, audiocpp, parakeetcpp) + 9 helpers transférés (prerequisites, hardware, paths, profiles, check-imports, models, arbitrage, summary-log, postgres-tools). Tête stdlib-pure : python-env tourne AVANT requirements avec le python système
@@ -254,7 +254,7 @@ transcria/
       gpu_phase.py          # B1 : réservation/session GPU d'une phase (GPUSession, _should_use_remote_stt)
       agent_workspace.py    # scratch HORS dépôt des agents opencode (stage/write_input/verify_and_restore_sources)
       srt_editor.py         # parsing/écriture SRT de l'éditeur intégré (chunks, révisions)
-      timing_model.py       # modèle de temps CALIBRÉ MACHINE — source unique des estimations de durée
+      timing_model.py       # modèle de temps CALIBRÉ MACHINE — source unique des estimations de durée ; les étapes LLM (summary, correction, final_review, type_fields) sont historisées sous une clé `@cloud` distincte quand la LLM est cloud (stage_key) — jamais mélangées avec les mesures locales ; `config=` passé par les appelants (règle n°3)
       timing_service.py     # façade du modèle de temps : profil → étapes → estimation
       type_field_extraction.py # extraction LÉGÈRE des champs sur-mesure d'un type (logique pure)
       concurrency_profile.py # profil de concurrence du workflow + observabilité du goulot

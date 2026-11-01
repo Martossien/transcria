@@ -39,7 +39,7 @@ def queue_wait_estimates(config: dict, entries: list[JobQueueEntry]) -> dict[str
             if audio_s <= 0:
                 return 0.0
             if profile is not None:
-                return estimate_queue_wait_seconds(profile, audio_s)
+                return estimate_queue_wait_seconds(profile, audio_s, config=config)
             return legacy_machine_seconds(audio_s)
         except Exception:  # noqa: BLE001 — une entrée illisible ne bloque pas les autres
             return 0.0

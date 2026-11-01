@@ -24,6 +24,10 @@ GOLDEN_ALL_CHECKS = [
     "check_arbitrage_llm",
     "check_opencode",
     "check_opencode_model_resolution",
+    # Ajout 2026-11-01 (LLM cloud, lot C — docs/LLM_CLOUD.md § 3.3.1) : chaîne complète du
+    # fournisseur externe (clé, opencode.json, catalogue, fournisseur, validation admin).
+    # OK « sans objet » hors `services.backend: cloud` : une ligne de plus au rapport local.
+    "check_llm_cloud",
     "check_inference_nodes",
     "check_remote_stt_control_plane",
     "check_served_stt_runtimes",
@@ -56,6 +60,9 @@ GOLDEN_PROFILES = {
     "web": [
         "check_database",
         "check_database_encoding",
+        # Ajout 2026-11-01 (LLM cloud, lot C) : variante SANS réseau ni clé — le web n'exécute
+        # aucune phase LLM, mais sa garde d'admission refuse sans validation admin en base.
+        "check_llm_cloud_web",
         "check_inference_nodes",
         "check_remote_stt_control_plane",
         "check_meeting_scheduling",
@@ -81,6 +88,7 @@ GOLDEN_PROFILES = {
 # La surface que la façade `doctor` doit continuer d'exposer après découpe : tout ce que
 # les tests, scripts/doctor.py et la doc importent aujourd'hui.
 GOLDEN_PUBLIC_SURFACE = GOLDEN_ALL_CHECKS + [
+    "check_llm_cloud_web",
     "check_resource_node_auth",
     "check_resource_node_engines",
     "check_resource_node_ports",

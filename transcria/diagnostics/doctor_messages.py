@@ -158,6 +158,95 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                              "prompt inadapté). Lire {log}.",
         "smoke_ok": "opencode → LLM → texte : production confirmée (port {port})",
         "smoke_unknown_error": "inconnu",
+        # LLM d'arbitrage cloud (docs/LLM_CLOUD.md § 3.3.1)
+        "na_cloud": "sans objet (LLM d'arbitrage cloud — rien ne tourne sur cette machine)",
+        "chk_llm_cloud": "LLM d'arbitrage cloud (fournisseur externe)",
+        "chk_llm_cloud_web": "LLM d'arbitrage cloud (validation, tier web)",
+        "chk_model_resolution_cloud": "Résolution du modèle opencode (fournisseur cloud)",
+        "lc_not_cloud": "sans objet (LLM d'arbitrage locale)",
+        "lc_llm_disabled": "phases LLM désactivées (rien à vérifier)",
+        "lc_no_provider": "model_id « {model_id} » : fournisseur introuvable — attendu « <fournisseur>/<modèle> »",
+        "lc_no_provider_hint": "Renseigner workflow.arbitration_llm.model_id (et summary_llm.model_id) au format "
+                               "<fournisseur>/<modèle>, ex. « mistral/<modèle> » (docs/LLM_CLOUD.md § 2.2).",
+        "lc_local_provider": "services.backend: cloud mais le model_id désigne le fournisseur « local » ({model_id})",
+        "lc_local_provider_hint": "Choisir un fournisseur externe dans model_id, ou repasser services.backend "
+                                  "à la valeur de la LLM locale.",
+        "lc_ids_differ": "les deux model_id diffèrent (correction « {arb} », résumé « {summ} ») — un seul "
+                         "fournisseur/modèle est validé à la fois",
+        "lc_ids_differ_hint": "Aligner workflow.summary_llm.model_id sur workflow.arbitration_llm.model_id.",
+        "lc_no_base_url": "fournisseur « {provider} » hors table : URL inconnue",
+        "lc_no_base_url_hint": "Renseigner workflow.arbitration_llm.api_base (URL OpenAI-compatible finissant "
+                               "par /v1), ou choisir un fournisseur de la table (transcria/data/llm_providers.yaml).",
+        "lc_no_key_env": "fournisseur « {provider} » hors table : variable d'environnement de la clé inconnue",
+        "lc_no_key_env_hint": "Renseigner workflow.llm_cloud.api_key_env (NOM de la variable, jamais la clé).",
+        "lc_key_missing": "variable {env} absente, vide ou mal formée (blanc/caractère de contrôle) — "
+                          "la clé n'est jamais affichée",
+        "lc_key_missing_hint": "Définir {env}=… dans le .env du service (une ligne, sans retour à la ligne "
+                               "ni échappement), puis redémarrer le service.",
+        "lc_oc_config_missing": "opencode.json introuvable ou illisible : {path}",
+        "lc_oc_config_hint": "Lancer venv/bin/python scripts/setup_opencode.py (pose share: disabled et, pour un "
+                             "fournisseur hors table, le bloc provider avec la clé via {env:VAR}).",
+        "lc_share_not_disabled": "opencode.json ({path}) : share = « {share} » (attendu « disabled ») — "
+                                 "opencode pourrait publier une session en ligne",
+        "lc_api_key_residual": "opencode.json ({path}) : provider.{provider}.options.apiKey présent — en v1 il "
+                               "primerait sur la variable {env}",
+        "lc_api_key_residual_hint": "Retirer ce bloc : un fournisseur du catalogue opencode n'a besoin d'aucune "
+                                    "entrée dans opencode.json (docs/LLM_CLOUD.md § 2.1).",
+        "lc_api_key_literal": "opencode.json ({path}) : provider.{provider}.options.apiKey contient une clé EN "
+                              "CLAIR au lieu de {{env:VAR}}",
+        "lc_auth_stored": "identifiant opencode stocké pour « {provider} » dans {path} — il primerait sur {env} "
+                          "pour un opencode lancé hors du pipeline",
+        "lc_auth_stored_hint": "Le pipeline isole XDG_DATA_HOME (ses runs ne le voient pas) ; pour lever "
+                               "l'ambiguïté : opencode auth logout, ou retirer l'entrée du fichier.",
+        "lc_auth_stored_v2_hint": "Le pipeline isole XDG_DATA_HOME (ses runs ne le voient pas) ; pour lever "
+                                  "l'ambiguïté (opencode v2) : opencode auth logout.",
+        "lc_auth_db_unreadable": "identifiants opencode v2 non vérifiés : {path} illisible en lecture seule ({exc})",
+        "lc_auth_db_unreadable_hint": "Relancer le doctor quand opencode n'écrit pas dans sa base ; sinon "
+                                      "opencode auth list pour vérifier qu'aucun identifiant ne vise ce fournisseur.",
+        "lc_catalog_unavailable": "catalogue opencode illisible (opencode models : {reason})",
+        "lc_catalog_unavailable_hint": "Vérifier le binaire opencode (check « Binaire opencode ») ; la présence du "
+                                       "modèle dans son catalogue n'a pas pu être confirmée.",
+        "lc_catalog_missing": "« {model_id} » absent du catalogue de cet opencode ({count} modèles listés) — "
+                              "« Model unavailable » au premier run",
+        "lc_catalog_missing_hint": "Choisir un modèle listé (opencode models {provider}), mettre à jour opencode "
+                                   "(le catalogue embarqué suit la version), ou déclarer un fournisseur hors table.",
+        "lc_provider_auth": "le fournisseur « {provider} » refuse la clé ({reason})",
+        "lc_provider_auth_hint": "Vérifier ou renouveler la clé dans la console du fournisseur, mettre à jour {env} "
+                                 "dans le .env, puis redémarrer le service.",
+        "lc_provider_http": "réponse inattendue du fournisseur « {provider} » ({reason})",
+        "lc_provider_unreachable": "fournisseur « {provider} » injoignable depuis cette machine ({reason})",
+        "lc_provider_unreachable_hint": "Vérifier la sortie réseau vers {url} (proxy d'entreprise HTTPS_PROXY dans "
+                                        "le .env, pare-feu sortant).",
+        "lc_provider_model_missing": "« {model} » absent des {count} modèles servis par « {provider} »",
+        "lc_provider_model_missing_hint": "Le modèle est peut-être retiré ou réservé à une autre offre : choisir un "
+                                          "modèle servi par {provider}, puis le faire valider.",
+        "lc_ack_unreadable": "validation administrateur illisible en base ({exc})",
+        "lc_ack_unreadable_hint": "Vérifier la base (check « Base de données ») et appliquer les migrations, puis "
+                                  "Administration → LLM cloud.",
+        "lc_ack_missing": "aucune validation administrateur pour {provider}/{model} — les phases LLM sont refusées",
+        "lc_ack_stale": "validation administrateur caduque (texte « {version} », texte courant « {current} ») — "
+                        "les phases LLM sont refusées",
+        "lc_ack_hint": "Administration → LLM cloud : lire l'information et valider ce fournisseur/modèle.",
+        "lc_ok": "{provider} / {model} — {url} (clé via {env}, validation administrateur à jour)",
+        "lc_ok_web": "{provider} / {model} — validation administrateur à jour (tier web : clé et fournisseur "
+                     "vérifiés côté ordonnanceur)",
+        "mr_cloud_no_provider": "aucun fournisseur cloud exploitable dans le model_id (« {model_id} »)",
+        "mr_cloud_no_provider_hint": "workflow.arbitration_llm.model_id au format <fournisseur>/<modèle> "
+                                     "(fournisseur ≠ local).",
+        "mr_cloud_catalog": "« {model_id} » : fournisseur « {provider} » du catalogue opencode — aucun bloc "
+                            "provider requis",
+        "mr_cloud_no_block": "fournisseur hors table « {provider} » sans bloc provider.{provider}.models.{model} "
+                             "dans {path}",
+        "mr_cloud_no_block_hint": "Lancer venv/bin/python scripts/setup_opencode.py (écrit le bloc "
+                                  "openai-compatible, clé via {env:VAR}).",
+        "mr_cloud_block_ok": "« {model_id} » résout (fournisseur hors table {provider}, bloc provider de {path})",
+        "smoke_cloud_paid": "APPEL PAYANT chez le fournisseur « {provider} » ({model_id}) : une requête facturée "
+                            "sur votre compte",
+        "smoke_cloud_failed": "{paid} — opencode a échoué : {error}",
+        "smoke_cloud_notext": "{paid} — opencode a terminé sans produire AUCUN texte ni fichier",
+        "smoke_cloud_hint": "Lancer d'abord le doctor sans --llm-smoke (check « LLM d'arbitrage cloud » : clé, "
+                            "catalogue, validation) ; journaux opencode avec OPENCODE_PRINT_LOGS=1.",
+        "smoke_cloud_ok": "{paid} — opencode → fournisseur → texte : production confirmée",
         # check_inference_nodes
         "in_local": "topologie locale — pas de nœud distant à joindre",
         "in_no_node": "mode « {mode} » mais aucun nœud configuré (inference.nodes / inference.url)",
@@ -474,6 +563,92 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                              "prompt). Read {log}.",
         "smoke_ok": "opencode → LLM → text: production confirmed (port {port})",
         "smoke_unknown_error": "unknown",
+        "na_cloud": "not applicable (cloud arbitration LLM — nothing runs on this machine)",
+        "chk_llm_cloud": "Cloud arbitration LLM (external provider)",
+        "chk_llm_cloud_web": "Cloud arbitration LLM (approval, web tier)",
+        "chk_model_resolution_cloud": "opencode model resolution (cloud provider)",
+        "lc_not_cloud": "not applicable (local arbitration LLM)",
+        "lc_llm_disabled": "LLM phases disabled (nothing to check)",
+        "lc_no_provider": "model_id “{model_id}”: provider not found — expected “<provider>/<model>”",
+        "lc_no_provider_hint": "Set workflow.arbitration_llm.model_id (and summary_llm.model_id) as "
+                               "<provider>/<model>, e.g. “mistral/<model>” (docs/LLM_CLOUD.md § 2.2).",
+        "lc_local_provider": "services.backend: cloud but model_id names the “local” provider ({model_id})",
+        "lc_local_provider_hint": "Pick an external provider in model_id, or set services.backend back to the "
+                                  "local LLM value.",
+        "lc_ids_differ": "the two model_ids differ (correction “{arb}”, summary “{summ}”) — only one "
+                         "provider/model is approved at a time",
+        "lc_ids_differ_hint": "Align workflow.summary_llm.model_id with workflow.arbitration_llm.model_id.",
+        "lc_no_base_url": "provider “{provider}” not in the table: unknown URL",
+        "lc_no_base_url_hint": "Set workflow.arbitration_llm.api_base (OpenAI-compatible URL ending in /v1), or "
+                               "pick a provider from the table (transcria/data/llm_providers.yaml).",
+        "lc_no_key_env": "provider “{provider}” not in the table: unknown key environment variable",
+        "lc_no_key_env_hint": "Set workflow.llm_cloud.api_key_env (the variable NAME, never the key).",
+        "lc_key_missing": "variable {env} missing, empty or malformed (whitespace/control character) — "
+                          "the key is never displayed",
+        "lc_key_missing_hint": "Set {env}=… in the service .env (one line, no line break or escape), then "
+                               "restart the service.",
+        "lc_oc_config_missing": "opencode.json not found or unreadable: {path}",
+        "lc_oc_config_hint": "Run venv/bin/python scripts/setup_opencode.py (sets share: disabled and, for a "
+                             "provider outside the table, the provider block with the key via {env:VAR}).",
+        "lc_share_not_disabled": "opencode.json ({path}): share = “{share}” (expected “disabled”) — opencode "
+                                 "could publish a session online",
+        "lc_api_key_residual": "opencode.json ({path}): provider.{provider}.options.apiKey present — in v1 it "
+                               "would override the {env} variable",
+        "lc_api_key_residual_hint": "Remove that block: a provider from the opencode catalog needs no entry in "
+                                    "opencode.json (docs/LLM_CLOUD.md § 2.1).",
+        "lc_api_key_literal": "opencode.json ({path}): provider.{provider}.options.apiKey holds a key IN CLEAR "
+                              "instead of {{env:VAR}}",
+        "lc_auth_stored": "opencode credential stored for “{provider}” in {path} — it would override {env} for "
+                          "an opencode run outside the pipeline",
+        "lc_auth_stored_hint": "The pipeline isolates XDG_DATA_HOME (its runs do not see it); to remove the "
+                               "ambiguity: opencode auth logout, or delete the entry from the file.",
+        "lc_auth_stored_v2_hint": "The pipeline isolates XDG_DATA_HOME (its runs do not see it); to remove the "
+                                  "ambiguity (opencode v2): opencode auth logout.",
+        "lc_auth_db_unreadable": "opencode v2 credentials not checked: {path} unreadable in read-only mode ({exc})",
+        "lc_auth_db_unreadable_hint": "Run the doctor again when opencode is not writing to its database; otherwise "
+                                      "opencode auth list to check that no credential targets this provider.",
+        "lc_catalog_unavailable": "opencode catalog unreadable (opencode models: {reason})",
+        "lc_catalog_unavailable_hint": "Check the opencode binary (“opencode binary” check); the model's presence "
+                                       "in its catalog could not be confirmed.",
+        "lc_catalog_missing": "“{model_id}” missing from this opencode's catalog ({count} models listed) — "
+                              "“Model unavailable” on the first run",
+        "lc_catalog_missing_hint": "Pick a listed model (opencode models {provider}), update opencode (the "
+                                   "embedded catalog follows the version), or declare a provider outside the table.",
+        "lc_provider_auth": "provider “{provider}” rejects the key ({reason})",
+        "lc_provider_auth_hint": "Check or renew the key in the provider console, update {env} in the .env, then "
+                                 "restart the service.",
+        "lc_provider_http": "unexpected response from provider “{provider}” ({reason})",
+        "lc_provider_unreachable": "provider “{provider}” unreachable from this machine ({reason})",
+        "lc_provider_unreachable_hint": "Check outbound access to {url} (corporate proxy HTTPS_PROXY in the .env, "
+                                        "outbound firewall).",
+        "lc_provider_model_missing": "“{model}” not among the {count} models served by “{provider}”",
+        "lc_provider_model_missing_hint": "The model may be retired or tied to another plan: pick a model served "
+                                          "by {provider}, then have it approved.",
+        "lc_ack_unreadable": "administrator approval unreadable in the database ({exc})",
+        "lc_ack_unreadable_hint": "Check the database (“Database” check) and apply migrations, then "
+                                  "Administration → Cloud LLM.",
+        "lc_ack_missing": "no administrator approval for {provider}/{model} — LLM phases are refused",
+        "lc_ack_stale": "administrator approval outdated (text “{version}”, current text “{current}”) — "
+                        "LLM phases are refused",
+        "lc_ack_hint": "Administration → Cloud LLM: read the notice and approve this provider/model.",
+        "lc_ok": "{provider} / {model} — {url} (key via {env}, administrator approval up to date)",
+        "lc_ok_web": "{provider} / {model} — administrator approval up to date (web tier: key and provider "
+                     "checked on the scheduler)",
+        "mr_cloud_no_provider": "no usable cloud provider in model_id (“{model_id}”)",
+        "mr_cloud_no_provider_hint": "workflow.arbitration_llm.model_id as <provider>/<model> (provider ≠ local).",
+        "mr_cloud_catalog": "“{model_id}”: provider “{provider}” from the opencode catalog — no provider block "
+                            "required",
+        "mr_cloud_no_block": "provider “{provider}” outside the table has no provider.{provider}.models.{model} "
+                             "block in {path}",
+        "mr_cloud_no_block_hint": "Run venv/bin/python scripts/setup_opencode.py (writes the openai-compatible "
+                                  "block, key via {env:VAR}).",
+        "mr_cloud_block_ok": "“{model_id}” resolves (provider {provider} outside the table, provider block in {path})",
+        "smoke_cloud_paid": "PAID CALL to provider “{provider}” ({model_id}): one request billed to your account",
+        "smoke_cloud_failed": "{paid} — opencode failed: {error}",
+        "smoke_cloud_notext": "{paid} — opencode finished without producing ANY text or file",
+        "smoke_cloud_hint": "First run the doctor without --llm-smoke (“Cloud arbitration LLM” check: key, catalog, "
+                            "approval); opencode logs with OPENCODE_PRINT_LOGS=1.",
+        "smoke_cloud_ok": "{paid} — opencode → provider → text: production confirmed",
         "in_local": "local topology — no remote node to reach",
         "in_no_node": "mode “{mode}” but no node configured (inference.nodes / inference.url)",
         "in_no_node_hint": "Set inference.nodes (or inference.url), or set inference.mode back to local.",

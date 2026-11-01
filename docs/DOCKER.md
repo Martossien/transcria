@@ -599,6 +599,17 @@ docker compose -f docker-compose.split-gpu.yml run --rm verify \
   --audio /app/tests/test2.mp3 --password "$ADMIN_PASSWORD"
 ```
 
+### LLM d'arbitrage cloud (fournisseur externe)
+
+Au lieu d'embarquer une LLM locale, le résumé et la correction peuvent passer par un fournisseur externe (passe-plat ; cf. `docs/LLM_CLOUD.md`). Aucun GPU n'est requis pour la LLM :
+
+- dans `config.yaml` : `services.backend: cloud` et le **même** `<fournisseur>/<modèle>` dans les **deux** `model_id` — `workflow.arbitration_llm.model_id` **et** `workflow.summary_llm.model_id` (le schéma refuse un `local/arbitrage` résiduel comme deux modèles différents) ; les deux blocs restent `enabled: true` ;
+- la **clé d'API** se met dans `./.env` (monté dans chaque service), sous le **nom de variable imposé par le fournisseur** (table des fournisseurs de `docs/LLM_CLOUD.md`) — jamais dans `config.yaml` ;
+- **aucun GGUF n'est téléchargé** (l'entrypoint le journalise : « LLM cloud : aucun GGUF à provisionner ») et `provider.local` d'opencode n'est pas écrit ; un fournisseur absent du catalogue opencode est déclaré avec `apiKey: {env:<VARIABLE>}` (`llm_cloud.api_key_env`) ;
+- l'usage doit être **validé par un administrateur** dans Administration → LLM cloud, sinon les phases LLM sont refusées ;
+- **redémarrer** les conteneurs (`docker compose restart`) à la bascule : l'entrypoint relit la config au démarrage ;
+- l'image **CPU** suffit : `TRANSCRIA_LLM_BACKEND=cloud ./scripts/docker_quickstart.sh --cpu` — la variable déclare l'intention **avant** la génération de `config.yaml`, pour que le quickstart ne désactive pas les blocs LLM (sans elle, `--cpu` les passe à `enabled: false` : les remettre à `true` sur les deux blocs avec `services.backend: cloud`). Les deux `model_id` restent à renseigner à la main ; STT CPU Kroko (`sherpa-onnx`). Attention : l'image CPU n'embarque **pas encore** le binaire `audiocpp_cli` (prévu « lot D ») ; la diarisation `auto` (Nemotron 3) y retombe donc sur pyannote, qui demande un `HF_TOKEN` (gated).
+
 ## Procédure de rollback
 
 - **Rollback de code SANS changement de schéma** (les deux versions partagent la même

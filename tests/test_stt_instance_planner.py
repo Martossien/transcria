@@ -82,3 +82,14 @@ def test_llm_reserved_vide_si_distante_ou_desactivee():
         "gpu": base_gpu, "workflow": _WF_LLM_ON,
         "services": {"arbitrage_llm_host": "192.168.1.42"},
     }) == {}
+
+
+def test_llm_reserved_vide_en_cloud():
+    """LLM d'arbitrage cloud (docs/LLM_CLOUD.md) : rien ne tourne ici, même avec une
+    calibration locale résiduelle et un hôte 127.0.0.1 → aucune part LLM par carte."""
+    cfg = {
+        "gpu": {"llm_gpu_indices": [0, 1], "llm_vram_mb_per_gpu": [26000, 23000]},
+        "workflow": {"summary_llm": {"enabled": True}, "arbitration_llm": {"enabled": True}},
+        "services": {"backend": "cloud", "arbitrage_llm_host": "127.0.0.1"},
+    }
+    assert llm_reserved_by_gpu(cfg) == {}
