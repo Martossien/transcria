@@ -17,7 +17,8 @@
     <dl class="row mb-0">
       <dt class="col-sm-3">{{ _('Fournisseur') }}</dt>
       <dd class="col-sm-9">{{ cloud.provider_label }} <code>{{ cloud.provider }}</code>
-        {% if not cloud.known_provider %}<span class="badge text-bg-warning">{{ _('hors table des fournisseurs connus') }}</span>{% endif %}</dd>
+        {% if cloud.provider_source == 'catalog' %}<span class="badge text-bg-warning">{{ _('catalogue opencode, non qualifié') }}</span>
+        {% elif not cloud.qualified %}<span class="badge text-bg-warning">{{ _('hors table des fournisseurs connus') }}</span>{% endif %}</dd>
       <dt class="col-sm-3">{{ _('Modèle') }}</dt>
       <dd class="col-sm-9"><code>{{ cloud.model }}</code></dd>
       <dt class="col-sm-3">{{ _('URL') }}</dt>
@@ -25,6 +26,9 @@
       <dt class="col-sm-3">{{ _('Hébergement') }}</dt>
       <dd class="col-sm-9">{{ cloud.hosting or _('non renseigné : vérifiez-le auprès du fournisseur') }}</dd>
     </dl>
+    {% if cloud.provider_source == 'catalog' %}
+    <p class="mt-3 mb-0 text-warning-emphasis" data-llm-cloud-unqualified>{{ _("Ce fournisseur vient du catalogue models.dev d'opencode : TranscrIA n'a vérifié ni son hébergement, ni sa conservation des données, ni ses conditions. Vérifiez-les vous-même avant de valider.") }}</p>
+    {% endif %}
     {% if cloud.facts %}
     <ul class="mt-3 mb-0" data-llm-cloud-facts>
       {% for fact in cloud.facts %}<li>{{ fact }}</li>{% endfor %}

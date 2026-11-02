@@ -89,7 +89,8 @@ EMPTY_GOLDENS = {
         base_url="",
         api_key_env="",
         extra_request_fields={},
-        models_endpoint="unknown",
+        provider_source="",
+        provider_label="",
     ),
 }
 

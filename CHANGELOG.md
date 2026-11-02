@@ -28,10 +28,14 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   `job_external_llm`). Migration `a7c3e9f1b2d4`. `share: disabled` posé dans `opencode.json`.
 - **Doctor** : check « LLM d'arbitrage cloud » (clé, `opencode.json`, catalogue, `GET /models`,
   validation non caduque) ; `--llm-smoke` annoncé comme appel payant. Le verdict sur la clé dit
-  ce que la sonde prouve vraiment (`models_endpoint` par fournisseur, mesuré) : « acceptée »
-  seulement si la liste des modèles exige la clé (Mistral) ; « présente mais NON vérifiée » quand
-  la liste est publique (Ollama cloud, OpenRouter) ; un fournisseur sans liste (opencode) n'est
-  pas sondé et reste disponible dès que son serveur répond. **Docker** : entrypoint
+  ce que la sonde prouve vraiment, **mesuré** à chaque passage (second appel sans clé) :
+  « acceptée » seulement si la liste des modèles exige la clé (Mistral) ; « présente mais NON
+  vérifiée » quand la liste est publique (Ollama cloud, OpenRouter) ; sans liste (opencode, 404),
+  rien n'est vérifiable et le fournisseur reste disponible dès que son serveur répond.
+  **Fournisseurs du catalogue models.dev d'opencode** (cache local, 192 résolvables : URL https
+  littérale, une seule variable, SDK OpenAI) : résolus sans dérogation de config (URL + variable
+  de clé dérivées, `api_key_env` refusé), affichés « non qualifié » dans l'écran d'administration
+  et le doctor ; `install.sh --llm-cloud` les accepte sur demande explicite. **Docker** : entrypoint
   sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
   phases LLM cloud historisées à part dans le modèle de temps.
 - **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation

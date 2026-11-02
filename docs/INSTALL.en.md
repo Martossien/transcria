@@ -154,8 +154,11 @@ provider **the administrator chose, contracted and monitors**. TranscrIA is a **
   `opencode.json`, logs or readable backups.
 - **Config**: `services.backend: cloud` and **both** `workflow.summary_llm.model_id` and
   `workflow.arbitration_llm.model_id` set to the same `<provider>/<model>` (e.g.
-  `mistral/mistral-large-4`). Provider not in the table: `workflow.arbitration_llm.api_base`
-  (https) + `workflow.llm_cloud.api_key_env`. `workflow.llm_cloud.extra_request_fields` is merged
+  `mistral/mistral-large-4`). Provider not in the table but in opencode's models.dev catalog
+  (service account's `~/.cache/opencode/models.json`, 192 providers): URL and key variable are
+  derived, nothing else to set (the key goes in the variable models.dev publishes; `api_key_env`
+  is refused), but TranscrIA has **not qualified** it (check hosting, retention and terms yourself). Provider outside both: `workflow.arbitration_llm.api_base` (https) +
+  `workflow.llm_cloud.api_key_env`. `workflow.llm_cloud.extra_request_fields` is merged
   into direct calls only. **Restart the service** to switch (also the scheduler in split).
 - **Approval**: an administrator must validate provider and model in *Administration → Cloud
   LLM* (`/admin/llm-cloud`). Until then every LLM treatment is refused; if the notice text
@@ -166,10 +169,11 @@ provider **the administrator chose, contracted and monitors**. TranscrIA is a **
 - **Behavior**: no VRAM, no local start/stop, no idle watchdog. Provider outage or revoked key =
   one automatic retry, then an explicit, relaunchable failure.
 - **Check**: `scripts/doctor.py` ("Cloud arbitration LLM"); `--llm-smoke` is a paid call. What the
-  `GET /models` probe proves depends on the provider: Mistral's list requires the key (success =
-  "key accepted"); Ollama cloud's and OpenRouter's lists are **public**, so the doctor reports
-  "key present but NOT verified" (the key is only checked at inference); opencode's provider has
-  no list at all (nothing verifiable before the first call).
+  `GET /models` probe proves is **measured** on each run (a second call without the key): a list
+  that requires the key (Mistral) makes a success mean "key accepted"; a **public** list (Ollama
+  cloud, OpenRouter) makes the doctor report "key present but NOT verified" (the key is only
+  checked at inference); no list at all (opencode's provider) means nothing is verifiable before
+  the first call. A catalog provider is flagged "NOT qualified".
 - **Zero-GPU tier**: cloud LLM + Kroko CPU STT + Nemotron 3 CPU diarization = a complete
   install without a graphics card (slower, less accurate STT; no local LLM fallback).
 - **`install.sh --llm-cloud`** (opt-in): installer phase that writes the key variable to `.env`
@@ -177,8 +181,10 @@ provider **the administrator chose, contracted and monitors**. TranscrIA is a **
   command help for the exact options. Non-interactive: `--llm-cloud-provider <id>
   --llm-cloud-model <model>` are required and the key goes through `--llm-cloud-key-env VAR`
   (name of an exported variable, never the key itself); **`sudo` strips that variable**: use
-  `sudo --preserve-env=VAR ./install.sh …`. A provider **outside the table** (OpenAI-compatible,
-  non-local `https://`) is not handled by `install.sh`: `venv/bin/python -m
+  `sudo --preserve-env=VAR ./install.sh …`. A provider from **opencode's catalog** must be asked
+  for explicitly (`--llm-cloud-provider <id>`, never picked silently) and `--llm-cloud-key-env`
+  must then be the variable models.dev publishes. A provider **outside the table and the catalog**
+  (OpenAI-compatible, non-local `https://`) is not handled by `install.sh`: `venv/bin/python -m
   transcria.installer.cli llm-cloud --config config.yaml --env-file .env --user-home <service
   HOME> --provider <id> --key-env VAR --model <model> --api-base https://…/v1`.
 

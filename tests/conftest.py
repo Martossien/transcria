@@ -199,6 +199,16 @@ def owner_id(app):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_opencode_catalog(monkeypatch, tmp_path):
+    """Aucun test ne lit le VRAI cache models.dev d'opencode de la machine (~/.cache/opencode/
+    models.json) : un fournisseur « résolu » par le catalogue de l'opérateur rendait vert en local
+    un test rouge en CI (relecture 2026-11-02). Un test qui veut un catalogue en pose un lui-même."""
+    import transcria.config.llm_providers as providers_mod
+    absent = tmp_path / "no-opencode-cache" / "models.json"
+    monkeypatch.setattr(providers_mod, "opencode_models_cache_path", lambda home=None: absent)
+
+
+@pytest.fixture(autouse=True)
 def _reset_login_rate_limiter():
     """C3.3 — le compteur anti-bourrinage est un singleton process : reset entre tests."""
     from transcria.auth.rate_limit import login_rate_limiter

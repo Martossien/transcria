@@ -1236,7 +1236,7 @@ fournisseur = une reprise automatique puis échec explicite relançable (jamais 
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `api_key_env` | string | `""` | Nom de la variable d'environnement portant la clé, **uniquement pour un fournisseur hors table** (avec `workflow.arbitration_llm.api_base` en `https://` non locale). Pour un fournisseur de la table, la variable est imposée par la table et cette clé est ignorée. Majuscules, chiffres et `_` seulement |
+| `api_key_env` | string | `""` | Nom de la variable d'environnement portant la clé. **Requis** pour un fournisseur hors table ET hors catalogue models.dev d'opencode (avec `workflow.arbitration_llm.api_base` en `https://` non locale) ; **refusé** pour un fournisseur du catalogue models.dev (opencode lit la variable publiée par models.dev : une autre variable laisserait les phases agentiques sans clé) ; **ignoré** pour un fournisseur de la table (variable imposée). Majuscules, chiffres et `_` seulement |
 | `extra_request_fields` | objet | `{}` | Champs fusionnés dans le corps des **appels directs** (`/chat/completions` du chat d'affinage, arbitrage multi-STT, extraction des champs de type) — ex. `{reasoning_effort: none}` chez Ollama cloud (qui rejette la requête sur un modèle sans raisonnement), `{zdr: true}` chez OpenRouter. `model`, `messages` et `stream` ne sont jamais écrasés. Les phases agentiques (opencode) ne le lisent pas |
 
 **Redémarrage requis :** oui — la bascule local ↔ cloud est capturée au démarrage par l'exécuteur et

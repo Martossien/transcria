@@ -17,7 +17,15 @@ config (injections lexique, backend forcé) restent sur le dict.
 """
 from dataclasses import dataclass, field
 
-from transcria.config.llm_providers import LOCAL_PROVIDER_ID, MODELS_ENDPOINT_UNKNOWN, get_llm_provider
+from transcria.config.llm_providers import (
+    LOCAL_PROVIDER_ID,
+    PROVIDER_SOURCE_CATALOG,
+    PROVIDER_SOURCE_CUSTOM,
+    PROVIDER_SOURCE_NONE,
+    PROVIDER_SOURCE_TABLE,
+    get_catalog_provider,
+    get_llm_provider,
+)
 
 
 def _section(cfg: dict, *path: str) -> dict:
@@ -185,14 +193,19 @@ def _split_model_ref(model_id: str) -> tuple[str, str]:
     return provider.strip().lower(), model.strip()
 
 
+# Défaut historique de `workflow.arbitration_llm.api_base` (loader) : l'endpoint de la LLM locale.
+_LOCAL_LLM_DEFAULT_API_BASE = "http://127.0.0.1:8080/v1"
+
+
 @dataclass(frozen=True)
 class LlmCloudView:
     """LLM d'arbitrage chez un FOURNISSEUR EXTERNE (``services.backend: cloud``, docs/LLM_CLOUD.md).
 
     L'UNIQUE endroit qui lit ``workflow.llm_cloud.*`` et découpe les deux ``model_id``
-    (``<fournisseur>/<modèle>``). Résolution de l'URL et de la variable de clé : table des
-    fournisseurs (``transcria/data/llm_providers.yaml``) > dérogations de config pour un
-    fournisseur NON listé (``workflow.arbitration_llm.api_base`` + ``workflow.llm_cloud.api_key_env``).
+    (``<fournisseur>/<modèle>``). Résolution de l'URL et de la variable de clé, dans l'ordre
+    (``provider_source``) : table des fournisseurs qualifiés (``transcria/data/llm_providers.yaml``)
+    > catalogue models.dev d'opencode (cache local : URL ``api`` + variable ``env``) > dérogations
+    de config (``workflow.arbitration_llm.api_base`` + ``workflow.llm_cloud.api_key_env``).
     La vue ne dit PAS si le backend cloud est actif (c'est ``arbitrage_endpoint.is_cloud_backend``).
     """
 
@@ -200,13 +213,17 @@ class LlmCloudView:
     model: str                    # modèle nu pour l'API directe (premier segment retiré)
     summary_provider: str         # premier segment du model_id de résumé
     summary_model: str
-    known_provider: bool          # le fournisseur est dans la table
+    known_provider: bool          # connu d'opencode (table OU catalogue) : aucun bloc opencode.json requis
     base_url: str                 # URL OpenAI-compatible effective ("" si indéterminable)
     api_key_env: str              # variable d'environnement qui porte la clé ("" si inconnue)
     extra_request_fields: dict = field(default_factory=dict)
-    # Ce que prouve `GET /models` chez ce fournisseur (table : authenticated/public/none ;
-    # hors table : unknown — rien n'est présumé sur la clé). Cf. llm_providers.MODELS_ENDPOINT_*.
-    models_endpoint: str = MODELS_ENDPOINT_UNKNOWN
+    provider_source: str = PROVIDER_SOURCE_NONE   # table | catalog | custom | "" (aucun fournisseur)
+    provider_label: str = ""                      # libellé affichable (table/catalogue), sinon l'identifiant
+
+    @property
+    def qualified(self) -> bool:
+        """Fournisseur de la table : faits d'hébergement/conservation connus et affichés."""
+        return self.provider_source == PROVIDER_SOURCE_TABLE
 
     @property
     def is_local_provider(self) -> bool:
@@ -226,19 +243,34 @@ class LlmCloudView:
             # Sinon un résumé cloud lirait le fournisseur « local » et échouerait toujours.
             provider, model = s_provider, s_model
         listed = get_llm_provider(provider)
+        catalog = get_catalog_provider(provider) if (provider and listed is None) else None
         api_base = str(arb.get("api_base") or "").strip().rstrip("/")
         key_env = str(cloud.get("api_key_env") or "").strip()
         extra = cloud.get("extra_request_fields")
+        if listed is not None:
+            source, base_url, env_name, label = PROVIDER_SOURCE_TABLE, listed.base_url, listed.api_key_env, listed.label
+        elif catalog is not None:
+            # Catalogue : URL ET variable viennent de models.dev — c'est ce qu'opencode lit lui-même
+            # (sa base d'identifiants est masquée par le XDG_DATA_HOME de chaque run) ; une autre
+            # variable ou un `api_base` de config ne seraient suivis que par nos appels directs.
+            source, base_url, env_name, label = PROVIDER_SOURCE_CATALOG, catalog.base_url, catalog.api_key_env, catalog.label
+        elif provider:
+            # Hors table et hors catalogue : la dérogation de config est l'UNIQUE source. Le défaut
+            # du loader (LLM LOCALE sur 8080) n'est JAMAIS une URL cloud : cache models.dev absent
+            # ⇒ vue SANS URL, plutôt qu'un Bearer envoyé à ce qui écoute sur 8080.
+            cloud_base = "" if api_base.rstrip("/") == _LOCAL_LLM_DEFAULT_API_BASE else api_base
+            source, base_url, env_name, label = PROVIDER_SOURCE_CUSTOM, cloud_base, key_env, provider
+        else:
+            source, base_url, env_name, label = PROVIDER_SOURCE_NONE, "", key_env, ""
         return cls(
             provider=provider,
             model=model,
             summary_provider=s_provider,
             summary_model=s_model,
-            known_provider=listed is not None,
-            # Fournisseur listé : la table fait foi (api_base garde son défaut local, non lu).
-            # Non listé : la dérogation api_base est l'UNIQUE source. Aucun fournisseur : "".
-            base_url=listed.base_url if listed else (api_base if provider else ""),
-            api_key_env=(listed.api_key_env if listed else "") or key_env,
+            known_provider=source in (PROVIDER_SOURCE_TABLE, PROVIDER_SOURCE_CATALOG),
+            base_url=base_url,
+            api_key_env=env_name,
             extra_request_fields=dict(extra) if isinstance(extra, dict) else {},
-            models_endpoint=listed.models_endpoint if listed else MODELS_ENDPOINT_UNKNOWN,
+            provider_source=source,
+            provider_label=label,
         )

@@ -89,12 +89,49 @@ class TestLlmCloudView:
     def test_is_local_provider(self):
         assert LlmCloudView.from_config(_cloud("local/arbitrage")).is_local_provider is True
 
-    def test_models_endpoint_table_ou_unknown(self):
-        assert LlmCloudView.from_config(_cloud()).models_endpoint == "authenticated"
-        assert LlmCloudView.from_config(_cloud("ollama-cloud/glm-5.2")).models_endpoint == "public"
-        assert LlmCloudView.from_config(_cloud("opencode/un-modele")).models_endpoint == "none"
-        assert LlmCloudView.from_config(_cloud("fakeprov/x")).models_endpoint == "unknown"
-        assert LlmCloudView.from_config({}).models_endpoint == "unknown"
+    def test_provider_source_table_custom_aucun(self):
+        table = LlmCloudView.from_config(_cloud())
+        assert table.provider_source == "table" and table.qualified and table.known_provider
+        assert table.provider_label == "Mistral — La Plateforme"
+        custom = LlmCloudView.from_config(_cloud("fakeprov/x"))
+        assert custom.provider_source == "custom" and not custom.qualified and not custom.known_provider
+        assert custom.provider_label == "fakeprov"
+
+    def test_custom_sans_cache_ne_recupere_jamais_le_defaut_local(self):
+        """Cache models.dev absent (image neuve) + fournisseur hors table : `api_base` vaut le
+        DÉFAUT du loader (LLM locale 8080) — la vue reste SANS URL plutôt que d'y envoyer un Bearer."""
+        cfg = _cloud("deepseek/deepseek-chat")
+        cfg["workflow"]["arbitration_llm"]["api_base"] = "http://127.0.0.1:8080/v1"   # défaut du loader
+        v = LlmCloudView.from_config(cfg)
+        assert v.provider_source == "custom" and v.base_url == ""
+        cfg["workflow"]["arbitration_llm"]["api_base"] = "https://llm.exemple.test/v1/"
+        assert LlmCloudView.from_config(cfg).base_url == "https://llm.exemple.test/v1"
+        empty = LlmCloudView.from_config({})
+        assert empty.provider_source == "" and empty.provider_label == ""
+
+    def test_provider_source_catalogue_opencode(self, monkeypatch, tmp_path):
+        """Fournisseur absent de la table mais présent dans le cache models.dev d'opencode :
+        URL et variable DÉRIVÉES, connu d'opencode (aucun bloc opencode.json), NON qualifié."""
+        import json
+        import transcria.config.llm_providers as providers_mod
+        path = tmp_path / "models.json"
+        path.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"], "npm": "@ai-sdk/openai-compatible",
+                                                 "api": "https://api.deepseek.com", "models": {"deepseek-chat": {}}}}),
+                        encoding="utf-8")
+        monkeypatch.setattr(providers_mod, "opencode_models_cache_path", lambda home=None: path)
+        v = LlmCloudView.from_config(_cloud("deepseek/deepseek-chat"))
+        assert v.provider_source == "catalog" and v.known_provider and not v.qualified
+        assert v.base_url == "https://api.deepseek.com" and v.api_key_env == "DEEPSEEK_API_KEY"
+        assert v.provider_label == "DeepSeek"
+        # Ni api_key_env ni api_base de config ne s'appliquent : opencode lit models.dev, et nos
+        # appels directs doivent aller au MÊME endroit avec la MÊME variable (relecture 2026-11-02).
+        cfg = _cloud("deepseek/deepseek-chat")
+        cfg["workflow"]["llm_cloud"] = {"api_key_env": "MA_CLE"}
+        cfg["workflow"]["arbitration_llm"]["api_base"] = "https://autre.example/v1"
+        v2 = LlmCloudView.from_config(cfg)
+        assert v2.api_key_env == "DEEPSEEK_API_KEY" and v2.base_url == "https://api.deepseek.com"
+        # La table GAGNE sur le catalogue (Mistral y est sans URL : SDK dédié).
+        assert LlmCloudView.from_config(_cloud()).provider_source == "table"
 
     @pytest.mark.parametrize("raw,exp", [("", ("", "")), ("abc", ("", "abc")), ("A/B", ("a", "B")), (None, ("", ""))])
     def test_split(self, raw, exp):
@@ -323,22 +360,125 @@ class TestCloudBackend:
         b = lb.CloudLLMBackend(_cloud())
         assert b.is_loaded() is False and b.unload() is True and b.shutdown() is True
 
-    def test_models_endpoint_suit_la_table(self):
-        assert lb.CloudLLMBackend(_cloud()).models_endpoint == "authenticated"
-        assert lb.CloudLLMBackend(_cloud("ollama-cloud/glm-5.2")).models_endpoint == "public"
-        assert lb.CloudLLMBackend(_cloud("opencode/un-modele")).models_endpoint == "none"
-        assert lb.CloudLLMBackend(_cloud("fakeprov/modele-test")).models_endpoint == "unknown"
+    def test_probe_liste_exigeant_la_cle(self, monkeypatch):
+        """200 avec la clé, 401 sans : la liste PROUVE la clé (Mistral, mesuré 2026-11-01)."""
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+        calls = []
+
+        def fake_get(url, timeout=5, **kw):
+            calls.append(kw.get("headers") or {})
+            if "Authorization" in (kw.get("headers") or {}):
+                return _Resp(200, {"data": [{"id": "m1"}]})
+            return _Resp(401, text="Unauthorized")
+
+        monkeypatch.setattr(requests, "get", fake_get)
+        b = lb.CloudLLMBackend(_cloud())
+        probe = b.probe_models(measure_key_requirement=True)
+        assert probe.ids == ("m1",) and probe.error is None and probe.status == 200
+        assert probe.list_kind == lb.MODELS_LIST_AUTHENTICATED and probe.key_proven
+        assert len(calls) == 2 and "Authorization" not in calls[1]   # second appel SANS clé
+        calls.clear()
+        assert b.is_available() is True
+        assert len(calls) == 1          # disponibilité avant une phase : UN seul appel, avec la clé
+        assert b.probe_models().list_kind == lb.MODELS_LIST_UNKNOWN   # sans mesure, rien n'est présumé
+
+    def test_probe_liste_publique_ne_prouve_pas_la_cle(self, monkeypatch):
+        """200 avec ET sans clé (Ollama cloud, OpenRouter, mesurés) : clé non vérifiée."""
+        monkeypatch.setenv("OLLAMA_API_KEY", "sk-secret")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(200, {"data": [{"id": "glm-5.2"}]}))
+        probe = lb.CloudLLMBackend(_cloud("ollama-cloud/glm-5.2")).probe_models(measure_key_requirement=True)
+        assert probe.list_kind == lb.MODELS_LIST_PUBLIC and not probe.key_proven
+        assert probe.ids == ("glm-5.2",) and probe.error is None
+
+    def test_probe_second_appel_illisible_ne_presume_rien(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: (
+            _Resp(200, {"data": [{"id": "m1"}]}) if "Authorization" in (kw.get("headers") or {}) else _Resp(503)))
+        probe = lb.CloudLLMBackend(_cloud()).probe_models(measure_key_requirement=True)
+        assert probe.list_kind == lb.MODELS_LIST_UNKNOWN and not probe.key_proven and probe.error is None
 
     def test_fournisseur_sans_liste_disponible_des_que_le_serveur_repond(self, monkeypatch):
-        """opencode : GET /models → 404 (mesuré 2026-11-01). Exiger un 200 rendrait ce fournisseur
+        """opencode : GET /models → 404 (mesuré 2026-11-01). Exiger un 200 rendait ce fournisseur
         indisponible à CHAQUE phase ; « le serveur répond » suffit, la clé est jugée à l'inférence."""
         monkeypatch.setenv("OPENCODE_API_KEY", "sk-secret")
-        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(404, text="Not Found"))
+        calls = []
+
+        def fake_get(url, timeout=5, **kw):
+            calls.append(url)
+            return _Resp(404, text="Not Found")
+
+        monkeypatch.setattr(requests, "get", fake_get)
         b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
-        assert b.is_reachable() == (True, None)
+        probe = b.probe_models(measure_key_requirement=True)
+        assert probe.list_kind == lb.MODELS_LIST_NONE and probe.error is None and probe.status == 404
+        assert len(calls) == 1          # pas de second appel sans liste
         assert b.is_available() is True and b.ensure_available() is True
 
-    def test_fournisseur_sans_liste_injoignable_reste_indisponible(self, monkeypatch, caplog):
+    def test_404_hors_table_reste_une_panne(self, monkeypatch, caplog):
+        """Hors table, un 404 n'est PAS « pas de liste » : c'est l'`api_base` sans /v1 silencieux."""
+        monkeypatch.setenv("MAISON_KEY", "sk-secret")
+        cfg = _cloud("maison/m1")
+        cfg["workflow"]["arbitration_llm"]["api_base"] = "https://llm.exemple.test"
+        cfg["workflow"]["llm_cloud"] = {"api_key_env": "MAISON_KEY"}
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(404, text="Not Found"))
+        b = lb.CloudLLMBackend(cfg)
+        probe = b.probe_models(measure_key_requirement=True)
+        assert probe.error and probe.status == 404 and probe.list_kind != lb.MODELS_LIST_NONE
+        with caplog.at_level(logging.ERROR):
+            assert b.is_available() is False
+
+    def test_200_non_json_porte_le_statut_200(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+
+        class _Html:
+            status_code, text = 200, "<html>portail captif</html>"
+
+            def json(self):
+                raise ValueError("pas du JSON")
+
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Html())
+        probe = lb.CloudLLMBackend(_cloud()).probe_models()
+        assert probe.status == 200 and probe.error and "non-JSON" in probe.error
+
+    def test_200_sans_data_avec_mesure(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: (
+            _Resp(200, {"object": "list"}) if "Authorization" in (kw.get("headers") or {}) else _Resp(401)))
+        probe = lb.CloudLLMBackend(_cloud()).probe_models(measure_key_requirement=True)
+        assert probe.ids == () and probe.error is None and probe.list_kind == lb.MODELS_LIST_AUTHENTICATED
+
+    def test_second_appel_bloque_netrc(self, monkeypatch):
+        """Le GET sans clé passe `auth=_no_auth` : `requests` ne lit pas ~/.netrc (sinon une entrée
+        pour l'hôte « authentifierait » l'appel et la liste paraîtrait publique à tort)."""
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
+        seen = []
+
+        def fake_get(url, timeout=5, **kw):
+            seen.append(kw)
+            return _Resp(200, {"data": [{"id": "m1"}]}) if "headers" in kw and "Authorization" in kw["headers"] else _Resp(401)
+
+        monkeypatch.setattr(requests, "get", fake_get)
+        lb.CloudLLMBackend(_cloud()).probe_models(measure_key_requirement=True)
+        assert "auth" not in seen[0] and seen[1]["auth"] is lb._no_auth
+        assert "Authorization" not in seen[1]["headers"]
+
+    def test_refus_journalise_le_statut_seul(self, monkeypatch, caplog):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret-valeur")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(401, text="Incorrect key sk-secret-valeur"))
+        with caplog.at_level(logging.ERROR):
+            assert lb.CloudLLMBackend(_cloud()).is_available() is False
+        assert "statut HTTP 401" in caplog.text and "sk-secret-valeur" not in caplog.text and "Incorrect" not in caplog.text
+
+    def test_cle_refusee_indisponible_statut_porte(self, monkeypatch, caplog):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret-valeur")
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(401, text="bad key sk-secret-valeur"))
+        b = lb.CloudLLMBackend(_cloud())
+        probe = b.probe_models()
+        assert probe.error and probe.status == 401 and probe.ids is None
+        with caplog.at_level(logging.ERROR):
+            assert b.is_available() is False
+
+    def test_fournisseur_injoignable_reste_indisponible(self, monkeypatch, caplog):
         monkeypatch.setenv("OPENCODE_API_KEY", "sk-secret-valeur")
 
         def boom(url, timeout=5, **kw):
@@ -346,22 +486,21 @@ class TestCloudBackend:
 
         monkeypatch.setattr(requests, "get", boom)
         b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
-        ok, err = b.is_reachable()
-        assert ok is False and "connexion" in err
+        probe = b.probe_models()
+        assert probe.error and "connexion" in probe.error and probe.status == 0
         with caplog.at_level(logging.ERROR):
             assert b.is_available() is False
         assert "sk-secret-valeur" not in caplog.text
 
-    def test_fournisseur_avec_liste_un_404_reste_une_indisponibilite(self, monkeypatch):
-        monkeypatch.setenv("MISTRAL_API_KEY", "sk-secret")
-        monkeypatch.setattr(requests, "get", lambda url, timeout=5, **kw: _Resp(404, text="Not Found"))
-        assert lb.CloudLLMBackend(_cloud()).is_available() is False
-
-    def test_sans_cle_meme_sans_liste_indisponible_sans_reseau(self, monkeypatch):
+    def test_sans_cle_indisponible_sans_reseau_meme_sans_liste(self, monkeypatch):
         monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
         monkeypatch.setattr(requests, "get", lambda *a, **k: pytest.fail("pas de réseau sans clé"))
         b = lb.CloudLLMBackend(_cloud("opencode/un-modele"))
-        assert b.is_reachable()[0] is False and b.is_available() is False
+        assert b.probe_models().error and b.is_available() is False
+
+    def test_url_irresolue_probe(self):
+        probe = lb.CloudLLMBackend(_cloud("fakeprov/modele-test")).probe_models()
+        assert probe.error and "non résolue" in probe.error
 
     def test_http_get_sans_headers_compat_doublures(self, monkeypatch):
         seen = {}

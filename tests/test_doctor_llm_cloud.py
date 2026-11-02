@@ -14,6 +14,7 @@ from builders import make_config
 
 from transcria.diagnostics import doctor as doc
 from transcria.diagnostics.checks import llm_cloud as lc
+from transcria.gpu.llm_backend import ModelsProbe
 from transcria.llm_cloud.policy import CLOUD_NOTICE_TEXT_VERSION
 
 SECRET = "sk-secret-VALEUR-123"
@@ -42,6 +43,15 @@ def _valid_ack(cfg, provider, model):
     return {"provider": provider, "model": model, "text_version": CLOUD_NOTICE_TEXT_VERSION, "revoked_at": None}
 
 
+def _listed(*ids, kind="authenticated"):
+    """Sonde nominale : la liste répond avec la clé, et son exigence de clé est ``kind``."""
+    return ModelsProbe(ids=tuple(ids), status=200, list_kind=kind)
+
+
+def _refused(status):
+    return ModelsProbe(error=f"statut HTTP {status}", status=status)
+
+
 def _probes(**over):
     """Sondes nominales (tout est vert) ; chaque test en remplace une."""
     probes = {
@@ -52,7 +62,7 @@ def _probes(**over):
         "db_path": "/x/opencode.db",
         "db_reader": lambda path: None,
         "catalog_probe": lambda cfg: [MODEL_ID, "mistral/autre"],
-        "provider_probe": lambda cfg: (["mistral-large-4", "autre"], None),
+        "provider_probe": lambda cfg: _listed("mistral-large-4", "autre"),
         "ack_reader": _valid_ack,
     }
     probes.update(over)
@@ -118,7 +128,7 @@ def test_liste_publique_ne_dit_jamais_cle_valide(monkeypatch):
     déduirait « clé valide » mentirait sur une clé révoquée — il dit « présente, NON vérifiée »."""
     monkeypatch.setenv("OLLAMA_API_KEY", SECRET)
     res = lc.check_llm_cloud(_ollama_cfg(), **_probes(
-        catalog_probe=lambda c: ["ollama-cloud/glm-5.2"], provider_probe=lambda c: (["glm-5.2", "kimi-k3"], None)))
+        catalog_probe=lambda c: ["ollama-cloud/glm-5.2"], provider_probe=lambda c: _listed("glm-5.2", "kimi-k3", kind="public")))
     assert res.status == doc.OK, res
     assert "clé OLLAMA_API_KEY présente mais NON vérifiée" in res.detail
     assert "acceptée" not in res.detail
@@ -129,18 +139,19 @@ def test_liste_publique_ne_dit_jamais_cle_valide(monkeypatch):
 def test_liste_publique_garde_ses_verdicts_modele_et_401(monkeypatch):
     monkeypatch.setenv("OLLAMA_API_KEY", SECRET)
     probes = _probes(catalog_probe=lambda c: ["ollama-cloud/glm-5.2"])
-    absent = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: (["autre"], None)})
+    absent = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: _listed("autre", kind="public")})
     assert absent.status == doc.FAIL and "glm-5.2" in absent.detail
-    refuse = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: (None, "statut HTTP 401")})
+    refuse = lc.check_llm_cloud(_ollama_cfg(), **{**probes, "provider_probe": lambda c: _refused(401)})
     assert refuse.status == doc.FAIL and "refuse la clé" in refuse.detail
 
 
-def test_fournisseur_sans_liste_ne_sonde_pas_et_le_dit(monkeypatch):
-    """opencode : pas de GET /models (404 mesuré). Aucune sonde ; ni clé ni modèle vérifiables."""
+def test_fournisseur_sans_liste_le_dit(monkeypatch):
+    """opencode : GET /models → 404 (mesuré). Ni clé ni modèle vérifiables ; pas un échec."""
     monkeypatch.setenv("OPENCODE_API_KEY", SECRET)
     mid = "opencode/un-modele"
     cfg = _cloud_cfg(workflow={"arbitration_llm": {"model_id": mid}, "summary_llm": {"model_id": mid}})
-    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: [mid], provider_probe=_boom))
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: [mid],
+                                            provider_probe=lambda c: ModelsProbe(status=404, list_kind="none")))
     assert res.status == doc.OK, res
     assert "n'expose pas de liste des modèles" in res.detail
     assert "--llm-smoke" in res.detail
@@ -155,13 +166,85 @@ def test_fournisseur_hors_table_ne_presume_rien_sur_la_cle(monkeypatch):
         "summary_llm": {"model_id": "maison/m1"},
         "llm_cloud": {"api_key_env": "MAISON_KEY"},
     })
-    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: ["maison/m1"], provider_probe=lambda c: (["m1"], None)))
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: ["maison/m1"], provider_probe=lambda c: _listed("m1", kind="public")))
     assert res.status == doc.OK, res
-    assert "hors table" in res.detail and "acceptée" not in res.detail
+    assert "hors table et hors catalogue" in res.detail and "acceptée" not in res.detail
+
+
+def test_fournisseur_hors_table_liste_exigeant_la_cle_prouve_la_cle(monkeypatch):
+    """Hors table, rien n'est présumé : c'est la MESURE qui décide (401 sans clé ⇒ acceptée)."""
+    monkeypatch.setenv("MAISON_KEY", SECRET)
+    cfg = _cloud_cfg(workflow={
+        "arbitration_llm": {"model_id": "maison/m1", "api_base": "https://llm.exemple.test/v1"},
+        "summary_llm": {"model_id": "maison/m1"},
+        "llm_cloud": {"api_key_env": "MAISON_KEY"},
+    })
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: ["maison/m1"], provider_probe=lambda c: _listed("m1")))
+    assert res.status == doc.OK and "clé MAISON_KEY acceptée" in res.detail
+
+
+def test_404_hors_table_est_un_warn_pas_rien_de_verifiable(monkeypatch):
+    """`api_base` sans /v1 : le 404 reste une réponse inattendue (WARN), jamais « pas de liste »."""
+    monkeypatch.setenv("MAISON_KEY", SECRET)
+    cfg = _cloud_cfg(workflow={
+        "arbitration_llm": {"model_id": "maison/m1", "api_base": "https://llm.exemple.test"},
+        "summary_llm": {"model_id": "maison/m1"},
+        "llm_cloud": {"api_key_env": "MAISON_KEY"},
+    })
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: ["maison/m1"], provider_probe=lambda c: _refused(404)))
+    assert res.status == doc.WARN and "réponse inattendue" in res.detail and "n'expose pas" not in res.detail
+
+
+def test_bloc_residuel_pour_un_fournisseur_du_catalogue_a_une_autre_url_est_un_warn(monkeypatch, tmp_path):
+    import json
+    import transcria.config.llm_providers as providers_mod
+    path = tmp_path / "models.json"
+    path.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"], "npm": "@ai-sdk/openai-compatible",
+                                             "api": "https://api.deepseek.com", "models": {"deepseek-chat": {}}}}), encoding="utf-8")
+    monkeypatch.setattr(providers_mod, "opencode_models_cache_path", lambda home=None: path)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", SECRET)
+    mid = "deepseek/deepseek-chat"
+    cfg = _cloud_cfg(workflow={"arbitration_llm": {"model_id": mid}, "summary_llm": {"model_id": mid}})
+    reader = lambda p: {"share": "disabled", "provider": {"deepseek": {"options": {"baseURL": "https://ancien.example/v1", "apiKey": "{env:DEEPSEEK_API_KEY}"}}}}  # noqa: E731
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: [mid], provider_probe=lambda c: _listed("deepseek-chat"),
+                                            opencode_config_reader=reader))
+    assert res.status == doc.WARN and "https://ancien.example/v1" in res.detail and "api.deepseek.com" in res.detail
+    _assert_no_secret(res)
+
+
+def test_second_appel_illisible_verdict_non_verifiee():
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: _listed("mistral-large-4", kind="unknown")))
+    assert res.status == doc.OK and "clé non vérifiée" in res.detail and "acceptée" not in res.detail
+
+
+def test_fournisseur_du_catalogue_opencode_est_dit_non_qualifie(monkeypatch, tmp_path):
+    """deepseek n'est pas dans la table mais dans le cache models.dev d'opencode : résolu
+    (URL + variable), aucun bloc opencode.json exigé, et le doctor dit « NON qualifié »."""
+    import json
+    import transcria.config.llm_providers as providers_mod
+    path = tmp_path / "models.json"
+    path.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"], "npm": "@ai-sdk/openai-compatible",
+                                             "api": "https://api.deepseek.com", "models": {"deepseek-chat": {}}}}),
+                    encoding="utf-8")
+    monkeypatch.setattr(providers_mod, "opencode_models_cache_path", lambda home=None: path)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", SECRET)
+    mid = "deepseek/deepseek-chat"
+    cfg = _cloud_cfg(workflow={"arbitration_llm": {"model_id": mid}, "summary_llm": {"model_id": mid}})
+    res = lc.check_llm_cloud(cfg, **_probes(catalog_probe=lambda c: [mid], provider_probe=lambda c: _listed("deepseek-chat")))
+    assert res.status == doc.OK, res
+    assert "https://api.deepseek.com" in res.detail
+    assert "catalogue models.dev d'opencode, NON qualifié" in res.detail
+    # Un bloc opencode.json avec {env:…} est toléré pour un fournisseur du catalogue, un littéral non.
+    tol = _probes(catalog_probe=lambda c: [mid], provider_probe=lambda c: _listed("deepseek-chat"),
+                  opencode_config_reader=lambda p: {"share": "disabled", "provider": {"deepseek": {"options": {"apiKey": "{env:DEEPSEEK_API_KEY}"}}}})
+    assert lc.check_llm_cloud(cfg, **tol).status == doc.OK
+    lit = dict(tol, opencode_config_reader=lambda p: {"share": "disabled", "provider": {"deepseek": {"options": {"apiKey": "sk-litteral"}}}})
+    assert lc.check_llm_cloud(cfg, **lit).status == doc.FAIL
+    _assert_no_secret(res)
 
 
 def test_fournisseur_non_sonde_verdict_non_verifiee():
-    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: (None, "connexion refusée/coupée: x")))
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: ModelsProbe(error="connexion refusée/coupée: x")))
     assert res.status == doc.WARN
     assert "non vérifiée (fournisseur non sondé)" in res.detail
     assert "acceptée" not in res.detail
@@ -213,7 +296,7 @@ def test_unlisted_provider_without_api_base_fails():
     cfg = _cloud_cfg(workflow={"arbitration_llm": {"model_id": "maison/m1", "api_base": ""},
                                "summary_llm": {"model_id": "maison/m1"}})
     res = lc.check_llm_cloud(cfg, **_probes(ack_reader=_boom))
-    assert res.status == doc.FAIL and "hors table" in res.detail and "api_base" in res.hint
+    assert res.status == doc.FAIL and "ni dans la table ni dans le catalogue" in res.detail and "api_base" in res.hint
 
 
 def test_unlisted_provider_without_key_env_fails():
@@ -269,7 +352,7 @@ def test_unlisted_provider_literal_api_key_fails_env_reference_passes(monkeypatc
         "llm_cloud": {"api_key_env": "MAISON_KEY"}})
     literal = {"share": "disabled", "provider": {"maison": {"options": {"apiKey": "k-maison"}}}}
     env_ref = {"share": "disabled", "provider": {"maison": {"options": {"apiKey": "{env:MAISON_KEY}"}}}}
-    ok_probes = {"catalog_probe": lambda c: ["maison/m1"], "provider_probe": lambda c: (["m1"], None)}
+    ok_probes = {"catalog_probe": lambda c: ["maison/m1"], "provider_probe": lambda c: _listed("m1")}
     res = lc.check_llm_cloud(cfg, **_probes(opencode_config_reader=lambda p: literal, **ok_probes))
     assert res.status == doc.FAIL and "EN CLAIR" in res.detail and "{env:VAR}" in res.detail
     assert "k-maison" not in res.detail
@@ -409,30 +492,30 @@ def test_default_catalog_probe_timeout_kills_the_process_group(monkeypatch):
 
 @pytest.mark.parametrize("status", [401, 403])
 def test_provider_rejects_key_fails(status):
-    probe = lambda cfg: (None, f"statut HTTP {status}: Unauthorized")  # noqa: E731
+    probe = lambda cfg: ModelsProbe(error=f"statut HTTP {status}: Unauthorized", status=status)  # noqa: E731
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=probe, ack_reader=_boom))
     assert res.status == doc.FAIL and "refuse la clé" in res.detail
 
 
 def test_provider_unreachable_is_warn():
-    probe = lambda cfg: (None, "résolution DNS impossible: api.mistral.ai")  # noqa: E731
+    probe = lambda cfg: ModelsProbe(error="résolution DNS impossible: api.mistral.ai")  # noqa: E731
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=probe))
     assert res.status == doc.WARN and "injoignable" in res.detail
     assert "HTTPS_PROXY" in res.hint
 
 
 def test_provider_other_http_error_is_warn():
-    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: (None, "statut HTTP 503: busy")))
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: _refused(503)))
     assert res.status == doc.WARN and "réponse inattendue" in res.detail
 
 
 def test_model_not_served_by_provider_fails():
-    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: (["autre"], None), ack_reader=_boom))
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: _listed("autre"), ack_reader=_boom))
     assert res.status == doc.FAIL and "absent des 1 modèles" in res.detail
 
 
 def test_empty_provider_list_is_not_conclusive():
-    assert lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: ([], None))).status == doc.OK
+    assert lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lambda c: _listed())).status == doc.OK
 
 
 def test_default_provider_probe_uses_bearer_and_never_leaks_key(monkeypatch):
@@ -444,6 +527,7 @@ def test_default_provider_probe_uses_bearer_and_never_leaks_key(monkeypatch):
 
     def fake_get(url, timeout=None, headers=None):
         calls["url"], calls["headers"] = url, headers
+        calls["n"] = calls.get("n", 0) + 1
         return _Resp()
 
     import requests
@@ -452,19 +536,44 @@ def test_default_provider_probe_uses_bearer_and_never_leaks_key(monkeypatch):
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lc._probe_provider_models, ack_reader=_boom))
     assert calls["url"] == "https://api.mistral.ai/v1/models"
     assert calls["headers"] == {"Authorization": f"Bearer {SECRET}"}
+    assert calls["n"] == 1            # refus avec la clé : aucun second appel
     assert res.status == doc.FAIL
     _assert_no_secret(res)
 
 
+def test_default_provider_probe_measures_whether_the_list_requires_the_key(monkeypatch):
+    """La sonde réelle fait un SECOND appel sans clé pour mesurer ce que la liste prouve."""
+    seen = []
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code, self.text = code, "x"
+
+        def json(self):
+            return {"data": [{"id": "mistral-large-4"}]}
+
+    def fake_get(url, timeout=None, headers=None, **kw):
+        seen.append(headers or {})
+        return _Resp(200 if "Authorization" in (headers or {}) else 401)
+
+    import requests
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=lc._probe_provider_models))
+    assert len(seen) == 2 and "Authorization" not in seen[1]
+    assert res.status == doc.OK and "clé MISTRAL_API_KEY acceptée" in res.detail
+    _assert_no_secret(res)
+
+
 def test_401_body_with_partially_masked_key_is_not_reported():
-    probe = lambda cfg: (None, "statut HTTP 401: Incorrect API key provided: sk-ab...wxyz")  # noqa: E731
+    probe = lambda cfg: ModelsProbe(error="statut HTTP 401: Incorrect API key provided: sk-ab...wxyz", status=401)  # noqa: E731
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=probe, ack_reader=_boom))
     assert res.status == doc.FAIL and "statut HTTP 401" in res.detail
     assert "sk-ab" not in res.detail and "wxyz" not in res.detail and "Incorrect" not in res.detail
 
 
 def test_key_like_patterns_are_scrubbed_even_if_not_the_configured_key():
-    probe = lambda cfg: (None, "statut HTTP 502: echo sk-ab…wxyz12 / Authorization: Bearer abc.DEF-123")  # noqa: E731
+    probe = lambda cfg: ModelsProbe(error="statut HTTP 502: echo sk-ab…wxyz12 / Authorization: Bearer abc.DEF-123", status=502)  # noqa: E731
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=probe))
     assert res.status == doc.WARN
     assert "sk-ab" not in res.detail and "abc.DEF-123" not in res.detail
@@ -472,7 +581,7 @@ def test_key_like_patterns_are_scrubbed_even_if_not_the_configured_key():
 
 
 def test_secret_echoed_by_a_probe_is_masked():
-    probe = lambda cfg: (None, f"connexion refusée/coupée: {SECRET}")  # noqa: E731
+    probe = lambda cfg: ModelsProbe(error=f"connexion refusée/coupée: {SECRET}")  # noqa: E731
     res = lc.check_llm_cloud(_cloud_cfg(), **_probes(provider_probe=probe))
     assert res.status == doc.WARN
     _assert_no_secret(res)

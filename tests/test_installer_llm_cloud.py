@@ -235,6 +235,77 @@ class TestNonInteractif:
         with pytest.raises(LlmCloudPhaseError, match="--provider"):
             _run(_plan(tmp_path, model="m"), runner=runner)
 
+    def test_fournisseur_du_catalogue_opencode_sous_le_home_du_service(self, tmp_path):
+        """deepseek : absent de la table, présent dans le cache models.dev d'opencode DU COMPTE DE
+        SERVICE → clé copiée de son magasin, variable du catalogue, ni api_base ni bloc opencode.json."""
+        cache = tmp_path / "svc-home" / ".cache" / "opencode" / "models.json"
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"], "npm": "@ai-sdk/openai-compatible",
+                                                  "api": "https://api.deepseek.com", "models": {"deepseek-chat": {}}}}),
+                         encoding="utf-8")
+        runner = _Runner(export=[
+            {"integrationID": "deepseek", "active": True, "value": {"type": "key", "key": SECRET}},
+        ])
+        # Un fournisseur du catalogue ne se choisit jamais en silence : il est DEMANDÉ.
+        plan = _plan(tmp_path, provider="deepseek", model="deepseek-chat")
+        result, console = _run(plan, runner=runner)
+
+        assert result.provider == "deepseek" and result.key_source == "opencode"
+        assert result.key_env == "DEEPSEEK_API_KEY"
+        assert "DEEPSEEK_API_KEY='" + SECRET + "'" in (tmp_path / ".env").read_text(encoding="utf-8")
+        cfg_text = plan.config_path.read_text(encoding="utf-8")
+        assert "deepseek/deepseek-chat" in cfg_text and "api_base: https://api.deepseek.com" not in cfg_text
+        assert plan.opencode_config is not None
+        oc = json.loads(plan.opencode_config.read_text(encoding="utf-8"))
+        assert "deepseek" not in (oc.get("provider") or {})     # opencode le connaît : aucun bloc
+        assert "NON qualifié" in console and "https://api.deepseek.com" in console
+        _assert_secret_only_in_env(tmp_path, plan, console)
+
+    def test_fournisseur_du_catalogue_refuse_une_autre_variable(self, tmp_path, monkeypatch):
+        """opencode lit la variable de models.dev : --key-env MA_CLE laisserait les phases
+        agentiques SANS clé. Refusé AVANT toute écriture ; la même variable est acceptée."""
+        cache = tmp_path / "svc-home" / ".cache" / "opencode" / "models.json"
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"],
+                                                  "npm": "@ai-sdk/openai-compatible",
+                                                  "api": "https://api.deepseek.com", "models": {}}}), encoding="utf-8")
+        monkeypatch.setenv("MA_CLE", SECRET)
+        plan = _plan(tmp_path, provider="deepseek", key_env="MA_CLE", model="deepseek-chat")
+        with pytest.raises(LlmCloudPhaseError, match="DEEPSEEK_API_KEY"):
+            _run(plan)
+        assert not (tmp_path / ".env").exists()
+        monkeypatch.setenv("DEEPSEEK_API_KEY", SECRET)
+        plan = _plan(tmp_path, provider="deepseek", key_env="DEEPSEEK_API_KEY", model="deepseek-chat")
+        result, _console = _run(plan)
+        assert result.key_env == "DEEPSEEK_API_KEY"
+        assert "DEEPSEEK_API_KEY='" + SECRET + "'" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_un_seul_fournisseur_decouvert_mais_du_catalogue_n_est_pas_choisi_en_silence(self, tmp_path):
+        cache = tmp_path / "svc-home" / ".cache" / "opencode" / "models.json"
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"],
+                                                  "npm": "@ai-sdk/openai-compatible",
+                                                  "api": "https://api.deepseek.com", "models": {}}}), encoding="utf-8")
+        runner = _Runner(export=[{"integrationID": "deepseek", "active": True, "value": {"type": "key", "key": SECRET}}])
+        plan = _plan(tmp_path, model="deepseek-chat")
+        with pytest.raises(LlmCloudPhaseError, match="provider"):
+            _run(plan, runner=runner)
+        assert not (tmp_path / ".env").exists()
+
+    def test_config_validee_contre_le_cache_du_service_pas_celui_de_l_operateur(self, tmp_path, monkeypatch):
+        """Relecture 2026-11-02 (bloquant) : validate_config lisait le cache du HOME de
+        l'opérateur — ici ABSENT (conftest), seul celui du compte de service existe."""
+        cache = tmp_path / "svc-home" / ".cache" / "opencode" / "models.json"
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps({"deepseek": {"name": "DeepSeek", "env": ["DEEPSEEK_API_KEY"],
+                                                  "npm": "@ai-sdk/openai-compatible",
+                                                  "api": "https://api.deepseek.com", "models": {}}}), encoding="utf-8")
+        monkeypatch.setenv("DEEPSEEK_API_KEY", SECRET)
+        plan = _plan(tmp_path, provider="deepseek", key_env="DEEPSEEK_API_KEY", model="deepseek-chat")
+        result, _console = _run(plan)
+        assert result.provider == "deepseek"
+        assert "deepseek/deepseek-chat" in plan.config_path.read_text(encoding="utf-8")
+
     def test_fournisseur_inconnu_refuse(self, tmp_path, monkeypatch):
         monkeypatch.setenv("K", SECRET)
         plan = _plan(tmp_path, provider="inconnu", key_env="K", model="m")

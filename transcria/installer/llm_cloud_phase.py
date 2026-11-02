@@ -43,7 +43,16 @@ from transcria.cli_i18n import make_translator
 from transcria.config.checks.llm_cloud import _is_local_host
 from transcria.config.config_schema import validate_config
 from transcria.config.env_file import get_env_value, update_env_file
-from transcria.config.llm_providers import CLOUD_BACKEND, LOCAL_PROVIDER_ID, LlmProvider, load_llm_providers
+from transcria.config.llm_providers import (
+    CLOUD_BACKEND,
+    LOCAL_PROVIDER_ID,
+    CatalogProvider,
+    LlmProvider,
+    catalog_path_override,
+    get_catalog_provider,
+    load_llm_providers,
+    opencode_models_cache_path,
+)
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_value
 from transcria.installer.messages import INSTALL_MESSAGES
 from transcria.installer.yaml_text_edit import YamlTextEditError, edit_yaml_text, write_text_preserving_owner
@@ -301,9 +310,9 @@ def _validate_key(key: str, t: Callable[..., str]) -> str:
 # ── Orchestration ───────────────────────────────────────────────────────────────────
 
 def _choose_provider(
-    plan: LlmCloudPlan, providers: dict[str, LlmProvider], discovered: dict[str, str],
+    plan: LlmCloudPlan, providers: Mapping[str, str], discovered: dict[str, str],
     existing: str, *, console: _ConsoleLike, prompt: PromptFn, t: Callable[..., str],
-    check: Callable[[str], None],
+    check: Callable[[str], None], table_ids: frozenset[str] = frozenset(),
 ) -> str:
     if plan.provider:
         pid = plan.provider.strip().lower()
@@ -313,15 +322,17 @@ def _choose_provider(
         if existing:
             check(existing)
             return existing
-        if len(discovered) == 1:
-            # Un seul fournisseur de la table connu d'opencode : choix sans ambiguïté.
-            return next(iter(discovered))
+        implicit = [pid for pid in discovered if pid in table_ids]
+        if len(implicit) == 1 and len(discovered) == 1:
+            # Un seul fournisseur connu d'opencode, et QUALIFIÉ : choix sans ambiguïté. Un
+            # fournisseur du catalogue (non qualifié) ne se choisit jamais en silence.
+            return implicit[0]
         raise LlmCloudPhaseError(t("lc_provider_required"))
     ordered = [pid for pid in providers if pid in discovered] + [pid for pid in providers if pid not in discovered]
     console.info(t("lc_provider_list"))
     for i, pid in enumerate(ordered, start=1):
         mark = t("lc_provider_found_mark") if pid in discovered else ""
-        console.info(f"  {i}) {pid} — {providers[pid].label}{mark}")
+        console.info(f"  {i}) {pid} — {providers[pid]}{mark}")
     default = ordered[0] if (discovered or not existing) else existing
     last_error: LlmCloudPhaseError | None = None
     for _ in range(_PROVIDER_TRIES):
@@ -365,6 +376,43 @@ def _resolve_key(
     return _validate_key(prompt_secret(t("lc_key_prompt", var=target_env)), t), "prompt"
 
 
+def _target_env(plan: LlmCloudPlan, provider_id: str, listed: LlmProvider | None,
+                catalog: CatalogProvider | None, *, console: _ConsoleLike, t: Callable[..., str]) -> str:
+    """Variable d'environnement qui portera la clé : imposée par la table, dérivée du catalogue
+    models.dev (dérogation ``--key-env`` honorée), sinon exigée (fournisseur hors catalogue)."""
+    if listed is not None:
+        return listed.api_key_env
+    if catalog is not None:
+        if (plan.key_env or "").strip() and plan.key_env.strip() != catalog.api_key_env:
+            # opencode lit la variable de models.dev : une autre variable laisserait les phases
+            # agentiques SANS clé alors que nos appels directs seraient verts.
+            raise LlmCloudPhaseError(t("lc_catalog_key_env_refused", provider=provider_id, var=catalog.api_key_env))
+        console.info(t("lc_provider_from_catalog", provider=provider_id, url=catalog.base_url, var=catalog.api_key_env))
+        return catalog.api_key_env
+    target_env = (plan.key_env or "").strip()
+    if not _ENV_NAME_RE.match(target_env):
+        raise LlmCloudPhaseError(t("lc_unlisted_needs_key_env", provider=provider_id))
+    return target_env
+
+
+def _choose_model(plan: LlmCloudPlan, cfg: dict, provider_id: str, *, prompt: PromptFn,
+                  t: Callable[..., str]) -> str:
+    """Modèle nu (préfixe ``<fournisseur>/`` toléré puis retiré) : argument, sinon config
+    existante, sinon saisie en interactif ; vide ou avec blanc = refus."""
+    model = (plan.model or "").strip()
+    if model.startswith(f"{provider_id}/"):
+        model = model[len(provider_id) + 1:]
+    if not model:
+        model = _existing_cloud_model(cfg, provider_id)
+        if plan.interactive:
+            model = prompt(t("lc_model_prompt", provider=provider_id, default=model)).strip() or model
+            if model.startswith(f"{provider_id}/"):
+                model = model[len(provider_id) + 1:]
+    if not model or any(c.isspace() for c in model):
+        raise LlmCloudPhaseError(t("lc_model_required", provider=provider_id))
+    return model
+
+
 def apply_llm_cloud(
     plan: LlmCloudPlan,
     *,
@@ -386,10 +434,16 @@ def apply_llm_cloud(
     if str(get_yaml_value(cfg, "services.backend") or "").strip().lower() == CLOUD_BACKEND:
         existing_provider = str(get_yaml_value(cfg, "workflow.arbitration_llm.model_id") or "").partition("/")[0]
 
+    # Catalogue models.dev d'opencode SOUS LE HOME DU SERVICE (c'est lui qui résoudra le modèle).
+    catalog_path = opencode_models_cache_path(plan.user_home)
+
+    def _catalog(pid: str) -> CatalogProvider | None:
+        return get_catalog_provider(pid, catalog_path)
+
     def _check_provider(pid: str) -> None:
         if pid == LOCAL_PROVIDER_ID or not _PROVIDER_ID_RE.match(pid):
             raise LlmCloudPhaseError(t("lc_provider_invalid", provider=_echoable(pid)))
-        if pid not in providers and not plan.api_base:
+        if pid not in providers and not plan.api_base and _catalog(pid) is None:
             raise LlmCloudPhaseError(t("lc_provider_unknown", provider=_echoable(pid), known=", ".join(providers)))
 
     # Tout ce qui peut être refusé l'est AVANT la moindre sonde ou écriture.
@@ -404,35 +458,27 @@ def apply_llm_cloud(
         console.warn(t("lc_opencode_missing"))
     discovered: dict[str, str] = {}
     if not (plan.provider and plan.key_env):
+        # Table qualifiée ET fournisseurs du catalogue (URL + variable connues d'opencode).
         discovered = {pid: key for pid, key in
                       discover_opencode_keys(plan, opencode_bin=opencode_bin, runner=runner).items()
-                      if pid in providers}
+                      if pid in providers or _catalog(pid) is not None}
         if discovered:
             console.ok(t("lc_found_in_opencode", home=plan.user_home, providers=", ".join(sorted(discovered))))
         else:
             console.info(t("lc_none_in_opencode", home=plan.user_home))
 
-    provider_id = _choose_provider(plan, providers, discovered, existing_provider,
-                                   console=console, prompt=prompt, t=t, check=_check_provider)
+    menu = {pid: p.label for pid, p in providers.items()}
+    for pid in sorted(discovered):
+        from_catalog = _catalog(pid)
+        if pid not in menu and from_catalog is not None:
+            menu[pid] = from_catalog.label + t("lc_provider_catalog_mark")
+    provider_id = _choose_provider(plan, menu, discovered, existing_provider,
+                                   console=console, prompt=prompt, t=t, check=_check_provider,
+                                   table_ids=frozenset(providers))
     listed = providers.get(provider_id)
-    if listed is not None:
-        target_env = listed.api_key_env
-    else:
-        target_env = (plan.key_env or "").strip()
-        if not _ENV_NAME_RE.match(target_env):
-            raise LlmCloudPhaseError(t("lc_unlisted_needs_key_env", provider=provider_id))
-
-    model = (plan.model or "").strip()
-    if model.startswith(f"{provider_id}/"):
-        model = model[len(provider_id) + 1:]
-    if not model:
-        model = _existing_cloud_model(cfg, provider_id)
-        if plan.interactive:
-            model = prompt(t("lc_model_prompt", provider=provider_id, default=model)).strip() or model
-            if model.startswith(f"{provider_id}/"):
-                model = model[len(provider_id) + 1:]
-    if not model or any(c.isspace() for c in model):
-        raise LlmCloudPhaseError(t("lc_model_required", provider=provider_id))
+    catalog = None if listed is not None else _catalog(provider_id)
+    target_env = _target_env(plan, provider_id, listed, catalog, console=console, t=t)
+    model = _choose_model(plan, cfg, provider_id, prompt=prompt, t=t)
 
     # (c, en mémoire) valeurs de config + contrôle du schéma AVANT toute écriture.
     model_ref = f"{provider_id}/{model}"
@@ -441,13 +487,16 @@ def apply_llm_cloud(
         values[key_path] = model_ref
     for key_path in ENABLED_KEYS:
         values[key_path] = True
-    if listed is None:
+    if listed is None and catalog is None:
         values["workflow.arbitration_llm.api_base"] = api_base
         values["workflow.llm_cloud.api_key_env"] = target_env
     projected = copy.deepcopy(cfg)
     for key_path, value in values.items():
         set_yaml_value(projected, key_path, value)
-    errors = _new_errors(cfg, projected)
+    # Le schéma lit le catalogue SANS chemin : on lui impose celui du compte de service (sinon
+    # c'est le cache de l'opérateur qui décide, et la config écrite peut être invalide au démarrage).
+    with catalog_path_override(catalog_path):
+        errors = _new_errors(cfg, projected)
     if errors:
         raise LlmCloudPhaseError(t("lc_schema_invalid", errors="; ".join(errors)))
 
@@ -473,7 +522,8 @@ def apply_llm_cloud(
 
     # (c) config.yaml : diff minimal, mode/propriétaire conservés, schéma revérifié sur le fichier.
     original_text = _set_config_values(plan.config_path, values, t)
-    errors = _new_errors(cfg, load_yaml_file(plan.config_path))
+    with catalog_path_override(catalog_path):
+        errors = _new_errors(cfg, load_yaml_file(plan.config_path))
     if errors:
         with contextlib.suppress(OSError):
             write_text_preserving_owner(plan.config_path, original_text)
@@ -485,9 +535,10 @@ def apply_llm_cloud(
     oc_path = plan.opencode_config or (plan.user_home / ".config" / "opencode" / "opencode.json")
     created_dirs = _missing_dirs(oc_path, plan.user_home)
     try:
-        if listed is None:
+        if listed is None and catalog is None:
             ensure_cloud_provider(oc_path, provider_id, api_base, target_env, model)
         else:
+            # Table ou catalogue : opencode résout le fournisseur seul (clé par variable d'env).
             ensure_share_disabled(oc_path)
         ensure_agent_permissions(oc_path, resolve_agent_work_root(load_yaml_file(plan.config_path)))
         for directory in (*created_dirs, oc_path):
@@ -497,7 +548,7 @@ def apply_llm_cloud(
         console.warn(t("lc_opencode_failed", path=oc_path, error=exc))
 
     # (e)(f) récapitulatif : la validation reste à faire par un admin connecté.
-    label = listed.label if listed else provider_id
+    label = listed.label if listed else (catalog.label if catalog else provider_id)
     recap = [
         t("lc_recap_provider", label=label, model=model_ref),
         t("lc_recap_key", var=target_env, path=plan.env_file),

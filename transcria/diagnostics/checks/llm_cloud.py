@@ -11,11 +11,12 @@ Toutes les sondes sont injectables. L'appel réseau au fournisseur (``GET {base}
 lieu QUE dans le doctor — jamais depuis une page web. La valeur de la clé n'apparaît dans
 aucun détail ni conseil (elle est en plus masquée défensivement en sortie).
 
-Ce que la sonde PROUVE dépend du fournisseur (``models_endpoint`` de la table, mesuré) : liste
-qui exige la clé ⇒ « clé acceptée » ; liste publique (Ollama cloud, OpenRouter) ⇒ seulement
-« joignable, modèle servi », la clé n'étant contrôlée qu'à l'inférence ; pas de liste (opencode)
-⇒ aucune sonde, rien de vérifiable avant le premier appel. Le verdict l'écrit noir sur blanc :
-le doctor ne dit JAMAIS qu'une clé est valide quand il ne l'a pas vue acceptée.
+Ce que la sonde PROUVE est MESURÉ à chaque fois (``CloudLLMBackend.probe_models`` : un second
+GET sans clé) et non supposé par fournisseur : liste qui exige la clé ⇒ « clé acceptée » ;
+liste publique (Ollama cloud, OpenRouter) ⇒ seulement « joignable, modèle servi », la clé
+n'étant contrôlée qu'à l'inférence ; pas de liste (opencode) ⇒ rien de vérifiable avant le
+premier appel. Le verdict l'écrit noir sur blanc : le doctor ne dit JAMAIS qu'une clé est valide
+quand il ne l'a pas vue acceptée.
 """
 from __future__ import annotations
 
@@ -38,16 +39,19 @@ from transcria.diagnostics.checks.common import (
     _resolve_database_uri,
     _t,
 )
-
-# Constantes ré-exportées par arbitrage_endpoint (module déjà importé : fan-out inchangé).
 from transcria.gpu.arbitrage_endpoint import (
-    MODELS_ENDPOINT_AUTHENTICATED,
-    MODELS_ENDPOINT_NONE,
-    MODELS_ENDPOINT_PUBLIC,
+    PROVIDER_SOURCE_CATALOG,
+    PROVIDER_SOURCE_TABLE,
     cloud_view,
     is_cloud_backend,
 )
-from transcria.gpu.llm_backend import CloudLLMBackend
+from transcria.gpu.llm_backend import (
+    MODELS_LIST_AUTHENTICATED,
+    MODELS_LIST_NONE,
+    MODELS_LIST_PUBLIC,
+    CloudLLMBackend,
+    ModelsProbe,
+)
 from transcria.llm_cloud.policy import CLOUD_NOTICE_TEXT_VERSION, ack_is_valid
 from transcria.llm_tools.opencode_cli import parse_opencode_version
 from transcria.llm_tools.opencode_setup import SHARE_POLICY, find_opencode_binary, resolve_config_path
@@ -192,9 +196,9 @@ def _probe_opencode_catalog(cfg: dict) -> list[str]:
     return [line.strip() for line in out.splitlines() if "/" in line.strip()]
 
 
-def _probe_provider_models(cfg: dict) -> tuple[list[str] | None, str | None]:
-    """``GET {base}/models`` avec la clé (Bearer) — l'UNIQUE appel réseau au fournisseur."""
-    return CloudLLMBackend(cfg).list_models(timeout=_PROVIDER_TIMEOUT_S)
+def _probe_provider_models(cfg: dict) -> ModelsProbe:
+    """``GET {base}/models`` avec la clé puis sans — les SEULS appels réseau au fournisseur."""
+    return CloudLLMBackend(cfg).probe_models(timeout=_PROVIDER_TIMEOUT_S, measure_key_requirement=True)
 
 
 def _read_cloud_ack(cfg: dict, provider: str, model: str) -> dict | None:
@@ -246,7 +250,7 @@ def _step_key(key: str | None, view: LlmCloudView) -> None:
         raise _Stop(_t("lc_key_missing", env=view.api_key_env), _t("lc_key_missing_hint", env=view.api_key_env))
 
 
-def _step_opencode_config(view: LlmCloudView, path: str, data: dict | None) -> None:
+def _step_opencode_config(view: LlmCloudView, path: str, data: dict | None, warns: list) -> None:
     if data is None:
         raise _Stop(_t("lc_oc_config_missing", path=path), _t("lc_oc_config_hint"))
     share = data.get("share")
@@ -256,10 +260,16 @@ def _step_opencode_config(view: LlmCloudView, path: str, data: dict | None) -> N
     providers = data.get("provider")
     block = providers.get(view.provider) if isinstance(providers, dict) else None
     options = block.get("options") if isinstance(block, dict) else None
+    block_url = str(options.get("baseURL") or "").rstrip("/") if isinstance(options, dict) else ""
+    if view.provider_source == PROVIDER_SOURCE_CATALOG and block_url and block_url != view.base_url:
+        # Un bloc résiduel (ancienne dérogation) l'emporte côté opencode : les phases agentiques
+        # iraient ailleurs que nos appels directs.
+        warns.append((_t("lc_block_url_differs", path=path, provider=view.provider, url=block_url,
+                         catalog=view.base_url), _t("lc_block_url_differs_hint")))
     api_key = options.get("apiKey") if isinstance(options, dict) else None
     if api_key is None:
         return
-    if view.known_provider:
+    if view.provider_source == PROVIDER_SOURCE_TABLE:
         raise _Stop(_t("lc_api_key_residual", path=path, provider=view.provider, env=view.api_key_env),
                     _t("lc_api_key_residual_hint"))
     if not str(api_key).startswith("{env:"):
@@ -299,43 +309,40 @@ def _step_catalog(cfg: dict, model_id: str, view: LlmCloudView,
 
 
 def _step_provider_models(cfg: dict, view: LlmCloudView,
-                          probe: Callable[[dict], tuple[list[str] | None, str | None]], warns: list) -> str:
-    """Sonde ``GET /models`` ; renvoie le VERDICT sur la clé (clé de message ``lc_key_*``).
+                          probe: Callable[[dict], ModelsProbe], warns: list) -> str:
+    """Sonde la liste des modèles ; renvoie le VERDICT sur la clé (clé de message ``lc_key_*``).
 
-    ``none`` (fournisseur sans liste) : aucune sonde, verdict « rien de vérifiable ». Sinon un 401/403
-    est un ``fail`` ; une panne de transport un ``warn`` (verdict « non vérifiée ») ; un 200 vaut
-    « acceptée » SEULEMENT si la liste exige la clé (``authenticated``), « présente, non vérifiée »
-    pour une liste publique ou un fournisseur hors table (rien n'est présumé).
+    Un 401/403 est un ``fail`` ; une panne de transport/5xx un ``warn`` (verdict « non vérifiée ») ;
+    pas de liste (404) ⇒ « rien de vérifiable » ; un 200 vaut « acceptée » SEULEMENT si la liste
+    a refusé l'appel sans clé (mesuré), « présente, non vérifiée » si elle est publique.
     """
-    if view.models_endpoint == MODELS_ENDPOINT_NONE:
-        return "lc_key_unverifiable_no_list"
     try:
-        ids, err = probe(cfg)
+        result = probe(cfg)
     except Exception as exc:  # noqa: BLE001 — sonde réseau : jamais de crash
-        ids, err = None, f"erreur inattendue: {type(exc).__name__}"
-    if err or ids is None:
-        reason = err or "réponse vide"
-        match = _HTTP_STATUS.search(reason)
-        status = int(match.group(1)) if match else 0
-        if status in (401, 403):
+        result = ModelsProbe(error=f"erreur inattendue: {type(exc).__name__}")
+    if result.error:
+        if result.status in (401, 403):
             # Statut SEUL : le corps d'un refus peut citer la clé, même partiellement masquée.
-            raise _Stop(_t("lc_provider_auth", provider=view.provider, reason=f"statut HTTP {status}"),
+            raise _Stop(_t("lc_provider_auth", provider=view.provider, reason=f"statut HTTP {result.status}"),
                         _t("lc_provider_auth_hint", env=view.api_key_env))
-        if status:
-            warns.append((_t("lc_provider_http", provider=view.provider, reason=reason),
+        if result.status:
+            warns.append((_t("lc_provider_http", provider=view.provider, reason=result.error),
                           _t("lc_provider_unreachable_hint", url=view.base_url)))
         else:
-            warns.append((_t("lc_provider_unreachable", provider=view.provider, reason=reason),
+            warns.append((_t("lc_provider_unreachable", provider=view.provider, reason=result.error),
                           _t("lc_provider_unreachable_hint", url=view.base_url)))
         return "lc_key_unverified_unreachable"
-    if ids and view.model not in ids:
-        raise _Stop(_t("lc_provider_model_missing", model=view.model, provider=view.provider, count=len(ids)),
+    if result.list_kind == MODELS_LIST_NONE:
+        return "lc_key_unverifiable_no_list"
+    if result.ids and view.model not in result.ids:
+        raise _Stop(_t("lc_provider_model_missing", model=view.model, provider=view.provider,
+                       count=len(result.ids)),
                     _t("lc_provider_model_missing_hint", provider=view.provider))
-    if view.models_endpoint == MODELS_ENDPOINT_AUTHENTICATED:
+    if result.list_kind == MODELS_LIST_AUTHENTICATED:
         return "lc_key_accepted"
-    if view.models_endpoint == MODELS_ENDPOINT_PUBLIC:
+    if result.list_kind == MODELS_LIST_PUBLIC:
         return "lc_key_unverified_public_list"
-    return "lc_key_unverified_unknown_provider"
+    return "lc_key_unverified_unknown_list"
 
 
 def _step_ack(cfg: dict, view: LlmCloudView, reader: Callable[[dict, str, str], dict | None]) -> None:
@@ -388,7 +395,7 @@ def check_llm_cloud(
     db_path: str | None = None,
     db_reader: Callable[[str], set[str] | None] | None = None,
     catalog_probe: Callable[[dict], list[str]] | None = None,
-    provider_probe: Callable[[dict], tuple[list[str] | None, str | None]] | None = None,
+    provider_probe: Callable[[dict], ModelsProbe] | None = None,
     ack_reader: Callable[[dict, str, str], dict | None] | None = None,
 ) -> CheckResult:
     """Chaîne complète de la LLM cloud (docs/LLM_CLOUD.md § 3.3.1). Hors cloud : OK « sans objet ».
@@ -413,7 +420,7 @@ def check_llm_cloud(
             key = (key_reader or (lambda c: CloudLLMBackend(c).api_key()))(cfg)
             _step_key(key, view)
             oc_path = opencode_config_path or resolve_config_path()
-            _step_opencode_config(view, oc_path, (opencode_config_reader or _read_json_file)(oc_path))
+            _step_opencode_config(view, oc_path, (opencode_config_reader or _read_json_file)(oc_path), warns)
             a_path = auth_path or _opencode_auth_path()
             _step_stored_credential(view, a_path, (auth_reader or _read_json_file)(a_path), warns)
             _step_stored_credential_v2(view, db_path or _opencode_db_path(),
@@ -426,8 +433,9 @@ def check_llm_cloud(
 
     if not network:
         return _scrub(CheckResult(name, OK, _t("lc_ok_web", provider=view.provider, model=view.model)), key)
+    source_note = "" if view.qualified else " ; " + _t(f"lc_source_{view.provider_source or 'custom'}")
     ok_detail = _t("lc_ok", provider=view.provider, model=view.model, url=view.base_url,
-                   key=_t(key_verdict, env=view.api_key_env))
+                   key=_t(key_verdict, env=view.api_key_env)) + source_note
     if warns:
         return _scrub(CheckResult(name, WARN, ok_detail + " ; " + " ; ".join(d for d, _ in warns),
                                   hint=" | ".join(h for _, h in warns)), key)

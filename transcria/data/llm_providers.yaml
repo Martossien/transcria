@@ -7,19 +7,17 @@ _doc: >
   le `model_id` de la config s'écrit `<id>/<modèle>` et opencode résout la clé par la MÊME
   variable d'environnement. Les faits viennent de sources secondaires (recherche web du
   2026-11-01) : l'admin les VÉRIFIE sur les conditions du fournisseur avant de valider.
-  `models_endpoint` dit ce que prouve la sonde `GET {base_url}/models` (doctor, disponibilité
-  avant une phase) — MESURÉ le 2026-11-01 avec une clé bidon : `authenticated` = la liste exige
-  la clé (401 sinon) ⇒ un 200 prouve que la clé est acceptée ; `public` = la liste répond 200 à
-  tout le monde ⇒ elle ne prouve que la joignabilité et la présence du modèle, la clé n'est
-  contrôlée qu'à l'inférence (appel facturé : `doctor --llm-smoke`) ; `none` = pas de liste
-  (404) ⇒ ni clé ni modèle vérifiables avant le premier appel, la disponibilité se réduit à
-  « le serveur répond ». Contrat vérifié par tests/test_llm_providers.py.
+  Cette table ne liste que les fournisseurs QUALIFIÉS (faits vérifiés). Tout autre fournisseur
+  du catalogue models.dev d'opencode (cache local ~/.cache/opencode/models.json : URL `api` +
+  variable `env`) est résolu automatiquement par `LlmCloudView`, sans faits ni conditions —
+  l'écran d'administration le dit « non qualifié ». Ce que prouve `GET /models` (clé acceptée,
+  liste publique, pas de liste) n'est PAS déclaré ici : le doctor le MESURE à chaque passage
+  (`CloudLLMBackend.probe_models`, second appel sans clé). Contrat vérifié par tests/test_llm_providers.py.
 providers:
   mistral:
     label: "Mistral — La Plateforme"
     base_url: "https://api.mistral.ai/v1"
     api_key_env: "MISTRAL_API_KEY"
-    models_endpoint: authenticated
     terms_url: "https://mistral.ai/terms/"
     verified_on: "2026-11-01"
     hosting:
@@ -38,7 +36,6 @@ providers:
     label: "Ollama cloud"
     base_url: "https://ollama.com/v1"
     api_key_env: "OLLAMA_API_KEY"
-    models_endpoint: public
     terms_url: "https://ollama.com/terms"
     verified_on: "2026-11-01"
     hosting:
@@ -55,7 +52,6 @@ providers:
     label: "OpenRouter"
     base_url: "https://openrouter.ai/api/v1"
     api_key_env: "OPENROUTER_API_KEY"
-    models_endpoint: public
     terms_url: "https://openrouter.ai/terms"
     verified_on: "2026-11-01"
     hosting:
@@ -74,7 +70,6 @@ providers:
     label: "opencode (fournisseur d'inférence d'opencode)"
     base_url: "https://opencode.ai/inference/openai/v1"
     api_key_env: "OPENCODE_API_KEY"
-    models_endpoint: none
     terms_url: "https://opencode.ai/legal/terms-of-service"
     verified_on: "2026-11-01"
     hosting:

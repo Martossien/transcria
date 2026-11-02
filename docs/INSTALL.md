@@ -961,9 +961,14 @@ consommation et la disponibilité du fournisseur relèvent de l'administrateur.
 
    `extra_request_fields` est fusionné dans le corps des seuls **appels directs** (chat
    d'affinage, arbitrage multi-STT, extraction des champs de type) — ex. `reasoning_effort: none`
-   chez Ollama cloud, `zdr: true` chez OpenRouter. **Fournisseur hors table** : `api_base`
-   (`workflow.arbitration_llm.api_base`, en `https://`) et `workflow.llm_cloud.api_key_env` (nom
-   de la variable portant la clé). Référence des clés : [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md).
+   chez Ollama cloud, `zdr: true` chez OpenRouter. **Fournisseur absent de la table** : s'il est
+   dans le catalogue models.dev d'opencode (cache `~/.cache/opencode/models.json` du compte de
+   service — DeepSeek, NVIDIA, Moonshot… 192 fournisseurs), l'URL et la variable de clé en
+   sont dérivées, rien d'autre à configurer (la clé va **dans la variable que models.dev publie**,
+   `api_key_env` est refusé), mais TranscrIA ne l'a **pas qualifié** (hébergement, conservation et
+   conditions à vérifier par vous-même avant la validation). Sinon (hors catalogue)
+   : `api_base` (`workflow.arbitration_llm.api_base`, en `https://`) et `workflow.llm_cloud.api_key_env`
+   (nom de la variable portant la clé). Référence des clés : [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md).
 
 3. **Redémarrer le service** : la bascule local ↔ cloud est capturée au démarrage (en split,
    l'ordonnanceur est un autre process : le redémarrer aussi). La clé doit être présente sur le
@@ -995,11 +1000,12 @@ part jamais vers le service en ligne d'opencode.
 le fournisseur et les deux `model_id`, la présence et la forme de la clé (la variable est
 nommée, jamais la valeur), `opencode.json`, l'absence d'identifiant stocké qui primerait, la
 présence du modèle dans le catalogue d'opencode puis chez le fournisseur (`GET /models`, seul
-appel réseau du doctor) et une validation non caduque. Ce que cette sonde **prouve** dépend du
-fournisseur : chez Mistral la liste exige la clé, un succès vaut « clé acceptée » ; chez Ollama
-cloud et OpenRouter la liste est **publique**, le doctor écrit alors « clé présente mais NON
-vérifiée » (la clé n'est contrôlée qu'à l'inférence : `--llm-smoke`) ; le fournisseur d'opencode
-n'a pas de liste, rien n'est vérifiable avant le premier appel. Les checks de la LLM locale (script,
+appel réseau du doctor) et une validation non caduque. Ce que cette sonde **prouve** est
+**mesuré** à chaque passage (un second appel sans clé) : si la liste exige la clé (Mistral), un
+succès vaut « clé acceptée » ; si elle est **publique** (Ollama cloud, OpenRouter), le doctor
+écrit « clé présente mais NON vérifiée » (la clé n'est contrôlée qu'à l'inférence : `--llm-smoke`) ;
+sans liste (fournisseur d'opencode), rien n'est vérifiable avant le premier appel. Un fournisseur
+du catalogue opencode est rappelé « NON qualifié ». Les checks de la LLM locale (script,
 placement, GPU) sont « sans objet ». `--llm-smoke` y est un **appel payant**, annoncé avant le
 lancement.
 
@@ -1018,8 +1024,11 @@ Options exactes : voir l'aide de la commande (`install.sh --help`). En non inter
 `--llm-cloud-provider <id> --llm-cloud-model <modèle>` sont requis et la clé passe par
 `--llm-cloud-key-env VAR` (nom d'une variable exportée, jamais la clé en argument) ; **`sudo`
 retire cette variable de l'environnement** : `sudo --preserve-env=VAR ./install.sh …`. Un
-fournisseur **hors table** (OpenAI-compatible, `https://` non local) ne passe pas par
-`install.sh` : `venv/bin/python -m transcria.installer.cli llm-cloud --config config.yaml
+fournisseur du **catalogue opencode** se demande explicitement (`--llm-cloud-provider <id>` ; en
+interactif il est listé « catalogue opencode, non qualifié » s'il a une clé dans opencode) et
+n'est jamais choisi en silence ; `--llm-cloud-key-env` doit alors être la variable publiée par
+models.dev. Un fournisseur **hors table et hors catalogue** (OpenAI-compatible,
+`https://` non local) ne passe pas par `install.sh` : `venv/bin/python -m transcria.installer.cli llm-cloud --config config.yaml
 --env-file .env --user-home <HOME du service> --provider <id> --key-env VAR --model <modèle>
 --api-base https://…/v1`.
 

@@ -13,15 +13,15 @@ import os
 from transcria.config.llm_providers import (
     ARBITRAGE_BACKENDS,
     CLOUD_BACKEND,
-    MODELS_ENDPOINT_AUTHENTICATED,
-    MODELS_ENDPOINT_NONE,
-    MODELS_ENDPOINT_PUBLIC,
+    PROVIDER_SOURCE_CATALOG,
+    PROVIDER_SOURCE_CUSTOM,
+    PROVIDER_SOURCE_TABLE,
 )
 from transcria.config.views import LlmCloudView
 
 __all__ = [
-    "ARBITRAGE_BACKENDS", "CLOUD_BACKEND", "MODELS_ENDPOINT_AUTHENTICATED", "MODELS_ENDPOINT_NONE",
-    "MODELS_ENDPOINT_PUBLIC", "cloud_base_url", "cloud_view", "configured_backend",
+    "ARBITRAGE_BACKENDS", "CLOUD_BACKEND", "PROVIDER_SOURCE_CATALOG", "PROVIDER_SOURCE_CUSTOM",
+    "PROVIDER_SOURCE_TABLE", "cloud_base_url", "cloud_view", "configured_backend",
     "default_base_url", "describe_arbitrage_endpoint", "is_cloud_backend", "is_ollama_backend",
     "is_remote_arbitrage", "ollama_model_name", "ollama_name_matches", "resolve_arbitrage_endpoint",
 ]

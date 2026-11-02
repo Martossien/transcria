@@ -290,8 +290,15 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "lc_provider_prompt": "  Fournisseur (numéro ou identifiant) [{default}] : ",
         "lc_provider_required": "Mode non interactif : --provider <id> est requis (avec --key-env <VAR>).",
         "lc_provider_invalid": "Identifiant de fournisseur invalide : « {provider} ».",
-        "lc_provider_unknown": ("Fournisseur « {provider} » absent de la table ({known}) — pour un fournisseur "
-                                "OpenAI-compatible hors table, passez --api-base <url> et --key-env <VAR>."),
+        "lc_provider_unknown": ("Fournisseur « {provider} » absent de la table ({known}) et du catalogue models.dev "
+                                "d'opencode (cache ~/.cache/opencode/models.json du compte de service) — pour un "
+                                "fournisseur OpenAI-compatible inconnu, passez --api-base <url> et --key-env <VAR>."),
+        "lc_provider_catalog_mark": " (catalogue opencode, non qualifié)",
+        "lc_catalog_key_env_refused": ("Fournisseur « {provider} » du catalogue opencode : la clé doit être dans {var} "
+                                       "(variable lue par opencode) — --key-env ne peut pas la remplacer."),
+        "lc_provider_from_catalog": ("Fournisseur « {provider} » résolu depuis le catalogue models.dev d'opencode "
+                                     "({url}, clé par {var}) — NON qualifié : vérifiez hébergement, conservation "
+                                     "et conditions avant la validation administrateur."),
         "lc_unlisted_needs_key_env": ("Fournisseur hors table « {provider} » : --key-env <VAR> est requis "
                                       "(nom de la variable d'environnement qui portera la clé)."),
         "lc_model_prompt": "  Modèle chez {provider} (sans préfixe) [{default}] : ",
@@ -587,8 +594,15 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "lc_provider_prompt": "  Provider (number or id) [{default}]: ",
         "lc_provider_required": "Non-interactive mode: --provider <id> is required (with --key-env <VAR>).",
         "lc_provider_invalid": "Invalid provider id: \"{provider}\".",
-        "lc_provider_unknown": ("Provider \"{provider}\" is not in the table ({known}) — for an "
-                                "OpenAI-compatible provider outside the table, pass --api-base <url> and --key-env <VAR>."),
+        "lc_provider_unknown": ("Provider \"{provider}\" is neither in the table ({known}) nor in opencode's models.dev "
+                                "catalog (service account's ~/.cache/opencode/models.json) — for an unknown "
+                                "OpenAI-compatible provider, pass --api-base <url> and --key-env <VAR>."),
+        "lc_provider_catalog_mark": " (opencode catalog, not qualified)",
+        "lc_catalog_key_env_refused": ("Provider \"{provider}\" from the opencode catalog: the key must live in {var} "
+                                       "(the variable opencode reads) — --key-env cannot replace it."),
+        "lc_provider_from_catalog": ("Provider \"{provider}\" resolved from opencode's models.dev catalog "
+                                     "({url}, key via {var}) — NOT qualified: check hosting, retention and terms "
+                                     "before the administrator approval."),
         "lc_unlisted_needs_key_env": ("Provider \"{provider}\" outside the table: --key-env <VAR> is required "
                                       "(name of the environment variable that will hold the key)."),
         "lc_model_prompt": "  Model at {provider} (no prefix) [{default}]: ",

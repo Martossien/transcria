@@ -15,6 +15,7 @@ from transcria.config.llm_providers import (
     ARBITRAGE_BACKENDS,
     CLOUD_BACKEND,
     LOCAL_PROVIDER_ID,
+    get_catalog_provider,
     get_llm_provider,
 )
 from transcria.config.views import _split_model_ref
@@ -41,8 +42,9 @@ def _check_llm_cloud(cfg: dict, r: ValidationResult) -> None:
       « clooud » deviendrait une LLM LOCALE — lancement de llama-server, sonde 127.0.0.1:8080,
       réservation VRAM) ;
     - en cloud : les ``model_id`` ACTIVÉS s'écrivent ``<fournisseur>/<modèle>``, partagent le
-      MÊME fournisseur, jamais ``local/`` ; un fournisseur hors table exige la dérogation
-      ``workflow.arbitration_llm.api_base`` (https, non loopback) ET ``workflow.llm_cloud.api_key_env`` ;
+      MÊME fournisseur, jamais ``local/`` ; un fournisseur hors table ET hors catalogue models.dev
+      d'opencode exige la dérogation ``workflow.arbitration_llm.api_base`` (https, non loopback)
+      ET ``workflow.llm_cloud.api_key_env`` ;
     - hors cloud : un ``model_id`` préfixé par un fournisseur de la table est un MÉLANGE refusé
       (il serait traité comme une LLM locale).
 
@@ -112,9 +114,21 @@ def _check_llm_cloud(cfg: dict, r: ValidationResult) -> None:
         # un modèle de résumé différent partirait sans avoir été vu ni validé (relecture lot B).
         detail = ", ".join(f"{k} → {v}" for k, v in models.items())
         r.add_error(f"workflow: en cloud, résumé et correction doivent utiliser le MÊME modèle ({detail})")
-    unlisted = next((p for p in providers.values() if get_llm_provider(p) is None), None)
+    unlisted = next((p for p in providers.values()
+                     if get_llm_provider(p) is None and get_catalog_provider(p) is None), None)
     if unlisted is not None:
         _check_unlisted_provider(unlisted, wf.get("arbitration_llm") or {}, key_env, r)
+    from_catalog = next((p for p in providers.values()
+                         if get_llm_provider(p) is None and get_catalog_provider(p) is not None), None)
+    if from_catalog is not None and key_env:
+        # opencode lit la variable publiée par models.dev, pas celle-ci : les phases agentiques
+        # tourneraient SANS clé alors que nos appels directs et le doctor seraient verts.
+        catalog = get_catalog_provider(from_catalog)
+        r.add_error(
+            f"workflow.llm_cloud.api_key_env: sans effet pour le fournisseur « {from_catalog} » du "
+            f"catalogue opencode — opencode lit {catalog.api_key_env if catalog else 'sa propre variable'} ; "
+            "retirer cette clé"
+        )
 
 
 def _check_llm_cloud_section(cloud_cfg: object, r: ValidationResult) -> str:
@@ -140,7 +154,7 @@ def _check_llm_cloud_section(cloud_cfg: object, r: ValidationResult) -> str:
 
 
 def _check_unlisted_provider(provider: str, arb: dict, key_env: str, r: ValidationResult) -> None:
-    """Fournisseur NON listé : la dérogation doit être complète et sûre."""
+    """Fournisseur ni dans la table ni dans le catalogue : la dérogation doit être complète et sûre."""
     api_base = str(arb.get("api_base") or "").strip()
     try:
         host = urlparse(api_base).hostname or ""
@@ -148,11 +162,11 @@ def _check_unlisted_provider(provider: str, arb: dict, key_env: str, r: Validati
         host = ""
     if not api_base.startswith("https://") or _is_local_host(host):
         r.add_error(
-            f"workflow.arbitration_llm.api_base: fournisseur « {provider} » hors table — "
+            f"workflow.arbitration_llm.api_base: fournisseur « {provider} » hors table et hors catalogue opencode — "
             f"une URL https:// non locale est requise (valeur: '{api_base}')"
         )
     if not key_env:
         r.add_error(
-            f"workflow.llm_cloud.api_key_env: fournisseur « {provider} » hors table — "
+            f"workflow.llm_cloud.api_key_env: fournisseur « {provider} » hors table et hors catalogue opencode — "
             "le nom de la variable d'environnement portant la clé est requis"
         )

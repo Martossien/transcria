@@ -1,17 +1,18 @@
 import contextlib
 import logging
 import os
+import re
 import subprocess
 import time
 from abc import ABC, abstractmethod
-from typing import IO
+from dataclasses import dataclass
+from typing import IO, Any
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu._port_utils import kill_port_listeners
 from transcria.gpu.arbitrage_endpoint import (
     ARBITRAGE_BACKENDS,
     CLOUD_BACKEND,
-    MODELS_ENDPOINT_NONE,
     cloud_view,
     is_cloud_backend,
     ollama_model_name,
@@ -102,7 +103,7 @@ class LLMBackend(ABC):
 
     @staticmethod
     def _http_get_json_result(
-        url: str, timeout: int = 5, headers: dict[str, str] | None = None,
+        url: str, timeout: int = 5, headers: dict[str, str] | None = None, auth: Any = None,
     ) -> tuple[dict | None, str | None]:
         """Renvoie (données, None) ou (None, "nature: détail") — typé, testable."""
         try:
@@ -110,12 +111,14 @@ class LLMBackend(ABC):
             from requests import exceptions as rexc
 
             try:
-                # `headers` seulement si fournis : les doublures de test historiques
+                # `headers`/`auth` seulement si fournis : les doublures de test historiques
                 # (lambda url, timeout) et les sondes locales restent inchangées.
+                kwargs: dict[str, Any] = {}
                 if headers:
-                    r = requests.get(url, timeout=timeout, headers=headers)
-                else:
-                    r = requests.get(url, timeout=timeout)
+                    kwargs["headers"] = headers
+                if auth is not None:
+                    kwargs["auth"] = auth
+                r = requests.get(url, timeout=timeout, **kwargs)
             except rexc.ConnectTimeout as exc:
                 return None, f"timeout de connexion ({timeout}s): {exc}"
             except rexc.ReadTimeout as exc:
@@ -503,6 +506,33 @@ class HTTPLLMBackend(LLMBackend):
         return True
 
 
+# Ce que la liste des modèles d'un fournisseur PROUVE (mesuré par `CloudLLMBackend.probe_models`).
+MODELS_LIST_AUTHENTICATED = "authenticated"   # la liste exige la clé : un 200 prouve la clé
+MODELS_LIST_PUBLIC = "public"                 # la liste répond à tout le monde : clé non vérifiée
+MODELS_LIST_NONE = "none"                     # pas de liste (404) : rien de vérifiable avant le 1er appel
+MODELS_LIST_UNKNOWN = "unknown"               # second appel illisible : rien n'est présumé
+_HTTP_STATUS_RE = re.compile(r"statut HTTP (\d{3})")
+
+
+def _no_auth(request):
+    """Auth `requests` qui ne fait RIEN — bloque la lecture de ~/.netrc sans ajouter d'en-tête."""
+    return request
+
+
+@dataclass(frozen=True)
+class ModelsProbe:
+    """Résultat de ``GET /models`` chez un fournisseur cloud — sans jamais porter la clé."""
+
+    ids: tuple[str, ...] | None = None    # modèles listés (None : pas de liste exploitable)
+    error: str | None = None              # panne ou refus (clé, transport, 5xx) ; None = le serveur répond
+    status: int = 0                       # statut HTTP de l'appel AVEC clé (0 = aucune réponse HTTP)
+    list_kind: str = MODELS_LIST_UNKNOWN  # MODELS_LIST_*
+
+    @property
+    def key_proven(self) -> bool:
+        return self.error is None and self.list_kind == MODELS_LIST_AUTHENTICATED
+
+
 class CloudCredentialsMissing(RuntimeError):
     """La variable d'environnement qui porte la clé du fournisseur est absente ou vide."""
 
@@ -601,50 +631,79 @@ class CloudLLMBackend(LLMBackend):
         ids = [str(m.get("id")) for m in (items or []) if isinstance(m, dict) and m.get("id")]
         return ids, None
 
-    @property
-    def models_endpoint(self) -> str:
-        """Ce que prouve ``GET /models`` chez ce fournisseur (``llm_providers.MODELS_ENDPOINT_*``)."""
-        return self.view.models_endpoint
+    @staticmethod
+    def _status_of(err: str | None) -> int:
+        """Statut HTTP porté par une erreur de ``_http_get_json_result`` (0 = pas de réponse)."""
+        match = _HTTP_STATUS_RE.search(err or "")
+        return int(match.group(1)) if match else 0
 
-    def is_reachable(self, timeout: int = 10) -> tuple[bool, str | None]:
-        """Le serveur du fournisseur RÉPOND-il ? (toute réponse HTTP compte, même 404 — pour un
-        fournisseur sans liste de modèles ; seules les pannes de transport sont une indisponibilité)."""
+    def probe_models(self, timeout: int = 10, *, measure_key_requirement: bool = False) -> ModelsProbe:
+        """``GET /models`` AVEC la clé ; avec ``measure_key_requirement`` (doctor), un SECOND appel
+        SANS clé si le premier a répondu 200 — pour dire ce que la liste PROUVE, mesuré plutôt que
+        supposé par fournisseur (sans mesure, ``list_kind`` reste ``unknown``) :
+
+        - 401/403 avec la clé → le fournisseur refuse la clé (``error``) ;
+        - 404 avec la clé → pas de liste (``none``) : le serveur répond, rien d'autre n'est
+          vérifiable (opencode, mesuré) ;
+        - 200 avec la clé, 401/403 sans → la liste exige la clé (``authenticated``) : clé prouvée ;
+        - 200 avec ET sans clé → liste publique (``public``, Ollama cloud/OpenRouter mesurés) :
+          la clé n'est contrôlée qu'à l'inférence ;
+        - toute autre panne (transport, 5xx) → ``error`` ; second appel illisible → ``unknown``.
+        """
         if not self.base_url:
-            return False, f"URL du fournisseur « {self.provider_id or '?'} » non résolue"
+            return ModelsProbe(error=f"URL du fournisseur « {self.provider_id or '?'} » non résolue "
+                               "(hors table et hors catalogue : renseigner workflow.arbitration_llm.api_base)")
         try:
             headers = self.auth_headers()
         except CloudCredentialsMissing as exc:
-            return False, str(exc)
-        _data, err = self._http_get_json_result(f"{self.base_url}/models", timeout=timeout, headers=headers)
-        if err and not err.startswith("statut HTTP") and not err.startswith("réponse non-JSON"):
-            return False, err
-        return True, None
+            return ModelsProbe(error=str(exc))
+        url = f"{self.base_url}/models"
+        data, err = self._http_get_json_result(url, timeout=timeout, headers=headers)
+        if err is None or err.startswith("réponse non-JSON"):
+            status = 200
+        else:
+            status = self._status_of(err)
+        if err is not None:
+            if status == 404 and self.view.qualified:
+                # Fournisseur de la TABLE sans liste (opencode, mesuré) : le serveur répond. Hors
+                # table, un 404 reste une panne : c'est le « api_base sans /v1 » silencieux.
+                return ModelsProbe(status=status, list_kind=MODELS_LIST_NONE)
+            return ModelsProbe(error=err, status=status)
+        items = (data or {}).get("data") if isinstance(data, dict) else None
+        ids = tuple(str(m.get("id")) for m in (items or []) if isinstance(m, dict) and m.get("id"))
+        if not measure_key_requirement:
+            return ModelsProbe(ids=ids, status=status)
+        # Sans clé : aucun en-tête Authorization, et `auth=_no_auth` empêche `requests` d'en
+        # fabriquer un depuis ~/.netrc (le verdict « liste publique » serait alors faux).
+        _data2, err2 = self._http_get_json_result(url, timeout=timeout, headers={"Accept": "application/json"},
+                                                  auth=_no_auth)
+        if err2 is None:
+            kind = MODELS_LIST_PUBLIC
+        elif self._status_of(err2) in (401, 403):
+            kind = MODELS_LIST_AUTHENTICATED
+        else:
+            kind = MODELS_LIST_UNKNOWN
+        return ModelsProbe(ids=ids, status=status, list_kind=kind)
 
     def is_available(self) -> bool:
-        """Le fournisseur répond-il ? (une requête réseau — JAMAIS depuis une page web).
+        """Le fournisseur répond-il ? (réseau — JAMAIS depuis une page web).
 
-        Fournisseur avec liste de modèles : ``GET /models`` doit réussir (chez un fournisseur
-        dont la liste exige la clé, c'est aussi la preuve que la clé est acceptée ; chez un
-        fournisseur à liste publique, la clé n'est contrôlée qu'à l'inférence). Fournisseur SANS
-        liste (``models_endpoint: none``, ex. opencode : 404) : « répond » suffit — exiger un
-        200 rendrait ce fournisseur inutilisable à chaque phase.
+        Disponible = la liste des modèles répond avec la clé, OU le fournisseur n'a pas de liste
+        (404 : opencode, mesuré — exiger un 200 le rendait indisponible à CHAQUE phase). Une clé
+        refusée, une panne de transport ou un 5xx = indisponible, journalisé sans la clé.
         """
-        if self.models_endpoint == MODELS_ENDPOINT_NONE:
-            ok, err = self.is_reachable()
-            if not ok:
-                logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", err)
-            return ok
-        ids, err = self.list_models()
-        if err:
-            logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", err)
+        probe = self.probe_models()
+        if probe.error:
+            # Statut seul sur un refus : le corps d'un 401 peut citer la clé, même masquée.
+            reason = f"clé refusée (statut HTTP {probe.status})" if probe.status in (401, 403) else probe.error
+            logger.error("LLM cloud %s indisponible — %s", self.provider_id or "?", reason)
             return False
-        return ids is not None
+        return True
 
     def ensure_available(self) -> bool:
         # Rien à lancer : « prêt » = le fournisseur répond. Le choix du modèle est vérifié
         # par le doctor (catalogue opencode + fournisseur), pas ici à chaque phase.
         return self.is_available()
-
     def is_loaded(self) -> bool:
         return False  # aucune VRAM locale, jamais
 

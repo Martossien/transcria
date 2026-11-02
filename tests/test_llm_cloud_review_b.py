@@ -28,6 +28,7 @@ import transcria.web.meetings_api as meetings_api
 import transcria.web.meetings_views as meetings_views
 import transcria.web.pages_routes as pages_routes
 import transcria.web.wizard_api as wizard_api
+from transcria.auth import permissions as auth_permissions
 from transcria.auth.api_tokens import create_token
 from transcria.auth.models import Role
 from transcria.auth.store import UserStore
@@ -221,7 +222,10 @@ def meetings_cloud(app, monkeypatch):
     monkeypatch.setenv("TRANSCRIA_MEETING_REF_KEY", _MEET_KEY)
     model = f"m-{_uid()}"
     cfg = _cloud_cfg(model, connectors={"meetings": {"enabled": True, "runner_usernames": ["svc-runner"]}})
-    for module in (meetings_api, meetings_views):
+    # La permission runner (OPERATE_MEETING_RUNNER) est NOMINATIVE et lue par `auth.permissions`
+    # via SA get_config : sans ce patch, le test ne passait qu'avec un config.yaml local listant
+    # svc-runner (CI rouge du lot B au 04796ac : heartbeat 403 → aucun runner vivant → 400).
+    for module in (meetings_api, meetings_views, auth_permissions):
         monkeypatch.setattr(module, "get_config", lambda: cfg)
     with app.app_context():
         user = UserStore.get_by_username("svc-runner")
@@ -238,8 +242,9 @@ def meetings_cloud(app, monkeypatch):
 
 
 def _plan(client, admin_client, runner_token):
-    client.post("/v1/runners/heartbeat", headers={"Authorization": f"Bearer {runner_token}"},
-                json={"runner": "runner-1", "capacity": 2, "active": 0, "platforms": ["jitsi"], "images": []})
+    hb = client.post("/v1/runners/heartbeat", headers={"Authorization": f"Bearer {runner_token}"},
+                     json={"runner": "runner-1", "capacity": 2, "active": 0, "platforms": ["jitsi"], "images": []})
+    assert hb.status_code == 200, hb.get_json()   # sinon « Plateforme indisponible » masque le vrai verdict
     return admin_client.post("/api/meetings", json={
         "provider": "jitsi", "meeting_ref": f"https://meet.jit.si/salle-{_uid()}",
         "title": "Comité test", "language": "fr"})

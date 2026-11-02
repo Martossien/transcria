@@ -52,7 +52,8 @@ def cloud_status(config: dict, lang: str = "fr") -> dict:
         except Exception:  # noqa: BLE001
             pass
         return {"active": True, "unknown": True, "acknowledged": False,
-                "provider": view.provider, "provider_label": listed.label if listed else view.provider,
+                "provider": view.provider, "provider_label": view.provider_label or view.provider,
+                "provider_source": view.provider_source,
                 "model": view.model, "hosting": listed.hosting_text(lang) if listed else "",
                 "facts": [], "terms_url": "", "connectors_allowed": False,
                 "text_version": CLOUD_NOTICE_TEXT_VERSION}
@@ -60,10 +61,13 @@ def cloud_status(config: dict, lang: str = "fr") -> dict:
     return {
         "active": True,
         "provider": view.provider,
-        "provider_label": listed.label if listed else view.provider,
+        "provider_label": view.provider_label or view.provider,
         "model": view.model,
         "base_url": view.base_url,
-        "known_provider": listed is not None,
+        # `qualified` = table (faits affichés) ; `provider_source` dit d'où vient la résolution
+        # (table | catalog = catalogue models.dev d'opencode, non qualifié | custom).
+        "qualified": listed is not None,
+        "provider_source": view.provider_source,
         "hosting": listed.hosting_text(lang) if listed else "",
         "facts": list(listed.facts_text(lang)) if listed else [],
         "terms_url": listed.terms_url if listed else "",

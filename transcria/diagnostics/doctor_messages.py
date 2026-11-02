@@ -174,10 +174,12 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_ids_differ": "les deux model_id diffèrent (correction « {arb} », résumé « {summ} ») — un seul "
                          "fournisseur/modèle est validé à la fois",
         "lc_ids_differ_hint": "Aligner workflow.summary_llm.model_id sur workflow.arbitration_llm.model_id.",
-        "lc_no_base_url": "fournisseur « {provider} » hors table : URL inconnue",
+        "lc_no_base_url": "fournisseur « {provider} » ni dans la table ni dans le catalogue models.dev d'opencode "
+                          "(cache ~/.cache/opencode/models.json du compte de service) : URL inconnue",
         "lc_no_base_url_hint": "Renseigner workflow.arbitration_llm.api_base (URL OpenAI-compatible finissant "
                                "par /v1), ou choisir un fournisseur de la table (transcria/data/llm_providers.yaml).",
-        "lc_no_key_env": "fournisseur « {provider} » hors table : variable d'environnement de la clé inconnue",
+        "lc_no_key_env": "fournisseur « {provider} » ni dans la table ni dans le catalogue models.dev d'opencode : "
+                         "variable d'environnement de la clé inconnue",
         "lc_no_key_env_hint": "Renseigner workflow.llm_cloud.api_key_env (NOM de la variable, jamais la clé).",
         "lc_key_missing": "variable {env} absente, vide ou mal formée (blanc/caractère de contrôle) — "
                           "la clé n'est jamais affichée",
@@ -235,9 +237,17 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_key_unverifiable_no_list": "clé {env} présente ; ce fournisseur n'expose pas de liste des modèles : "
                                        "ni la clé ni le modèle ne sont vérifiables avant le premier appel "
                                        "(--llm-smoke = un appel facturé)",
-        "lc_key_unverified_unknown_provider": "clé {env} présente ; fournisseur hors table : la liste des modèles "
-                                              "répond, sans garantie qu'elle exige la clé",
+        "lc_key_unverified_unknown_list": "clé {env} présente ; la liste des modèles répond mais l'appel sans "
+                                          "clé n'a pas pu être interprété : clé non vérifiée",
         "lc_key_unverified_unreachable": "clé {env} présente, non vérifiée (fournisseur non sondé)",
+        "lc_source_catalog": "fournisseur du catalogue models.dev d'opencode, NON qualifié par TranscrIA : "
+                             "hébergement, conservation et conditions à vérifier par l'administrateur",
+        "lc_source_custom": "fournisseur hors table et hors catalogue (dérogation api_base / api_key_env)",
+        "lc_block_url_differs": "{path} : le bloc provider.{provider} pointe sur {url} alors que le catalogue "
+                                "opencode donne {catalog} — les phases agentiques et les appels directs "
+                                "n'iraient pas au même endroit",
+        "lc_block_url_differs_hint": "Retirer le bloc provider résiduel d'opencode.json (opencode connaît ce "
+                                     "fournisseur) ou le faire pointer sur l'URL du catalogue.",
         "lc_ok_web": "{provider} / {model} — validation administrateur à jour (tier web : clé et fournisseur "
                      "vérifiés côté ordonnanceur)",
         "mr_cloud_no_provider": "aucun fournisseur cloud exploitable dans le model_id (« {model_id} »)",
@@ -588,10 +598,12 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_ids_differ": "the two model_ids differ (correction “{arb}”, summary “{summ}”) — only one "
                          "provider/model is approved at a time",
         "lc_ids_differ_hint": "Align workflow.summary_llm.model_id with workflow.arbitration_llm.model_id.",
-        "lc_no_base_url": "provider “{provider}” not in the table: unknown URL",
+        "lc_no_base_url": "provider “{provider}” neither in the table nor in opencode's models.dev catalog "
+                          "(service account's ~/.cache/opencode/models.json): unknown URL",
         "lc_no_base_url_hint": "Set workflow.arbitration_llm.api_base (OpenAI-compatible URL ending in /v1), or "
                                "pick a provider from the table (transcria/data/llm_providers.yaml).",
-        "lc_no_key_env": "provider “{provider}” not in the table: unknown key environment variable",
+        "lc_no_key_env": "provider “{provider}” neither in the table nor in opencode's models.dev catalog: "
+                         "unknown key environment variable",
         "lc_no_key_env_hint": "Set workflow.llm_cloud.api_key_env (the variable NAME, never the key).",
         "lc_key_missing": "variable {env} missing, empty or malformed (whitespace/control character) — "
                           "the key is never displayed",
@@ -649,9 +661,16 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "lc_key_unverifiable_no_list": "key {env} present; this provider exposes no model list: neither the key "
                                        "nor the model can be verified before the first call "
                                        "(--llm-smoke = one billed call)",
-        "lc_key_unverified_unknown_provider": "key {env} present; provider not in the table: the model list "
-                                              "answers, with no guarantee that it requires the key",
+        "lc_key_unverified_unknown_list": "key {env} present; the model list answers but the call without a key "
+                                          "could not be interpreted: key not verified",
         "lc_key_unverified_unreachable": "key {env} present, not verified (provider not probed)",
+        "lc_source_catalog": "provider from opencode's models.dev catalog, NOT qualified by TranscrIA: hosting, "
+                             "retention and terms are for the administrator to check",
+        "lc_source_custom": "provider outside the table and the catalog (api_base / api_key_env override)",
+        "lc_block_url_differs": "{path}: block provider.{provider} points to {url} while opencode's catalog "
+                                "gives {catalog} — agentic phases and direct calls would not go to the same place",
+        "lc_block_url_differs_hint": "Remove the leftover provider block from opencode.json (opencode knows this "
+                                     "provider) or point it to the catalog URL.",
         "lc_ok_web": "{provider} / {model} — administrator approval up to date (web tier: key and provider "
                      "checked on the scheduler)",
         "mr_cloud_no_provider": "no usable cloud provider in model_id (“{model_id}”)",
