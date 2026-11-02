@@ -258,5 +258,46 @@ class TestChatCompletionCloud:
                 chat_completion(self._config(), [],
                                 post=lambda *a, payload=payload, **k: _CloudResp(payload=payload))
 
+    def test_cloud_content_en_liste_de_parts_mistral(self, monkeypatch):
+        """Mesuré au banc 2026-11-02 : Mistral Large 4 renvoie content = [thinking, text]. Seul
+        le texte des parts `text` est rendu — jamais str(liste), jamais le raisonnement."""
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+        def post(url, json, headers, timeout):
+            return _CloudResp(payload={"choices": [{"message": {"content": [
+                {"type": "thinking", "thinking": [{"type": "text", "text": "je réfléchis secret"}], "closed": True},
+                {"type": "text", "text": "Réponse "},
+                {"type": "image_url", "image_url": "x"},
+                {"type": "text", "text": "finale."},
+            ]}}]})
+        out = chat_completion(self._config(), [{"role": "user", "content": "?"}], post=post)
+        assert out == "Réponse finale."
+        assert "secret" not in out and "[{" not in out
+
+    def test_cloud_content_liste_sans_texte_est_une_reponse_vide(self, monkeypatch):
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+        def post(url, json, headers, timeout):
+            return _CloudResp(payload={"choices": [{"message": {"content": [{"type": "thinking", "thinking": []}]}}]})
+        with pytest.raises(CloudLLMError, match="réponse vide"):
+            chat_completion(self._config(), [{"role": "user", "content": "?"}], post=post)
+
+    def test_cloud_fournisseur_injoignable_erreur_lisible(self, monkeypatch):
+        import requests
+        monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+        def post(url, json, headers, timeout):
+            raise requests.exceptions.ConnectionError("HTTPSConnectionPool(host='llm.invalid.example'): NameResolutionError")
+        with pytest.raises(CloudLLMError, match="injoignable") as exc:
+            chat_completion(self._config(), [{"role": "user", "content": "?"}], post=post)
+        assert "ConnectionError" in str(exc.value) and "llm.invalid.example" in str(exc.value)
+
+    def test_message_text(self):
+        from transcria.workflow.refine_llm import message_text
+        assert message_text("abc") == "abc"
+        assert message_text(None) == ""
+        assert message_text(["a", {"text": "b"}, {"type": "text", "text": "c"}, {"type": "thinking", "thinking": "d"}, 5]) == "abc"
+        assert message_text(42) == "42"
+
     def test_budget_cloud_defaut(self):
         assert compute_transcript_budget_chars(self._config()) == 60000

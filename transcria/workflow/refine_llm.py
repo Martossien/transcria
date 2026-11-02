@@ -168,7 +168,15 @@ def _cloud_completion(backend: CloudLLMBackend, payload: dict, post, timeout_s: 
     body = {**payload, **{k: v for k, v in extra.items() if k not in _PROTECTED_FIELDS}}
     logger.info("Affinage discuss : complétion directe chez le fournisseur %s sur %s (model=%s)",
                 backend.provider_id or "?", url, body["model"])
-    resp = post(url, json=body, headers=headers, timeout=timeout_s)
+    try:
+        resp = post(url, json=body, headers=headers, timeout=timeout_s)
+    except OSError as exc:
+        # requests.RequestException est une OSError : DNS, connexion refusée, délai… Message
+        # lisible pour l'appelant best-effort ; le texte de l'exception ne porte que l'URL.
+        raise CloudLLMError(
+            f"fournisseur « {backend.provider_id or '?'} » injoignable ({type(exc).__name__}) : "
+            f"{str(exc)[:160]}"
+        ) from None
     status = getattr(resp, "status_code", 200)
     if isinstance(status, int) and not 200 <= status < 300:
         excerpt = _error_excerpt(resp)
@@ -176,18 +184,38 @@ def _cloud_completion(backend: CloudLLMBackend, payload: dict, post, timeout_s: 
             f"le fournisseur « {backend.provider_id or '?'} » a refusé la requête "
             f"(HTTP {status})" + (f" : {excerpt}" if excerpt else "")
         )
-    content = ""
+    content: object = ""
     try:
         data = resp.json()
         content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
     except (ValueError, AttributeError, IndexError, TypeError):
         content = ""
-    text = _THINK_BLOCK.sub("", str(content)).strip()
+    text = _THINK_BLOCK.sub("", message_text(content)).strip()
     if not text:
         raise CloudLLMError(
             f"réponse vide du fournisseur « {backend.provider_id or '?'} » (aucun contenu généré)"
         )
     return text
+
+
+def message_text(content: object) -> str:
+    """Texte d'un ``message.content`` OpenAI-compatible, qu'il soit une chaîne ou une LISTE de
+    parts (Mistral Large 4, mesuré au banc du 2026-11-02 : ``[{type: thinking, …}, {type: text,
+    text: "…"}]``) — seules les parts ``text`` comptent, le raisonnement est ignoré. Une liste
+    convertie par ``str()`` donnait du charabia au chat d'affinage et aux parseurs."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        pieces: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                pieces.append(part)
+            elif isinstance(part, dict) and part.get("type", "text") == "text":
+                value = part.get("text")
+                if isinstance(value, str):
+                    pieces.append(value)
+        return "".join(pieces)
+    return "" if content is None else str(content)
 
 
 def chat_completion(

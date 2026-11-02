@@ -1,6 +1,6 @@
 # LLM d'arbitrage « cloud » (fournisseur externe, passe-plat) — plan directeur
 
-> Statut (2026-11-01) : **lots A, B, C, D livrés** (5729b19, 9266dc9, e94fdfa, 4b70384 ; correctif de migration 8c54f14), **lot E à faire** (qualification réelle — premier constat déjà intégré : ce que prouve `GET /models` dépend du fournisseur, § 3.3.1 et § 8). Plan validé dans ses décisions. Rédigé après une étude
+> Statut (2026-11-01) : **lots A, B, C, D livrés** (5729b19, 9266dc9, e94fdfa, 4b70384 ; correctif de migration 8c54f14), **lot E qualifié le 2026-11-02** (E2E 17/17 chez Mistral ET Ollama cloud, scénarios d'échec, proxy, catalogue hors ligne — journal § 6 ; restent la relecture humaine des DOCX, la rotation des clés et la gate d'installation vierge `--llm-cloud` avant le tag). Plan validé dans ses décisions. Rédigé après une étude
 > de code par sous-agent, la lecture des sources d'opencode (v1.19.5 et v2.2.5, clones locaux),
 > des sondes réelles, deux vérifications indépendantes (sources opencode ; inventaire de notre
 > code), puis une **relecture critique** (17 références contrôlées, trous et contradictions
@@ -227,7 +227,11 @@ appels directs.
    segment retiré, **pas de `chat_template_kwargs`** en cloud, **pas de retry sur 401/403/429/5xx**,
    champ admin `workflow.llm_cloud.extra_request_fields` (dict fusionné dans le corps ; ex.
    `reasoning_effort: none` chez Ollama, qui **rejette** la requête sur un modèle sans
-   raisonnement ; `zdr: true` OpenRouter). Contenu vide = échec lisible.
+   raisonnement ; `zdr: true` OpenRouter). Contenu vide = échec lisible. **`message.content` peut être une LISTE de parts** (Mistral
+   Large 4, mesuré au banc du 2026-11-02 : `[{type: thinking, …}, {type: text, text}]`) :
+   `refine_llm.message_text` ne garde que les parts `text` — `str(liste)` donnait du charabia au
+   chat d'affinage, à la relecture multi-STT et à l'extraction des champs de type. Panne réseau
+   (DNS, connexion) → `CloudLLMError` « injoignable » lisible, jamais une exception `requests` nue.
 6. **Runner en cloud** : `_wait_llm_endpoint_ready` sautée ; `_llm_is_processing` et
    `_llm_gpus_active` rendent `None` ; **mise à mort par inactivité désactivée** (ni
    `idle_grace`, ni `first_contact`, ni `pure_idle`) : seul le plafond absolu `timeout_seconds`
@@ -369,7 +373,7 @@ Compte des phases mis à jour dans AGENTS.md.
 | B — que ce soit dit — **livré** (9266dc9) | table de validation + caducité, colonne groupe + migration, écran, case connecteurs, bandeau permanent, refus à la soumission (5 entrées) + rempart worker, `profile_availability`, provenance + bandeau résultat + pied DOCX + audit, ligne E2E | Playwright gestes réels + revue visuelle ; tests aux limites ; DOCX local inchangé ; `DATA_MODEL.md`, `API_REFERENCE.md` |
 | C — que ça ne casse rien — **livré** (e94fdfa) | doctor révisé (§ 3.3.1), gardes UI/provisioning (§ 3.3.2), Docker/scripts (§ 3.3.3), `timing_model` | golden registre doctor ; tests par rôle ; `docker compose config` |
 | D — zéro GPU + install + docs — **livré** (4b70384) | branche installateur/express, `audiocpp_cli` dans l'image CPU, assistant `llm-cloud`, INSTALL/DOCKER (fr+en), CONFIG_REFERENCE (chaque clé feuille), LLM_BACKENDS, SECURITY_MODEL, AUDIT_DPO, UPGRADE, **`docs/README.md` + AGENTS.md** (index documentaire exigé par `release_check`) ; i18n **6 langues** (fr/en/de/es/it/pt) | `i18n_check`, `release_check`, gate d'installation vierge avec `--llm-cloud`, build de l'image CPU (règle C7) |
-| E — qualification réelle — **à faire** | E2E complet 17/17 avec **Mistral** (`mistral-large-4` ou `zai-glm-5-3`, UE) puis **Ollama cloud** ; échecs : clé révoquée, modèle retiré, fournisseur injoignable, groupe interdit, connecteur refusé ; proxy ; relecture humaine du DOCX ; réseau coupé + `XDG_DATA_HOME` vide + une variable d'env (catalogue embarqué) ; rotation des clés de banc après coup. **Fait les 2026-11-01/02 (avant le banc)** : verdict doctor MESURÉ sur la clé (second GET sans clé), disponibilité d'un fournisseur sans liste, fournisseurs du catalogue models.dev d'opencode résolus sans dérogation ; **les clés du banc se lisent dans le magasin opencode de l'opérateur** (`installer.cli llm-cloud --user-home`), jamais collées dans un échange | journal dans ce document |
+| E — qualification réelle — **banc passé** (2026-11-02 ; reste relecture DOCX, rotation des clés, gate install vierge) | E2E complet 17/17 avec **Mistral** (`mistral-large-4` ou `zai-glm-5-3`, UE) puis **Ollama cloud** ; échecs : clé révoquée, modèle retiré, fournisseur injoignable, groupe interdit, connecteur refusé ; proxy ; relecture humaine du DOCX ; réseau coupé + `XDG_DATA_HOME` vide + une variable d'env (catalogue embarqué) ; rotation des clés de banc après coup. **Journal 2026-11-02 (banc 7899, PG jetable, clé lue dans le magasin opencode par la phase `llm-cloud`, jamais affichée)** : phase d'installation OK (`.env` 0600, config scratch, prod intacte) ; doctor de banc OK (Mistral « clé acceptée ») ; appel direct : clé révoquée → 401 lisible, modèle retiré → 400 lisible, DNS → `CloudLLMError` ; `ensure_llm_ready` injoignable → une reprise à 5 s puis échec explicite, jamais `vram_wait`, 401 journalisé par son statut seul ; refus web : `group_forbidden` (process + ingest), `not_acknowledged`, `connectors_not_allowed` (ingest seul), profil sans LLM jamais refusé ; écran `/admin/llm-cloud` et bandeau OK ; catalogue opencode HORS LIGNE (proxy mort, XDG vide, une variable) : 20 modèles Mistral listés en 1,1 s ; proxy : cf. § 8 ; **défaut trouvé et corrigé** : `content` en liste de parts (§ 3.1.5). **E2E complet Mistral `mistral-large-4` : terminé, état `completed`** (test2.mp3 73 s + PDF joint, profil qualité : résumé LLM 197 s, correction 282 s, relecture finale 331 s, total 1054 s ; document joint exploité jusqu'au SRT corrigé ; isolation des agents respectée ; aucun `.opencode.pid` ni scratch sous le job) ; tour d'affinage « discuss » rejoué par le chemin de PRODUCTION (web → file → exécuteur → appel direct) : réponse juste en 8 s, libellé contractuel, `metadata/llm_provenance.json` écrit, pied de page DOCX « LLM externe : Mistral — La Plateforme ». Piège de banc : le worker lit `storage.jobs_dir` de la CONFIG, pas une surcharge de ligne de commande — la config scratch doit porter ses propres dossiers, sinon le banc écrit dans le `jobs/` de prod (vécu, nettoyé). **E2E complet Ollama cloud `glm-5.2` : terminé, état `completed`, 17 OK / 0 échec** (résumé LLM 44 s, correction 75 s, relecture finale 60 s, total 198 s — cinq fois plus rapide que `mistral-large-4` sur le même audio) ; tour « discuss » par le chemin de production : réponse juste en 4 s, provenance `ollama-cloud`, pied de page DOCX « LLM externe : Ollama cloud ». **Reste du lot E** : relecture humaine des deux DOCX, rotation des deux clés exposées lors d'une session antérieure, gate d'installation en distro vierge avec `--llm-cloud` avant tout tag (`docs/RELEASE.md`). **Fait les 2026-11-01/02 (avant le banc)** : verdict doctor MESURÉ sur la clé (second GET sans clé), disponibilité d'un fournisseur sans liste, fournisseurs du catalogue models.dev d'opencode résolus sans dérogation ; **les clés du banc se lisent dans le magasin opencode de l'opérateur** (`installer.cli llm-cloud --user-home`), jamais collées dans un échange | journal dans ce document |
 
 Ratchets et gardes : `deep_config_chains` 196 (nouvelles lectures `llm_cloud.*` **par vue typée**,
 `tests/contracts/test_config_views_contract.py` à régénérer) ; `test_config_classification`
@@ -433,7 +437,14 @@ Voix (patron) : `voice/models.py:78`, `voice/routes.py:48,194`. Groupes : `auth/
   Mistral `GET /v1/models` → 401 sans clé valide. D'abord porté en table statique (04796ac),
   puis remplacé le 2026-11-02 par une **mesure à chaque passage** du doctor (second GET sans
   clé), valable pour tout fournisseur (§ 3.3.1).
-- Bun/opencode et le proxy d'entreprise (`https_proxy`, `no_proxy`) : à tester au lot E.
+- ~~Bun/opencode et le proxy d'entreprise (`https_proxy`, `no_proxy`) : à tester au lot E.~~
+  **Mesuré le 2026-11-02 (tinyproxy local, Mistral, opencode 2.2.5)** : opencode **honore
+  `https_proxy`** (CONNECT vus par le proxy) **et `no_proxy`** (aucun CONNECT avec
+  `no_proxy=api.mistral.ai`) ; l'appel direct `requests` aussi. **Proxy injoignable** : opencode
+  reste **muet** (aucune erreur, aucun texte) jusqu'au plafond absolu du runner — le doctor, lui,
+  échoue vite sur `GET /models` (« injoignable »), c'est le pré-vol à lancer après tout changement
+  de proxy. Modèle retiré → événement `error` typé `provider.no-route` « Model unavailable » ;
+  clé révoquée → `provider.auth` 401, corps du fournisseur sans la clé.
 - ~~Le binaire opencode peut-il lister les URL de base (→ table réduite aux faits à afficher) ?~~
   **Répondu le 2026-11-02** : pas le binaire, mais son **cache du catalogue models.dev**
   (`~/.cache/opencode/models.json`, dict `id → {api, env, npm, name, models}`) — 235 fournisseurs,

@@ -35,7 +35,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   **Fournisseurs du catalogue models.dev d'opencode** (cache local, 192 résolvables : URL https
   littérale, une seule variable, SDK OpenAI) : résolus sans dérogation de config (URL + variable
   de clé dérivées, `api_key_env` refusé), affichés « non qualifié » dans l'écran d'administration
-  et le doctor ; `install.sh --llm-cloud` les accepte sur demande explicite. **Docker** : entrypoint
+  et le doctor ; `install.sh --llm-cloud` les accepte sur demande explicite. **Appels directs** :
+  un `message.content` en liste de parts (Mistral Large 4 : raisonnement puis texte) est lu
+  correctement (texte des parts `text` seulement — il arrivait en chaîne brute au chat
+  d'affinage, à la relecture multi-STT et à l'extraction des champs de type) ; une panne réseau
+  devient une erreur lisible « fournisseur injoignable ». **Docker** : entrypoint
   sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
   phases LLM cloud historisées à part dans le modèle de temps.
 - **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation

@@ -260,7 +260,7 @@ transcria/
       type_field_extraction.py # extraction LÉGÈRE des champs sur-mesure d'un type (logique pure)
       concurrency_profile.py # profil de concurrence du workflow + observabilité du goulot
       refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables), extract_proposal (label contractuel tolérant)
-      refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>)
+      refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>) ; message_text = content chaîne OU liste de parts (Mistral : thinking + text → parts text seules)
       llm_readiness.py      # ensure_llm_ready/llm_running_before_phase : règle UNIQUE « LLM prête ? » des phases ; en CLOUD une seule reprise puis échec explicite (jamais vram_wait), en local/distant inchangé
       multi_stt_review.py   # Multi-STT ciblé — LOGIQUE PURE (sélection/arbitrage/application) ; l'orchestration vit dans phases/multi_stt_review.py (workflow.multi_stt, ON par défaut depuis 0.3.4, best-effort)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
