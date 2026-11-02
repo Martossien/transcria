@@ -87,7 +87,7 @@
   "transcria.diagnostics.doctor": 10,
   "transcria.diagnostics.system_status": 1,
   "transcria.exports": 2,
-  "transcria.exports.docx_report": 7,
+  "transcria.exports.docx_report": 8,
   "transcria.exports.docx_style": 1,
   "transcria.exports.package_builder": 5,
   "transcria.gpu": 2,

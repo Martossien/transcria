@@ -39,7 +39,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   un `message.content` en liste de parts (Mistral Large 4 : raisonnement puis texte) est lu
   correctement (texte des parts `text` seulement — il arrivait en chaîne brute au chat
   d'affinage, à la relecture multi-STT et à l'extraction des champs de type) ; une panne réseau
-  devient une erreur lisible « fournisseur injoignable ». **Docker** : entrypoint
+  devient une erreur lisible « fournisseur injoignable ». **Rapport Word** : les rôles et
+  fonctions des participants sont harmonisés au rendu sur le lexique validé (variantes → forme
+  de référence, mot entier) — le texte de la LLM de résumé, écrit sur la transcription rapide
+  encore fautive, imprimait des graphies que l'utilisateur avait lui-même déclarées fautives
+  (mesuré : 29 jobs réels sur 65) ; `participants.json` reste intact. **Docker** : entrypoint
   sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
   phases LLM cloud historisées à part dans le modèle de temps.
 - **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation

@@ -335,6 +335,7 @@ transcria/
       package_builder.py    # PackageBuilder — ZIP final (inclut le rapport DOCX)
       docx_report.py        # DocxReport — rapport Word pro adapté au type : extraction structurée (décisions/actions/votes…),
                             #   champs type-spécifiques, quorum CSE auto ; FAÇADE (ré-exporte style+srt) — golden tests/test_docx_report_golden.py
+                            #   rôles/fonctions des participants harmonisés AU RENDU sur le lexique validé (context/lexicon.apply_validated_forms : variante → forme, mot entier ; participants.json intact — mesuré 29/65 jobs réels)
       docx_style.py         # helpers de STYLE extraits (vague 0) : palette, libellés FR/EN, thèmes (_DocxTheme), XML bas niveau, formats, gras markdown
       docx_srt.py           # parsing SRT pur texte (blocs, locuteurs, durée) — réutilisable hors DOCX
                             #   generate_docx_report(job_id, jobs_dir, output_path). Exclu de mypy (python-docx sans stubs).

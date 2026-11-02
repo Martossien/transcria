@@ -577,3 +577,56 @@ class TestPointsAVerifierCouvertureComplete:
 def test_footer_absent_de_la_couverture(doc):
     """La page de garde reste vierge : pas de « Page 1/N » sur la couverture."""
     assert doc.sections[0].different_first_page_header_footer is True
+
+
+# ── Rôles des participants harmonisés sur le lexique VALIDÉ (rendu seul) ─────────
+
+def test_roles_participants_harmonises_sur_le_lexique_valide(tmp_path):
+    """Mesuré sur 65 jobs réels (2026-11-02) : 29 jobs imprimaient dans le tableau des
+    participants une variante déclarée fautive au lexique (rôle écrit par la LLM de résumé
+    sur la transcription rapide). Au rendu, la forme validée remplace la variante — mot entier,
+    casse ignorée, sigles compris — et participants.json n'est pas modifié."""
+    import json
+    from transcria.exports.docx_report import generate_docx_report
+    job_id = "job-lex-roles"
+    _seed_job(tmp_path, job_id)
+    base = tmp_path / job_id
+    parts = json.loads((base / "context" / "participants.json").read_text(encoding="utf-8"))
+    parts[0]["role"] = "cliente qui commande de l'émental et parle du sigle abécé et d'un émentalier"
+    parts[0]["function"] = "responsable abécé"
+    (base / "context" / "participants.json").write_text(json.dumps(parts), encoding="utf-8")
+    (base / "context" / "session_lexicon.json").write_text(json.dumps([
+        {"term": "Emmental", "category": "produit", "priority": "importante", "variants": ["émental", "Emental"], "replace_by": ""},
+        {"term": "SIGLE_A", "category": "sigle", "priority": "critique", "variants": ["abécé"], "replace_by": "SIGLE_A"},
+    ]), encoding="utf-8")
+    out = generate_docx_report(job_id, str(tmp_path), tmp_path / "out.docx")
+    from docx import Document
+    doc = Document(str(out))
+    # SEUL le tableau des participants est harmonisé ; la transcription reste verbatim.
+    participants_table = next(t for t in doc.tables if "Fonction" in " ".join(c.text for c in t.rows[0].cells))
+    rows = " ".join(c.text for r in participants_table.rows for c in r.cells)
+    assert "Emmental" in rows and "émental " not in rows and "d'émental" not in rows
+    assert "SIGLE_A" in rows and "abécé" not in rows
+    assert "émentalier" in rows             # mot entier seulement : jamais de remplacement partiel
+    assert "responsable SIGLE_A" in rows
+    transcript = " ".join(_table_texts(doc))
+    assert "d'émental s'il vous plaît" in transcript   # verbatim intact
+    stored = json.loads((base / "context" / "participants.json").read_text(encoding="utf-8"))
+    assert "émental" in stored[0]["role"]    # l'artefact reste intact
+
+
+def test_roles_participants_sans_lexique_ou_lexique_corrompu(tmp_path):
+    import json
+    from transcria.exports.docx_report import generate_docx_report
+    job_id = "job-lex-absent"
+    _seed_job(tmp_path, job_id)
+    base = tmp_path / job_id
+    parts = json.loads((base / "context" / "participants.json").read_text(encoding="utf-8"))
+    parts[0]["role"] = "cliente qui commande de l'émental"
+    (base / "context" / "participants.json").write_text(json.dumps(parts), encoding="utf-8")
+    from docx import Document
+    out = generate_docx_report(job_id, str(tmp_path), tmp_path / "a.docx")
+    assert "émental" in " ".join(_table_texts(Document(str(out))))
+    (base / "context" / "session_lexicon.json").write_text("{pas du json", encoding="utf-8")
+    out = generate_docx_report(job_id, str(tmp_path), tmp_path / "b.docx")
+    assert "émental" in " ".join(_table_texts(Document(str(out))))

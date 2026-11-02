@@ -11,6 +11,7 @@ from docx.document import Document as DocumentT  # type pour annotations (docx.D
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.shared import Cm, Pt, RGBColor
 
+from transcria.context.lexicon import apply_validated_forms
 from transcria.context.meeting_type_catalog import (
     ORDERABLE_SECTIONS,
     confidential_types,
@@ -131,8 +132,13 @@ class DocxReport:
         logo_bytes: bytes | None = None,
         summary_stale: bool = False,
         llm_provenance: dict | None = None,
+        lexicon_entries: list | None = None,
     ):
         self.logo_bytes = logo_bytes
+        # Lexique de session VALIDÉ : les rôles/fonctions des participants (texte de la LLM de
+        # résumé, écrit sur la transcription rapide encore fautive) sont harmonisés au rendu,
+        # comme la synthèse l'est par la relecture finale. L'artefact participants.json reste intact.
+        self.lexicon_entries: list = lexicon_entries if isinstance(lexicon_entries, list) else []
         # §5.2 : verbatim édité APRÈS la génération de la synthèse (marqueur posé par
         # l'éditeur SRT) → mention honnête dans le document, levée à la resync LLM.
         self.summary_stale = bool(summary_stale)
@@ -203,9 +209,9 @@ class DocxReport:
                 # `_readable` présente en « Locuteur N » plutôt qu'en tiret muet.
                 "name": self._readable(
                     p.get("name") or spk.get("mapped_name") or spk.get("speaker_id") or "—"),
-                "function": p.get("function", ""),
+                "function": apply_validated_forms(str(p.get("function") or ""), self.lexicon_entries),
                 "service": p.get("service", ""),
-                "role": p.get("role", ""),
+                "role": apply_validated_forms(str(p.get("role") or ""), self.lexicon_entries),
                 "is_animator": bool(p.get("is_animator", False)),
                 "time_s": time_s,
                 "time_pct": pct,
@@ -1179,12 +1185,17 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
         llm_provenance = fs.load_json("metadata/llm_provenance.json") or {}
     except Exception:  # JSON corrompu = pas de mention, le rendu ne casse jamais
         llm_provenance = {}
+    try:
+        lexicon_entries = fs.load_json("context/session_lexicon.json") or []
+    except Exception:  # JSON corrompu = rôles rendus tels quels, le rendu ne casse jamais
+        lexicon_entries = []
     # Mapping locuteurs validé → substitution des jetons SPEAKER_XX au rendu de la
     # synthèse (le ctx est le canal de données du rapport ; l'artefact reste intact).
     ctx["speaker_mapping"] = speaker_map
     report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
                         render_options=render_options, logo_bytes=logo_bytes,
-                        summary_stale=summary_stale, llm_provenance=llm_provenance)
+                        summary_stale=summary_stale, llm_provenance=llm_provenance,
+                        lexicon_entries=lexicon_entries)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

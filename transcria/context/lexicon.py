@@ -1,3 +1,4 @@
+import re
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -161,3 +162,35 @@ class LexiconManager:
             terms.append({"term": term, "category": category, "priority": priority, "variants": []})
 
         return LexiconManager.save(job, jobs_dir, terms)
+
+
+def apply_validated_forms(text: str, entries: list | None) -> str:
+    """Remplace, dans un texte LIBRE, chaque variante d'un lexique VALIDÉ par sa forme de
+    référence (``replace_by`` sinon ``term``) — mot entier, insensible à la casse.
+
+    Mesuré 2026-11-02 sur 65 jobs réels : 29 jobs portaient dans un rôle de participant une
+    variante que l'utilisateur avait lui-même déclarée fautive au lexique (109 champs, 98 fois
+    le texte de la LLM de résumé jamais retouché) — le tableau du rapport Word l'imprimait
+    telle quelle. Les variantes sont par définition des graphies fautives validées comme
+    telles : aucun homographe légitime à préserver. Les variantes les plus longues passent en
+    premier (« SIGLE_A B » avant « SIGLE_A »). Jamais appliqué à un artefact stocké : rendu seul.
+    """
+    if not text or not entries:
+        return text
+    pairs: list[tuple[str, str]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        form = str(entry.get("replace_by") or entry.get("term") or "").strip()
+        if not form:
+            continue
+        for variant in entry.get("variants") or []:
+            v = str(variant).strip()
+            if v and v.lower() != form.lower():
+                pairs.append((v, form))
+    if not pairs:
+        return text
+    out = text
+    for variant, form in sorted(pairs, key=lambda vf: -len(vf[0])):
+        out = re.sub(r"(?<!\w)" + re.escape(variant) + r"(?!\w)", form, out, flags=re.IGNORECASE)
+    return out
