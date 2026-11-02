@@ -79,6 +79,10 @@
           <label class="form-label small mb-1">{{ _("Forme à écrire dans la transcription (si différente de la forme validée)") }}</label>
           <input type="text" class="form-control form-control-sm lex-replace" placeholder="{{ _("Ex. sigle développé, orthographe officielle") }}" value="{{ t.replace_by or '' }}">
         </div>
+        {% if t.mentions %}
+        <div class="mt-1 small text-body-secondary lex-mentions">{{ _('Mentions relevées, jamais remplacées :') }} {{ t.mentions|join(', ') }}</div>
+        {% endif %}
+        <script type="application/json" class="lex-mentions-json">{{ (t.mentions or [])|tojson }}</script>
         {% if ' / ' in (t.term or '') %}
         <div class="mt-2"><span class="badge text-bg-warning-subtle border text-warning-emphasis">{{ _("Forme ambiguë « A / B » : jamais remplacée, seulement signalée — gardez une seule graphie") }}</span></div>
         {% endif %}

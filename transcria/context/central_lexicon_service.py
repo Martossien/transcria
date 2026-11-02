@@ -49,6 +49,7 @@ def _clean_entry(entry: dict, source: str) -> dict:
         "replace_by": str(entry.get("replace_by", "") or "").strip(),
         "comment": str(entry.get("comment", "") or "").strip(),
         "contexts": LexiconManager._normalize_contexts(entry.get("contexts", [])),
+        "mentions": LexiconManager._normalize_variants(entry.get("mentions", []), term=term),
         "source": str(entry.get("source", "") or source),
         "central_entry_id": entry.get("central_entry_id") or (entry.get("id", "") if is_central else ""),
         "central_lexicon_id": entry.get("central_lexicon_id") or entry.get("lexicon_id", ""),
@@ -81,6 +82,7 @@ def merge_lexicon_entries(
             continue
         current = merged[key]
         current["variants"] = _merge_variants(current.get("variants", []), entry.get("variants", []))
+        current["mentions"] = _merge_variants(current.get("mentions", []), entry.get("mentions", []))
         current["priority"] = _priority_max(current.get("priority", "normale"), entry.get("priority", "normale"))
         current["category"] = entry.get("category") or current.get("category", "mot suspect")
         current["comment"] = entry.get("comment") or current.get("comment", "")
@@ -94,6 +96,7 @@ def merge_lexicon_entries(
             continue
         if key in merged:
             entry["variants"] = _merge_variants(entry.get("variants", []), merged[key].get("variants", []))
+            entry["mentions"] = _merge_variants(entry.get("mentions", []), merged[key].get("mentions", []))
             entry["priority"] = _priority_max(entry.get("priority", "normale"), merged[key].get("priority", "normale"))
             entry["source"] = "session"
         merged[key] = entry
@@ -139,7 +142,8 @@ def prefilter_lexicon_entries_for_display(
         entry = dict(raw)
         term = str(entry.get("term", "") or "").strip()
         priority = normalize_priority(entry.get("priority", "normale"))
-        variants = [str(v).strip() for v in entry.get("variants", []) if str(v).strip()]
+        # Une mention (jamais remplacée) atteste autant qu'une variante que le terme est CITÉ.
+        variants = [str(v).strip() for v in [*entry.get("variants", []), *entry.get("mentions", [])] if str(v).strip()]
 
         if normalized_reference and term and normalize_match_text(term) in normalized_reference:
             entry["_display_reason"] = "term_presence"
@@ -207,7 +211,7 @@ def filter_lexicon_by_srt_presence(
         entry = dict(raw)
         term = str(entry.get("term", "") or "").strip()
         priority = normalize_priority(entry.get("priority", "normale"))
-        variants = [str(v).strip() for v in entry.get("variants", []) if str(v).strip()]
+        variants = [str(v).strip() for v in [*entry.get("variants", []), *entry.get("mentions", [])] if str(v).strip()]
 
         if term and normalize_match_text(term) in normalized_srt:
             filtered.append(entry)

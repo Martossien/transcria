@@ -18,15 +18,16 @@
   "transcria/web/static/js/srt_time.js": 49,
   "transcria/web/static/js/ui_actions.js": 84,
   "transcria/web/static/js/wizard-api.js": 59,
-  "transcria/web/static/js/wizard.js": 1366
+  "transcria/web/static/js/wizard.js": 1380
  },
  "template_lines": {
   "transcria/web/templates/_central_lexicon_entry_fields.html": 31,
-  "transcria/web/templates/_first_run_checklist.html": 63,
+  "transcria/web/templates/_first_run_checklist.html": 61,
   "transcria/web/templates/account_tokens.html": 75,
   "transcria/web/templates/admin_config.html": 197,
   "transcria/web/templates/admin_connectors.html": 369,
   "transcria/web/templates/admin_hardware.html": 55,
+  "transcria/web/templates/admin_llm_cloud.html": 95,
   "transcria/web/templates/admin_maintenance.html": 227,
   "transcria/web/templates/admin_models.html": 201,
   "transcria/web/templates/audit.html": 106,
@@ -45,6 +46,7 @@
   "transcria/web/templates/meeting_types.html": 178,
   "transcria/web/templates/queue.html": 192,
   "transcria/web/templates/schedule.html": 240,
+  "transcria/web/templates/setup.html": 38,
   "transcria/web/templates/srt_editor.html": 123,
   "transcria/web/templates/user_form.html": 55,
   "transcria/web/templates/users.html": 33,
@@ -57,7 +59,7 @@
   "transcria/web/templates/wizard/_step_export.html": 38,
   "transcria/web/templates/wizard/_step_file.html": 112,
   "transcria/web/templates/wizard/_step_launch.html": 26,
-  "transcria/web/templates/wizard/_step_lexicon.html": 170,
+  "transcria/web/templates/wizard/_step_lexicon.html": 174,
   "transcria/web/templates/wizard/_step_participants.html": 217,
   "transcria/web/templates/wizard/_step_quality.html": 61,
   "transcria/web/templates/wizard/_step_summary.html": 115

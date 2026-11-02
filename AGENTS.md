@@ -248,7 +248,7 @@ transcria/
       resume.py             # reprise mi-parcours : PIPELINE_PHASES, artefacts non ambigus, empreintes sha256 (goldens B1)
       profiles.py           # profils de traitement (get_profile/profile_for_job) — quelles étapes chaque profil exécute
       profile_availability.py # disponibilité des profils pour l'UI (Phase 6)
-      speaker_projection.py # B1 : projection locuteurs — service PUR
+      speaker_projection.py # B1 : projection locuteurs — service PUR ; merge_llm_suggestions normalise les termes douteux à l'ENTRÉE (llm_parsing.normalize_suspect_terms : « A / B » tranché par la transcription rapide ou scindé, mentions ≠ variantes — mesure 2026-11-02, 0 prompt touché)
       speaker_manifest.py   # projection manifeste participants × diarisation → suggestions étape 5 (rooms « micro partagé »)
       animator_hint.py      # suggestion d'animateur d'après le RÔLE ANNONCÉ (vocabulaire fermé ×5 langues) → bouton étape 5 ; PUR, proposé jamais coché ; le chemin statistique « forme des tours » a été essayé puis retiré (corpus réel : ne se déclenche jamais)
       track_fusion.py       # vague 5 lot B : fenêtres→intervalles STT (levier de coût), fusion par tri, chevauchements protégés du multi-STT
@@ -316,7 +316,7 @@ transcria/
       participants.py       # ParticipantsManager
       invite_parser.py      # sanitize_invite()/render_invite_markdown() — brief d'invitation collé (noms via e-mails, contexte), e-mails retirés
       document_extractor.py # extract_document_text() — texte des documents présentés joints (PDF/DOCX/PPTX/TXT, images ignorées), e-mails retirés
-      lexicon.py            # LexiconManager (20 catégories, variants, contexts)
+      lexicon.py            # LexiconManager (20 catégories, variants, mentions = formes relevées JAMAIS remplacées, contexts) ; apply_validated_forms = variantes → forme (rendu)
       central_lexicon_models.py # Modèles SQLAlchemy lexiques centralisés par groupe
       central_lexicon_store.py  # Permissions, CRUD, import et périmètre job→groupe
       central_lexicon_service.py# Fusion session/LLM/central + filtrage avant correction

@@ -32,7 +32,9 @@ serveur) — jamais lancé par la CI. Codes de sortie documentés dans chaque en
 `score_reference_bench.py` ; corpus : `prepare_reference_windows.py`,
 `extract_reference_docx.py`, `read_deliverables.py` ; charge : `load_test.py`,
 `load_sampler.py`, `e2e_campaign.py`, `estimate_local_b5.py` ; prototypes hybrides :
-`compare_stt_segments.py`, `arbitrate_hybrid_llm.py`, `build_hybrid_transcript.py`.
+`compare_stt_segments.py`, `arbitrate_hybrid_llm.py`, `build_hybrid_transcript.py` ;
+relevé des corrections humaines et du devenir des termes douteux (COMPTAGES seuls, jamais un
+terme ni un nom) : `lexicon_edits_survey.py` — à rejouer sur une instance d'usage réel.
 Mode d'emploi : `docs/BENCHMARKING.md`.
 
 > Historique : jusqu'à la vague 0 de consolidation (2026-07), tout vivait à plat (63

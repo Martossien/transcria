@@ -43,7 +43,17 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   fonctions des participants sont harmonisés au rendu sur le lexique validé (variantes → forme
   de référence, mot entier) — le texte de la LLM de résumé, écrit sur la transcription rapide
   encore fautive, imprimait des graphies que l'utilisateur avait lui-même déclarées fautives
-  (mesuré : 29 jobs réels sur 65) ; `participants.json` reste intact. **Docker** : entrypoint
+  (mesuré : 29 jobs réels sur 65) ; `participants.json` reste intact. **Lexique : formes
+  « A / B » tranchées à l'entrée et mentions séparées des variantes** (mesure sur 65 jobs :
+  497 termes douteux sur 1319 proposés avaient une forme « A / B » que la correction ne peut
+  pas appliquer ; 789 variantes « non résolues » dans les rapports qualité, dont 84 % venaient
+  de là ou de mentions légitimes comptées comme fautes). À l'arrivée des termes dans le job,
+  `llm_parsing.normalize_suspect_terms` tranche « A / B » par la transcription rapide (la forme
+  absente du brut est la bonne), scinde deux entités distinctes en deux entrées, et range dans
+  une clé `mentions` les formes qui ne sont pas des graphies fautives (« semestre 2 » pour
+  « S2 », « PEI 25 » pour « PEI ») : affichées à l'étape 6, comptées pour la présence, jamais
+  remplacées ni comptées « non résolues ». Rejoué sur le corpus : 0 forme « A / B » restante,
+  non résolues 789 → 262. Aucun prompt modifié. **Docker** : entrypoint
   sans GGUF en cloud, quickstart `--cpu` honorant `TRANSCRIA_LLM_BACKEND=cloud`. Durées des
   phases LLM cloud historisées à part dans le modèle de temps.
 - **Palier zéro GPU** (LLM cloud + Kroko + Nemotron 3 CPU) et option d'installation

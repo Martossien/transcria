@@ -160,7 +160,8 @@ class WorkflowRunner:
 
         result["summary_text"] = summary_text
         meeting_ctx = fs.load_json("context/meeting_context.json") or {}
-        empty_fields = speaker_projection.merge_llm_suggestions(meeting_ctx, parsed)
+        empty_fields = speaker_projection.merge_llm_suggestions(
+            meeting_ctx, parsed, transcript_text=fs.load_text("summary/quick_transcript.txt") or "")
         if empty_fields:
             logger.warning("_apply_llm_suggestions: champs LLM non renseignés — %s", empty_fields)
         fs.save_json("context/meeting_context.json", meeting_ctx)

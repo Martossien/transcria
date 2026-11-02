@@ -128,6 +128,12 @@ class LexiconManager:
                 "comment": t.get("comment", "").strip(),
                 "contexts": LexiconManager._normalize_contexts(t.get("contexts", [])),
             }
+            # Mentions relevées par la LLM (« semestre 2 » pour « S2 ») : gardées pour le
+            # contexte et la présence, JAMAIS des cibles de remplacement — distinctes des variantes.
+            mentions = [m for m in LexiconManager._normalize_variants(t.get("mentions", []), term=term)
+                        if m.casefold() not in {v.casefold() for v in entry["variants"]}]
+            if mentions:
+                entry["mentions"] = mentions
             for optional in ("source", "central_entry_id", "central_lexicon_id", "central_lexicon_name", "_display_reason"):
                 if t.get(optional):
                     entry[optional] = str(t.get(optional)).strip()

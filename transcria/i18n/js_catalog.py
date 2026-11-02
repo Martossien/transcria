@@ -61,6 +61,7 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('Finalisation…'),
     N_('Fonction'),
     N_('Forme validée'),
+    N_('Mentions relevées, jamais remplacées :'),
     N_('Formes suspectes observées'),
     N_('Identification des locuteurs…'),
     N_('Informations client'),

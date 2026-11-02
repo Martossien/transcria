@@ -16,7 +16,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from transcria.llm_tools.llm_parsing import split_label_function
+from transcria.llm_tools.llm_parsing import normalize_suspect_terms, split_label_function
 
 # Champs de suggestion LLM projetés tels quels dans meeting_context.json.
 SUGGESTION_FIELDS = (
@@ -102,12 +102,13 @@ def normalize_speaker_role_info(info: dict) -> dict:
     return {"label": label, "function": function, "role": role}
 
 
-def merge_llm_suggestions(meeting_ctx: dict, parsed: dict) -> list[str]:
+def merge_llm_suggestions(meeting_ctx: dict, parsed: dict, *, transcript_text: str = "") -> list[str]:
     """Projette les suggestions LLM parsées dans ``meeting_ctx`` (mutation en place).
 
     Retourne la liste des champs de suggestion NON renseignés par la LLM (à journaliser
     par l'appelant). Ne touche jamais un choix explicite déjà posé par l'utilisateur
-    (``language``).
+    (``language``). Les termes douteux sont normalisés à l'entrée (formes « A / B »
+    tranchées avec ``transcript_text`` — la transcription rapide —, mentions séparées).
     """
     # Langue des livrables RÉSOLUE (owner.locale / détection) : persistée pour que l'affichage
     # (extraction de la synthèse, en-tête d'extrait, rapports, DOCX) choisisse les bons
@@ -122,7 +123,7 @@ def merge_llm_suggestions(meeting_ctx: dict, parsed: dict) -> list[str]:
 
     if parsed.get("speaker_count", 0) > 0:
         meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
-    termes_suspects = parsed.get("termes_suspects") or []
+    termes_suspects = normalize_suspect_terms(parsed.get("termes_suspects") or [], transcript_text)
     meeting_ctx["termes_suspects"] = termes_suspects
     meeting_ctx["termes_suspects_parse_status"] = parsed.get("termes_suspects_parse_status", "missing")
     parse_warning = parsed.get("termes_suspects_parse_warning", "")

@@ -537,7 +537,11 @@ var TranscrIA = window.TranscrIA || {};
     };
 
     W.parseLexiconContexts = function (row) {
-        var node = row.querySelector('.lex-contexts-json');
+        return W.parseLexiconJsonField(row, '.lex-contexts-json');
+    };
+
+    W.parseLexiconJsonField = function (row, selector) {
+        var node = row && row.querySelector(selector);
         if (!node) return [];
         try {
             var parsed = JSON.parse(node.textContent || '[]');
@@ -735,6 +739,8 @@ var TranscrIA = window.TranscrIA || {};
             '<input type="hidden" class="lex-display-reason" value="">' +
             '<div class="mt-2 lex-central-badge d-none"></div>' +
             '<script type="application/json" class="lex-contexts-json">[]</script>' +
+            '<script type="application/json" class="lex-mentions-json">[]</script>' +
+            '<div class="mt-1 small text-body-secondary lex-mentions d-none"></div>' +
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="' + t('Pourquoi cette forme doit être validée') + '"></textarea>' +
             W.renderLexiconContexts(td.contexts || []) +
             (document.getElementById('lex-promote-modal')
@@ -753,6 +759,13 @@ var TranscrIA = window.TranscrIA || {};
         row.querySelector('.lex-central-lexicon-id').value = td.central_lexicon_id || '';
         row.querySelector('.lex-central-lexicon-name').value = td.central_lexicon_name || '';
         row.querySelector('.lex-display-reason').value = td._display_reason || '';
+        var mentions = Array.isArray(td.mentions) ? td.mentions : [];
+        row.querySelector('.lex-mentions-json').textContent = JSON.stringify(mentions);
+        var mentionsNode = row.querySelector('.lex-mentions');
+        if (mentionsNode && mentions.length) {
+            mentionsNode.classList.remove('d-none');
+            mentionsNode.textContent = t('Mentions relevées, jamais remplacées :') + ' ' + mentions.join(', ');
+        }
         var centralBadge = row.querySelector('.lex-central-badge');
         if (centralBadge && td.central_lexicon_name) {
             centralBadge.classList.remove('d-none');
@@ -886,7 +899,8 @@ var TranscrIA = window.TranscrIA || {};
                 replace_by: W.getRowValue(row, '.lex-replace'),
                 variants: W.getRowValue(row, '.lex-variants').split(/[;,]/).map(function (v) { return v.trim(); }).filter(Boolean),
                 comment: W.getRowValue(row, '.lex-comment'),
-                contexts: W.parseLexiconContexts(row)
+                contexts: W.parseLexiconContexts(row),
+                mentions: W.parseLexiconJsonField(row, '.lex-mentions-json')
             };
             [
                 ['source', '.lex-source'],

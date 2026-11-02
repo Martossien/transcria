@@ -505,7 +505,7 @@ jobs/<job_id>/
 │   ├── meeting_context.json       # Contexte de réunion (titre, type, langue, suggestions LLM)
 │   ├── participants.json          # Liste des participants [{id, name, function, role, ...}]
 │   ├── selected_lexicons.json     # Lexiques centralisés cochés pour le préremplissage du job
-│   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, source, central_entry_id, ...}]
+│   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, variants, mentions?, replace_by, source, central_entry_id, ...}] — `mentions` (optionnel) : formes relevées par la LLM qui ne sont PAS des graphies fautives (« semestre 2 » pour « S2 ») : attestent la présence, jamais remplacées
 │   ├── session_lexicon_filtered.json # Lexique réduit transmis à la correction LLM
 │   ├── session_lexicon.txt        # Lexique en texte (pour correction LLM)
 │   ├── render_options.json        # Options de rendu du rapport (thème, sections on/off + ORDRE) — chat d'affinage ou route directe sans LLM

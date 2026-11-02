@@ -6,9 +6,11 @@ vLLM. Aucun sous-processus, aucun fichier — testables sans mock de processus.
 ``OpenCodeRunner`` conserve des délégateurs ``staticmethod`` : les appelants
 historiques et les tests passent par la classe.
 """
+import difflib
 import json
 import logging
 import re
+import unicodedata
 
 from transcria.llm_tools.prompt_locator import summary_markers
 
@@ -295,8 +297,9 @@ def parse_summary_term_line(line: str, table_headers: list[str] | None = None) -
 
     term = raw_term
     variants = normalize_summary_variants(variants_raw, term=term)
-    if not variants and "/" in raw_term:
-        parts = [clean_summary_cell(p) for p in raw_term.split("/") if p.strip()]
+    if not variants and ALTERNATIVES_RE.search(raw_term):
+        # « A / B » (slash ENTOURÉ d'espaces) = alternatives ; « 24/7 » fait partie du terme.
+        parts = [clean_summary_cell(p) for p in ALTERNATIVES_RE.split(raw_term) if p.strip()]
         if parts:
             term = parts[0]
             variants = normalize_summary_variants(parts[1:], term=term)
@@ -722,3 +725,194 @@ def parse_structured_summary(
     fields["structured_data_parse_warning"] = sd_warning
 
     return fields
+
+
+# ── Formes « A / B » et mentions (mesure 2026-11-02 sur 65 jobs réels) ─────────────────
+#
+# 458 des 1305 entrées validées avaient un terme « A / B » : la LLM hésite entre deux graphies
+# (« Power BI / Power B ») ou colle deux entités (« MSSI / DPO »), l'humain valide tel quel, et
+# la correction ne peut rien remplacer par « A / B » (garde en code `sans_formes_ambigues`).
+# Ces entrées expliquaient 634 des 753 variantes « non résolues » des rapports qualité. Les
+# 119 autres étaient des MENTIONS légitimes listées comme variantes (« semestre 2 » pour
+# « S2 », « PEI 25 » pour « PEI ») que la correction laisse à raison mais que le contrôle
+# qualité comptait. Les deux se tranchent par le code, ici, à l'entrée dans le job.
+
+#: Slash ENTOURÉ d'espaces = alternatives ; un slash collé (« 24/7 », « E/S ») fait partie du terme.
+ALTERNATIVES_RE = re.compile(r"\s/\s")
+#: En deçà, deux graphies ne sont plus « le même mot » (seuil de `resolve_alternatives`).
+_SAME_WORD_RATIO = 0.75
+#: En deçà, une variante n'est plus une graphie fautive mais une mention d'autre chose.
+_SPELLING_RATIO = 0.6
+#: Au-delà, deux formes entendues toutes les deux restent UNE graphie (l'une est la faute de l'autre).
+_NEAR_IDENTICAL_RATIO = 0.9
+
+
+def fold_key(text: str) -> str:
+    """Clé de comparaison de graphies : casse, accents, espaces, tirets, apostrophes, points ignorés."""
+    decomposed = unicodedata.normalize("NFKD", str(text or "").casefold())
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return re.sub(r"[\s\-_'’.]+", "", stripped)
+
+
+def _fold_text(text: str) -> str:
+    """Texte de recherche : casse ignorée, ACCENTS et mots conservés — « Zabeo » et « Zabéo »
+    doivent rester distinguables pour savoir laquelle des deux a été entendue."""
+    return str(text or "").casefold()
+
+
+def _phrase_present(folded_text: str, phrase: str) -> bool:
+    needle = _fold_text(phrase).strip()
+    if not needle or not folded_text:
+        return False
+    return re.search(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", folded_text) is not None
+
+
+def _ratio(a: str, b: str) -> float:
+    ka, kb = fold_key(a), fold_key(b)
+    if not ka or not kb:
+        return 0.0
+    return difflib.SequenceMatcher(None, ka, kb).ratio()
+
+
+def classify_variant(form: str, variant: str) -> str:
+    """« variant » = graphie fautive de ``form`` à remplacer ; « mention » = autre chose.
+
+    Règles, dans l'ordre : même clé pliée (casse/accents/tirets) → variant ; la forme est
+    incluse dans la variante avec des mots en plus (« PEI 25 » pour « PEI ») ou l'inverse
+    (« ALOHA » pour « Aloha V2 ») → mention ; développement en ≥ 3 mots d'un terme court
+    (« système national de gestion du temps » pour « SMGT ») → mention ; sinon similarité des
+    clés pliées ≥ 0,6 → variant (« cepan » → « CEPAM », « Calicamme » → « Calicane »),
+    en deçà → mention (« administration générale » pour « AG »).
+    """
+    f, v = str(form or "").strip(), str(variant or "").strip()
+    if not f or not v:
+        return "mention"
+    if fold_key(f) == fold_key(v):
+        return "variant"
+    ft, vt = re.findall(r"\w+", _fold_text(f)), re.findall(r"\w+", _fold_text(v))
+    if ft and vt and set(ft) <= set(vt) and len(vt) > len(ft):
+        return "mention"
+    if ft and vt and set(vt) <= set(ft) and len(ft) > len(vt):
+        return "mention"
+    if len(vt) >= 3 and len(ft) <= 1:
+        return "mention"
+    return "variant" if _ratio(f, v) >= _SPELLING_RATIO else "mention"
+
+
+def split_variants_and_mentions(form: str, candidates: list) -> tuple[list[str], list[str]]:
+    """Sépare les candidats en (variantes à remplacer, mentions à garder telles quelles),
+    ordre conservé, doublons (clé pliée) retirés, la forme elle-même exclue."""
+    variants: list[str] = []
+    mentions: list[str] = []
+    seen: set[str] = set()
+    for raw in candidates or []:
+        text = str(raw or "").strip()
+        key = text.casefold()
+        # Une graphie qui ne diffère de la forme que par les points, accents ou tirets
+        # (« P.E.I » pour « PEI ») est une variante À REMPLACER : seule l'égalité exacte
+        # (casse près) est exclue.
+        if not text or key in seen or key == str(form or "").strip().casefold():
+            continue
+        seen.add(key)
+        (variants if classify_variant(form, text) == "variant" else mentions).append(text)
+    return variants, mentions
+
+
+def _contexts_for(contexts: list, phrases: list[str]) -> list:
+    """Contextes qui citent l'une des phrases ; tous si aucun ne cite (on ne perd rien)."""
+    if not isinstance(contexts, list) or not contexts:
+        return contexts if isinstance(contexts, list) else []
+    kept = []
+    for ctx in contexts:
+        blob = _fold_text(json.dumps(ctx, ensure_ascii=False) if isinstance(ctx, dict) else str(ctx))
+        if any(_phrase_present(blob, ph) for ph in phrases if ph):
+            kept.append(ctx)
+    return kept or contexts
+
+
+def _prefix_comment(entry: dict, note: str) -> str:
+    comment = str(entry.get("comment") or "").strip()
+    return f"{note} ; {comment}" if comment else note
+
+
+def resolve_alternatives(entry: dict, transcript_text: str = "") -> list[dict]:
+    """Tranche un terme « A / B [/ C] » en une ou plusieurs entrées à forme UNIQUE.
+
+    Les alternatives sont regroupées par graphie (similarité ≥ 0,75 : « Zabéo / Zabeo »,
+    « Netform / net-form ») ; deux entités distinctes (« MSSI / DPO ») donnent deux entrées.
+    Dans un groupe, la forme retenue est celle ABSENTE de la transcription rapide quand elle est
+    seule à l'être (la LLM corrige ce qu'elle a entendu) ; sinon la première citée. Les autres
+    graphies deviennent des variantes ; les variantes proposées par la LLM rejoignent le groupe
+    qui leur ressemble. Un terme sans « / » entouré d'espaces est rendu tel quel.
+    """
+    term = str(entry.get("term") or "").strip()
+    if not isinstance(entry, dict) or not ALTERNATIVES_RE.search(term):
+        return [entry]
+    alts: list[str] = []
+    for part in ALTERNATIVES_RE.split(term):
+        part = part.strip()
+        if part and part.casefold() not in {a.casefold() for a in alts}:
+            alts.append(part)
+    if len(alts) == 1:
+        # « Netform / NetForm » : une seule forme à la casse près — on garde la première, sans slash.
+        return [{**entry, "term": alts[0], "comment": _prefix_comment(entry, f"Forme retenue « {alts[0]} » parmi « {term} » (casse)")}]
+    if len(alts) < 2:
+        return [entry]
+    folded_transcript = _fold_text(transcript_text) if transcript_text else ""
+    heard = {a: _phrase_present(folded_transcript, a) for a in alts} if folded_transcript else {}
+    clusters: list[list[str]] = []
+    for alt in alts:
+        for cluster in clusters:
+            # Deux formes ENTENDUES toutes les deux sont deux choses distinctes (« PEI 25 / PEI 26 »,
+            # « COMET / COMETAL ») — sauf graphies quasi identiques (« Power BI / Power B » : la
+            # STT a produit les deux, l'une est la faute de l'autre).
+            ratio = _ratio(alt, cluster[0])
+            both_heard = bool(heard) and heard.get(alt) and heard.get(cluster[0]) and ratio < _NEAR_IDENTICAL_RATIO
+            if ratio >= _SAME_WORD_RATIO and not both_heard:
+                cluster.append(alt)
+                break
+        else:
+            clusters.append([alt])
+    extra: list[list[str]] = [[] for _ in clusters]
+    for raw in entry.get("variants") or []:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        scores = [max(_ratio(text, a) for a in cluster) for cluster in clusters]
+        best = max(range(len(clusters)), key=lambda i: scores[i])
+        extra[best if scores[best] >= 0.5 else 0].append(text)
+    results: list[dict] = []
+    for cluster, assigned in zip(clusters, extra, strict=True):
+        form = cluster[0]
+        decided_by = "premier choix"
+        if len(cluster) > 1 and folded_transcript:
+            absent = [a for a in cluster if not heard.get(a)]
+            if len(absent) == 1:
+                form, decided_by = absent[0], "transcription"
+        candidates = [a for a in cluster if a != form] + assigned
+        variants, mentions = split_variants_and_mentions(form, candidates)
+        note = (f"Forme retenue « {form} » parmi « {term} » ({decided_by})" if len(clusters) == 1
+                else f"Entrée scindée depuis « {term} »")
+        new = {**entry, "term": form, "variants": variants, "mentions": mentions,
+               "comment": _prefix_comment(entry, note),
+               "contexts": _contexts_for(entry.get("contexts") or [], [form, *variants, *mentions])}
+        results.append(new)
+    return results
+
+
+def normalize_suspect_terms(terms: list, transcript_text: str = "") -> list:
+    """Normalisation déterministe des termes douteux à l'entrée dans le job : formes « A / B »
+    tranchées ou scindées, variantes séparées des simples mentions (clé ``mentions``)."""
+    out: list = []
+    for entry in terms or []:
+        if not isinstance(entry, dict):
+            out.append(entry)      # forme historique (chaîne) : rendue telle quelle
+            continue
+        for resolved in resolve_alternatives(entry, transcript_text):
+            if "mentions" in resolved and ALTERNATIVES_RE.search(str(entry.get("term") or "")):
+                out.append(resolved)
+                continue
+            form = str(resolved.get("replace_by") or resolved.get("term") or "").strip()
+            variants, mentions = split_variants_and_mentions(form, resolved.get("variants") or [])
+            out.append({**resolved, "variants": variants, "mentions": mentions})
+    return out
