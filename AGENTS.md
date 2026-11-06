@@ -182,7 +182,7 @@ transcria/
       backup.py / restore.py / upgrade.py # sauvegarde (pg_dump -Fc / sqlite .backup + manifeste), restauration gardée (refus base vivante), montée de version outillée
       schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
       restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
-      cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
+      cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge, rebuild-job-cards
     config/local_dirs.py    # resolve_models_dir()/resolve_runtimes_dir() — MODELS_DIR et TRANSCRIA_RUNTIMES_DIR, source unique (catalogue, doctor, diariseur Nemotron)
     llm_cloud/              # GOUVERNANCE de la LLM d'arbitrage cloud (docs/LLM_CLOUD.md § 3.2 — « que ce soit dit ») :
       policy.py             #   politique PURE (CLOUD_NOTICE_TEXT_VERSION = version du texte lu par l'admin → validation CADUQUE si elle change ; decide_gate ; un utilisateur est interdit dès qu'UN de ses groupes l'est)
@@ -212,9 +212,13 @@ transcria/
     jobs/
       models.py             # Job, JobState (20 états)
       store.py              # JobStore — méthodes statiques
-      filesystem.py         # JobFilesystem — arborescence disque par job
+      filesystem.py         # JobFilesystem — arborescence disque par job ; observateurs d'écriture par chemin exact (add_write_listener / notify_written) pour les données DÉRIVÉES d'un fichier — un observateur en échec ne casse jamais l'écriture
       artifact_store.py     # synchronisation base↔disque des fichiers de jobs (backend pg, cf. docs/STOCKAGE_PARTAGE_JOBS.md)
       timing_store.py       # JobTimingStore — historique des durées réelles (modèle de temps calibré machine)
+    job_cards/              # FICHES de réunion (docs/DISCUTER_REUNIONS.md § 2.3, lot A) : projection COURTE du contexte, table job_cards — donnée DÉRIVÉE de context/meeting_context.json + participants.json, jamais de transcription ni de termes suspects
+      projection.py         #   PUR : project_card (date analysée sinon date d'import, règle « confidentiel » — dans le doute confidentiel —, sujet/objectif/ordre du jour validés sinon suggérés, abrégé ≤ 800 car. de la synthèse EFFECTIVE, décisions/actions bornées) + source_fingerprint ; « étape 4 enregistrée » = clé meeting_type présente (posée par MeetingContextManager.save() seul)
+      models.py / store.py  #   JobCard (FK ON DELETE CASCADE + cascade ORM : SQLite n'applique pas les clés étrangères) ; JobCardStore.refresh idempotent par empreinte (fichier absent ICI ou illisible ⇒ skipped, jamais de fiche vidée), for_jobs (identifiants DÉJÀ filtrés par list_for_user), rebuild_all, prune_orphans
+      hooks.py              #   accroche sur JobFilesystem.save_json (le SEUL point commun des ~10 sites qui réécrivent le contexte ; RefineStore.restore_version prévient aussi) + rattrapage au démarrage du process qui exécute la file ; pas d'accroche sur le pull pg (la fiche vit en base) — MAIS tout recalcul qui ne suit pas une écriture locale passe par rebuild_for_config (tire context/ d'abord : un cache local périmé a déjà failli déclasser une fiche confidentielle)
     ingestion/              # RÉUNIONS côté cœur (vagues 2-5 + suites) — l'autre bout de la frontière /v1/audio/ingest
       models.py / store.py  # MeetingImport — mapping artefact externe → job, get-or-create IDEMPOTENT (ADR-001 D2)
       manifest.py           # manifeste participants (v1 fenêtres, v2 pistes `track_<id>`) — validation STRICTE tout-ou-rien
@@ -1000,7 +1004,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/STT_CORPUS.md` | Constitution du corpus de référence |
 | `docs/PISTES_AMELIORATION.md` | Backlog technique : ce qui est identifié, pas encore décidé |
 | `docs/LLM_CLOUD.md` | **Plan + statut (lots A-C livrés, D docs en cours, E qualification réelle à faire)** : LLM d'arbitrage chez un fournisseur externe (passe-plat) — `services.backend: cloud`, clé par variable d'env, validation admin en base, bandeau permanent, interdiction par groupe, provenance par job, palier zéro GPU |
-| `docs/DISCUTER_REUNIONS.md` | **Plan, rien codé** : « discuter avec mes réunions » — demandes consommées par le worker (jamais de LLM depuis le web), fiches `job_cards`, escalade fiches → synthèse effective → SRT, citations vérifiées, vue « Mes actions » |
+| `docs/DISCUTER_REUNIONS.md` | **Plan + statut (lots 0 et A livrés : fiches `job_cards` ; B-E à faire)** : « discuter avec mes réunions » — demandes consommées par le worker (jamais de LLM depuis le web), escalade fiches → synthèse effective → SRT, citations vérifiées, vue « Mes actions » ; § 6 = journal des lots et écarts mesurés avec le plan |
 | `docs/ATTRIBUTION_LOCUTEURS_RESUME.md` | Descriptions LLM sur le mauvais SPEAKER_XX à l'étape Résumé : cause (transcription rapide sans étiquettes), contraintes (> 8 voix, numéros stables), 5 options, **mesure sur 3 réunions réelles** (option A `workflow.summary_by_turns` : 18/19 justes contre 11/19, +15 à +25 % de durée) — activée PAR DÉFAUT (0.4.8), `false` = repli rapide |
 | `docs/TESTERS.md` | Guide des testeurs externes |
 | `docs/PRESENTATION.md` / `.en.md` | Présentation non technique (français / anglais) |

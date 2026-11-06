@@ -258,6 +258,36 @@ Validation par un administrateur de l'usage d'une LLM d'arbitrage chez un fourni
 
 **Sémantique :** table **append-only** — chaque validation ajoute une ligne, aucune n'est modifiée sauf `revoked_at`. La validation *courante* d'un couple (fournisseur, modèle) est la plus récente non révoquée ; une nouvelle validation du même couple révoque la précédente. Une validation est **caduque** (donc sans effet : les soumissions sont refusées, aucun repli sur une LLM locale) si elle ne vise pas exactement le fournisseur et le modèle configurés, si `text_version` diffère de la version courante du texte, ou si elle est révoquée. Aucun contenu de transcription n'y figure.
 
+### Table `job_cards`
+
+Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discuter avec mes réunions » et la vue « Mes actions » (`docs/DISCUTER_REUNIONS.md` § 2.3). Modèle : `transcria/job_cards/models.py` ; migration `alembic/versions/b4d1f6a8c2e9_add_job_cards.py`.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `job_id` | String(36) | PK, FK → jobs.id **ON DELETE CASCADE** | Une fiche par job |
+| `title` | String(255) | NOT NULL, default="" | Titre du contexte (étape 4, sinon titre suggéré). Vide ⇒ le lecteur affiche `jobs.title` |
+| `meeting_type` | String(255) | NOT NULL, default="" | Type choisi à l'étape 4, sinon type suggéré |
+| `meeting_date` | Date | nullable | Date de la réunion |
+| `date_is_import_fallback` | Boolean | NOT NULL, default=false | Vrai : la date du contexte était vide ou illisible, `meeting_date` est la date de création du job (affichée « date d'import ») |
+| `confidential` | Boolean | NOT NULL, default=false | Résultat de la règle « confidentiel » ci-dessous |
+| `sensitivity` | String(20) | NOT NULL, default="normal" | Copie de `meeting_context.sensitivity` |
+| `language` | String(8) | NOT NULL, default="" | Langue des livrables |
+| `participants_json` | Text | NOT NULL, default=`[]` | `[{name, function}]` — personnes nommées de `participants.json` (jamais une étiquette `SPEAKER_XX`) ; 60 au plus |
+| `topic` / `objective` / `agenda` | Text | NOT NULL, default="" | Sujet, objectif, ordre du jour : champs de l'étape 4 si elle a été enregistrée, sinon suggestions de la LLM (400 / 300 / 700 caractères au plus) |
+| `abstract` | Text | NOT NULL, default="" | 800 premiers caractères au plus de la synthèse **effective** (éditée > harmonisée > brute), coupés en fin de phrase |
+| `decisions_json` / `actions_json` | Text | NOT NULL, default=`[]` | Listes de chaînes de `structured_data` (40 éléments de 400 caractères au plus) |
+| `next_date` | String(120) | NOT NULL, default="" | `structured_data.prochaine_date` (texte libre) |
+| `source_sha256` | String(64) | NOT NULL | Empreinte de tout ce dont la fiche dépend |
+| `updated_at` | DateTime(tz) | NOT NULL | Dernier recalcul effectif |
+
+**Donnée dérivée.** Tout se recalcule depuis `context/meeting_context.json` et `context/participants.json` : la fiche ne porte ni propriétaire ni titre de job (le lecteur part de `JobStore.list_for_user`, il a la ligne `jobs`). **Jamais** de transcription ni de termes suspects.
+
+**Mise à jour.** `JobFilesystem.save_json` prévient ses observateurs d'écriture (`jobs.filesystem.add_write_listener`) ; `job_cards.hooks` y accroche `JobCardStore.refresh` pour les deux fichiers — la dizaine de sites qui réécrivent le contexte est couverte en un point, comme tout site ajouté plus tard. `RefineStore.restore_version` (copie sans `save_json`) prévient les mêmes observateurs. Le recalcul est idempotent (`source_sha256` identique ⇒ aucune écriture), relit les fichiers après avoir écrit (deux recalculs simultanés ne laissent pas la version périmée) et son échec ne fait jamais échouer l'écriture du fichier. Rattrapage : au démarrage du process qui exécute la file, et à la demande par `python -m transcria.maintenance.cli rebuild-job-cards` — en stockage partagé `pg`, `context/` est tiré de la base avant chaque recalcul (le disque local n'est qu'un cache).
+
+**Règle « confidentiel ».** Vrai si `sensitivity` ≠ `normal`, ou type choisi confidentiel (`behavior.confidential` du catalogue), ou type personnalisé matérialisé avec `behavior.confidential`, ou — tant que l'étape 4 n'a pas été enregistrée — type **suggéré** qui n'est pas un type intégré non confidentiel (suggestion confidentielle, ou inconnue du catalogue : dans le doute, confidentiel). « Étape 4 enregistrée » se lit dans le fichier : la clé `meeting_type` n'est posée que par `MeetingContextManager.save()`.
+
+**Suppression.** Clé étrangère `ON DELETE CASCADE` (PostgreSQL) et cascade ORM sur `Job.card` : SQLite n'applique pas les clés étrangères (aucun `PRAGMA foreign_keys` dans l'application), et `JobStore.delete_job` supprime par l'ORM. Une fiche orpheline (suppression SQL directe sur SQLite) n'est jamais lisible — la lecture se fait par identifiants de jobs visibles — et `rebuild-job-cards` la retire.
+
 ### Table `audit_logs`
 
 | Colonne | Type | Contraintes | Description |

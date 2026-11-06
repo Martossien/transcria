@@ -8,6 +8,7 @@ Sous-commandes :
     schedule          planifie sauvegardes et purge via timers systemd (--enable/--disable [--purge])
     opencode-upgrade  met à jour opencode (détecte npm / officiel / brew)
     purge             purge les données expirées (rétention DPO)
+    rebuild-job-cards reconstruit les fiches de réunion depuis les fichiers de contexte (idempotent)
     reset-admin-password  réinitialise le mot de passe d'un compte (local, audité)
 
 La logique métier est dans backup.py / restore.py (pur, testé) ; ce module est le runner.
@@ -22,6 +23,7 @@ from transcria import __version__
 from transcria.audit.store import AuditStore
 from transcria.config.loader import get_config_path, load_config
 from transcria.installer.opencode_lib import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
+from transcria.job_cards.store import rebuild_for_config
 from transcria.jobs.store import JobStore
 from transcria.maintenance import upgrade_service
 from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
@@ -394,6 +396,25 @@ def _cmd_purge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_rebuild_job_cards(args: argparse.Namespace) -> int:
+    """Reconstruit les fiches de réunion (table ``job_cards``) depuis les fichiers de contexte.
+
+    Idempotent : un job dont l'empreinte n'a pas changé n'est pas réécrit. En stockage partagé
+    ``pg``, ``context/`` est d'abord matérialisé depuis la base (les dossiers locaux ne sont
+    que des caches). N'affiche que des compteurs."""
+    cfg = load_config(args.config)
+    from app import create_app
+
+    app = create_app(args.config, start_background_services=False)
+    with app.app_context():
+        counts = rebuild_for_config(cfg)
+    print(
+        f"Fiches réunions : {counts['created']} créées, {counts['updated']} mises à jour, "
+        f"{counts['unchanged']} inchangées, {counts['skipped']} sans contexte, "
+        f"{counts['failed']} en échec, {counts['orphans_removed']} orphelines supprimées")
+    return 1 if counts["failed"] else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="transcria-maintenance",
@@ -487,6 +508,10 @@ def main(argv: list[str] | None = None) -> int:
     pg = sub.add_parser("purge", help="purger les données expirées (rétention DPO)")
     pg.add_argument("--dry-run", action="store_true", help="compter sans supprimer")
     pg.set_defaults(func=_cmd_purge)
+
+    jc = sub.add_parser("rebuild-job-cards",
+                        help="reconstruire les fiches de réunion depuis les fichiers de contexte (idempotent)")
+    jc.set_defaults(func=_cmd_rebuild_job_cards)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

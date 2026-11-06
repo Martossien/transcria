@@ -737,6 +737,10 @@ class TestEnsureArbitrageLlmHealthProbe:
         restarted = {"called": False}
         monkeypatch.setattr(vm, "launch_arbitrage_llm", lambda: restarted.update(called=True) or True)
         monkeypatch.setattr(vm, "stop_arbitrage_llm", lambda: True)
+        # CAS C libère aussi les ports des backends concurrents (8000 par défaut) : sans cette
+        # couture, le test dépendait de la MACHINE — un vrai service à l'écoute sur ce port le
+        # faisait échouer (garde anti-kill de conftest, vécu le 2026-11-06).
+        monkeypatch.setattr(vm, "stop_cleanup_llm_ports", lambda: True)
         monkeypatch.setattr(vm, "_get_port_pid", lambda port: "1234")
 
         import requests as _requests

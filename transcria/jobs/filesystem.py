@@ -1,5 +1,6 @@
 import contextlib
 import json
+import logging
 import mimetypes
 import os
 import shutil
@@ -7,6 +8,32 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TextIO
+
+logger = logging.getLogger(__name__)
+
+#: Observateurs d'écriture, par chemin relatif EXACT dans le dossier du job. Sert aux données
+#: DÉRIVÉES d'un fichier (la fiche de réunion, reflet de ``context/meeting_context.json``) : le
+#: fichier est réécrit à une dizaine d'endroits par ``save_json`` direct — s'accrocher ici est le
+#: seul point commun, et tout site d'écriture futur est couvert d'office.
+_WRITE_LISTENERS: dict[str, list[Callable[[str, str], None]]] = {}
+
+
+def add_write_listener(relative: str, listener: Callable[[str, str], None]) -> None:
+    """Enregistre ``listener(jobs_dir, job_id)``, appelé après chaque écriture de ``relative``.
+    Idempotent (le même observateur n'est jamais enregistré deux fois)."""
+    listeners = _WRITE_LISTENERS.setdefault(relative, [])
+    if listener not in listeners:
+        listeners.append(listener)
+
+
+def notify_written(jobs_dir: str, job_id: str, relative: str) -> None:
+    """Prévient les observateurs de ``relative``. Un observateur qui échoue est journalisé et
+    n'interrompt RIEN : l'écriture du fichier a déjà réussi, elle ne dépend pas de ses dérivés."""
+    for listener in _WRITE_LISTENERS.get(relative, ()):
+        try:
+            listener(jobs_dir, job_id)
+        except Exception:  # noqa: BLE001 — une donnée dérivée ne fait jamais échouer l'écriture source
+            logger.warning("Observateur d'écriture en échec (job=%s, fichier=%s)", job_id, relative, exc_info=True)
 
 
 class JobFilesystem:
@@ -48,6 +75,7 @@ class JobFilesystem:
             self._json_path(relative),
             lambda fh: json.dump(data, fh, ensure_ascii=False, indent=2, default=str),
         )
+        notify_written(str(self.jobs_dir), self.job_id, relative)
 
     def load_json(self, relative: str) -> Any:
         path = self._json_path(relative)

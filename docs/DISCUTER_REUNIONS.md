@@ -1,6 +1,7 @@
 # Discuter avec mes réunions — plan directeur
 
-> Statut : **plan validé dans ses décisions, rien n'est codé** (2026-11-01). Répond à deux retours
+> Statut : **lots 0 et A livrés (2026-11-06)** — vérifications restantes faites, fiches `job_cards`
+> en place (§ 6). Lots B à E à faire. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
 > utilisateurs de novembre 2026 : « retrouver une réunion parmi les miennes » et « suivre les
 > actions décidées ». Cadré avec le mainteneur, puis **relu par un relecteur critique** (code +
 > plan, mesures en base) dont les constats sont intégrés. **VÉRIFIÉ** = au code (fichier:ligne) ou
@@ -36,7 +37,7 @@ chat d'affinage).
     `meeting_type`, `language`, `service`, `topic`, `objective`, `notes`, **`sensitivity`**,
     défauts `meeting_context.py:135-145`), champs LLM préservés par `save()` (l.68-74 :
     `title_suggere`, `type_suggere`, `sujet_suggere`, `objectif_suggere`, `notes_suggeres`,
-    `mots_cles`, `participants_detectes` (chaîne), `speaker_roles_llm`, `summary_llm`,
+    `mots_cles` (préservé mais **jamais écrit** par le pipeline — § 6), `participants_detectes` (chaîne), `speaker_roles_llm`, `summary_llm`,
     `structured_data` = `{decisions, actions, blocages, reports, votes, resolutions, points_odj,
     prochaine_date, + extract_fields du type}`, `type_specific_data`, `termes_suspects*`,
     `*_parse_status/_warning`), plus `summary` (synthèse éditée), `summary_harmonized`,
@@ -139,25 +140,28 @@ chat d'affinage).
 Chaque réponse dit son niveau (« d'après les fiches », « d'après la synthèse de… »).
 
 ### 2.3 La fiche : une projection courte, en base
-Table **`job_cards`** (`job_id` FK **`ON DELETE CASCADE`**, `owner_id`, `title`, `meeting_type`,
+Table **`job_cards`** (`job_id` FK **`ON DELETE CASCADE`**, `title`, `meeting_type`,
 `meeting_date` (date ou null), `date_is_import_fallback` (bool), `confidential` (bool),
-`sensitivity`, `language`, `participants` (json : nom, fonction), `keywords` (json), `abstract`
-(≤ 800 caractères de la section synthèse effective), `decisions` (json), `actions` (json),
-`next_date`, `source_sha256`, `updated_at`). **Jamais de transcription ni de termes suspects**.
-- **Écrite** par une fonction unique `job_cards.refresh(job_id)` accrochée à **tous** les sites de
-  réécriture listés au § 1 (9 pour `meeting_context`, 4 pour `participants`, `restore_version`) —
-  de préférence **dans `MeetingContextManager.save()` et `ParticipantsManager.save()`** eux-mêmes
-  (un seul point chacun), plus `restore_version` et la matérialisation du pull.
-- **Rattrapage** : `python -m transcria.maintenance.cli rebuild-job-cards` (idempotent par sha256).
+`sensitivity`, `language`, `participants` (json : nom, fonction), `topic`, `objective`, `agenda`,
+`abstract` (≤ 800 caractères de la section synthèse effective), `decisions` (json), `actions`
+(json), `next_date`, `source_sha256`, `updated_at`). **Jamais de transcription ni de termes
+suspects**. *Tel que livré au lot A — écarts avec la version du 2026-11-01 expliqués au § 6.*
+- **Écrite** par une fonction unique `JobCardStore.refresh(job_id, jobs_dir)` accrochée à
+  **`JobFilesystem.save_json`** par un observateur d'écriture (le seul point commun des sites
+  de réécriture du § 1), plus `restore_version`.
+- **Rattrapage** : au démarrage du process qui exécute la file, et
+  `python -m transcria.maintenance.cli rebuild-job-cards` (idempotent par sha256).
 - **Confidentiel** = `sensitivity ≠ normal` **OU** type intégré confidentiel **OU**
-  `custom_type.behavior.confidential` **OU** (`type_suggere` confidentiel ET type non validé).
+  `custom_type.behavior.confidential` **OU** (étape 4 non enregistrée ET `type_suggere` qui n'est
+  pas un type intégré non confidentiel : suggestion confidentielle ou inconnue du catalogue).
 - **Date** : `meeting_context.date` si analysable (ISO ou formats fr courants), sinon `created_at`
   avec `date_is_import_fallback` vrai (affiché « date d'import »).
 
 ### 2.4 Présélection (tranchée par la mesure)
 Score **en Python**, identique PostgreSQL/SQLite, sur les fiches visibles (≤ quelques centaines) :
 normalisation NFD + casefold (extraite de `lexicon_checks` vers un module PUR), tokens de la
-question pondérés par champ (titre, mots-clés, décisions/actions, participants, abrégé), bonus de
+question pondérés par champ (titre, sujet/objectif/ordre du jour, décisions/actions, participants,
+abrégé), bonus de
 date si la question en contient une, bonus de participant si un nom est cité ; **les N meilleures**
 sous plafond. Pas de `tsvector`, pas d'embeddings. Module PUR `transcria/search/` (ajouté aux
 contrats import-linter ; il n'importe pas `workflow/` : la présélection ne connaît pas la LLM).
@@ -222,8 +226,8 @@ Bandeau cloud hérité de `LLM_CLOUD.md`. 6 langues ; JS extrait `static/js/ask_
 
 | Lot | Contenu | Preuve |
 |---|---|---|
-| 0 — vérifications restantes | clés étrangères SQLite (`PRAGMA foreign_keys`), patron de migration, taille réelle d'une fiche projetée (calcul sur les jobs de test), délai d'expiration gunicorn du rôle web (sans objet pour l'appel, utile pour l'interrogation) | note dans ce document |
-| A — fiches | `job_cards` + migration (cascade), `refresh()` dans les deux `save()` + `restore_version` + pull, `rebuild-job-cards`, règle confidentiel, règle date | tests store ; « fiche = reflet du contexte » ; rattrapage sur jobs de test ; suppression d'un job supprime la fiche (PG et SQLite) |
+| 0 — vérifications restantes ✅ | clés étrangères SQLite (`PRAGMA foreign_keys`), patron de migration, taille réelle d'une fiche projetée (calcul sur les jobs de test), délai d'expiration gunicorn du rôle web (sans objet pour l'appel, utile pour l'interrogation) | note dans ce document |
+| A — fiches ✅ | `job_cards` + migration (cascade), `refresh()` dans les deux `save()` + `restore_version` + pull, `rebuild-job-cards`, règle confidentiel, règle date | tests store ; « fiche = reflet du contexte » ; rattrapage sur jobs de test ; suppression d'un job supprime la fiche (PG et SQLite) |
 | B — demandes | `ask_requests` + `ask_turns` + migrations, consommation par le worker (claim, verrou LLM, ensure, timeout), présélection PURE (`transcria/search/`), prompt 6 langues, garde des citations, escalade 2-3, filtres cloud/groupe/connecteurs, rétention + purge, audit | tests PURS sans LLM (présélection, garde, escalade, filtres) ; faux LLM ; limites (question vide / 1 car. / très longue / unicode) → jamais de 500 ; test « admin voit tout » et « membre ne voit que ses groupes » |
 | C — UI | pages `/meetings/ask` et `/meetings/actions`, interrogation, navbar, JS extrait, i18n, interrupteur admin, bandeau cloud | Playwright gestes réels + revue visuelle ; `audit_front` ; `test_js_api_contract` ; `API_REFERENCE.md` ; docstrings de routes |
 | D — docs | TECHNICAL, DATA_MODEL (3 tables), CONFIG_REFERENCE (`workflow.ask_meetings.*`), **AUDIT_DPO** (historique des conversations : rétention, purge, sauvegarde ; admin interroge tout), **SECURITY_MODEL** (corriger la ligne Manager), README/PRESENTATION fr+en, `docs/README.md` index, CHANGELOG | `release_check`, `i18n_check`, `test_config_classification` |
@@ -247,3 +251,90 @@ nouveau module de routes dans `routes-independantes`), `test_config_classificati
 - Non vérifié par le relecteur (commandes bloquées) : clés étrangères SQLite, patron Alembic (lu
   depuis : `c8e5a1f9d2b7_add_meeting_sessions.py`), constante d'étranglement du pull (sans objet
   avec § 2.1) → lot 0.
+
+## 6. Journal des lots
+
+### Lot 0 — vérifications restantes (2026-11-06)
+
+| Question | Réponse | Conséquence |
+|---|---|---|
+| Clés étrangères sur SQLite | **Non appliquées** : aucun `PRAGMA foreign_keys` dans l'application, `PRAGMA foreign_keys` rend 0 (verrouillé par un test). Les activer globalement changerait le comportement de toutes les suppressions existantes | `ON DELETE CASCADE` en base (PostgreSQL) **et** cascade ORM sur `Job.card` (SQLite) ; lecture par identifiants de jobs visibles, donc une fiche orpheline n'est jamais lisible ; `rebuild-job-cards` les retire |
+| Patron de migration | Idempotent (`has_table` avant `create_table`), comme `a7c3e9f1b2d4` : `db.create_all()` peut poser la table avant `alembic upgrade head` | Migration `b4d1f6a8c2e9`, test de rattrapage dédié |
+| Taille réelle d'une fiche | Mesurée sur les 92 contextes de l'installation de dev : **≈ 610 tokens en médiane**, ≈ 990 au 90e percentile, ≈ 1 150 au maximum (contre ≈ 9 500 pour `meeting_context.json`) | 100 fiches ≈ 61 000 tokens : les plafonds `max_cards` / `max_context_tokens` du lot B sont nécessaires, la présélection ne peut pas tout envoyer |
+| Délai gunicorn du rôle web | 120 s (`deploy/entrypoint.py`) ; le serveur de dev n'en a pas | Sans objet : le web n'appelle jamais la LLM, l'interrogation est une lecture courte |
+| « Étape 4 enregistrée » lisible dans le fichier ? | Oui : la clé `meeting_type` n'est posée que par `MeetingContextManager.save()` (route de l'étape 4). Recoupé avec l'état en base sur 87 jobs : 68 après l'étape 4 avec la clé, 17 avant sans la clé, 2 arrivés plus loin sans passer par le formulaire (personne n'a validé : cohérent) | Critère de la règle « confidentiel » et du choix validé / suggéré, sans dépendre de l'état du job (la fiche est recalculée avant le changement d'état) |
+
+### Lot A — fiches (2026-11-06)
+
+Livré : paquet `transcria/job_cards/` (`projection` PURE, `models`, `store`, `hooks`), observateurs
+d'écriture dans `jobs/filesystem.py`, migration `b4d1f6a8c2e9`, commande `rebuild-job-cards`,
+rattrapage au démarrage, `docs/DATA_MODEL.md`.
+
+**Écarts avec le plan du 2026-11-01, tous dictés par le code ou la mesure :**
+
+- **Point d'accroche.** Le plan visait les deux `save()`. Vérifié : sur les sites qui réécrivent
+  `meeting_context.json`, **un seul** passe par `MeetingContextManager.save()` ; les autres
+  appellent `fs.save_json` directement. L'accroche est donc dans `JobFilesystem.save_json`
+  (observateur par chemin exact) : un point, et tout site futur couvert. `jobs/` ne connaît pas
+  les fiches (l'application enregistre l'observateur au démarrage).
+- **Pas d'accroche sur le pull `pg`.** La fiche vit en base ; le process qui écrit le fichier la
+  recalcule avant de pousser. Tirer le fichier sur un autre tier n'apprend rien à la base. Un
+  fichier absent du disque local ne vide jamais une fiche existante.
+- **Ni `owner_id` ni titre du job dans la fiche.** Le lecteur part de `list_for_user` et a la ligne
+  `jobs` : recopier ces colonnes créerait une seconde vérité (renommage d'un job sans écriture du
+  contexte). La fiche reste une fonction pure des deux fichiers, d'où une empreinte exacte.
+- **`keywords` retiré, `topic` / `objective` / `agenda` ajoutés.** Mesuré : `mots_cles` n'existe
+  dans **aucun** des 92 contextes (le champ est préservé par `save()` mais n'est jamais écrit par
+  le pipeline). En revanche sujet, objectif et ordre du jour sont présents partout, courts
+  (≈ 190 / 130 / 200 caractères en médiane) et décrivent la réunion entière, là où l'abrégé ne
+  couvre que le début d'une synthèse de ≈ 4 000 caractères.
+- **`summary_harmonized` est un markdown complet**, pas une section (16 Ko en médiane) : l'abrégé
+  en extrait la section synthèse, comme la relecture finale. Sans cela, 7 fiches sur 92
+  commençaient par les lignes « titre suggéré / type suggéré ».
+- **Confidentiel, cas de la suggestion inconnue.** Une suggestion hors catalogue (type personnalisé
+  non résolu, libellé décoré) ne peut pas être prouvée non confidentielle : elle est traitée comme
+  confidentielle tant que l'étape 4 n'est pas enregistrée. Coût mesuré ici : aucune fiche concernée.
+- **Champ validé puis vidé.** Après l'étape 4, un sujet ou un objectif vidé par l'utilisateur reste
+  vide : la suggestion de la LLM ne revient pas à sa place.
+- **Rattrapage au démarrage**, en plus de la commande : la montée de version ne demande aucun geste.
+
+**Relecture critique indépendante (2026-11-06), trois défauts corrigés avant livraison :**
+
+- **Rattrapage sur un cache périmé (stockage `pg`).** Le rattrapage au démarrage lisait le disque
+  du worker, qui n'est qu'un cache : un contexte d'avant l'étape 4 y remplaçait une fiche juste —
+  jusqu'à faire repasser une réunion confidentielle en non confidentielle. Tout recalcul qui ne
+  suit pas une écriture locale tire désormais `context/` de la base d'abord (`rebuild_for_config`,
+  démarrage comme commande).
+- **Deux recalculs en même temps.** Le dernier à écrire gagnait, même s'il avait lu le fichier le
+  plus ancien. Après chaque écriture, `refresh` relit les fichiers et recalcule s'ils ont changé
+  (trois passes au plus) : celui qui a écrit du périmé le corrige lui-même, sans verrou tenu dans
+  la session de l'appelant.
+- **`meeting_type` posé sans humain.** L'écriture déclenchée par l'affichage du wizard
+  (`_recover_summary_speaker_hints`) persistait les défauts du formulaire quand le fichier était
+  absent, donc la marque « étape 4 enregistrée ». Elle n'écrit plus que le fichier complété.
+
+Limites connues, laissées en l'état : en stockage `pg`, une écriture faite par le tier web sur une
+copie locale en retard de quelques secondes (tirage espacé) peut produire une fiche en retard
+jusqu'à l'écriture suivante ; une restauration de version qui supprimerait les DEUX fichiers
+laisse la fiche précédente (un fichier absent ne vide jamais une fiche, faute de pouvoir
+distinguer « supprimé » de « pas sur ce disque »).
+
+**Preuves.** Tests PURS de la projection (dates, règle confidentiel, bornes, formes inattendues,
+empreinte) ; tests en base : la fiche suit l'écriture directe, l'étape 4, les participants, la
+restauration de version ; réécriture identique sans écriture en base ; contexte illisible ou absent
+qui ne détruit rien ; échec du recalcul qui ne casse pas l'écriture ; suppression du job
+(PostgreSQL par l'ORM et par SQL direct, SQLite par l'ORM) ; rattrapage et sa commande ; fichier
+modifié pendant le recalcul, deux créations simultanées, vraie erreur SQL dans l'accroche,
+rattrapage en stockage `pg` sur cache périmé, invariant « aucune écriture machine ne pose
+`meeting_type` ».
+**Rejeu sur les vrais jobs de l'installation de dev** (base jetable, production en lecture seule,
+compteurs seulement) : 104 jobs, 87 fiches créées, 17 jobs sans contexte sautés, 0 échec, 0,19 s ;
+second passage 87 inchangées, 0,06 s ; aucun dossier créé. Formes : 89 abrégés sur 89 finissent
+proprement, aucun ne contient de ligne de métadonnées ; 358 actions sur 412 portent un responsable
+« Nom : » (matière de la vue par responsable du lot C). 75 fiches sur 87 retombent sur la date
+d'import : le champ date n'est presque jamais rempli à l'étape 4 — à garder en tête pour le bonus
+de date de la présélection (lot B).
+
+**Non fait, volontairement.** Le contenu réel des fiches n'a pas été relu ligne à ligne ici (noms
+de personnes) : la relecture humaine se fera à l'écran, lots C et E. Aucune interface, aucune
+route : la table n'est encore lue par rien.

@@ -97,6 +97,16 @@ venv/bin/python -m transcria.maintenance.cli schedule            # statut des DE
 sudo venv/bin/python -m transcria.maintenance.cli schedule --disable --purge
 ```
 
+Les **fiches de réunion** (table `job_cards`, donnée dérivée des fichiers de contexte) se
+rattrapent seules au démarrage du service. Pour les reconstruire à la main — après une
+restauration de fichiers sans la base, par exemple — la commande est idempotente et n'affiche
+que des compteurs. À lancer **sous le compte du service** (en stockage partagé `pg`, elle
+matérialise `context/` dans le dossier des jobs) :
+
+```bash
+sudo HOME=/root venv/bin/python -m transcria.maintenance.cli rebuild-job-cards
+```
+
 ## Restaurer
 
 La restauration est **irréversible** : commencez toujours par une simulation.

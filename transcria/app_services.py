@@ -27,6 +27,7 @@ from transcria.context.lexicon import localized_priority
 from transcria.context.meeting_type_routes import meeting_type_bp
 from transcria.database import db, import_all_models
 from transcria.i18n import select_locale
+from transcria.job_cards.hooks import register_card_refresh, start_card_catchup
 from transcria.jobs.artifact_store import assert_runtime_compatible, backend_name
 from transcria.logging_setup import inject_correlation_id
 from transcria.queue.routes import queue_api_bp, queue_pages_bp
@@ -478,6 +479,11 @@ def start_runtime(app: Flask, cfg: dict, role: str, *, start_background_services
         # Rôle 'web' : tier HTTP sans état → n'exécute PAS la file (un orchestrateur
         # 'scheduler'/'all' s'en charge ailleurs). L'enfilement reste possible.
         init_job_executor(app, cfg, run_scheduler=run_scheduler)
+    # Fiches de réunion (docs/DISCUTER_REUNIONS.md § 2.3) : tenues à jour à chaque écriture du
+    # contexte ; le process qui exécute la file rattrape en plus l'existant au démarrage.
+    register_card_refresh(app)
+    if run_scheduler:
+        start_card_catchup(app, cfg)
 
     logger.info("Process démarré (rôle=%s, scheduler=%s, stockage_jobs=%s)",
                 role, run_scheduler, backend_name(cfg))

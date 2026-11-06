@@ -3,6 +3,7 @@ import json
 
 from fakes import InMemoryJobFilesystem
 
+from transcria.context.meeting_context import MeetingContextManager
 from transcria.web.lexicon_views import (
     enrich_lexicon_context_audio as _enrich_lexicon_context_audio,
 )
@@ -163,6 +164,23 @@ def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
     assert recovered["speaker_roles_llm"]["SPEAKER_00"]["label"] == "Alex Dupont"
     assert "Alex Dupont" in recovered["participants_detectes"]
     assert json.loads(fs.files["context/meeting_context.json"]) == recovered
+
+
+def test_recover_summary_speaker_hints_never_writes_form_defaults():
+    """Fichier de contexte ABSENT : la vue reçoit les défauts du formulaire, mais l'écriture
+    déclenchée par ce GET ne doit pas les persister — la clé ``meeting_type`` est la marque
+    « étape 4 enregistrée » (fiches de réunion), seul un humain la pose."""
+    fs = InMemoryJobFilesystem()
+    fs.save_text("summary/summary.md", """## Participants probables
+
+- SPEAKER_00 [Alex Dupont] : personne s'identifiant dans un extrait vocal
+""")
+
+    recovered = _recover_summary_speaker_hints(fs, MeetingContextManager.default_context())
+
+    assert recovered["meeting_type"] == "Réunion interne"          # la vue garde ses défauts
+    stored = json.loads(fs.files["context/meeting_context.json"])
+    assert set(stored) == {"participants_detectes", "speaker_roles_llm"}
 
 
 def test_processing_diagnostic_view_counts_reliability_and_limits_segments():

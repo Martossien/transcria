@@ -62,6 +62,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Image CPU Docker** : binaire `audiocpp_cli` précompilé (≈ 55 Mo, téléchargé au build,
   sha256 vérifié) — diarisation Nemotron 3 CPU dans l'image CPU.
 
+#### Fiches de réunion (socle de « Discuter avec mes réunions »)
+
+- **Table `job_cards`** — une fiche courte par réunion (titre, type, date, confidentialité,
+  participants, sujet, objectif, ordre du jour, abrégé de la synthèse, décisions, actions),
+  recalculée à chaque écriture du contexte et supprimée avec le job. Mesuré sur 92 réunions :
+  ≈ 600 tokens en médiane, contre ≈ 9 500 pour `meeting_context.json`. Rien n'est encore
+  visible à l'écran : c'est la matière des prochains lots (`docs/DISCUTER_REUNIONS.md`).
+  Migration `b4d1f6a8c2e9` ; les réunions existantes sont rattrapées au démarrage, et à la
+  demande par `python -m transcria.maintenance.cli rebuild-job-cards`.
+
 #### Retours utilisateurs
 
 - **Notifications** : bilan d'accueil admin (SMTP désactivé, hôte manquant, comptes sans

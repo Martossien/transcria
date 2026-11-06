@@ -21,7 +21,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from transcria.jobs.filesystem import JobFilesystem
+from transcria.jobs.filesystem import JobFilesystem, notify_written
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,7 @@ class RefineStore:
         if not vdir.is_dir() or not isinstance(manifest, dict):
             return []
         restored: list[str] = []
+        touched: list[str] = []
         for name, entry in manifest.items():
             if isinstance(entry, str):  # ancien format (chemin nu) = fichier présent
                 entry = {"path": entry, "absent": False}
@@ -222,10 +223,22 @@ class RefineStore:
                 if dest.is_file():
                     dest.unlink()
                 restored.append(name)
+                touched.append(rel)
                 continue
             src = vdir / name
             if src.is_file():
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
                 restored.append(name)
+                touched.append(rel)
+        # La restauration copie les fichiers SANS passer par ``save_json`` : les données dérivées
+        # (fiche de réunion) doivent être prévenues ici, une fois tous les fichiers en place.
+        for rel in touched:
+            path = Path(rel)
+            if path.is_absolute():          # ancien manifeste : chemin absolu
+                try:
+                    path = path.relative_to(self.job_dir)
+                except ValueError:
+                    continue
+            notify_written(str(self._fs.jobs_dir), self._fs.job_id, path.as_posix())
         return restored

@@ -251,11 +251,16 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
         return meeting
 
     recovered = dict(meeting)
+    # On n'écrit que le FICHIER complété, jamais ``meeting`` : quand le fichier est absent,
+    # ``meeting`` est ``default_context()`` et l'écrire poserait ``meeting_type`` — la marque
+    # « étape 4 enregistrée » — sans qu'aucun humain n'ait rien validé (relecture 2026-11-06).
+    stored = fs.load_json("context/meeting_context.json")
+    stored = dict(stored) if isinstance(stored, dict) else {}
     if participants_detectes:
-        recovered["participants_detectes"] = participants_detectes
+        recovered["participants_detectes"] = stored["participants_detectes"] = participants_detectes
     if speaker_roles:
-        recovered["speaker_roles_llm"] = speaker_roles
-    fs.save_json("context/meeting_context.json", recovered)
+        recovered["speaker_roles_llm"] = stored["speaker_roles_llm"] = speaker_roles
+    fs.save_json("context/meeting_context.json", stored)
     logger.info(
         "Champs participants LLM récupérés depuis summary.md | speaker_roles=%d",
         len(speaker_roles),
