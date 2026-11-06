@@ -354,7 +354,7 @@ def test_niveau_1_repond_avec_citations_verifiees(ctx, owner_id, tmp_path, quiet
     assert _run(_config(tmp_path), req, llm, runner) == OUTCOME_DONE
     done = _claimed(req.id)
     assert done.status == STATUS_DONE and done.level_reached == LEVEL_CARDS
-    assert done.answer == "Le budget a été validé [1]. Hors liste ."
+    assert done.answer == "Le budget a été validé [1]. Hors liste."
     assert done.cited_job_ids == [budget.id]
     assert llm.sent_meetings(0)[0] == "Budget formation"            # la plus pertinente en [1]
     assert len(llm.calls) == 1

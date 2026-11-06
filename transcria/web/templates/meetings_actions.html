@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Mes actions') }} — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-check2-square me-2"></i>{{ _('Mes actions') }}</h1>
+  <a href="/meetings/ask" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chat-square-text me-1"></i>{{ _('Discuter avec mes réunions') }}</a>
+</div>
+<p class="text-muted">{{ _('Les actions relevées dans les comptes rendus de vos réunions, telles qu\'écrites — sans statut ni case à cocher. Cliquez sur une réunion pour l\'ouvrir.') }}</p>
+
+<form method="get" class="row g-2 align-items-end mb-3" data-actions-filters>
+  <div class="col-auto">
+    <label class="form-label small mb-0" for="af-by">{{ _('Grouper par') }}</label>
+    <select class="form-select form-select-sm" id="af-by" name="by">
+      <option value="meeting" {% if by == 'meeting' %}selected{% endif %}>{{ _('réunion') }}</option>
+      <option value="owner" {% if by == 'owner' %}selected{% endif %}>{{ _('responsable') }}</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" for="af-type">{{ _('Type de réunion') }}</label>
+    <select class="form-select form-select-sm" id="af-type" name="type">
+      <option value="">{{ _('tous') }}</option>
+      {% for t in types %}<option value="{{ t }}" {% if t == meeting_type %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" for="af-from">{{ _('Du') }}</label>
+    <input type="date" class="form-control form-control-sm" id="af-from" name="from" value="{{ date_from }}">
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" for="af-to">{{ _('Au') }}</label>
+    <input type="date" class="form-control form-control-sm" id="af-to" name="to" value="{{ date_to }}">
+  </div>
+  <div class="col-auto form-check ms-2">
+    <input class="form-check-input" type="checkbox" id="af-conf" name="confidential" value="1" {% if include_confidential %}checked{% endif %}>
+    <label class="form-check-label small" for="af-conf">{{ _('Inclure les réunions confidentielles que je vois') }}</label>
+  </div>
+  <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">{{ _('Filtrer') }}</button></div>
+</form>
+
+<p class="small text-muted" data-actions-count>
+  {{ ngettext('%(n)s action', '%(n)s actions', total, n=total) }}
+  {% if excluded_confidential and not include_confidential %}— {{ ngettext('%(n)s réunion confidentielle exclue', '%(n)s réunions confidentielles exclues', excluded_confidential, n=excluded_confidential) }}{% endif %}
+</p>
+
+{% if not groups %}
+<div class="alert alert-light border" role="status" data-actions-empty>{{ _('Aucune action dans les réunions visibles avec ces filtres.') }}</div>
+{% endif %}
+
+{% for group in groups %}
+<div class="card mb-3" data-actions-group>
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    {% if by == 'meeting' %}
+      <a href="/jobs/{{ group.key }}/result" class="fw-semibold text-decoration-none">{{ group.label }}</a>
+      <span class="small text-muted">
+        {% set first = group.lines[0] %}
+        {% if first.meeting_date %}{{ first.meeting_date.isoformat() }}{% if first.date_is_import_fallback %} ({{ _('date d\'import') }}){% endif %}{% endif %}
+        {% if first.meeting_type %}· {{ first.meeting_type }}{% endif %}
+      </span>
+    {% else %}
+      <span class="fw-semibold">{% if group.label %}{{ group.label }}{% else %}<em>{{ unassigned_label }}</em>{% endif %}</span>
+      <span class="small text-muted">{{ ngettext('%(n)s action', '%(n)s actions', group.lines | length, n=group.lines | length) }}</span>
+    {% endif %}
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for line in group.lines %}
+    <li class="list-group-item d-flex flex-wrap justify-content-between gap-2">
+      <span>{% if by == 'meeting' and line.owner %}<strong>{{ line.owner }}</strong> : {% endif %}{{ line.text }}</span>
+      {% if by == 'owner' %}
+      <a href="/jobs/{{ line.job_id }}/result" class="small text-decoration-none">
+        {{ line.meeting_title }}{% if line.meeting_date %} · {{ line.meeting_date.isoformat() }}{% endif %}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endblock %}

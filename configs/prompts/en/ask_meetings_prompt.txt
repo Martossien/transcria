@@ -55,5 +55,3 @@ concisely, ONLY from the meetings provided below.
   sentence they support.
 - Dates as "12 May 2026". People's names and terms as they appear in the meetings (do not
   correct, do not translate).
-- End with a line "Meetings consulted: [n], [m]" listing the cited numbers, or nothing if you
-  found nothing.

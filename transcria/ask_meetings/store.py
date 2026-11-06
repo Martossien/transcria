@@ -6,7 +6,7 @@ import re
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from transcria.ask_meetings.messages import SUPPORTED_LOCALES
+from transcria.ask_meetings.messages import SUPPORTED_LOCALES, ask_message
 from transcria.ask_meetings.models import (
     LEVEL_CARDS,
     LEVEL_TRANSCRIPT,
@@ -178,12 +178,28 @@ class AskStore:
             if anchor is None or anchor > cutoff:
                 continue
             req.status = STATUS_FAILED
-            req.error = "timeout"
+            req.error = ask_message(req.locale, "timeout")
             req.done_at = _utcnow()
             count += 1
         if count:
             db.session.commit()
         return count
+
+    @staticmethod
+    def expire_if_stale(req: AskRequest, timeout_s: int) -> bool:
+        """Expire UNE demande encore ``waiting``/``running`` au-delà de ``timeout_s`` — appelé à
+        la lecture par le web : sur un tier ``web`` sans ordonnanceur, personne d'autre ne le
+        ferait et la page attendrait sans fin."""
+        if req.status not in (STATUS_WAITING, STATUS_RUNNING):
+            return False
+        anchor = _aware(req.started_at) if req.status == STATUS_RUNNING else _aware(req.created_at)
+        if anchor is None or anchor > _utcnow() - timedelta(seconds=max(1, int(timeout_s))):
+            return False
+        req.status = STATUS_FAILED
+        req.error = ask_message(req.locale, "timeout")
+        req.done_at = _utcnow()
+        db.session.commit()
+        return True
 
     # ── Tours ────────────────────────────────────────────────────────────────
 

@@ -25,6 +25,17 @@ def N_(s: str) -> str:
 # vague après vague. Beaucoup recoupent des msgid déjà présents côté templates (dédupliqués
 # dans le catalogue) ; les nouvelles sont propres au JS.
 JS_MESSAGES: tuple[str, ...] = (
+    # ask_meetings_page.js — « Discuter avec mes réunions »
+    N_('En attente du worker…'),
+    N_('Vous'),
+    N_('Assistant'),
+    N_('La demande a échoué.'),
+    N_('Impossible de joindre le serveur.'),
+    N_("La demande n'a pas été traitée dans le délai prévu (le worker est-il démarré ?)."),
+    N_('Chercher dans la transcription de cette réunion'),
+    N_("date d'import"),
+    N_('Réunions citées :'),
+    N_('aucune'),
     N_('%(label)s (%(elapsed)s écoulées)'),
     N_('%(n)s diapo(s)'),
     N_('%(n)s image(s) ignorée(s)'),

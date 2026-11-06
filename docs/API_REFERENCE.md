@@ -205,6 +205,9 @@
 | `/api/meetings/<session_id>/cancel` | POST | connexion requise | Annule une session (états annulables seulement) — visibilité = celle du job porteur. | `transcria.web.meetings_api` |
 | `/api/meetings/<session_id>/captions` | GET | connexion requise | Delta du suivi en direct pour la page du job (`?after=<n>`) — visibilité = celle du | `transcria.web.meetings_api` |
 | `/api/meetings/<session_id>/reschedule` | POST | connexion requise | Relance une captation depuis un état terminal replanifiable : NOUVELLE session, MÊME | `transcria.web.meetings_api` |
+| `/api/meetings/ask` | POST | connexion requise | Écrit une demande (202) ; le worker la traite. Jamais d'appel LLM ici. | `transcria.web.ask_routes` |
+| `/api/meetings/ask/<request_id>` | GET | connexion requise | État d'une demande de l'utilisateur (interrogation par la page) : réponse, niveau, réunions citées. | `transcria.web.ask_routes` |
+| `/api/meetings/ask/history` | GET | connexion requise | Tours d'une conversation de l'utilisateur (reprise de la page), réunions citées détaillées. | `transcria.web.ask_routes` |
 | `/api/meetings/availability` | GET | connexion requise | Moteurs prêts + nombre de runners — pilote l'affichage de la carte « Réunion ». | `transcria.web.meetings_api` |
 | `/api/profiles/availability` | GET | connexion requise | Profils de traitement disponibles + profil recommandé (source unique pour le wizard). | `transcria.web.wizard_api` |
 | `/api/resources/status` | GET | connexion requise | État des ressources distantes pour le panneau frontale (mode dégradé inclus). | `transcria.web.processing_api` |
@@ -214,6 +217,8 @@
 | `/jobs/<job_id>/delete` | POST | connexion + Permission.DELETE_JOBS | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/jobs/<job_id>/result` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/jobs/new` | POST | connexion + Permission.CREATE_JOBS | _(docstring manquante)_ | `transcria.web.pages_routes` |
+| `/meetings/actions` | GET | connexion requise | Page « Mes actions » : les actions des réunions visibles, par réunion ou par responsable — sans LLM. | `transcria.web.ask_routes` |
+| `/meetings/ask` | GET | connexion requise | Page « Discuter avec mes réunions » : question en langage libre sur les réunions visibles. | `transcria.web.ask_routes` |
 | `/metrics` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/ready` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
@@ -226,7 +231,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 160 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 165 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

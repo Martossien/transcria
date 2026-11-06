@@ -57,5 +57,3 @@ precisão e concisão, APENAS a partir das reuniões fornecidas abaixo.
   que sustentam.
 - Datas no formato «12 de maio de 2026». Nomes de pessoas e termos tal como aparecem nas
   reuniões (não corrijas, não traduzas).
-- Termina com uma linha «Reuniões consultadas: [n], [m]» com os números citados, ou nada se não
-  encontraste nada.

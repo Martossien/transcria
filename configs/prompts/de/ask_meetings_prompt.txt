@@ -57,5 +57,3 @@ Deutsch, präzise und knapp, AUSSCHLIESSLICH anhand der unten bereitgestellten B
 - Kurze Sätze, Aufzählungen bei mehreren Punkten, Nummern `[n]` direkt am gestützten Satz.
 - Daten im Format „12. Mai 2026“. Personennamen und Begriffe, wie sie in den Besprechungen
   stehen (nicht korrigieren, nicht übersetzen).
-- Schließe mit einer Zeile „Eingesehene Besprechungen: [n], [m]“ mit den zitierten Nummern, oder
-  mit nichts, wenn du nichts gefunden hast.

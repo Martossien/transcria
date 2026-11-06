@@ -1,8 +1,8 @@
 # Discuter avec mes réunions — plan directeur
 
-> Statut : **lots 0, A et B livrés (2026-11-06)** — fiches `job_cards`, demandes consommées par le
-> worker, présélection, prompt six langues, garde des citations (§ 6). Lots C (interface), D (docs)
-> et E (qualification réelle) à faire : rien n'est encore visible à l'écran. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
+> Statut : **lots 0 à C livrés (2026-11-06)** — fiches `job_cards`, demandes consommées par le
+> worker, présélection, prompt six langues, garde des citations, pages `/meetings/ask` et
+> `/meetings/actions` (§ 6). Lots D (docs) et E (qualification réelle, machine principale) à faire. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
 > utilisateurs de novembre 2026 : « retrouver une réunion parmi les miennes » et « suivre les
 > actions décidées ». Cadré avec le mainteneur, puis **relu par un relecteur critique** (code +
 > plan, mesures en base) dont les constats sont intégrés. **VÉRIFIÉ** = au code (fichier:ligne) ou
@@ -230,7 +230,7 @@ Bandeau cloud hérité de `LLM_CLOUD.md`. 6 langues ; JS extrait `static/js/ask_
 | 0 — vérifications restantes ✅ | clés étrangères SQLite (`PRAGMA foreign_keys`), patron de migration, taille réelle d'une fiche projetée (calcul sur les jobs de test), délai d'expiration gunicorn du rôle web (sans objet pour l'appel, utile pour l'interrogation) | note dans ce document |
 | A — fiches ✅ | `job_cards` + migration (cascade), `refresh()` dans les deux `save()` + `restore_version` + pull, `rebuild-job-cards`, règle confidentiel, règle date | tests store ; « fiche = reflet du contexte » ; rattrapage sur jobs de test ; suppression d'un job supprime la fiche (PG et SQLite) |
 | B — demandes ✅ | `ask_requests` + `ask_turns` + migrations, consommation par le worker (claim, verrou LLM, ensure, timeout), présélection PURE (`transcria/search/`), prompt 6 langues, garde des citations, escalade 2-3, filtres cloud/groupe/connecteurs, rétention + purge, audit | tests PURS sans LLM (présélection, garde, escalade, filtres) ; faux LLM ; limites (question vide / 1 car. / très longue / unicode) → jamais de 500 ; test « admin voit tout » et « membre ne voit que ses groupes » |
-| C — UI | pages `/meetings/ask` et `/meetings/actions`, interrogation, navbar, JS extrait, i18n, interrupteur admin, bandeau cloud | Playwright gestes réels + revue visuelle ; `audit_front` ; `test_js_api_contract` ; `API_REFERENCE.md` ; docstrings de routes |
+| C — UI ✅ | pages `/meetings/ask` et `/meetings/actions`, interrogation, navbar, JS extrait, i18n, interrupteur admin, bandeau cloud | Playwright gestes réels + revue visuelle ; `audit_front` ; `test_js_api_contract` ; `API_REFERENCE.md` ; docstrings de routes |
 | D — docs | TECHNICAL, DATA_MODEL (3 tables), CONFIG_REFERENCE (`workflow.ask_meetings.*`), **AUDIT_DPO** (historique des conversations : rétention, purge, sauvegarde ; admin interroge tout), **SECURITY_MODEL** (corriger la ligne Manager), README/PRESENTATION fr+en, `docs/README.md` index, CHANGELOG | `release_check`, `i18n_check`, `test_config_classification` |
 | E — qualification réelle | sur l'instance de dev avec les réunions réelles (privées, jamais versionnées) : 20 questions types (retrouver, décisions, actions, « non retrouvé » attendu, confidentiel exclu puis inclus, niveau 3), relecture humaine des réponses et des citations, mesure du temps par niveau ; puis en cloud (Mistral) | journal dans ce document, anonymisé |
 
@@ -432,4 +432,56 @@ réunion, cible inexistante dite invisible. Migration : dérive modèles ↔ mig
 « inclure les confidentielles », le bouton « chercher dans la transcription de… », l'interrupteur
 admin dans le formulaire). La qualité des réponses d'une vraie LLM sur de vraies réunions est
 l'objet du lot E, sur la machine principale, en lisant.
+
+### Lot C — interface (2026-11-06)
+
+Livré : `transcria/web/ask_routes.py` (page `/meetings/ask`, `POST /api/meetings/ask` → 202,
+`GET /api/meetings/ask/<id>`, `GET /api/meetings/ask/history`, page `/meetings/actions`),
+`ask_meetings/actions.py` (PUR), templates `ask_meetings.html` / `meetings_actions.html`, JS extrait
+`static/js/ask_meetings_page.js` (îlot JSON, zéro JS inline, `t()`), entrée de menu « Discuter »,
+interrupteur `workflow.ask_meetings.enabled` dans `/admin/config` (clé passée de « deferred » à
+« exposed »), six catalogues complétés (`pgettext('navigation', 'Discuter')` pour l'entrée de menu),
+`docs/API_REFERENCE.md` régénérée, banc `scripts/bench/ask_meetings_walkthrough.py`.
+
+**Choix :**
+
+- **Une seule entrée de menu** (« Discuter »), comme le plan ; « Mes actions » est un bouton de la
+  page et réciproquement. Deux entrées faisaient passer la barre de navigation sur deux lignes à
+  1 280 px (vu sur capture).
+- **Les réunions citées renvoyées au navigateur sont relues à travers `list_for_user`** : une
+  réunion supprimée ou devenue invisible n'est plus détaillée (identifiant conservé dans la
+  réponse stockée, carte absente).
+- **Conversation** : identifiant dans `sessionStorage` ; au rechargement, l'historique est relu
+  depuis le serveur (jamais mis en cache côté navigateur) ; « Nouvelle conversation » oublie
+  l'identifiant. Le niveau 3 se demande depuis la carte d'une réunion citée (bandeau « prochaine
+  question posée à la transcription de… », annulable).
+- **Refus de saisie** : codes stables du store traduits par l'interface (vide, trop longue,
+  niveau, cible, conversation) — jamais de 500, message qui guide. Désactivé par l'admin ou
+  refusé par la garde cloud : page sans formulaire, message explicite, API 403.
+- **Garde des citations** : après retrait d'un numéro hors liste, la ponctuation orpheline est
+  resserrée (« Hors liste : . » → « Hors liste. »), sans toucher aux espaces français avant
+  « : » et « ; ». La ligne de pied « Réunions consultées : [n] » a été retirée du prompt dans les
+  six langues : les cartes la rendaient en double (vu sur capture).
+
+**Relecture critique indépendante (2026-11-06), corrigée avant livraison** — rien de bloquant
+sur les permissions (demandes et tours lisibles par leur auteur seul, cartes citées relues par
+`can_access_job`, XSS/CSRF sains) ; cinq points justes : le nettoyage des citations mangeait
+l'espace française avant « ? » et « ! » (seuls « , » et « . » sont recollés désormais) ; le bouton
+« chercher dans la transcription » d'une réunion confidentielle citée échouait si la case n'était
+plus cochée (la carte porte le drapeau, la case se coche) ; « Mes actions » appliquait les
+exclusions cloud alors qu'elle n'appelle aucune LLM (`for_llm=False`) ; une demande expirée
+affichait la clé brute « timeout » (message traduit) ; une demande jamais traitée (tier `web`
+sans ordonnanceur) faisait attendre sans fin (expiration à la lecture + plafond d'interrogation
+côté navigateur). Booléen strict pour `include_confidential`, question non textuelle refusée.
+
+**Preuves.** Tests de routes : page (formulaire, îlot JSON, désactivée, refus cloud), huit refus de
+saisie sans 500, écriture + `submit_ask`, état d'une demande (auteur seul, 404 sinon ; attente,
+échec ; réunion citée invisible non détaillée), historique, accès anonyme, « Mes actions » (ordre,
+regroupements, filtres, confidentielles, réunions d'autrui absentes), helper pur. **Banc Playwright
+sur instance jetable** (SQLite, LLM factice compatible OpenAI vue comme distante) : question →
+attente → réponse citée avec carte → question à la transcription depuis la carte → « non
+retrouvé » après escalade → rechargement avec historique → nouvelle conversation → actions par
+réunion / par responsable / confidentielles incluses ; zéro erreur console ni serveur ; neuf
+captures relues (défauts attrapés ainsi : navbar sur deux lignes, pied de réponse en double,
+ponctuation orpheline).
 

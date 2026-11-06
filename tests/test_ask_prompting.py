@@ -77,6 +77,8 @@ def test_build_messages_rejoue_l_historique_utile_seulement():
     ("Validé [1] et [2].", 3, "Validé [1] et [2].", [1, 2]),
     ("Validé [1, 2] puis [2;3].", 3, "Validé [1, 2] puis [2, 3].", [1, 2, 3]),
     ("Hors liste [7] et [0] ; vrai [3].", 3, "Hors liste et ; vrai [3].", [3]),
+    ("Validé [9]. Hors liste : [8].", 2, "Validé. Hors liste.", []),
+    ("Est-ce validé ? Oui [1] ! Voir : [9] ?", 2, "Est-ce validé ? Oui [1] ! Voir ?", [1]),   # espaces françaises gardées
     ("Mixte [1, 9].", 3, "Mixte [1].", [1]),
     ("[ 2 ] avec espaces", 3, "[2] avec espaces", [2]),
     ("Aucune citation.", 3, "Aucune citation.", []),

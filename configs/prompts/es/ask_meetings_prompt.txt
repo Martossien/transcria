@@ -57,5 +57,3 @@ precisión y concisión, ÚNICAMENTE a partir de las reuniones proporcionadas a 
   frase que sustentan.
 - Fechas en formato «12 de mayo de 2026». Nombres de personas y términos tal como aparecen en
   las reuniones (no corrijas, no traduzcas).
-- Termina con una línea «Reuniones consultadas: [n], [m]» con los números citados, o nada si no
-  encontraste nada.

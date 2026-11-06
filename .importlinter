@@ -88,6 +88,7 @@ modules =
     transcria.web.downloads_api
     transcria.web.refine_api
     transcria.web.admin_routes
+    transcria.web.ask_routes
     transcria.web.health_routes
     transcria.web.editor_routes
     transcria.web.facade_api

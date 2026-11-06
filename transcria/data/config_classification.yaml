@@ -75,6 +75,7 @@ exposed:
 - workflow.queue.enabled
 - workflow.summary_autostart.enabled
 - workflow.summary_llm.model_id
+- workflow.ask_meetings.enabled
 internal:
   maintenance.backup_dir: dossier des sauvegardes — géré via la page Maintenance / CLI
   maintenance.schedule.enabled: planification (timer systemd) gérée via la page Maintenance / CLI
@@ -88,7 +89,6 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
-- workflow.ask_meetings.enabled
 - workflow.ask_meetings.max_cards
 - workflow.ask_meetings.max_context_tokens
 - workflow.ask_meetings.level2_meetings

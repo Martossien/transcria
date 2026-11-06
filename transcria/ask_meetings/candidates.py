@@ -38,11 +38,14 @@ class CandidateSet:
     excluded_cloud: int
 
 
-def visible_candidates(config: dict, user, *, include_confidential: bool) -> CandidateSet:
-    """Fiches des réunions que ``user`` peut interroger, dans l'ordre de ``list_for_user``."""
+def visible_candidates(config: dict, user, *, include_confidential: bool, for_llm: bool = True) -> CandidateSet:
+    """Fiches des réunions que ``user`` peut interroger, dans l'ordre de ``list_for_user``.
+
+    ``for_llm=False`` (vue « Mes actions », aucune LLM) : les exclusions cloud ne s'appliquent
+    pas — elles protègent ce qui PART chez un fournisseur, pas ce que l'utilisateur lit chez lui."""
     jobs = JobStore.list_for_user(user)
     cards = JobCardStore.for_jobs([job.id for job in jobs])
-    cloud = is_cloud_backend(config)
+    cloud = for_llm and is_cloud_backend(config)
     connectors_allowed = True
     if cloud:
         view = LlmCloudView.from_config(config)

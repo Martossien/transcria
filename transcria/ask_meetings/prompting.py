@@ -189,6 +189,9 @@ def verify_citations(answer: str, allowed: int) -> tuple[str, list[int]]:
         return "[" + ", ".join(str(n) for n in valid) + "]" if valid else ""
 
     cleaned = _CITATION_RE.sub(_replace, answer or "")
+    cleaned = re.sub(r"[:;,]\s*([.!?])", r"\1", cleaned)           # « Hors liste : . » → « Hors liste . »
+    # Seuls « , » et « . » sont recollés : « ? », « ! », « : », « ; » prennent une espace en français.
+    cleaned = re.sub(r"[ \t]+([,.])", r"\1", cleaned)             # « validé [9]. » → « validé. »
     cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
     cleaned = re.sub(r" {2,}", " ", cleaned).strip()
     return cleaned, cited

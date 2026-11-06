@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Discuter avec mes réunions') }} — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-chat-square-text me-2"></i>{{ _('Discuter avec mes réunions') }}</h1>
+  <a href="/meetings/actions" class="btn btn-outline-secondary btn-sm"><i class="bi bi-check2-square me-1"></i>{{ _('Mes actions') }}</a>
+</div>
+
+<p class="text-muted" data-ask-scope>
+  {% if scope_all %}{{ _('Vous êtes administrateur : la recherche porte sur toutes les réunions de cette instance.') }}
+  {% else %}{{ _('La recherche porte sur vos réunions et celles des membres de vos groupes — exactement ce que vous voyez sur l\'accueil.') }}{% endif %}
+  {{ _('Les réunions confidentielles sont exclues sauf si vous cochez la case. La réponse cite chaque réunion utilisée ; une réunion non retrouvée est dite non retrouvée.') }}
+</p>
+
+{% if not enabled %}
+<div class="alert alert-secondary" role="status" data-ask-disabled>{{ _('La discussion avec les réunions est désactivée par l\'administrateur.') }}</div>
+{% elif cloud_refusal %}
+<div class="alert alert-warning" role="status" data-ask-cloud-refused>{{ cloud_refusal }}</div>
+{% else %}
+
+<div id="ask-thread" class="mb-3" aria-live="polite"></div>
+
+<div id="ask-target" class="alert alert-info d-none d-flex align-items-center justify-content-between" role="status">
+  <span><i class="bi bi-file-earmark-text me-1"></i>{{ _('Prochaine question posée à la transcription de :') }} <strong id="ask-target-title"></strong></span>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="ask-target-cancel">{{ _('Annuler') }}</button>
+</div>
+
+<form id="ask-form" class="card">
+  <div class="card-body">
+    <label for="ask-question" class="form-label fw-semibold">{{ _('Votre question') }}</label>
+    <textarea id="ask-question" class="form-control" rows="3" maxlength="{{ settings.max_question_chars }}"
+              placeholder="{{ _('Ex. : qu\'a-t-on décidé sur le budget cet automne ? Dans quelle réunion a-t-on parlé du nouveau prestataire ?') }}"></textarea>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="ask-confidential">
+        <label class="form-check-label" for="ask-confidential">{{ _('Inclure les réunions confidentielles que je vois') }}</label>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="ask-new">{{ _('Nouvelle conversation') }}</button>
+        <button type="submit" class="btn btn-primary" id="ask-submit"><i class="bi bi-send me-1"></i>{{ _('Poser la question') }}</button>
+      </div>
+    </div>
+    <div id="ask-error" class="text-danger small mt-2 d-none" role="alert"></div>
+  </div>
+</form>
+{% endif %}
+
+<script type="application/json" id="ask-settings">{{ settings | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ asset_url('js/ask_meetings_page.js') }}"></script>
+{% endblock %}

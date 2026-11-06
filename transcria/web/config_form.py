@@ -90,6 +90,9 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         "fields": [
             {"path": "workflow.arbitration_llm.enabled", "label": _l("Activer la correction LLM"), "type": "bool",
              "help": _l("Désactiver pour produire un SRT brut sans correction.")},
+            {"path": "workflow.ask_meetings.enabled", "label": _l("Discuter avec mes réunions"), "type": "bool",
+             "help": _l("Page « Discuter » : questions en langage libre sur les réunions visibles, "
+                        "réponses citées de la LLM d'arbitrage, traitées par le worker.")},
             {"path": "workflow.summary_llm.model_id", "label": _l("Modèle de résumé"), "type": "text",
              "help": _l("Identifiant opencode, ex. local/arbitrage.")},
             {"path": "workflow.arbitration_llm.model_id", "label": _l("Modèle de correction"), "type": "text",

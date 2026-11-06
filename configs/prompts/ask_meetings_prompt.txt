@@ -58,5 +58,3 @@ en français, avec précision et concision, UNIQUEMENT à partir des réunions f
   phrase qu'ils étayent.
 - Dates au format « 12 mai 2026 ». Noms de personnes et termes tels qu'ils apparaissent dans
   les réunions (ne corrige pas, ne traduis pas).
-- Termine par une ligne « Réunions consultées : [n], [m] » listant les numéros cités, ou rien si
-  tu n'as rien trouvé.

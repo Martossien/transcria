@@ -62,7 +62,7 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Image CPU Docker** : binaire `audiocpp_cli` précompilé (≈ 55 Mo, téléchargé au build,
   sha256 vérifié) — diarisation Nemotron 3 CPU dans l'image CPU.
 
-#### « Discuter avec mes réunions » — socle serveur (interface au prochain lot)
+#### « Discuter avec mes réunions »
 
 - **Table `job_cards`** — une fiche courte par réunion (titre, type, date, confidentialité,
   participants, sujet, objectif, ordre du jour, abrégé de la synthèse, décisions, actions),
@@ -78,7 +78,13 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   d'une réunion n'est lue que sur demande explicite). Même verrou LLM que les jobs, jamais
   d'appel depuis le web. Prompt `ask_meetings_prompt.txt` en six langues, section
   `workflow.ask_meetings.*`, audit `job_ask_meetings`, rétention des conversations 30 jours.
-  Rien n'est encore visible à l'écran (`docs/DISCUTER_REUNIONS.md`).
+- **Pages** : entrée de menu « Discuter » → `/meetings/ask` (question, case « inclure les
+  réunions confidentielles que je vois », réponse avec son niveau et les cartes des réunions
+  citées, bouton « chercher dans la transcription de cette réunion », conversation reprise au
+  rechargement) et `/meetings/actions` (les actions des réunions visibles, par réunion ou par
+  responsable, filtres type et dates — sans LLM). Interrupteur « Discuter avec mes réunions »
+  dans `/admin/config`. Six langues. Banc Playwright `scripts/bench/ask_meetings_walkthrough.py`
+  (`docs/DISCUTER_REUNIONS.md`).
 
 #### Retours utilisateurs
 
