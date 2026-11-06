@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestration n'importe pas Flask (§8.2)
     from flask import Flask
 
+from transcria.ask_meetings import worker as ask_worker
 from transcria.config.views import QueueView
 from transcria.database import db
 from transcria.jobs import artifact_store
@@ -102,12 +103,13 @@ class JobExecutorService:
             max_workers=self.max_workers,
             thread_name_prefix="transcria-worker",
         )
+        self._ask_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="transcria-ask-direct")
         self._lock = threading.Lock()
         self._queued_job_ids: set[str] = set()
         self._running_job_ids: set[str] = set()
         self._scheduler: QueueScheduler | None = None
         if self.queue_enabled:
-            self._scheduler = QueueScheduler(app, config, self._run_process)
+            self._scheduler = QueueScheduler(app, config, self._run_process, ask_fn=self._run_ask_next)
             if self.run_scheduler:
                 self._scheduler.start()
 
@@ -148,6 +150,26 @@ class JobExecutorService:
         future.add_done_callback(lambda _: self._finalize_tracking(job_id))
         return {"accepted": True, "status": "queued", "mode": mode}
 
+    def _run_ask_next(self) -> str:
+        """Une itération « Discuter avec mes réunions » (appelée par le scheduler, sous contexte d'app)."""
+        return ask_worker.process_next(self.config)
+
+    def submit_ask(self, request_id: str) -> dict:
+        """Signale une demande écrite en base. En mode file, c'est le process qui exécute la file
+        qui la prendra (rôles ``scheduler``/``all``) ; sans file, elle est traitée ici, en thread
+        — le mode sans file est tout-en-un par construction."""
+        if self.queue_enabled:
+            return {"accepted": True, "status": "queued", "request_id": request_id}
+
+        def _run() -> None:
+            with self.app.app_context():
+                ask_worker.process_next(self.config)
+
+        # Un seul thread : deux questions en parallèle se feraient expirer l'une l'autre
+        # (``fail_stale``) et se disputeraient le verrou LLM pour rien.
+        self._ask_executor.submit(_run)
+        return {"accepted": True, "status": "running", "request_id": request_id}
+
     def get_runtime_snapshot(self) -> dict:
         if self.queue_enabled and self._scheduler is not None:
             return self._scheduler.get_runtime_snapshot()
@@ -164,6 +186,7 @@ class JobExecutorService:
         if self._scheduler is not None:
             self._scheduler.stop(timeout_s=10)
         self._executor.shutdown(wait=False, cancel_futures=False)
+        self._ask_executor.shutdown(wait=False, cancel_futures=True)
 
     def _run_process(self, job_id: str, audio_path: str, mode: str) -> None:
         sl = get_structured_logger(__name__)

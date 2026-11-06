@@ -183,6 +183,7 @@ transcria/
       schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
       restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge, rebuild-job-cards
+      retention.py          # purge_expired(cfg) = l'UNIQUE endroit qui sait tout ce qui expire (jobs, audit par famille, conversations ask_meetings) — appelé par la page d'accueil et par `purge` ; une donnée nouvelle qui expire s'ajoute ICI
     config/local_dirs.py    # resolve_models_dir()/resolve_runtimes_dir() — MODELS_DIR et TRANSCRIA_RUNTIMES_DIR, source unique (catalogue, doctor, diariseur Nemotron)
     llm_cloud/              # GOUVERNANCE de la LLM d'arbitrage cloud (docs/LLM_CLOUD.md § 3.2 — « que ce soit dit ») :
       policy.py             #   politique PURE (CLOUD_NOTICE_TEXT_VERSION = version du texte lu par l'admin → validation CADUQUE si elle change ; decide_gate ; un utilisateur est interdit dès qu'UN de ses groupes l'est)
@@ -219,6 +220,13 @@ transcria/
       projection.py         #   PUR : project_card (date analysée sinon date d'import, règle « confidentiel » — dans le doute confidentiel —, sujet/objectif/ordre du jour validés sinon suggérés, abrégé ≤ 800 car. de la synthèse EFFECTIVE, décisions/actions bornées) + source_fingerprint ; « étape 4 enregistrée » = clé meeting_type présente (posée par MeetingContextManager.save() seul)
       models.py / store.py  #   JobCard (FK ON DELETE CASCADE + cascade ORM : SQLite n'applique pas les clés étrangères) ; JobCardStore.refresh idempotent par empreinte (fichier absent ICI ou illisible ⇒ skipped, jamais de fiche vidée), for_jobs (identifiants DÉJÀ filtrés par list_for_user), rebuild_all, prune_orphans
       hooks.py              #   accroche sur JobFilesystem.save_json (le SEUL point commun des ~10 sites qui réécrivent le contexte ; RefineStore.restore_version prévient aussi) + rattrapage au démarrage du process qui exécute la file ; pas d'accroche sur le pull pg (la fiche vit en base) — MAIS tout recalcul qui ne suit pas une écriture locale passe par rebuild_for_config (tire context/ d'abord : un cache local périmé a déjà failli déclasser une fiche confidentielle)
+    ask_meetings/           # « DISCUTER AVEC MES RÉUNIONS » (docs/DISCUTER_REUNIONS.md, lot B) — demandes consommées par le WORKER, JAMAIS d'appel LLM depuis le web
+      models.py / store.py  #   ask_requests (waiting→running→done|failed, claim = UPDATE conditionnel rowcount==1, portable PG/SQLite), ask_turns (mémoire courte par utilisateur, rétention 30 j), ask_turn_citations (FK jobs CASCADE ; événement ORM before_delete sur Job supprime les tours qui citent la réunion) ; AskValidationError = saisie refusée AVANT écriture (vide / trop longue / niveau / cible)
+      candidates.py         #   les réunions qu'une demande a le DROIT de voir, dans l'ORDRE : list_for_user → confidentiel exclu sauf demande → en cloud propriétaire dans un groupe interdit + connecteurs non autorisés → (présélection ensuite)
+      prompting.py          #   PUR : fiches numérotées [1], [2]… (jamais des UUID), blocs des 3 niveaux, build_messages, verify_citations = garde APRÈS la LLM (numéro hors liste RETIRÉ ; aucune citation ⇒ escalade)
+      worker.py / sources.py #  AskWorker.process : filtres → try_acquire_llm (borné, sinon demande remise en attente) → prepare_llm (partagé avec refine) → chat_completion → niveaux 1→2 automatique, 3 sur demande (cible revérifiée visible) → tours + audit job_ask_meetings (compteurs, jamais la question) ; process_next = une itération (fail_stale + claim). sources = synthèse EFFECTIVE et SRT effectif lus sur le disque du worker (pull ciblé en pg)
+      messages.py           #   textes de service fr/en/de/es/it/pt choisis par la LOCALE DE LA REQUÊTE (pas la langue d'une réunion)
+    search/                 # PRÉSÉLECTION PURE (aucune base, aucune LLM, n'importe pas workflow/) : text.py (fold NFD+casefold, tokens ≥ 3 car., mots-outils 6 langues, same_word racine 5 car.) ; preselect.py (CardDoc, score par champ pondéré titre/sujet/participants > objectif/odj/décisions/actions > type/abrégé, bonus de date jour/mois, tri score puis date, double plafond fiches/tokens ≈ car./4, sans score ⇒ les plus récentes)
     ingestion/              # RÉUNIONS côté cœur (vagues 2-5 + suites) — l'autre bout de la frontière /v1/audio/ingest
       models.py / store.py  # MeetingImport — mapping artefact externe → job, get-or-create IDEMPOTENT (ADR-001 D2)
       manifest.py           # manifeste participants (v1 fenêtres, v2 pistes `track_<id>`) — validation STRICTE tout-ou-rien
@@ -235,7 +243,7 @@ transcria/
     queue/
       allocator.py          # GPUAllocator — réservations GPU atomiques par job/phase + verrou LLM + PID tracking
       store.py              # QueueStore — file persistante, priorités, pause/reprise, aging
-      scheduler.py          # QueueScheduler — dispatch en arrière-plan selon capacité/calendrier
+      scheduler.py          # QueueScheduler — dispatch en arrière-plan selon capacité/calendrier ; `_ask_tick` (ask_fn injectée par l'exécuteur) traite UNE demande « Discuter avec mes réunions » à la fois dans son propre thread, sans bloquer la file
       calendar.py           # SchedulingCalendar — pause_queue, limit_concurrency, force_gpu
       routes.py             # /admin/queue, /admin/schedule, /api/queue/*, /api/schedule/*
       notify_listener.py    # réveil instantané du scheduler via PostgreSQL LISTEN/NOTIFY (Phase B)
@@ -1004,7 +1012,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/STT_CORPUS.md` | Constitution du corpus de référence |
 | `docs/PISTES_AMELIORATION.md` | Backlog technique : ce qui est identifié, pas encore décidé |
 | `docs/LLM_CLOUD.md` | **Plan + statut (lots A-C livrés, D docs en cours, E qualification réelle à faire)** : LLM d'arbitrage chez un fournisseur externe (passe-plat) — `services.backend: cloud`, clé par variable d'env, validation admin en base, bandeau permanent, interdiction par groupe, provenance par job, palier zéro GPU |
-| `docs/DISCUTER_REUNIONS.md` | **Plan + statut (lots 0 et A livrés : fiches `job_cards` ; B-E à faire)** : « discuter avec mes réunions » — demandes consommées par le worker (jamais de LLM depuis le web), escalade fiches → synthèse effective → SRT, citations vérifiées, vue « Mes actions » ; § 6 = journal des lots et écarts mesurés avec le plan |
+| `docs/DISCUTER_REUNIONS.md` | **Plan + statut (lots 0, A et B livrés : fiches `job_cards`, demandes/worker/présélection/garde ; C interface, D docs, E qualification à faire)** : « discuter avec mes réunions » — demandes consommées par le worker (jamais de LLM depuis le web), escalade fiches → synthèse effective → SRT, citations vérifiées, vue « Mes actions » ; § 6 = journal des lots et écarts mesurés avec le plan |
 | `docs/ATTRIBUTION_LOCUTEURS_RESUME.md` | Descriptions LLM sur le mauvais SPEAKER_XX à l'étape Résumé : cause (transcription rapide sans étiquettes), contraintes (> 8 voix, numéros stables), 5 options, **mesure sur 3 réunions réelles** (option A `workflow.summary_by_turns` : 18/19 justes contre 11/19, +15 à +25 % de durée) — activée PAR DÉFAUT (0.4.8), `false` = repli rapide |
 | `docs/TESTERS.md` | Guide des testeurs externes |
 | `docs/PRESENTATION.md` / `.en.md` | Présentation non technique (français / anglais) |

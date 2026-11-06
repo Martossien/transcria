@@ -23,6 +23,8 @@ class AuditAction(str, enum.Enum):
     JOB_PARTICIPANTS_SAVE = "job_participants_save"
     JOB_EXTERNAL_PUSH = "job_external_push"
     JOB_EXTERNAL_LLM = "job_external_llm"
+    JOB_ASK_MEETINGS = "job_ask_meetings"                      # « Discuter avec mes réunions » : une demande traitée
+    JOB_ASK_MEETINGS_TRANSCRIPT = "job_ask_meetings_transcript"  # idem, niveau transcription d'une réunion
     JOB_ENQUEUE = "job_enqueue"
     MEETING_SCHEDULE = "meeting_schedule"      # vague 3 : planification d'un bot de réunion
     MEETING_CANCEL = "meeting_cancel"
@@ -106,6 +108,7 @@ _VERB_FR = {
     "window_delete": "Suppression de créneau", "refine_request": "Demande d'affinage",
     "refine_revert": "Restauration d'affinage", "external_push": "Envoi externe",
     "external_llm": "Traitement par LLM externe (cloud)",
+    "ask_meetings": "Discussion avec les réunions", "ask_meetings_transcript": "Discussion — lecture d'une transcription",
     "llm_cloud_acknowledge": "Validation de la LLM cloud", "llm_cloud_revoke": "Retrait de la validation LLM cloud",
     "backup_create": "Création de sauvegarde", "backup_restore": "Restauration de sauvegarde",
 }

@@ -274,3 +274,39 @@ class LlmCloudView:
             provider_source=source,
             provider_label=label,
         )
+
+
+@dataclass(frozen=True)
+class AskMeetingsView:
+    """Section ``workflow.ask_meetings.*`` — « Discuter avec mes réunions » (docs/DISCUTER_REUNIONS.md).
+
+    Les plafonds sont dimensionnés sur la mesure du lot 0 : une fiche ≈ 610 tokens en médiane,
+    ≈ 990 au 90e percentile — 40 fiches ≈ 24 000 tokens.
+    """
+
+    enabled: bool
+    max_cards: int
+    max_context_tokens: int
+    level2_meetings: int
+    context_turns: int
+    retention_days: int
+    timeout_s: int
+    llm_lock_timeout_s: int
+    max_question_chars: int
+    max_answer_tokens: int
+
+    @classmethod
+    def from_config(cls, cfg: dict) -> "AskMeetingsView":
+        ask = _section(cfg, "workflow", "ask_meetings")
+        return cls(
+            enabled=bool(ask.get("enabled", True)),
+            max_cards=max(1, int(ask.get("max_cards", 40))),
+            max_context_tokens=max(500, int(ask.get("max_context_tokens", 24000))),
+            level2_meetings=max(1, int(ask.get("level2_meetings", 3))),
+            context_turns=max(0, int(ask.get("context_turns", 6))),
+            retention_days=max(0, int(ask.get("retention_days", 30))),
+            timeout_s=max(30, int(ask.get("timeout_s", 900))),
+            llm_lock_timeout_s=max(1, int(ask.get("llm_lock_timeout_s", 30))),
+            max_question_chars=max(1, int(ask.get("max_question_chars", 2000))),
+            max_answer_tokens=max(64, int(ask.get("max_answer_tokens", 1200))),
+        )

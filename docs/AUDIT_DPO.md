@@ -17,10 +17,11 @@
 | Tours de parole en direct | `jobs/<id>/live/captions.jsonl` | 365 j (avec le traitement) | plafonné par `connectors.meetings.max_caption_lines` |
 | Référence de réunion et code d'accès | base, **chiffrés** (Fernet) | avec la session | `TRANSCRIA_MEETING_REF_KEY` |
 | Journal d'audit | base | 1095 j (par famille) | `security.audit_retention_days` / `audit_retention_by_family` |
+| Conversations « Discuter avec mes réunions » (questions, réponses, réunions citées) | base (`ask_requests`, `ask_turns`) | 30 j | `workflow.ask_meetings.retention_days` |
 | Comptes utilisateurs | base | tant que le compte existe | — |
 
-La purge des **traitements** et de l'**audit** s'exécute automatiquement (au chargement
-de la page d'accueil) et peut être forcée en ligne de commande :
+La purge des **traitements**, de l'**audit** et des **conversations** s'exécute automatiquement
+(au chargement de la page d'accueil) et peut être forcée en ligne de commande :
 
 ```bash
 # Compter ce qui serait purgé, sans rien supprimer :
@@ -96,6 +97,16 @@ leur consentement à leur place.
   phases, identifiant du propriétaire du job). La même trace figure par job dans
   `metadata/llm_provenance.json` et en pied de page du DOCX. Événements d'authentification et
   de jetons rangés dans la **famille `auth`** pour la rétention.
+
+  **« Discuter avec mes réunions ».** `job_ask_meetings` (acteur = le demandeur ; nombre de
+  réunions candidates, envoyées et citées, niveau atteint, durée, réunions confidentielles
+  incluses ou non, fournisseur cloud le cas échéant — **jamais la question ni la réponse**) et
+  `job_ask_meetings_transcript` (niveau 3 : identifiant de la réunion dont la transcription a été
+  lue). Le périmètre interrogeable est exactement celui de la page d'accueil (`list_for_user`) :
+  **un administrateur global interroge toutes les réunions**. Les conversations sont des données
+  à part entière (questions et réponses peuvent citer des personnes) : rétention 30 jours par
+  défaut, suppression des tours qui citent une réunion quand elle est supprimée, présentes dans
+  la sauvegarde de la base comme le reste.
 
   **Transcriptions confiées à un tiers.** Lorsque cette option est activée, le fournisseur de LLM
   reçoit les transcriptions : il agit pour l'organisation comme un destinataire/sous-traitant à

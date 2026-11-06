@@ -7,6 +7,7 @@ db = SQLAlchemy()
 # Alembic, le diff de schéma de `doctor`, et le test anti-dérive. Toute nouvelle table doit
 # apparaître ici (garde : `tests/test_model_modules_complete.py`).
 MODEL_MODULES: tuple[str, ...] = (
+    "transcria.ask_meetings.models",
     "transcria.audit.models",
     "transcria.auth.models",
     "transcria.context.central_lexicon_models",

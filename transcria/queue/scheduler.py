@@ -53,10 +53,16 @@ class _RemoteDispatchState:
 class QueueScheduler:
     """Scheduler persistant minimal : draine job_queue et lance les jobs éligibles."""
 
-    def __init__(self, app: Flask, config: dict, process_fn: ProcessFn):
+    def __init__(self, app: Flask, config: dict, process_fn: ProcessFn,
+                 ask_fn: Callable[[], str] | None = None):
         self.app = app
         self.config = config
         self.process_fn = process_fn
+        # « Discuter avec mes réunions » : une demande à la fois, dans son propre thread, à chaque
+        # itération de dispatch — injectée par l'exécuteur (le scheduler ne connaît pas les demandes).
+        self.ask_fn = ask_fn
+        self._ask_future: Future | None = None
+        self._ask_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="transcria-ask-worker")
         queue_view = QueueView.from_config(config)
         execution_cfg = config.get("workflow", {}).get("execution", {}) or {}
         self.poll_interval_s = max(1, queue_view.poll_interval_s)
@@ -138,6 +144,7 @@ class QueueScheduler:
         if self._thread:
             self._thread.join(timeout=timeout_s)
         self._executor.shutdown(wait=False, cancel_futures=False)
+        self._ask_executor.shutdown(wait=False, cancel_futures=True)
         if self._singleton_lock is not None:
             self._singleton_lock.release()
             self._singleton_lock = None
@@ -184,7 +191,10 @@ class QueueScheduler:
             started = time.monotonic()
             try:
                 with self.app.app_context():
-                    dispatched = self._dispatch_iteration()
+                    try:
+                        dispatched = self._dispatch_iteration()
+                    finally:
+                        self._ask_tick()
                     self._last_iteration_s = time.monotonic() - started
                     if dispatched:
                         sl.info(
@@ -267,6 +277,28 @@ class QueueScheduler:
             if self._launch(entry.job_id, audio_arg, entry.mode):
                 dispatched += 1
         return dispatched
+
+    def _ask_tick(self) -> None:
+        """Lance le traitement d'UNE demande « Discuter avec mes réunions » si aucune n'est en
+        cours. Appelé à CHAQUE itération de la boucle, même quand le dispatch des jobs sort tôt
+        (file pleine, pause calendaire, nœud saturé, erreur) — relecture 2026-11-06 : placé en fin
+        de ``_dispatch_iteration``, il n'était jamais atteint tant qu'un job tournait, et les
+        questions expiraient derrière lui. La pause calendaire ne suspend pas les questions : elle
+        porte sur les traitements, une question attend le verrou LLM comme un tour d'affinage."""
+        if self.ask_fn is None:
+            return
+        if self._ask_future is not None and not self._ask_future.done():
+            return
+        self._ask_future = self._ask_executor.submit(self._run_ask)
+
+    def _run_ask(self) -> str:
+        try:
+            with self.app.app_context():
+                return str(self.ask_fn() if self.ask_fn is not None else "")
+        except Exception as exc:  # noqa: BLE001 — jamais d'exception perdue dans un Future
+            if not self._stop_event.is_set():
+                logger.warning("Discuter avec mes réunions : itération en échec (%s)", exc, exc_info=True)
+            return "error"
 
     def _materialize_job_inputs(self, job_id: str) -> Path | None:
         """Matérialise `input/` depuis la base (backend `pg`) et re-résout l'audio.

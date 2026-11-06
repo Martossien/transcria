@@ -62,15 +62,23 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Image CPU Docker** : binaire `audiocpp_cli` précompilé (≈ 55 Mo, téléchargé au build,
   sha256 vérifié) — diarisation Nemotron 3 CPU dans l'image CPU.
 
-#### Fiches de réunion (socle de « Discuter avec mes réunions »)
+#### « Discuter avec mes réunions » — socle serveur (interface au prochain lot)
 
 - **Table `job_cards`** — une fiche courte par réunion (titre, type, date, confidentialité,
   participants, sujet, objectif, ordre du jour, abrégé de la synthèse, décisions, actions),
   recalculée à chaque écriture du contexte et supprimée avec le job. Mesuré sur 92 réunions :
-  ≈ 600 tokens en médiane, contre ≈ 9 500 pour `meeting_context.json`. Rien n'est encore
-  visible à l'écran : c'est la matière des prochains lots (`docs/DISCUTER_REUNIONS.md`).
-  Migration `b4d1f6a8c2e9` ; les réunions existantes sont rattrapées au démarrage, et à la
-  demande par `python -m transcria.maintenance.cli rebuild-job-cards`.
+  ≈ 600 tokens en médiane, contre ≈ 9 500 pour `meeting_context.json`. Migration
+  `b4d1f6a8c2e9` ; les réunions existantes sont rattrapées au démarrage, et à la demande par
+  `python -m transcria.maintenance.cli rebuild-job-cards`.
+- **Demandes consommées par le worker** (`ask_requests`, `ask_turns`, migration `c7e2a9d4f1b6`) :
+  une question sur l'ensemble des réunions visibles, filtrées AVANT la LLM (visibilité,
+  confidentiel, groupes interdits et connecteurs en cloud), présélection pure en Python,
+  réponse citée par numéro et **vérifiée** (une citation hors liste est retirée ; sans
+  citation, la LLM lit les synthèses des trois réunions les plus proches ; la transcription
+  d'une réunion n'est lue que sur demande explicite). Même verrou LLM que les jobs, jamais
+  d'appel depuis le web. Prompt `ask_meetings_prompt.txt` en six langues, section
+  `workflow.ask_meetings.*`, audit `job_ask_meetings`, rétention des conversations 30 jours.
+  Rien n'est encore visible à l'écran (`docs/DISCUTER_REUNIONS.md`).
 
 #### Retours utilisateurs
 

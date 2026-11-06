@@ -781,6 +781,25 @@ workflow:
     timeout_seconds: 7200
     opencode_bin: "opencode"
 
+  # « Discuter avec mes réunions » (docs/DISCUTER_REUNIONS.md) : question en langage libre sur
+  # l'ensemble des réunions visibles, réponse de la LLM d'arbitrage avec citations vérifiées.
+  # Les demandes sont consommées par le WORKER (jamais d'appel LLM depuis le web).
+  ask_meetings:
+    enabled: true
+    # Niveau 1 : nombre max de fiches envoyées, et plafond de tokens estimés du contexte.
+    max_cards: 40
+    max_context_tokens: 24000
+    # Niveau 2 (automatique quand les fiches ne suffisent pas) : synthèses des N réunions les plus proches.
+    level2_meetings: 3
+    # Tours de conversation rejoués à la LLM ; rétention de l'historique (jours, 0 = pas de purge).
+    context_turns: 6
+    retention_days: 30
+    # Délai total d'une demande (secondes) et attente max du verrou LLM avant de réessayer plus tard.
+    timeout_s: 900
+    llm_lock_timeout_s: 30
+    max_question_chars: 2000
+    max_answer_tokens: 1200
+
   # Chat d'affinage des livrables (page résultats d'un job terminé) : discuter avec la
   # LLM locale puis APPLIQUER une demande validée — les artefacts texte sont édités sous
   # garde-fous, chaque application crée une version restaurable, les documents (DOCX/ZIP)

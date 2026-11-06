@@ -47,7 +47,7 @@ def _read_bytes(path: Path) -> bytes | None:
         return None
 
 
-def _summary_headings(language: object) -> list[str]:
+def summary_headings(language: object) -> list[str]:
     """Marqueur de la langue du job, puis tous les marqueurs connus (job sans langue persistée)."""
     own = summary_markers(str(language) if language else None)["summary_heading"]
     return [own] + [m["summary_heading"] for m in _SUMMARY_MARKERS.values()]
@@ -126,7 +126,7 @@ class JobCardStore:
         data = project_card(
             meeting_ctx, participants, created_at=job.created_at, confidential_types=confidential,
             known_types=known,
-            summary_headings=_summary_headings(meeting_ctx.get("language") if isinstance(meeting_ctx, dict) else None))
+            summary_headings=summary_headings(meeting_ctx.get("language") if isinstance(meeting_ctx, dict) else None))
 
         outcome = UPDATED
         if card is None:

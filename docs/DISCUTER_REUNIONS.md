@@ -1,7 +1,8 @@
 # Discuter avec mes réunions — plan directeur
 
-> Statut : **lots 0 et A livrés (2026-11-06)** — vérifications restantes faites, fiches `job_cards`
-> en place (§ 6). Lots B à E à faire. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
+> Statut : **lots 0, A et B livrés (2026-11-06)** — fiches `job_cards`, demandes consommées par le
+> worker, présélection, prompt six langues, garde des citations (§ 6). Lots C (interface), D (docs)
+> et E (qualification réelle) à faire : rien n'est encore visible à l'écran. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
 > utilisateurs de novembre 2026 : « retrouver une réunion parmi les miennes » et « suivre les
 > actions décidées ». Cadré avec le mainteneur, puis **relu par un relecteur critique** (code +
 > plan, mesures en base) dont les constats sont intégrés. **VÉRIFIÉ** = au code (fichier:ligne) ou
@@ -228,7 +229,7 @@ Bandeau cloud hérité de `LLM_CLOUD.md`. 6 langues ; JS extrait `static/js/ask_
 |---|---|---|
 | 0 — vérifications restantes ✅ | clés étrangères SQLite (`PRAGMA foreign_keys`), patron de migration, taille réelle d'une fiche projetée (calcul sur les jobs de test), délai d'expiration gunicorn du rôle web (sans objet pour l'appel, utile pour l'interrogation) | note dans ce document |
 | A — fiches ✅ | `job_cards` + migration (cascade), `refresh()` dans les deux `save()` + `restore_version` + pull, `rebuild-job-cards`, règle confidentiel, règle date | tests store ; « fiche = reflet du contexte » ; rattrapage sur jobs de test ; suppression d'un job supprime la fiche (PG et SQLite) |
-| B — demandes | `ask_requests` + `ask_turns` + migrations, consommation par le worker (claim, verrou LLM, ensure, timeout), présélection PURE (`transcria/search/`), prompt 6 langues, garde des citations, escalade 2-3, filtres cloud/groupe/connecteurs, rétention + purge, audit | tests PURS sans LLM (présélection, garde, escalade, filtres) ; faux LLM ; limites (question vide / 1 car. / très longue / unicode) → jamais de 500 ; test « admin voit tout » et « membre ne voit que ses groupes » |
+| B — demandes ✅ | `ask_requests` + `ask_turns` + migrations, consommation par le worker (claim, verrou LLM, ensure, timeout), présélection PURE (`transcria/search/`), prompt 6 langues, garde des citations, escalade 2-3, filtres cloud/groupe/connecteurs, rétention + purge, audit | tests PURS sans LLM (présélection, garde, escalade, filtres) ; faux LLM ; limites (question vide / 1 car. / très longue / unicode) → jamais de 500 ; test « admin voit tout » et « membre ne voit que ses groupes » |
 | C — UI | pages `/meetings/ask` et `/meetings/actions`, interrogation, navbar, JS extrait, i18n, interrupteur admin, bandeau cloud | Playwright gestes réels + revue visuelle ; `audit_front` ; `test_js_api_contract` ; `API_REFERENCE.md` ; docstrings de routes |
 | D — docs | TECHNICAL, DATA_MODEL (3 tables), CONFIG_REFERENCE (`workflow.ask_meetings.*`), **AUDIT_DPO** (historique des conversations : rétention, purge, sauvegarde ; admin interroge tout), **SECURITY_MODEL** (corriger la ligne Manager), README/PRESENTATION fr+en, `docs/README.md` index, CHANGELOG | `release_check`, `i18n_check`, `test_config_classification` |
 | E — qualification réelle | sur l'instance de dev avec les réunions réelles (privées, jamais versionnées) : 20 questions types (retrouver, décisions, actions, « non retrouvé » attendu, confidentiel exclu puis inclus, niveau 3), relecture humaine des réponses et des citations, mesure du temps par niveau ; puis en cloud (Mistral) | journal dans ce document, anonymisé |
@@ -338,3 +339,97 @@ de date de la présélection (lot B).
 **Non fait, volontairement.** Le contenu réel des fiches n'a pas été relu ligne à ligne ici (noms
 de personnes) : la relecture humaine se fera à l'écran, lots C et E. Aucune interface, aucune
 route : la table n'est encore lue par rien.
+
+### Lot B — demandes (2026-11-06)
+
+Livré : paquet `transcria/ask_meetings/` (modèles, store, candidats, rendu/garde, worker, messages
+six langues), paquet PUR `transcria/search/` (normalisation, présélection), prompt
+`configs/prompts/ask_meetings_prompt.txt` + `de/ en/ es/ it/ pt/`, migration `c7e2a9d4f1b6`,
+section `workflow.ask_meetings.*` (vue typée, classée « deferred » jusqu'à l'interrupteur admin du
+lot C), audit `job_ask_meetings` / `job_ask_meetings_transcript`, purge regroupée dans
+`maintenance/retention.py`, `_ask_tick` du scheduler et `JobExecutorService.submit_ask`.
+
+**Choix d'implémentation, et pourquoi :**
+
+- **Claim portable** par `UPDATE … WHERE status = 'waiting'` (`rowcount == 1`), pas de
+  `FOR UPDATE SKIP LOCKED` : même garantie d'unicité sur PostgreSQL et SQLite, et un seul worker
+  consomme de toute façon (le scheduler est unique par verrou consultatif).
+- **Un thread dédié, une demande à la fois**, lancé à chaque itération de dispatch : la question
+  attend le verrou LLM un temps borné (`llm_lock_timeout_s`) puis est remise en attente si la LLM
+  sert un job ; `timeout_s` borne le total et `fail_stale` expire ce qu'un arrêt du worker aurait
+  laissé en `running`. La file des jobs n'est jamais bloquée par une question.
+- **`prepare_llm` est désormais partagée** avec la phase d'affinage (réservation VRAM si la LLM
+  locale est éteinte, `ensure_llm_ready`) : même cycle de vie, pas de seconde logique.
+- **Escalade** : niveau 1 sur les fiches présélectionnées ; **aucune citation valide ⇒ niveau 2**
+  sur les `level2_meetings` réunions les mieux classées, avec leur synthèse effective (section
+  synthèse seule, bornée à `max_context_tokens × 4 / N` caractères) ; toujours rien ⇒ réponse
+  « non retrouvé » dans la langue de la requête, jamais le texte non cité de la LLM (il ne peut
+  rien révéler d'invisible, mais il n'est pas vérifiable). Niveau 3 seulement sur demande explicite,
+  cible **revérifiée** dans les candidats filtrés (une réunion invisible ⇒ échec, aucun appel LLM).
+- **Garde des citations** : `[n]`, `[n, m]`, `[ n ]` reconnus ; tout numéro hors `1..N` est retiré
+  du texte ; les numéros valides sont traduits en identifiants de jobs côté serveur.
+- **Fiche de niveau 1** : le titre du job sert de repli quand le contexte n'a pas de titre ; la
+  présélection pèse aussi `jobs.title` (c'est ce que l'utilisateur voit sur l'accueil).
+- **Présélection sans score** (question sans mot discriminant) : les plus récentes partent, jamais
+  une liste vide — la LLM dit elle-même « non retrouvé ». Mesure du lot A à garder en tête : 75
+  fiches sur 87 n'ont que la date d'import, le bonus de date pèsera peu sur cette machine.
+- **Historique** : les `context_turns` derniers tours de la conversation de CET utilisateur,
+  rejoués en vrais tours ; les numéros d'un tour précédent ne valent pas pour le suivant (dit dans
+  le prompt).
+- **Audit sans contenu** : compteurs, niveau, durée, fournisseur cloud ; jamais la question ni la
+  réponse (vérifié par test).
+
+**Relecture critique indépendante (2026-11-06), corrigée avant livraison :**
+
+- **Les questions n'étaient jamais traitées pendant qu'un job tournait** (presque bloquant) :
+  l'appel du worker était en fin de `_dispatch_iteration`, après des `return` anticipés (file
+  pleine — le défaut `max_concurrent_jobs: 1` suffit —, pause calendaire, nœud saturé, erreur).
+  Désormais appelé dans la boucle, en `finally`, à chaque itération. La pause calendaire ne
+  suspend pas les questions (elle porte sur les traitements).
+- **L'historique rejoué contournait les filtres** : une réponse donnée avec les confidentielles,
+  ou avant un passage au cloud / une interdiction de groupe, repartait vers la LLM. Ne sont
+  rejouées que les réponses dont TOUTES les réunions citées sont encore dans les candidats de la
+  demande ; les `[n]` des anciens tours sont retirés (ils numérotaient une autre liste).
+- **Le prompt empêchait l'escalade** : « dis ce que la fiche indique et que le détail n'y figure
+  pas » produisait une réponse citée, donc pas de niveau 2. Le bloc envoyé annonce la matière
+  (« fiches seules » / « fiches et synthèses » / « transcription ») et le prompt, dans les six
+  langues, réserve « non retrouvé » sans citation au niveau fiches (test de contrat).
+- **Sélection vide** (toutes les fiches au-dessus du budget) : plus d'appel LLM, réponse « non
+  retrouvé » — jamais un texte non vérifié.
+- **VRAM insuffisante** = attente (demande remise en file, bornée par `timeout_s`), plus un échec.
+- **Erreurs de base** : rollback avant d'écrire l'échec (réunion supprimée pendant l'appel LLM ⇒
+  clé étrangère), question + réponse + clôture en UNE transaction, citations filtrées sur les
+  réunions encore existantes, transaction de lecture rendue avant l'appel LLM (plus de
+  « idle in transaction » pendant des minutes), texte des exceptions jamais à l'écran.
+- **`target_job_id` sans clé étrangère** : un identifiant inexistant reçoit le même message
+  qu'une réunion invisible, au lieu d'une erreur d'intégrité (500 et oracle d'existence).
+- **Suppression d'une réunion** : les demandes dont la réponse la cite sont effacées aussi (pas
+  seulement les tours). Audit : échecs tracés (`outcome: failed`, motif), identifiants des
+  réunions citées et fournisseur cloud au niveau 3 aussi.
+- Mode sans file : les questions passent par un thread unique ; `complete`/`fail` n'écrivent
+  que sur une demande en cours (une demande expirée reste en échec).
+
+**Preuves.** Tests PURS : normalisation, mêmes-mots, dates de la question, poids des champs,
+bonus de date, égalité de score, plafonds, repli récence, limites (vide / 1 car. / très long /
+unicode) ; rendu des fiches et garde des citations (neuf formes, dont hors liste et mixtes) ;
+prompt six langues (numérotation, exemple de citation, contrat numéroté). Tests en base : validation
+des demandes (vide / 1 car. / 2 000 / 2 001 / unicode / niveau / cible / conversation), claim
+FIFO et concurrent, release, complete/fail, `fail_stale`, isolation des tours par utilisateur,
+purge, suppression d'une réunion qui supprime les tours qui la citent ; **admin voit tout, membre
+ne voit que ses groupes** ; confidentiel exclu sauf demande ; cloud : groupe interdit et
+connecteurs exclus puis réadmis ; worker avec fausse LLM : niveau 1 cité, escalade niveau 2 avec
+synthèse effective envoyée, « non retrouvé » aux deux niveaux, niveau 3 (transcription lue, cible
+invisible refusée sans appel LLM, transcription absente dite), LLM occupée ⇒ remise en attente,
+désactivé / sans réunion / expirée, exception LLM ⇒ échec lisible et verrou rendu, historique
+rejoué et plafonds respectés ; câblage scheduler (une demande à la fois, exception journalisée,
+appel même quand le dispatch sort tôt ou échoue) et exécuteur (mode sans file). Issus de la
+relecture : réponse citant une réunion hors candidats non rejouée, réunion invisible jamais dans
+les messages, sélection vide sans appel, VRAM insuffisante ⇒ attente puis réservation libérée,
+réunion supprimée pendant l'appel, échec de clôture lisible, demande citante effacée avec la
+réunion, cible inexistante dite invisible. Migration : dérive modèles ↔ migration et idempotence.
+
+**Non fait, volontairement.** Aucune route, aucune page : le lot C les apporte (dont la case
+« inclure les confidentielles », le bouton « chercher dans la transcription de… », l'interrupteur
+admin dans le formulaire). La qualité des réponses d'une vraie LLM sur de vraies réunions est
+l'objet du lot E, sur la machine principale, en lisant.
+

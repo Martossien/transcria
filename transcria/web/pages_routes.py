@@ -14,7 +14,6 @@ from flask_login import current_user, login_required
 
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
-from transcria.audit.store import AuditStore
 from transcria.auth.models import Role
 from transcria.auth.permissions import Permission, requires
 from transcria.auth.store import UserStore
@@ -34,6 +33,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.llm_tools.opencode_runner import _SUMMARY_MARKERS, OpenCodeRunner, resolve_output_language, summary_markers
+from transcria.maintenance.retention import purge_expired
 from transcria.services.job_service import JobService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import require_job_access
@@ -548,16 +548,9 @@ def _wizard_synthese_prefill(meeting: dict) -> str:
 @login_required
 def index():
     cfg = get_config()
-    retention_days = cfg.get("security", {}).get("retention_days")
-    purged = JobStore.purge_expired_jobs(retention_days, cfg["storage"]["jobs_dir"])
-    if purged:
-        logger.info("Purge rétention: %d jobs supprimés", purged)
-    audit_retention = cfg.get("security", {}).get("audit_retention_days", 1095)
-    if isinstance(audit_retention, (int, float)) and audit_retention > 0:
-        AuditStore.purge_expired_by_policy(
-            int(audit_retention),
-            cfg.get("security", {}).get("audit_retention_by_family") or {},
-        )
+    purged = purge_expired(cfg)
+    if purged.jobs:
+        logger.info("Purge rétention: %d jobs supprimés", purged.jobs)
     jobs = JobStore.list_for_user(current_user, include_all=current_user.has_role(Role.ADMIN))
     return render_template("index.html", jobs=jobs, roles=Role,
                            meeting_sessions=sessions_for_jobs(jobs),

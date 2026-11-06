@@ -163,12 +163,14 @@ def refine_messages(language: str | None) -> dict[str, str]:
 
 
 
-def _prepare_llm(runner, job: Job, config: dict, *, llm_was_already_running: bool) -> tuple[str | None, bool]:
+def prepare_llm(runner, owner_id: str, config: dict, *, llm_was_already_running: bool) -> tuple[str | None, bool]:
     """Réserve la VRAM LLM (si locale et éteinte) puis s'assure que la LLM répond.
+
+    Partagée avec « Discuter avec mes réunions » (``ask_meetings.worker``), qui n'a pas de job.
 
     Args:
         runner: le ``WorkflowRunner`` (allocateur, VRAM, coutures GPU).
-        job: le job affiné.
+        owner_id: propriétaire de la réservation (identifiant du job, ou ``ask:<demande>``).
         config: configuration effective.
         llm_was_already_running: état de la LLM avant le tour (aucune réservation si active).
 
@@ -181,11 +183,11 @@ def _prepare_llm(runner, job: Job, config: dict, *, llm_was_already_running: boo
         # Réservation MULTI-GPU (total ÷ GPU du placement, tout-ou-rien) — comme la
         # correction. Le try_reserve mono-GPU échouerait TOUJOURS ici : la LLM est
         # déchargée en fin de job (reclaim), donc l'affinage doit pouvoir la relancer.
-        reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+        reserved = runner.allocator.try_reserve_llm(owner_id, llm_vram_mb, "refine")
         if not reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
             # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
             # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
-            reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+            reserved = runner.allocator.try_reserve_llm(owner_id, llm_vram_mb, "refine")
         if not reserved:
             return "vram_insufficient", False
         llm_phase_reserved = True
@@ -198,7 +200,7 @@ def _prepare_llm(runner, job: Job, config: dict, *, llm_was_already_running: boo
     except Exception:
         # L'appelant ne connaît pas encore la réservation : on la rend avant de propager.
         if llm_phase_reserved:
-            runner.allocator.release_phase(job.id, "refine")
+            runner.allocator.release_phase(owner_id, "refine")
         raise
     if not ready:
         return "llm_unavailable", llm_phase_reserved
@@ -264,8 +266,8 @@ def run(runner, job: Job, config: dict) -> dict:
     llm_phase_reserved = False
     llm_was_already_running = llm_running_before_phase(runner.vram, config)
     try:
-        failure, llm_phase_reserved = _prepare_llm(
-            runner, job, config, llm_was_already_running=llm_was_already_running,
+        failure, llm_phase_reserved = prepare_llm(
+            runner, job.id, config, llm_was_already_running=llm_was_already_running,
         )
         if failure:
             store.append_turn(

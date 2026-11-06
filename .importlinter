@@ -63,6 +63,8 @@ source_modules =
     transcria.notifications
     transcria.jobs
     transcria.job_cards
+    transcria.ask_meetings
+    transcria.search
     transcria.auth
     transcria.config
     transcria.audit

@@ -20,15 +20,14 @@ import sys
 from pathlib import Path
 
 from transcria import __version__
-from transcria.audit.store import AuditStore
 from transcria.config.loader import get_config_path, load_config
 from transcria.installer.opencode_lib import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
 from transcria.job_cards.store import rebuild_for_config
-from transcria.jobs.store import JobStore
 from transcria.maintenance import upgrade_service
 from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
 from transcria.maintenance.restore import describe_restore, restore_backup
 from transcria.maintenance.restore_service import apply_pending_restore
+from transcria.maintenance.retention import purge_expired
 from transcria.maintenance.schedule import (
     BackupSchedule,
     PurgeSchedule,
@@ -383,16 +382,12 @@ def _cmd_purge(args: argparse.Namespace) -> int:
     app = create_app(args.config)
     with app.app_context():
         sec = cfg.get("security", {})
-        jobs_dir = cfg["storage"]["jobs_dir"]
-        job_count = JobStore.purge_expired_jobs(sec.get("retention_days"), jobs_dir, dry_run=args.dry_run)
+        report = purge_expired(cfg, dry_run=args.dry_run)
         mode = "à purger (simulation)" if args.dry_run else "purgés"
-        print(f"Traitements expirés {mode} (rétention {sec.get('retention_days')} j) : {job_count}")
+        print(f"Traitements expirés {mode} (rétention {sec.get('retention_days')} j) : {report.jobs}")
         if not args.dry_run:
-            audit_days = sec.get("audit_retention_days", 1095)
-            if isinstance(audit_days, (int, float)) and audit_days > 0:
-                n = AuditStore.purge_expired_by_policy(
-                    int(audit_days), sec.get("audit_retention_by_family") or {})
-                print(f"Entrées d'audit purgées : {n}")
+            print(f"Entrées d'audit purgées : {report.audit_entries}")
+            print(f"Conversations « Discuter avec mes réunions » purgées : {report.ask_items}")
     return 0
 
 

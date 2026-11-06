@@ -288,6 +288,35 @@ Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discu
 
 **Suppression.** Clé étrangère `ON DELETE CASCADE` (PostgreSQL) et cascade ORM sur `Job.card` : SQLite n'applique pas les clés étrangères (aucun `PRAGMA foreign_keys` dans l'application), et `JobStore.delete_job` supprime par l'ORM. Une fiche orpheline (suppression SQL directe sur SQLite) n'est jamais lisible — la lecture se fait par identifiants de jobs visibles — et `rebuild-job-cards` la retire.
 
+### Tables `ask_requests` / `ask_turns` / `ask_turn_citations`
+
+« Discuter avec mes réunions » (`docs/DISCUTER_REUNIONS.md` § 2.1, § 2.7). Modèles : `transcria/ask_meetings/models.py` ; migration `alembic/versions/c7e2a9d4f1b6_add_ask_meetings.py`.
+
+**`ask_requests`** — une question, son état, sa réponse. Écrite par le web, consommée par le worker.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK | |
+| `user_id` | String(36) | FK → users.id ON DELETE CASCADE, INDEX | Demandeur |
+| `conversation_id` | String(36) | NOT NULL, INDEX | Fil de conversation (mémoire courte) |
+| `question` | Text | NOT NULL | ≤ `workflow.ask_meetings.max_question_chars` |
+| `locale` | String(8) | NOT NULL, default `fr` | Langue de la RÉPONSE (locale de la requête web) |
+| `include_confidential` | Boolean | NOT NULL, default false | Inclure les réunions confidentielles visibles |
+| `level_requested` | Integer | NOT NULL, default 1 | 1 = fiches (escalade automatique vers 2), 3 = transcription d'une réunion |
+| `target_job_id` | String(36) | nullable, **sans clé étrangère** | Réunion du niveau 3 ; un identifiant inexistant est traité par le worker comme une réunion invisible (même message, pas d'erreur d'intégrité ni d'oracle d'existence) |
+| `status` | String(12) | NOT NULL, INDEX | `waiting` → `running` → `done` \| `failed` |
+| `answer` | Text | NOT NULL, default "" | Réponse après garde des citations |
+| `cited_job_ids_json` | Text | NOT NULL, default `[]` | Réunions citées (identifiants vérifiés) |
+| `level_reached` | Integer | NOT NULL, default 0 | Niveau qui a produit la réponse |
+| `error` | Text | NOT NULL, default "" | Message dans la langue de la requête quand `failed` |
+| `created_at` / `started_at` / `done_at` | DateTime(tz) | | Cycle de vie ; `fail_stale` expire au-delà de `timeout_s` |
+
+**`ask_turns`** — mémoire courte par utilisateur : `id`, `conversation_id` (INDEX), `user_id` (FK users CASCADE, INDEX), `role` (`user` \| `assistant`), `text`, `level`, `created_at` (INDEX). Rétention `workflow.ask_meetings.retention_days` (30 j), purgée avec les audits (page d'accueil, `maintenance.cli purge`).
+
+**`ask_turn_citations`** — `(turn_id FK ask_turns CASCADE, job_id FK jobs CASCADE)` : quelles réunions un tour cite. **Supprimer une réunion supprime les tours qui la citent et les demandes dont la réponse la cite** (événement ORM `before_delete` sur `Job`, donc aussi sur SQLite ; les chemins de suppression de l'application passent tous par l'ORM).
+
+Jamais la question ni la réponse dans l'audit : `job_ask_meetings` (compteurs, niveau, durée, fournisseur cloud le cas échéant) et `job_ask_meetings_transcript` (niveau 3, identifiant du job lu).
+
 ### Table `audit_logs`
 
 | Colonne | Type | Contraintes | Description |

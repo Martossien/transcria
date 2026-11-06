@@ -1270,6 +1270,33 @@ options de rendu seules disposent d'une route directe **sans LLM**
 
 **Redémarrage requis :** non. **Prérequis :** `arbitration_llm.enabled: true` (sinon tours « assistant indisponible »).
 
+#### `workflow.ask_meetings`
+
+« Discuter avec mes réunions » (`docs/DISCUTER_REUNIONS.md`) : question en langage libre sur
+**l'ensemble des réunions que l'utilisateur a le droit de voir**, réponse de la LLM d'arbitrage
+avec **citations vérifiées** par numéro, trois niveaux de matière (fiches → synthèses des
+réunions les plus proches, automatique → transcription d'une réunion, sur demande). Les demandes
+sont écrites en base par le web et **consommées par le process qui exécute la file** (rôles
+`scheduler`/`all`), sous le même verrou LLM que les jobs — jamais d'appel LLM depuis le web.
+Filtres AVANT la LLM : visibilité (`list_for_user`), confidentialité, et en cloud les groupes
+interdits et les réunions de connecteurs non autorisées.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Interrupteur global (une demande arrivée désactivée échoue avec un message explicite) |
+| `max_cards` | int | `40` | Niveau 1 : nombre maximal de fiches envoyées à la LLM |
+| `max_context_tokens` | int | `24000` | Plafond de tokens estimés du contexte (≈ 4 caractères par token ; une fiche ≈ 610 tokens en médiane) |
+| `level2_meetings` | int | `3` | Niveau 2 : nombre de réunions dont la synthèse effective est envoyée |
+| `context_turns` | int | `6` | Tours de la conversation rejoués à la LLM |
+| `retention_days` | int | `30` | Rétention des conversations et des demandes (0 = pas de purge) ; purgées avec les audits |
+| `timeout_s` | int | `900` | Délai total d'une demande ; au-delà, échec explicite (« LLM occupée trop longtemps ») |
+| `llm_lock_timeout_s` | int | `30` | Attente du verrou LLM avant de remettre la demande en attente |
+| `max_question_chars` | int | `2000` | Taille maximale d'une question |
+| `max_answer_tokens` | int | `1200` | Longueur maximale de la réponse (tokens) |
+
+**Redémarrage requis :** non (lu à chaque demande). **Prérequis :** la LLM d'arbitrage (locale ou
+cloud). Niveau 3 : la transcription est bornée par `workflow.refine_chat.max_transcript_chars`.
+
 #### `workflow.meeting_types`
 
 Types de réunion personnalisés (cf. `docs/archive/TYPES_REUNION_PERSONNALISES.md`) : tout

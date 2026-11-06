@@ -506,6 +506,20 @@ _DEFAULT_CONFIG = {
         # LLM lit une transcription entièrement attribuée. false = ordre historique
         # (STT par blocs VAD/30 s, diarisation ensuite). En cours de MESURE.
         "summary_by_turns": True,
+        # « Discuter avec mes réunions » (docs/DISCUTER_REUNIONS.md) : demandes consommées par le
+        # worker sous verrou LLM ; plafonds dimensionnés sur la mesure des fiches (lot 0).
+        "ask_meetings": {
+            "enabled": True,
+            "max_cards": 40,
+            "max_context_tokens": 24000,
+            "level2_meetings": 3,
+            "context_turns": 6,
+            "retention_days": 30,
+            "timeout_s": 900,
+            "llm_lock_timeout_s": 30,
+            "max_question_chars": 2000,
+            "max_answer_tokens": 1200,
+        },
         "pyannote_chunking": {
             "merge_micro_chunks": True,
             "micro_chunk_s": 0.35,

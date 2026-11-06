@@ -130,3 +130,43 @@ def test_job_cards_migration_tolerates_table_created_by_create_all(postgresql_pr
                 os.environ["TRANSCRIA_DATABASE_URL"] = previous
 
     assert diff == [], f"Schéma incohérent après rattrapage : {diff}"
+
+
+def test_ask_meetings_migration_tolerates_tables_created_by_create_all(postgresql_proc):
+    """Idem pour les trois tables de « Discuter avec mes réunions »."""
+    dbname = "alembic_ask_meetings_idempotent"
+    auth = postgresql_proc.user if not postgresql_proc.password else f"{postgresql_proc.user}:{postgresql_proc.password}"
+    url = f"postgresql+psycopg://{auth}@{postgresql_proc.host}:{postgresql_proc.port}/{dbname}"
+
+    with DatabaseJanitor(
+        user=postgresql_proc.user,
+        host=postgresql_proc.host,
+        port=postgresql_proc.port,
+        version=postgresql_proc.version,
+        dbname=dbname,
+        password=postgresql_proc.password,
+    ):
+        previous = os.environ.get("TRANSCRIA_DATABASE_URL")
+        os.environ["TRANSCRIA_DATABASE_URL"] = url
+        try:
+            command.upgrade(Config("alembic.ini"), "b4d1f6a8c2e9")
+            engine = create_engine(url)
+            try:
+                for table in ("ask_requests", "ask_turns", "ask_turn_citations"):
+                    db.metadata.tables[table].create(engine)
+                command.upgrade(Config("alembic.ini"), "head")
+                with engine.connect() as conn:
+                    ctx = MigrationContext.configure(
+                        conn, opts={"compare_type": True, "compare_server_default": True}
+                    )
+                    diff = compare_metadata(ctx, db.metadata)
+            finally:
+                engine.dispose()
+        finally:
+            if previous is None:
+                os.environ.pop("TRANSCRIA_DATABASE_URL", None)
+            else:
+                os.environ["TRANSCRIA_DATABASE_URL"] = previous
+
+    assert diff == [], f"Schéma incohérent après rattrapage : {diff}"
+

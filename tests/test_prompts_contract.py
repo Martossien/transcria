@@ -268,3 +268,47 @@ class TestRefinePromptsContract:
         for name in ("refine_discuss_prompt.txt", "refine_apply_prompt.txt"):
             p = _read(name)
             assert "SPEAKER_00(" not in p and "SPEAKER_01(" not in p, name
+
+
+class TestAskMeetingsPromptContract:
+    """« Discuter avec mes réunions » (docs/DISCUTER_REUNIONS.md § 2.6) : la LLM cite par NUMÉRO
+    entre crochets et dit « non retrouvé » — contrat de ``verify_citations`` et de l'escalade,
+    dans les six langues."""
+
+    def _all(self):
+        yield "fr", _read("ask_meetings_prompt.txt")
+        for d in TestLocalizedPromptsContract._locale_dirs():
+            path = d / "ask_meetings_prompt.txt"
+            assert path.is_file(), f"{d.name}: prompt ask_meetings absent"
+            yield d.name, path.read_text(encoding="utf-8")
+
+    def test_numerotation_et_citation_par_numero(self):
+        for lang, text in self._all():
+            assert "[1], [2]" in text, f"{lang}: numérotation [1], [2] absente"
+            assert "[2]." in text, f"{lang}: exemple de citation absent"
+            assert "`[n]`" in text, f"{lang}: convention [n] absente"
+
+    def test_non_retrouve_et_perimetre(self):
+        for lang, text in self._all():
+            assert "SPEAKER_XX" in text, f"{lang}: préfixe locuteur absent"
+            # La règle « ne jamais inventer » et la réponse « non retrouvé » sont numérotées 1 et 3.
+            assert "\n1. **" in text and "\n3. **" in text, f"{lang}: contrat numéroté absent"
+            assert text.count("[n]") >= 3, f"{lang}: le prompt ne parle pas assez des numéros"
+
+    def test_le_niveau_fiches_seules_declenche_non_retrouve(self):
+        """Relecture 2026-11-06 : une réponse citée du type « le détail n'y figure pas » empêchait
+        l'escalade (la garde voit une citation). Le prompt distingue désormais la matière fournie :
+        avec les fiches seules, le détail absent ⇒ « non retrouvé » sans citation."""
+        headers = {"fr": "Matière fournie", "en": "Material provided", "de": "Bereitgestelltes Material",
+                   "es": "Material proporcionado", "it": "Materiale fornito", "pt": "Material fornecido"}
+        from transcria.ask_meetings.prompting import labels
+        for lang, text in self._all():
+            assert headers[lang] in text, f"{lang}: le prompt ne nomme pas la ligne « matière fournie »"
+            assert labels(lang)["material"] == headers[lang]          # même libellé que le bloc rendu
+            assert labels(lang)["level_cards"] in text, f"{lang}: libellé « fiches seules » absent du prompt"
+
+    def test_aucun_extrait_reel(self):
+        # Les exemples restent abstraits (règle absolue n° 11) : budget / prestataire sont des génériques.
+        for lang, text in self._all():
+            assert "@" not in text, f"{lang}: une adresse dans un prompt ?"
+
