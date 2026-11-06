@@ -3,8 +3,10 @@
  *
  * Le navigateur ÉCRIT une demande (POST /api/meetings/ask → 202) puis INTERROGE son état
  * (GET /api/meetings/ask/<id>) jusqu'à done|failed : le worker fait tout le reste, jamais
- * d'appel LLM depuis le web. La conversation (identifiant) vit dans sessionStorage ; au
- * rechargement, l'historique est relu depuis le serveur (GET /api/meetings/ask/history).
+ * d'appel LLM depuis le web. L'identifiant de conversation vit dans localStorage (il survit à la
+ * fermeture de l'onglet) ; au chargement, l'historique ET les demandes encore en cours sont relus
+ * depuis le serveur (GET /api/meetings/ask/history), l'interrogation reprend ; les conversations
+ * récentes sont proposées dans un sélecteur (GET /api/meetings/ask/conversations).
  * Chaînes traduites via t() (msgid déclarés dans transcria/i18n/js_catalog.py).
  */
 (function () {
@@ -38,11 +40,13 @@
 
   var STORAGE_KEY = "transcria.ask.conversation";
   var conversationId = null;
-  try { conversationId = window.sessionStorage.getItem(STORAGE_KEY) || null; } catch (e) { conversationId = null; }
+  try { conversationId = window.localStorage.getItem(STORAGE_KEY) || null; } catch (e) { conversationId = null; }
+  var conversationsSelect = document.getElementById("ask-conversations");
 
   function rememberConversation(id) {
     conversationId = id;
-    try { if (id) window.sessionStorage.setItem(STORAGE_KEY, id); else window.sessionStorage.removeItem(STORAGE_KEY); } catch (e) { /* stockage indisponible : la conversation vit le temps de la page */ }
+    try { if (id) window.localStorage.setItem(STORAGE_KEY, id); else window.localStorage.removeItem(STORAGE_KEY); } catch (e) { /* stockage indisponible : la conversation vit le temps de la page */ }
+    if (conversationsSelect) conversationsSelect.value = id || "";
   }
 
   function el(tag, cls, text) {
@@ -147,13 +151,45 @@
   }
 
   function loadHistory() {
+    thread.innerHTML = "";
     if (!conversationId) return;
     fetch("/api/meetings/ask/history?conversation_id=" + encodeURIComponent(conversationId), { headers: { Accept: "application/json" } })
-      .then(function (resp) { return resp.ok ? resp.json() : { turns: [] }; })
+      .then(function (resp) { return resp.ok ? resp.json() : { turns: [], pending: [] }; })
       .then(function (d) {
         (d.turns || []).forEach(function (turn) { renderTurn(turn.role, turn.text, turn); });
+        // Parti avant la réponse : la question est réaffichée et l'interrogation reprend.
+        (d.pending || []).forEach(function (req) {
+          renderTurn("user", req.question);
+          submit.disabled = true;
+          poll(req.request_id, renderPending());
+        });
       })
       .catch(function () { /* historique indisponible : la page reste utilisable */ });
+  }
+
+  function loadConversations() {
+    if (!conversationsSelect) return;
+    fetch("/api/meetings/ask/conversations", { headers: { Accept: "application/json" } })
+      .then(function (resp) { return resp.ok ? resp.json() : { conversations: [] }; })
+      .then(function (d) {
+        (d.conversations || []).forEach(function (c) {
+          var opt = document.createElement("option");
+          opt.value = c.conversation_id;
+          var when = c.last_at ? c.last_at.slice(0, 10) + " — " : "";
+          opt.textContent = when + (c.first_question || "…");
+          conversationsSelect.appendChild(opt);
+        });
+        conversationsSelect.value = conversationId || "";
+      })
+      .catch(function () { /* liste indisponible : la conversation courante reste utilisable */ });
+  }
+  if (conversationsSelect) {
+    conversationsSelect.addEventListener("change", function () {
+      rememberConversation(conversationsSelect.value || null);
+      setTarget(null);
+      showError("");
+      loadHistory();
+    });
   }
 
   form.addEventListener("submit", function (ev) {
@@ -197,4 +233,5 @@
   document.getElementById("ask-target-cancel").addEventListener("click", function () { setTarget(null); });
 
   loadHistory();
+  loadConversations();
 })();

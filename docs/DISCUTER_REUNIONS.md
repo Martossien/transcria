@@ -486,6 +486,17 @@ réunion / par responsable / confidentielles incluses ; zéro erreur console ni 
 captures relues (défauts attrapés ainsi : navbar sur deux lignes, pied de réponse en double,
 ponctuation orpheline).
 
+**Complément (2026-11-06, question du mainteneur : « si je sors avant la réponse ? »)** — la
+conversation n'était retrouvée que dans le même onglet (`sessionStorage`) et une demande encore
+en cours n'était pas réaffichée. Désormais : identifiant en `localStorage` (survit à la fermeture
+de l'onglet), `GET /api/meetings/ask/history` rend aussi les demandes `waiting`/`running` de la
+conversation (la page les réaffiche et reprend l'interrogation), et un sélecteur « Mes
+conversations récentes » (`GET /api/meetings/ask/conversations` : première question, date,
+nombre de tours, les siennes seulement) permet de rouvrir une conversation des 30 derniers jours.
+Banc : parti avant la réponse → reprise au retour ; ancienne conversation rechargée par le
+sélecteur. Deux questions enchaînées ne s'interrompent jamais : une demande à la fois, dans
+l'ordre, la seconde profite de la LLM déjà chargée.
+
 ### Lot D — documentation (2026-11-06)
 
 Livré : `TECHNICAL.md` § 4.18 (briques, invariants) et § 4.11/4.13 ; `DATA_MODEL.md` (quatre

@@ -179,7 +179,21 @@ def api_ask_meetings_history() -> ResponseReturnValue:
             "cited": _meeting_summaries(turn.cited_job_ids, current_user) if turn.role == "assistant" else [],
             "created_at": turn.created_at.isoformat() if turn.created_at else None,
         })
-    return jsonify({"turns": turns})
+    # Demandes parties sans réponse (l'utilisateur a quitté la page) : la page les réaffiche et
+    # reprend l'interrogation là où elle s'était arrêtée.
+    timeout_s = AskMeetingsView.from_config(get_config()).timeout_s
+    pending = []
+    for req in AskStore.pending_requests(conversation_id, current_user.id):
+        if not AskStore.expire_if_stale(req, timeout_s):
+            pending.append({"request_id": req.id, "question": req.question})
+    return jsonify({"turns": turns, "pending": pending})
+
+
+@web_bp.route("/api/meetings/ask/conversations")
+@login_required
+def api_ask_meetings_conversations() -> ResponseReturnValue:
+    """Conversations récentes de l'utilisateur (première question, date, nombre de tours) — les siennes seulement."""
+    return jsonify({"conversations": AskStore.recent_conversations(current_user.id)})
 
 
 def _parse_date(raw: str | None) -> date | None:

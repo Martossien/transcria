@@ -69,6 +69,9 @@ class _FakeLLM(BaseHTTPRequestHandler):
         system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
         question = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
         numbered = re.findall(r"^\[(\d+)\] (.+)$", system, flags=re.M)
+        if "lentement" in question.lower():
+            import time
+            time.sleep(6)                      # laisse le temps de quitter la page et d'y revenir
         cards_only = "fiches seules" in system or "cards only" in system
         if "### Transcription [" in system or "### Transcript [" in system:
             answer = "D'après la transcription, la phrase exacte est « le devis part vendredi » [1]."
@@ -241,11 +244,30 @@ def cmd_walk(args) -> int:
         check("historique rechargé", page.locator("[data-ask-turn=user]").count() == 3)
         shot("06_discuter_historique_recharge")
 
-        # 6. Nouvelle conversation
+        # 6. Parti avant la réponse : retour sur la page, la demande en cours est reprise
+        page.fill("#ask-question", "Réponds lentement : le budget ?")
+        page.click("#ask-submit")
+        page.wait_for_selector("[data-ask-pending]", timeout=5000)
+        page.goto(f"{args.base_url}/meetings/actions", wait_until="networkidle")
+        page.goto(f"{args.base_url}/meetings/ask", wait_until="networkidle")
+        page.wait_for_selector("[data-ask-pending]", timeout=5000)
+        check("demande en cours reprise au retour", page.locator("[data-ask-turn=user]").count() == 4)
+        shot("06b_discuter_reprise_demande_en_cours")
+        page.wait_for_selector("[data-ask-turn=assistant] >> nth=3", timeout=60000)
+        check("réponse arrivée après le retour", page.locator("[data-ask-pending]").count() == 0)
+
+        # 7. Nouvelle conversation, puis retour à l'ancienne par le sélecteur
         page.click("#ask-new")
         check("fil vidé", page.locator("[data-ask-turn]").count() == 0)
+        options = page.locator("#ask-conversations option")
+        check("conversation récente listée", options.count() >= 2)
+        page.select_option("#ask-conversations", index=1)
+        page.wait_for_selector("[data-ask-turn=assistant]", timeout=10000)
+        check("ancienne conversation rechargée", page.locator("[data-ask-turn=user]").count() == 4)
+        shot("06c_discuter_selecteur_conversations")
+        page.click("#ask-new")
 
-        # 7. Mes actions
+        # 8. Mes actions
         page.goto(f"{args.base_url}/meetings/actions", wait_until="networkidle")
         html = page.content()
         check("actions par réunion", page.locator("[data-actions-group]").count() == 2 and "exclue" in html)

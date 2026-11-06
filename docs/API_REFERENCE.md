@@ -207,6 +207,7 @@
 | `/api/meetings/<session_id>/reschedule` | POST | connexion requise | Relance une captation depuis un état terminal replanifiable : NOUVELLE session, MÊME | `transcria.web.meetings_api` |
 | `/api/meetings/ask` | POST | connexion requise | Écrit une demande (202) ; le worker la traite. Jamais d'appel LLM ici. | `transcria.web.ask_routes` |
 | `/api/meetings/ask/<request_id>` | GET | connexion requise | État d'une demande de l'utilisateur (interrogation par la page) : réponse, niveau, réunions citées. | `transcria.web.ask_routes` |
+| `/api/meetings/ask/conversations` | GET | connexion requise | Conversations récentes de l'utilisateur (première question, date, nombre de tours) — les siennes seulement. | `transcria.web.ask_routes` |
 | `/api/meetings/ask/history` | GET | connexion requise | Tours d'une conversation de l'utilisateur (reprise de la page), réunions citées détaillées. | `transcria.web.ask_routes` |
 | `/api/meetings/availability` | GET | connexion requise | Moteurs prêts + nombre de runners — pilote l'affichage de la carte « Réunion ». | `transcria.web.meetings_api` |
 | `/api/profiles/availability` | GET | connexion requise | Profils de traitement disponibles + profil recommandé (source unique pour le wizard). | `transcria.web.wizard_api` |
@@ -231,7 +232,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 165 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 166 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

@@ -233,6 +233,40 @@ class AskStore:
         return AskStore.recent_turns(conversation_id, user_id, limit)
 
     @staticmethod
+    def pending_requests(conversation_id: str, user_id: str) -> list[AskRequest]:
+        """Demandes de CETTE conversation de CET utilisateur encore ``waiting``/``running`` (reprise
+        de la page : l'utilisateur est parti avant la réponse)."""
+        return list(db.session.execute(
+            db.select(AskRequest)
+            .where(AskRequest.conversation_id == conversation_id, AskRequest.user_id == user_id,
+                   AskRequest.status.in_((STATUS_WAITING, STATUS_RUNNING)))
+            .order_by(AskRequest.created_at.asc())).scalars().all())
+
+    @staticmethod
+    def recent_conversations(user_id: str, limit: int = 20) -> list[dict]:
+        """Les conversations de l'utilisateur, la plus récente d'abord : identifiant, première
+        question (tronquée), date du dernier tour, nombre de tours. Bornées par la rétention."""
+        rows = db.session.execute(
+            db.select(AskTurn.conversation_id, db.func.min(AskTurn.created_at), db.func.max(AskTurn.created_at),
+                      db.func.count(AskTurn.id))
+            .where(AskTurn.user_id == user_id)
+            .group_by(AskTurn.conversation_id)
+            .order_by(db.func.max(AskTurn.created_at).desc()).limit(limit)).all()
+        out: list[dict] = []
+        for conversation_id, _first_at, last_at, count in rows:
+            first = db.session.execute(
+                db.select(AskTurn.text).where(AskTurn.conversation_id == conversation_id, AskTurn.user_id == user_id,
+                                              AskTurn.role == "user")
+                .order_by(AskTurn.created_at.asc(), AskTurn.id.asc()).limit(1)).scalar() or ""
+            out.append({
+                "conversation_id": conversation_id,
+                "first_question": (first[:117] + "…") if len(first) > 120 else first,
+                "last_at": (_aware(last_at) or last_at).isoformat() if last_at else None,
+                "turns": int(count),
+            })
+        return out
+
+    @staticmethod
     def purge_expired(retention_days: int | None) -> int:
         """Tours et demandes plus vieux que la rétention (§ 2.7). 0 ou absent = aucune purge."""
         try:

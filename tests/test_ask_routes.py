@@ -204,7 +204,7 @@ def test_historique_d_une_conversation(app, user_client):
     assert [t["role"] for t in body["turns"]] == ["user", "assistant"]
     assert body["turns"][1]["cited"][0]["job_id"] == mine and body["turns"][1]["level_label"]
     assert user_client.client.get("/api/meetings/ask/history").get_json() == {"turns": []}
-    assert user_client.client.get(f"/api/meetings/ask/history?conversation_id={uuid.uuid4()}").get_json() == {"turns": []}
+    assert user_client.client.get(f"/api/meetings/ask/history?conversation_id={uuid.uuid4()}").get_json() == {"turns": [], "pending": []}
 
 
 def test_acces_anonyme_refuse(app):
@@ -294,7 +294,7 @@ def test_un_autre_utilisateur_avec_le_meme_conversation_id_ne_lit_rien(app, user
     with app.app_context():
         AskStore.append_turn(conversation_id=conv, user_id=user_client.user_id, role="user", text="ma question")
     other = _login(app, other_name, "mdp-de-test-web")
-    assert other.get(f"/api/meetings/ask/history?conversation_id={conv}").get_json() == {"turns": []}
+    assert other.get(f"/api/meetings/ask/history?conversation_id={conv}").get_json() == {"turns": [], "pending": []}
 
 
 def test_include_confidential_est_un_booleen_strict(app, user_client, monkeypatch):
@@ -355,4 +355,31 @@ def test_carte_citee_porte_le_drapeau_confidentiel(app, user_client):
         AskStore.complete(req_id, answer="x [1]", cited_job_ids=[secret], level_reached=1)
     body = user_client.client.get(f"/api/meetings/ask/{req_id}").get_json()
     assert body["cited"][0]["confidential"] is True
+
+
+def test_historique_rend_les_demandes_en_cours_et_la_liste_des_conversations(app, user_client):
+    """Parti avant la réponse : la page retrouve la demande en cours et reprend l'interrogation ;
+    les conversations récentes sont listées, celles d'un autre utilisateur jamais."""
+    conv = str(uuid.uuid4())
+    with app.app_context():
+        AskStore.append_turn(conversation_id=conv, user_id=user_client.user_id, role="user", text="première question")
+        AskStore.append_turn(conversation_id=conv, user_id=user_client.user_id, role="assistant", text="r1", level=1)
+        pending = AskStore.create_request(user_id=user_client.user_id, question="encore en cours", conversation_id=conv)
+        pending_id = pending.id
+        other_conv = str(uuid.uuid4())
+        AskStore.append_turn(conversation_id=other_conv, user_id=user_client.user_id, role="user", text="x" * 300)
+    body = user_client.client.get(f"/api/meetings/ask/history?conversation_id={conv}").get_json()
+    assert [t["text"] for t in body["turns"]] == ["première question", "r1"]
+    assert body["pending"] == [{"request_id": pending_id, "question": "encore en cours"}]
+
+    convs = user_client.client.get("/api/meetings/ask/conversations").get_json()["conversations"]
+    assert [c["conversation_id"] for c in convs][:2] == [other_conv, conv]        # la plus récente d'abord
+    assert convs[1]["first_question"] == "première question" and convs[1]["turns"] == 2
+    assert len(convs[0]["first_question"]) == 118 and convs[0]["first_question"].endswith("…")
+
+    other_name = f"askother_{uuid.uuid4().hex[:8]}"
+    with app.app_context():
+        UserStore.create_user(username=other_name, password="mdp-de-test-web", role=Role.OPERATOR)
+    other = _login(app, other_name, "mdp-de-test-web")
+    assert other.get("/api/meetings/ask/conversations").get_json() == {"conversations": []}
 

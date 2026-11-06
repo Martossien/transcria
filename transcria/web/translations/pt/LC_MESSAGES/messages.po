@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-06 22:52+0100\n"
+"POT-Creation-Date: 2026-11-06 23:34+0100\n"
 "PO-Revision-Date: 2026-10-22 10:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pt_BR\n"
@@ -323,7 +323,7 @@ msgstr "Moderador"
 msgid "Animateur retenu"
 msgstr "Moderador selecionado"
 
-#: transcria/i18n/js_catalog.py:47 transcria/web/templates/ask_meetings.html:25
+#: transcria/i18n/js_catalog.py:47 transcria/web/templates/ask_meetings.html:32
 #: transcria/web/templates/change_password.html:24
 #: transcria/web/templates/index.html:91
 #: transcria/web/templates/meeting_types.html:141
@@ -2102,7 +2102,7 @@ msgstr "A conversa com as reuniões foi desativada pelo administrador."
 msgid "Demande introuvable."
 msgstr "Pedido não encontrado."
 
-#: transcria/web/ask_routes.py:211
+#: transcria/web/ask_routes.py:225
 msgid "non attribué"
 msgstr "não atribuído"
 
@@ -4168,28 +4168,34 @@ msgstr "A pesquisa abrange as suas reuniões e as dos membros dos seus grupos �
 msgid "Les réunions confidentielles sont exclues sauf si vous cochez la case. La réponse cite chaque réunion utilisée ; une réunion non retrouvée est dite non retrouvée."
 msgstr "As reuniões confidenciais são excluídas salvo se assinalar a caixa. A resposta cita cada reunião utilizada; uma reunião não encontrada é declarada não encontrada."
 
+#: transcria/web/templates/ask_meetings.html:22
+#: transcria/web/templates/ask_meetings.html:23
+msgid "Mes conversations récentes"
+msgstr "As minhas conversas recentes"
+
 #: transcria/web/templates/ask_meetings.html:24
+#: transcria/web/templates/ask_meetings.html:46
+msgid "Nouvelle conversation"
+msgstr "Nova conversa"
+
+#: transcria/web/templates/ask_meetings.html:31
 msgid "Prochaine question posée à la transcription de :"
 msgstr "Próxima pergunta colocada à transcrição de:"
 
-#: transcria/web/templates/ask_meetings.html:30
+#: transcria/web/templates/ask_meetings.html:37
 msgid "Votre question"
 msgstr "A sua pergunta"
 
-#: transcria/web/templates/ask_meetings.html:32
+#: transcria/web/templates/ask_meetings.html:39
 msgid "Ex. : qu'a-t-on décidé sur le budget cet automne ? Dans quelle réunion a-t-on parlé du nouveau prestataire ?"
 msgstr "Ex.: o que foi decidido sobre o orçamento este outono? Em que reunião se falou do novo fornecedor?"
 
-#: transcria/web/templates/ask_meetings.html:36
+#: transcria/web/templates/ask_meetings.html:43
 #: transcria/web/templates/meetings_actions.html:35
 msgid "Inclure les réunions confidentielles que je vois"
 msgstr "Incluir as reuniões confidenciais que vejo"
 
-#: transcria/web/templates/ask_meetings.html:39
-msgid "Nouvelle conversation"
-msgstr "Nova conversa"
-
-#: transcria/web/templates/ask_meetings.html:40
+#: transcria/web/templates/ask_meetings.html:47
 msgid "Poser la question"
 msgstr "Perguntar"
 

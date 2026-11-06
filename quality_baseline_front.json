@@ -3,7 +3,7 @@
  "js_lines": {
   "transcria/web/static/js/admin_maintenance_page.js": 60,
   "transcria/web/static/js/admin_models_page.js": 32,
-  "transcria/web/static/js/ask_meetings_page.js": 200,
+  "transcria/web/static/js/ask_meetings_page.js": 237,
   "transcria/web/static/js/csrf.js": 65,
   "transcria/web/static/js/dashboard_status_page.js": 68,
   "transcria/web/static/js/first_run_checklist.js": 15,
@@ -31,7 +31,7 @@
   "transcria/web/templates/admin_llm_cloud.html": 95,
   "transcria/web/templates/admin_maintenance.html": 227,
   "transcria/web/templates/admin_models.html": 201,
-  "transcria/web/templates/ask_meetings.html": 52,
+  "transcria/web/templates/ask_meetings.html": 59,
   "transcria/web/templates/audit.html": 106,
   "transcria/web/templates/base.html": 206,
   "transcria/web/templates/central_lexicon_detail.html": 238,

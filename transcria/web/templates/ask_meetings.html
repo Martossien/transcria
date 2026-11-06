@@ -18,6 +18,13 @@
 <div class="alert alert-warning" role="status" data-ask-cloud-refused>{{ cloud_refusal }}</div>
 {% else %}
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="ask-conversations-bar">
+  <label for="ask-conversations" class="form-label small text-muted mb-0">{{ _('Mes conversations récentes') }}</label>
+  <select id="ask-conversations" class="form-select form-select-sm w-auto" aria-label="{{ _('Mes conversations récentes') }}">
+    <option value="">{{ _('Nouvelle conversation') }}</option>
+  </select>
+</div>
+
 <div id="ask-thread" class="mb-3" aria-live="polite"></div>
 
 <div id="ask-target" class="alert alert-info d-none d-flex align-items-center justify-content-between" role="status">
