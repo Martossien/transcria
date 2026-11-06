@@ -15,7 +15,7 @@ groupe** (appartenance à un groupe avec droit d'administration, orthogonal au r
 | **Modifier un traitement PARTAGÉ** | | ✅ | ✅ | ✅ |
 | Créer un traitement | | ✅ | ✅ | ✅ |
 | Voir les rapports qualité | | ✅ | ✅ | ✅ |
-| Voir TOUS les traitements | | | ✅ | ✅ |
+| Voir TOUS les traitements | | | | ✅ |
 | Relancer un traitement | | | ✅ | ✅ |
 | Supprimer un traitement | | | | ✅ |
 | Gérer les utilisateurs | | | | ✅ |
@@ -25,7 +25,12 @@ groupe** (appartenance à un groupe avec droit d'administration, orthogonal au r
 
 Les **lexiques centraux** et le **partage de types de réunion** sont gérés par les
 admins de groupe (et les admins) — voir `CentralLexiconStore.can_manage_lexicons`.
-Un utilisateur ne voit que les traitements de ses groupes (sauf `VIEW_ALL_JOBS`).
+Un utilisateur voit ses traitements et ceux des membres de ses groupes ; **seul un admin
+global voit tout** (`JobStore.list_for_user`, `can_access_job`). La permission `VIEW_ALL_JOBS`
+existe dans l'énumération du rôle Manager mais **n'est appliquée nulle part** : la doc disait
+l'inverse jusqu'en 2026-11, c'est le code qui fait foi. « Discuter avec mes réunions » et
+« Mes actions » interrogent exactement ce périmètre (`docs/DISCUTER_REUNIONS.md`), les
+réunions confidentielles en moins sauf demande explicite.
 
 **Voir et modifier sont deux droits distincts** (0.4.0). Jusque-là, les routes mutantes se
 contentaient de la garde de LECTURE — un compte `VIEWER` partageant un groupe avec le

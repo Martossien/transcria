@@ -1238,6 +1238,10 @@ Les routes (pages + API) vivent dans les modules `web/*_routes.py` / `web/*_api.
 (un blueprint partagé, vague A2). Les routes liées aux jobs passent par
 `get_job_for_api()` / `require_job_access()` (propriétaire ou admin).
 
+`ask_routes.py` (« Discuter avec mes réunions », `/meetings/ask`, et « Mes actions »,
+`/meetings/actions`) **n'appelle jamais la LLM** : il écrit une demande en base (202) et la page
+interroge son état ; le worker fait le reste (§ 4.18).
+
 **La table des routes n'est plus maintenue ici** : elle est **générée** dans
 [`docs/API_REFERENCE.md`](API_REFERENCE.md) par `scripts/generate_api_reference.py`
 (vague C8, gardée en CI par `tests/test_api_reference.py` — la dérive meurt à la
@@ -1290,6 +1294,7 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 | `submit_process(job_id, audio_path, mode, priority, scheduled_at, vram_profile)` | Soumet un job au scheduler persistant ou au worker direct |
 | `get_runtime_snapshot()` | Retourne l'état queue/worker pour `/ready`, `/metrics`, `/api/queue/status` |
 | `stop()` | Arrête le scheduler et l'executor interne (utilisé au teardown de tests et arrêt contrôlé) |
+| `submit_ask(request_id)` | Signale une demande « Discuter avec mes réunions » : en mode file, le scheduler la prend (`_ask_tick`, un thread, une demande à la fois) ; sans file, traitée dans un thread dédié de l'exécuteur |
 | `_run_process(job_id, audio_path, mode)` | Exécute `PipelineService.run_process(..., finalize_job_state=False)`, puis finalise `job_queue`, `execution` et `jobs.state` dans un ordre cohérent, puis appelle `_notify()` |
 | `_notify(config, job, event, error)` | Helper module-level fire-and-forget : extrait email/nom de `job.owner`, appelle `send_job_notification_async()`. Absorbe toute exception — ne bloque jamais le pipeline |
 | `_kill_orphaned_opencode(job_id, jobs_dir, sl)` | Tue les processus opencode orphelins via fichiers `.opencode.pid` |
@@ -1460,6 +1465,26 @@ Livrés en 0.4.0 (« les réunions arrivent toutes seules ») — vue d'ensemble
 - Sécurité : `outbound_guard.py` (garde des requêtes sortantes pilotées par une valeur utilisateur — S2.2, `VISIO_ALLOWED_HOSTS`), `jwt_crypto.py`/`signatures.py`/`oauth.py` (identités plateforme, vérification des signatures entrantes).
 
 Les quatre voies validées (Jitsi, Visio, Zoom, Meet) fonctionnent en connexion **sortante** uniquement. Zoom RTMS et Teams sont `implemented` non `validated` : ce sont les deux seuls à exiger un point d'entrée HTTPS public, et le doctor refuse leur activation sans TLS.
+
+### 4.18 « Discuter avec mes réunions » (`transcria/ask_meetings/`, `transcria/search/`, `transcria/job_cards/`)
+
+Plan, décisions et journal : `docs/DISCUTER_REUNIONS.md`. Une question en langage libre sur
+**l'ensemble des réunions que l'utilisateur a le droit de voir** ; réponse de la LLM d'arbitrage
+avec **citations vérifiées** ; vue « Mes actions » sans LLM.
+
+| Brique | Rôle |
+|---|---|
+| `job_cards/` | **Fiche** par réunion (table `job_cards`, ≈ 610 tokens en médiane) : projection PURE de `context/meeting_context.json` + `participants.json`, recalculée à chaque écriture par un observateur de `JobFilesystem.save_json` (une dizaine de sites d'écriture, un seul point d'accroche), rattrapée au démarrage du worker et par `maintenance.cli rebuild-job-cards` ; règle « confidentiel » (sensibilité, type, type personnalisé, suggestion non validée) |
+| `search/` | **Présélection PURE** : normalisation NFD, jetons, poids par champ (titre, sujet, participants > objectif, ordre du jour, décisions, actions > type, abrégé), bonus de date, double plafond fiches/tokens |
+| `ask_meetings/candidates.py` | Filtres **AVANT** la LLM, dans l'ordre : `list_for_user` → confidentiel exclu sauf demande → en cloud, propriétaire dans un groupe interdit et réunions de connecteurs non autorisées |
+| `ask_meetings/prompting.py` | Fiches numérotées `[1]`, `[2]`… (jamais des identifiants), blocs des trois niveaux avec la matière annoncée, **garde des citations APRÈS** la LLM : tout numéro hors liste est retiré, les numéros valides sont traduits en identifiants côté serveur |
+| `ask_meetings/worker.py` | Consommation par le **worker** (`QueueScheduler._ask_tick`, à chaque itération, même si la file est pleine) : claim atomique, verrou LLM borné (sinon remise en attente), `prepare_llm` partagée avec l'affinage, escalade fiches → synthèses effectives des N plus proches (automatique sans citation) → transcription d'une réunion (demande explicite, cible revérifiée), historique rejoué sans les réponses citant une réunion hors candidats, audit `job_ask_meetings` (compteurs, jamais la question) |
+| `ask_meetings/store.py` | `ask_requests` (waiting → running → done \| failed, `timeout_s`, `fail_stale`), `ask_turns` + citations (rétention 30 j, supprimés avec la réunion citée) |
+| `ask_meetings/actions.py` | « Mes actions » : responsable = texte avant le premier « : » suivi d'une espace, groupes par réunion ou par responsable |
+
+Invariants : **aucun appel LLM depuis le web** (ni local ni cloud) ; **aucune réunion non visible ne
+peut apparaître**, même si le modèle se trompe (filtre avant, garde après) ; **jamais de repli
+silencieux** (« non retrouvé » est dit, la LLM annonce la matière dont elle dispose).
 
 ---
 

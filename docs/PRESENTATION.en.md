@@ -65,6 +65,16 @@ And afterwards, two retouching tools without leaving the application:
 | ![Built-in transcript editor](screenshots/en/08-editor.png) | **A built-in editor** to fix the transcript with your mouse, audio side by side with the text and restorable versions — no export to a third-party tool. |
 | ![Talking to your deliverables](screenshots/en/12-speak_with_doc.png) | **Ask for a change in plain language** ("rephrase decision 2"): the correction propagates consistently to the transcript, the summary and the Word minutes. |
 
+And over the months, your meetings become a memory you can question:
+
+- **"Chat with my meetings"** — a plain-language question ("what did we decide about the
+  training budget this autumn?", "in which meeting did we talk about the new supplier?") across
+  every meeting you are allowed to see. The answer cites each meeting it uses, with a link to its
+  report; what is not found is said to be not found. Confidential meetings are consulted only
+  if you ask for it.
+- **"My actions"** — every action item recorded in your reports, by meeting or by owner, with no
+  artificial intelligence at all: just what was written.
+
 ## You stay in charge — the user journey
 
 The heart of the product: **the AI proposes, the human validates**. The guided journey

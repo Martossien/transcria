@@ -63,6 +63,16 @@ Et après coup, deux outils de retouche sans quitter l'application :
 | ![Éditeur de transcription intégré](screenshots/08-editor.png) | **Un éditeur intégré** pour corriger la transcription à la souris, avec l'audio en face du texte et des versions restaurables — pas d'export vers un outil tiers. |
 | ![Discuter avec ses livrables](screenshots/12-speak_with_doc.png) | **Demandez une retouche en français courant** (« reformule la décision 2 ») : la correction se propage de façon cohérente à la transcription, à la synthèse et au compte-rendu Word. |
 
+Et au fil des mois, vos réunions deviennent une mémoire interrogeable :
+
+- **« Discuter avec mes réunions »** — une question en français courant (« qu'a-t-on décidé sur
+  le budget formation cet automne ? », « dans quelle réunion a-t-on parlé du nouveau
+  prestataire ? ») sur l'ensemble des réunions que vous avez le droit de voir. La réponse cite
+  chaque réunion utilisée, avec un lien vers son compte rendu ; ce qui n'est pas retrouvé est dit
+  non retrouvé. Les réunions confidentielles ne sont consultées que si vous le demandez.
+- **« Mes actions »** — toutes les actions relevées dans vos comptes rendus, par réunion ou par
+  responsable, sans aucune intelligence artificielle : juste ce qui a été écrit.
+
 ## Vous gardez la main — le parcours utilisateur
 
 Le point central du produit : **l'IA propose, l'humain valide**. Le parcours guidé

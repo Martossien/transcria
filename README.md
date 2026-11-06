@@ -97,6 +97,13 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
   then apply a change in one click: a corrected term is fixed coherently across every
   deliverable (summary, SRT, structured data). Each apply snapshots a restorable version,
   and exports are regenerated at download so they always reflect the latest state.
+- **Chat with your meetings.** Ask a free-text question across every meeting you are
+  allowed to see ("what did we decide about the training budget this autumn?", "where do we
+  stand on the actions from the 12th?"). The permission filter runs *before* the LLM, every
+  meeting used is cited by number and verified *after*, and a meeting that is not found is said
+  to be not found — the answer escalates from short cards to full summaries, and to one
+  transcript only on request. A "My actions" view lists every action item, by meeting or by
+  owner, with no LLM at all ([docs/DISCUTER_REUNIONS.md](docs/DISCUTER_REUNIONS.md)).
 - **Production-grade orchestration.** A persistent GPU job queue (priorities,
   anti-starvation aging, pause/resume, scheduled starts), VRAM-aware admission per
   remaining pipeline phase, calendar-based GPU scheduling, a resumable pipeline (a

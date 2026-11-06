@@ -1,8 +1,9 @@
 # Discuter avec mes réunions — plan directeur
 
-> Statut : **lots 0 à C livrés (2026-11-06)** — fiches `job_cards`, demandes consommées par le
+> Statut : **lots 0 à D livrés (2026-11-06)** — fiches `job_cards`, demandes consommées par le
 > worker, présélection, prompt six langues, garde des citations, pages `/meetings/ask` et
-> `/meetings/actions` (§ 6). Lots D (docs) et E (qualification réelle, machine principale) à faire. Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
+> `/meetings/actions`, documentation (§ 6). **Reste le lot E** : qualification réelle sur la
+> machine principale, en lisant (§ 6, protocole proposé). Plan validé dans ses décisions le 2026-11-01. Répond à deux retours
 > utilisateurs de novembre 2026 : « retrouver une réunion parmi les miennes » et « suivre les
 > actions décidées ». Cadré avec le mainteneur, puis **relu par un relecteur critique** (code +
 > plan, mesures en base) dont les constats sont intégrés. **VÉRIFIÉ** = au code (fichier:ligne) ou
@@ -231,7 +232,7 @@ Bandeau cloud hérité de `LLM_CLOUD.md`. 6 langues ; JS extrait `static/js/ask_
 | A — fiches ✅ | `job_cards` + migration (cascade), `refresh()` dans les deux `save()` + `restore_version` + pull, `rebuild-job-cards`, règle confidentiel, règle date | tests store ; « fiche = reflet du contexte » ; rattrapage sur jobs de test ; suppression d'un job supprime la fiche (PG et SQLite) |
 | B — demandes ✅ | `ask_requests` + `ask_turns` + migrations, consommation par le worker (claim, verrou LLM, ensure, timeout), présélection PURE (`transcria/search/`), prompt 6 langues, garde des citations, escalade 2-3, filtres cloud/groupe/connecteurs, rétention + purge, audit | tests PURS sans LLM (présélection, garde, escalade, filtres) ; faux LLM ; limites (question vide / 1 car. / très longue / unicode) → jamais de 500 ; test « admin voit tout » et « membre ne voit que ses groupes » |
 | C — UI ✅ | pages `/meetings/ask` et `/meetings/actions`, interrogation, navbar, JS extrait, i18n, interrupteur admin, bandeau cloud | Playwright gestes réels + revue visuelle ; `audit_front` ; `test_js_api_contract` ; `API_REFERENCE.md` ; docstrings de routes |
-| D — docs | TECHNICAL, DATA_MODEL (3 tables), CONFIG_REFERENCE (`workflow.ask_meetings.*`), **AUDIT_DPO** (historique des conversations : rétention, purge, sauvegarde ; admin interroge tout), **SECURITY_MODEL** (corriger la ligne Manager), README/PRESENTATION fr+en, `docs/README.md` index, CHANGELOG | `release_check`, `i18n_check`, `test_config_classification` |
+| D — docs ✅ | TECHNICAL, DATA_MODEL (3 tables), CONFIG_REFERENCE (`workflow.ask_meetings.*`), **AUDIT_DPO** (historique des conversations : rétention, purge, sauvegarde ; admin interroge tout), **SECURITY_MODEL** (corriger la ligne Manager), README/PRESENTATION fr+en, `docs/README.md` index, CHANGELOG | `release_check`, `i18n_check`, `test_config_classification` |
 | E — qualification réelle | sur l'instance de dev avec les réunions réelles (privées, jamais versionnées) : 20 questions types (retrouver, décisions, actions, « non retrouvé » attendu, confidentiel exclu puis inclus, niveau 3), relecture humaine des réponses et des citations, mesure du temps par niveau ; puis en cloud (Mistral) | journal dans ce document, anonymisé |
 
 Ratchets et gardes : `deep_config_chains` (vue typée pour `ask_meetings.*`, `test_config_views_contract`
@@ -484,4 +485,44 @@ retrouvé » après escalade → rechargement avec historique → nouvelle conve
 réunion / par responsable / confidentielles incluses ; zéro erreur console ni serveur ; neuf
 captures relues (défauts attrapés ainsi : navbar sur deux lignes, pied de réponse en double,
 ponctuation orpheline).
+
+### Lot D — documentation (2026-11-06)
+
+Livré : `TECHNICAL.md` § 4.18 (briques, invariants) et § 4.11/4.13 ; `DATA_MODEL.md` (quatre
+tables, règles de suppression) ; `CONFIG_REFERENCE.md` (`workflow.ask_meetings.*`) ;
+`AUDIT_DPO.md` (rétention des conversations, actions d'audit, « un administrateur interroge tout ») ;
+`SECURITY_MODEL.md` **corrigé** : « voir tous les traitements » n'est vrai que pour l'admin global —
+la permission `VIEW_ALL_JOBS` du rôle Manager existe dans l'énumération mais n'est appliquée nulle
+part, la doc disait l'inverse ; `README.md`, `PRESENTATION.md` / `.en.md`, `docs/README.md`
+(index), `UPGRADE.md` (`rebuild-job-cards`), `CHANGELOG.md`, `AGENTS.md`, `scripts/README.md`.
+
+### Lot E — qualification réelle : protocole proposé (à jouer sur la machine principale)
+
+Prérequis : `git pull`, redémarrage du service (migrations `b4d1f6a8c2e9` et `c7e2a9d4f1b6`,
+fiches rattrapées au démarrage — vérifier dans le journal « Fiches réunions rattrapées »), compte
+non administrateur d'un groupe ET compte administrateur.
+
+Vingt questions, dans l'ordre, chacune **lue** (réponse et citations) et notée juste / partielle /
+fausse / « non retrouvé » à tort :
+
+1-4. **Retrouver** : « dans quelle réunion a-t-on parlé de X ? » pour deux sujets qui existent
+   (dont un seulement dans une synthèse, pas dans une fiche), un qui n'existe pas (attendu : non
+   retrouvé), un nom de participant.
+5-8. **Décisions** : « qu'a-t-on décidé sur X ? » (un sujet, deux réunions), « quelles décisions
+   en octobre ? » (bonus de date), un sujet absent (attendu : non retrouvé), une question vague
+   (« qu'a-t-on décidé récemment ? » : les plus récentes doivent partir).
+9-12. **Actions** : « qui doit faire quoi sur X ? », « quelles actions pour Personne A ? »,
+   comparer avec la page « Mes actions » par responsable, une action sans responsable.
+13-14. **Suivi dans le temps** : « où en est X ? » sur un sujet traité dans trois réunions.
+15-16. **Confidentiel** : une question dont la réponse est dans une réunion confidentielle, case
+   décochée (attendu : non retrouvé) puis cochée (attendu : trouvée, citée).
+17-18. **Périmètre** : la même question depuis le compte non administrateur (attendu : seules ses
+   réunions et celles de ses groupes) puis administrateur.
+19. **Niveau 3** : depuis une carte citée, une question dont seule la transcription a la réponse
+   (une phrase exacte).
+20. **Continuité** : une question de suite (« et sur le budget ? ») dans la même conversation.
+
+À mesurer : temps par niveau (journal « Discuter : niveau n … »), nombre de passages au niveau 2,
+fausses citations (une réunion citée qui ne porte pas la réponse), réponses « non retrouvé » à
+tort. Puis rejouer 1, 5, 9, 15-16 et 19 en cloud (Mistral) pour comparer. Journal anonymisé ici.
 
