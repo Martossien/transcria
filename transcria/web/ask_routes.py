@@ -21,7 +21,15 @@ from flask_login import current_user, login_required
 from transcria.ask_meetings.actions import action_lines, group_by_meeting, group_by_owner, meeting_types_present
 from transcria.ask_meetings.candidates import visible_candidates
 from transcria.ask_meetings.messages import ask_message
-from transcria.ask_meetings.models import LEVEL_CARDS, LEVEL_TRANSCRIPT, STATUS_DONE, STATUS_FAILED
+from transcria.ask_meetings.models import (
+    LEVEL_CARDS,
+    LEVEL_TRANSCRIPT,
+    STAGE_QUEUED,
+    STATUS_DONE,
+    STATUS_FAILED,
+    STATUS_RUNNING,
+    STATUS_WAITING,
+)
 from transcria.ask_meetings.store import AskStore, AskValidationError
 from transcria.auth.models import Role
 from transcria.config import get_config
@@ -77,7 +85,16 @@ def _level_label(level: int, locale: str) -> str:
     return ask_message(locale, f"level_{int(level)}") if int(level) in (1, 2, 3) else ""
 
 
+def _stage_of(req) -> str:
+    """Étape affichée : celle écrite par le worker ; une demande encore ``waiting`` sans étape est
+    derrière une autre (le worker en traite une à la fois)."""
+    if req.status not in (STATUS_WAITING, STATUS_RUNNING):
+        return ""
+    return req.stage or (STAGE_QUEUED if req.status == STATUS_WAITING else "")
+
+
 def _request_payload(req, user, locale: str) -> dict:
+    stage = _stage_of(req)
     payload = {
         "id": req.id,
         "conversation_id": req.conversation_id,
@@ -86,6 +103,8 @@ def _request_payload(req, user, locale: str) -> dict:
         "level_requested": int(req.level_requested),
         "level_reached": int(req.level_reached),
         "level_label": _level_label(req.level_reached, locale) if req.status == STATUS_DONE else "",
+        "stage": stage,
+        "stage_label": ask_message(locale, f"stage_{stage}") if stage else "",
         "answer": req.answer if req.status == STATUS_DONE else "",
         "error": req.error if req.status == STATUS_FAILED else "",
         "cited": _meeting_summaries(req.cited_job_ids, user) if req.status == STATUS_DONE else [],

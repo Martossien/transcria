@@ -290,7 +290,7 @@ Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discu
 
 ### Tables `ask_requests` / `ask_turns` / `ask_turn_citations`
 
-« Discuter avec mes réunions » (`docs/DISCUTER_REUNIONS.md` § 2.1, § 2.7). Modèles : `transcria/ask_meetings/models.py` ; migration `alembic/versions/c7e2a9d4f1b6_add_ask_meetings.py`.
+« Discuter avec mes réunions » (`docs/DISCUTER_REUNIONS.md` § 2.1, § 2.7). Modèles : `transcria/ask_meetings/models.py` ; migrations `alembic/versions/c7e2a9d4f1b6_add_ask_meetings.py` et `d8f3b5c1e7a2_add_ask_requests_stage.py`.
 
 **`ask_requests`** — une question, son état, sa réponse. Écrite par le web, consommée par le worker.
 
@@ -308,6 +308,7 @@ Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discu
 | `answer` | Text | NOT NULL, default "" | Réponse après garde des citations |
 | `cited_job_ids_json` | Text | NOT NULL, default `[]` | Réunions citées (identifiants vérifiés) |
 | `level_reached` | Integer | NOT NULL, default 0 | Niveau qui a produit la réponse |
+| `stage` | String(24) | NOT NULL, default "" | Étape en cours écrite par le worker (`llm_busy`, `vram_wait`, `llm_loading`, `generating`, `summaries`) ; une demande `waiting` sans étape est affichée « derrière une autre question » ; libellé par langue (`messages.stage_*`) |
 | `error` | Text | NOT NULL, default "" | Message dans la langue de la requête quand `failed` |
 | `created_at` / `started_at` / `done_at` | DateTime(tz) | | Cycle de vie ; `fail_stale` expire au-delà de `timeout_s` |
 

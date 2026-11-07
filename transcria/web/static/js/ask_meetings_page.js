@@ -116,10 +116,16 @@
     box.setAttribute("data-ask-pending", "1");
     var body = el("div", "card-body py-2 small text-muted");
     body.appendChild(el("span", "spinner-border spinner-border-sm me-2"));
-    body.appendChild(document.createTextNode(T.waiting));
+    body.appendChild(el("span", "", T.waiting));
     box.appendChild(body);
     thread.appendChild(box);
     return box;
+  }
+
+  function updatePending(pending, label) {
+    // « Pourquoi j'attends » : l'étape écrite par le worker remplace le texte générique.
+    var text = pending.querySelector(".card-body span:last-child");
+    if (text && label) text.textContent = label;
   }
 
   function renderFailure(pending, message) {
@@ -145,6 +151,7 @@
           return;
         }
         if (r.d.status === "failed") { renderFailure(pending, r.d.error); submit.disabled = false; return; }
+        updatePending(pending, r.d.stage_label);
         window.setTimeout(function () { poll(requestId, pending, startedAt); }, settings.poll_interval_ms || 2000);
       })
       .catch(function () { renderFailure(pending, T.network); submit.disabled = false; });

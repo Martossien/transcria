@@ -383,3 +383,24 @@ def test_historique_rend_les_demandes_en_cours_et_la_liste_des_conversations(app
     other = _login(app, other_name, "mdp-de-test-web")
     assert other.get("/api/meetings/ask/conversations").get_json() == {"conversations": []}
 
+
+def test_etape_affichee_dans_la_langue_de_l_interface(app, user_client):
+    """« Pourquoi j'attends » : en attente sans étape = derrière une autre question ; en cours =
+    l'étape écrite par le worker, libellée dans la langue de la requête ; rien une fois terminée."""
+    from transcria.ask_meetings.models import STAGE_LLM_LOADING
+
+    with app.app_context():
+        req = AskStore.create_request(user_id=user_client.user_id, question="q")
+        req_id = req.id
+    body = user_client.client.get(f"/api/meetings/ask/{req_id}").get_json()
+    assert body["stage"] == "queued" and body["stage_label"].startswith("Une autre question")
+    with app.app_context():
+        AskStore.claim_next()
+        AskStore.set_stage(req_id, STAGE_LLM_LOADING)
+    body = user_client.client.get(f"/api/meetings/ask/{req_id}?lang=en").get_json()
+    assert body["stage"] == "llm_loading" and body["stage_label"] == "Loading the arbitration LLM (one to two minutes the first time)."
+    with app.app_context():
+        AskStore.complete(req_id, answer="ok", cited_job_ids=[], level_reached=1)
+    body = user_client.client.get(f"/api/meetings/ask/{req_id}").get_json()
+    assert body["stage"] == "" and body["stage_label"] == ""
+

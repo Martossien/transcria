@@ -19,7 +19,17 @@ from datetime import UTC, datetime
 
 from transcria.ask_meetings.candidates import Candidate, CandidateSet, visible_candidates
 from transcria.ask_meetings.messages import ask_message
-from transcria.ask_meetings.models import LEVEL_CARDS, LEVEL_SUMMARIES, LEVEL_TRANSCRIPT, AskRequest
+from transcria.ask_meetings.models import (
+    LEVEL_CARDS,
+    LEVEL_SUMMARIES,
+    LEVEL_TRANSCRIPT,
+    STAGE_GENERATING,
+    STAGE_LLM_BUSY,
+    STAGE_LLM_LOADING,
+    STAGE_SUMMARIES,
+    STAGE_VRAM_WAIT,
+    AskRequest,
+)
 from transcria.ask_meetings.prompting import (
     NumberedMeeting,
     build_messages,
@@ -150,19 +160,21 @@ class AskWorker:
 
         runner = self.runner or WorkflowRunner(JobStore, self.config)
         owner = _owner_key(req.id)
+        AskStore.set_stage(req.id, STAGE_LLM_BUSY)      # tant que le verrou n'est pas pris, c'est la raison de l'attente
         if not runner.allocator.try_acquire_llm(owner, timeout_s=self.view.llm_lock_timeout_s):
-            AskStore.release(req.id)
+            AskStore.release(req.id, stage=STAGE_LLM_BUSY)
             return OUTCOME_LLM_BUSY
         reserved = False
         started = time.monotonic()
         try:
-            failure, reserved = prepare_llm(
-                runner, owner, self.config,
-                llm_was_already_running=llm_running_before_phase(runner.vram, self.config))
+            llm_was_running = llm_running_before_phase(runner.vram, self.config)
+            if not llm_was_running:
+                AskStore.set_stage(req.id, STAGE_LLM_LOADING)
+            failure, reserved = prepare_llm(runner, owner, self.config, llm_was_already_running=llm_was_running)
             if failure == "vram_insufficient":
                 # Transitoire (règle « VRAM insuffisante = attente, jamais échec ») : la demande
                 # repart en attente, bornée par ``timeout_s``.
-                AskStore.release(req.id)
+                AskStore.release(req.id, stage=STAGE_VRAM_WAIT)
                 return OUTCOME_LLM_BUSY
             if failure:
                 return self._fail(req, user, locale, "unavailable")
@@ -214,6 +226,7 @@ class AskWorker:
         if step.cited:
             return step
         # Niveau 2, automatique : les N réunions les plus proches, avec leur synthèse effective.
+        AskStore.set_stage(req.id, STAGE_SUMMARIES)
         closest = _numbered(selected[: self.view.level2_meetings], by_id)
         per_meeting_chars = max(2000, (self.view.max_context_tokens * CHARS_PER_TOKEN) // len(closest))
         summaries = {m.job_id: effective_summary(self.config, m.job_id)[:per_meeting_chars] for m in closest}
@@ -242,6 +255,8 @@ class AskWorker:
               meetings: list[NumberedMeeting], context_block: str) -> _Step:
         messages = build_messages(system_prompt=system_prompt, context_block=context_block,
                                   history=history, question=req.question)
+        if level != LEVEL_SUMMARIES:
+            AskStore.set_stage(req.id, STAGE_GENERATING)
         # Tout est lu : on ne tient pas une transaction ouverte pendant un appel de plusieurs minutes.
         db.session.rollback()
         raw = self.completion(self.config, messages, timeout_s=self.view.timeout_s,

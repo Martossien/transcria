@@ -122,7 +122,7 @@ class AskStore:
             result = db.session.execute(
                 db.update(AskRequest)
                 .where(AskRequest.id == candidate, AskRequest.status == STATUS_WAITING)
-                .values(status=STATUS_RUNNING, started_at=_utcnow()))
+                .values(status=STATUS_RUNNING, started_at=_utcnow(), stage=""))
             db.session.commit()
             if (result.rowcount or 0) == 1:  # type: ignore[attr-defined]
                 db.session.expire_all()
@@ -130,11 +130,20 @@ class AskStore:
         return None
 
     @staticmethod
-    def release(request_id: str) -> None:
-        """Remet une demande prise en ``waiting`` (LLM occupée : on retentera plus tard)."""
+    def release(request_id: str, *, stage: str = "") -> None:
+        """Remet une demande prise en ``waiting`` (LLM occupée, VRAM insuffisante : on retentera plus
+        tard). ``stage`` dit pourquoi, pour la page."""
         db.session.execute(
             db.update(AskRequest).where(AskRequest.id == request_id, AskRequest.status == STATUS_RUNNING)
-            .values(status=STATUS_WAITING, started_at=None))
+            .values(status=STATUS_WAITING, started_at=None, stage=stage))
+        db.session.commit()
+
+    @staticmethod
+    def set_stage(request_id: str, stage: str) -> None:
+        """Étape courante d'une demande EN COURS (ignorée sinon) — lue par la page toutes les 2 s."""
+        db.session.execute(
+            db.update(AskRequest).where(AskRequest.id == request_id, AskRequest.status == STATUS_RUNNING)
+            .values(stage=stage))
         db.session.commit()
 
     @staticmethod

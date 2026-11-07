@@ -497,6 +497,16 @@ Banc : parti avant la réponse → reprise au retour ; ancienne conversation rec
 sélecteur. Deux questions enchaînées ne s'interrompent jamais : une demande à la fois, dans
 l'ordre, la seconde profite de la LLM déjà chargée.
 
+**Complément (2026-11-07, « pourquoi j'attends ? »)** — « En attente du worker… » couvrait quatre
+situations. Le worker écrit désormais l'étape sur la demande (`ask_requests.stage`, migration
+`d8f3b5c1e7a2`) : verrou LLM tenu par un traitement, VRAM insuffisante (nouvelle tentative),
+chargement du modèle (modes locaux seulement — jamais en cloud ni en split), rédaction, lecture des
+synthèses ; une demande encore en file sans étape est dite « derrière une autre question ». La page
+affiche le libellé (six langues, langue de l'interface) à chaque interrogation. Aucune sonde, aucun
+coût : c'est ce que le worker sait déjà. Un voyant global d'état de la LLM reste à décider après le
+lot E (pièges par mode : « éteinte » est normal en tout-en-un ; jamais de sonde du fournisseur
+cloud depuis le web).
+
 ### Lot D — documentation (2026-11-06)
 
 Livré : `TECHNICAL.md` § 4.18 (briques, invariants) et § 4.11/4.13 ; `DATA_MODEL.md` (quatre

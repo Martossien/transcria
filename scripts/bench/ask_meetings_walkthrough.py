@@ -252,6 +252,9 @@ def cmd_walk(args) -> int:
         page.goto(f"{args.base_url}/meetings/ask", wait_until="networkidle")
         page.wait_for_selector("[data-ask-pending]", timeout=5000)
         check("demande en cours reprise au retour", page.locator("[data-ask-turn=user]").count() == 4)
+        page.wait_for_timeout(2500)                      # une interrogation de plus : l'étape du worker arrive
+        pending_text = page.locator("[data-ask-pending]").inner_text()
+        check("étape « pourquoi j'attends » affichée", "rédaction" in pending_text or "occupée" in pending_text, pending_text)
         shot("06b_discuter_reprise_demande_en_cours")
         page.wait_for_selector("[data-ask-turn=assistant] >> nth=3", timeout=60000)
         check("réponse arrivée après le retour", page.locator("[data-ask-pending]").count() == 0)

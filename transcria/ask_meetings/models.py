@@ -26,6 +26,14 @@ LEVEL_CARDS = 1
 LEVEL_SUMMARIES = 2
 LEVEL_TRANSCRIPT = 3
 
+#: Étapes d'une demande en cours — ce que la page affiche à la place d'un « en attente » unique.
+STAGE_QUEUED = "queued"            # une autre demande est traitée avant celle-ci
+STAGE_LLM_BUSY = "llm_busy"        # le verrou LLM est tenu par un traitement
+STAGE_VRAM_WAIT = "vram_wait"      # pas assez de VRAM pour charger la LLM, nouvelle tentative plus tard
+STAGE_LLM_LOADING = "llm_loading"  # chargement du modèle (modes locaux seulement)
+STAGE_GENERATING = "generating"    # appel en cours, niveau fiches ou transcription
+STAGE_SUMMARIES = "summaries"      # les fiches n'ont pas suffi : lecture des synthèses
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -62,6 +70,9 @@ class AskRequest(db.Model):
     answer = db.Column(db.Text, nullable=False, default="", server_default="")
     cited_job_ids_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")
     level_reached = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    #: Étape en cours, écrite par le worker (« pourquoi j'attends ») : voir STAGE_* ; vide = rien de
+    #: plus précis que le statut. Un libellé par langue dans ``messages`` (clé ``stage_<étape>``).
+    stage = db.Column(db.String(24), nullable=False, default="", server_default="")
     error = db.Column(db.Text, nullable=False, default="", server_default="")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
     started_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -84,6 +95,7 @@ class AskRequest(db.Model):
             "answer": self.answer,
             "cited_job_ids": self.cited_job_ids,
             "level_reached": int(self.level_reached),
+            "stage": self.stage,
             "error": self.error,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,

@@ -17,6 +17,11 @@ from transcria.ask_meetings.models import (
     LEVEL_CARDS,
     LEVEL_SUMMARIES,
     LEVEL_TRANSCRIPT,
+    STAGE_GENERATING,
+    STAGE_LLM_BUSY,
+    STAGE_LLM_LOADING,
+    STAGE_SUMMARIES,
+    STAGE_VRAM_WAIT,
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_RUNNING,
@@ -632,4 +637,66 @@ def test_cible_inexistante_acceptee_puis_dite_invisible(ctx, owner_id, tmp_path,
     req = AskStore.claim_next()
     assert _run(_config(tmp_path), req, FakeLLM({3: "x"})) == OUTCOME_FAILED
     assert "ne fait pas partie" in _claimed(req.id).error
+
+
+# ── « Pourquoi j'attends » : l'étape écrite par le worker ─────────────────────
+
+def test_les_etapes_sont_ecrites_au_fil_du_traitement(ctx, owner_id, tmp_path, monkeypatch):
+    """La page lit ``stage`` toutes les 2 s : chargement, rédaction, synthèses — dans cet ordre."""
+    _meeting(owner_id, tmp_path, title="Prestataire", summary="Organisation A retenue.")
+    monkeypatch.setattr(worker_mod, "llm_running_before_phase", lambda vram, config: False)
+    seen: list[str] = []
+
+    def loading_llm(runner, owner, config, *, llm_was_already_running):
+        seen.append(AskStore.get(req_id).stage)          # pendant prepare_llm
+        return None, False
+
+    monkeypatch.setattr(worker_mod, "prepare_llm", loading_llm)
+    req = AskStore.create_request(user_id=owner_id, question="prestataire ?")
+    req_id = req.id
+    req = AskStore.claim_next()
+
+    class StageLLM(FakeLLM):
+        def __call__(self, config, messages, *, timeout_s, max_tokens):
+            db.session.expire_all()
+            seen.append(AskStore.get(req_id).stage)
+            return super().__call__(config, messages, timeout_s=timeout_s, max_tokens=max_tokens)
+
+    assert _run(_config(tmp_path, level2_meetings=1), req, StageLLM({1: "Non retrouvé.", 2: "Organisation A [1]."})) == OUTCOME_DONE
+    assert seen == [STAGE_LLM_LOADING, STAGE_GENERATING, STAGE_SUMMARIES]
+    assert _claimed(req_id).stage == STAGE_SUMMARIES and _claimed(req_id).status == STATUS_DONE
+
+
+def test_llm_deja_chargee_pas_d_etape_chargement(ctx, owner_id, tmp_path, quiet_llm_prep):
+    _meeting(owner_id, tmp_path, title="A")
+    req = AskStore.create_request(user_id=owner_id, question="q")
+    req_id = req.id
+    req = AskStore.claim_next()
+    seen = []
+
+    class StageLLM(FakeLLM):
+        def __call__(self, config, messages, *, timeout_s, max_tokens):
+            db.session.expire_all()
+            seen.append(AskStore.get(req_id).stage)
+            return "ok [1]"
+
+    assert _run(_config(tmp_path), req, StageLLM({})) == OUTCOME_DONE
+    assert seen == [STAGE_GENERATING]
+
+
+def test_remise_en_attente_dit_pourquoi(ctx, owner_id, tmp_path, monkeypatch):
+    _meeting(owner_id, tmp_path, title="A")
+    req = AskStore.create_request(user_id=owner_id, question="q")
+    req_id = req.id
+    req = AskStore.claim_next()
+    assert _run(_config(tmp_path), req, FakeLLM({1: "x [1]"}), FakeRunner(busy=True)) == OUTCOME_LLM_BUSY
+    assert (_claimed(req_id).status, _claimed(req_id).stage) == (STATUS_WAITING, STAGE_LLM_BUSY)
+
+    monkeypatch.setattr(worker_mod, "llm_running_before_phase", lambda vram, config: False)
+    monkeypatch.setattr(worker_mod, "prepare_llm",
+                        lambda runner, owner, config, *, llm_was_already_running: ("vram_insufficient", False))
+    req = AskStore.claim_next()
+    assert _claimed(req_id).stage == ""                      # reprise : l'étape repart de zéro
+    assert _run(_config(tmp_path), req, FakeLLM({1: "x [1]"}), FakeRunner()) == OUTCOME_LLM_BUSY
+    assert _claimed(req_id).stage == STAGE_VRAM_WAIT
 
