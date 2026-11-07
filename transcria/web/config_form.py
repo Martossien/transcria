@@ -15,6 +15,24 @@ import copy
 
 from flask_babel import lazy_gettext as _l
 
+# Libellés d'affichage des moteurs STT dont la NATURE ne se devine pas au nom (la valeur
+# enregistrée reste l'identifiant du registre).
+_STT_OPTION_LABELS = {
+    "kroko": _l("kroko — CPU uniquement (zéro VRAM)"),
+    "moss": _l("moss — transcription ET locuteurs en une passe (expérimental, GPU)"),
+    "qwen3asr": _l("qwen3asr — runtime servi audio.cpp (URL requise)"),
+    "nemotron": _l("nemotron — runtime servi audio.cpp (URL requise)"),
+    "voxtralrt": _l("voxtralrt — runtime servi parakeet.cpp (URL requise)"),
+    "remote": _l("remote — nœud de ressources distant"),
+}
+_DIAR_OPTION_LABELS = {
+    "auto": _l("auto — Nemotron 3 jusqu'à 8 voix, pyannote au-delà (recommandé)"),
+    "pyannote": _l("pyannote — GPU, nombre de voix illimité, jeton HF requis"),
+    "sortformer": _l("sortformer — GPU, 4 voix au plus, sans jeton"),
+    "nemotron_diar": _l("nemotron_diar — GPU ou CPU, 8 voix au plus, sans jeton (audio.cpp)"),
+    "remote": _l("remote — nœud de ressources distant"),
+}
+
 # Marqueur d'un secret masqué côté UI (aligné sur web.admin_routes.CONFIG_SECRET_SENTINEL).
 SECRET_SENTINEL = "********"
 
@@ -46,12 +64,18 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         "help": _l("Choix des moteurs de transcription et de diarisation."),
         "fields": [
             {"path": "models.stt_backend", "label": _l("Backend STT"), "type": "select",
-             "options": ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss", "remote"],
-             "help": _l("Moteur de transcription par défaut (cohere recommandé).")},
+             "options": ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
+                         "qwen3asr", "nemotron", "voxtralrt", "remote"],
+             "option_labels": _STT_OPTION_LABELS,
+             "help": _l("Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement "
+                        "(zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp : "
+                        "refusés tant qu'aucune URL n'est posée dans inference.stt.backends.<nom> "
+                        "(cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
             {"path": "models.summary_stt_backend", "label": _l("Backend STT du résumé"), "type": "select",
              "nullable": True,
              "options": ["", "cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
                          "qwen3asr", "nemotron", "voxtralrt"],
+             "option_labels": _STT_OPTION_LABELS,
              "help": _l("Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur "
                         "que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron/voxtralrt exigent "
                         "le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
@@ -63,6 +87,7 @@ CONFIG_FORM_SECTIONS: list[dict] = [
                         "(cf. docs/TEMPS_REEL_REUNIONS.md).")},
             {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
              "options": ["auto", "pyannote", "sortformer", "nemotron_diar", "remote"],
+             "option_labels": _DIAR_OPTION_LABELS,
              "help": _l("Détection des locuteurs : auto (Nemotron 3 de 1 à 8 voix, pyannote au-delà ou pour un "
                         "comptage exact — recommandé), pyannote (illimité, token HF), sortformer (≤ 4, non gated), "
                         "nemotron_diar (≤ 8, non gated, runtime audio.cpp, GPU ou CPU).")},

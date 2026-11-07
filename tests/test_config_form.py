@@ -222,3 +222,21 @@ class TestChampNullable:
         from transcria.web.config_form import CONFIG_FORM_SECTIONS, build_partial_config
         partial = build_partial_config({"server.port": ""}, CONFIG_FORM_SECTIONS)
         assert "server" not in partial or "port" not in partial.get("server", {})
+
+
+class TestLibellesDesMoteurs:
+    """Les listes STT/diarisation disent la NATURE de chaque moteur (CPU, runtime servi, une passe) ;
+    la valeur enregistrée reste l'identifiant du registre."""
+
+    def test_select_rend_le_libelle_et_garde_la_valeur(self, admin_client):
+        body = admin_client.get("/admin/config").get_data(as_text=True)
+        assert '<option value="kroko"' in body and "kroko — CPU uniquement (zéro VRAM)" in body
+        assert '<option value="moss"' in body and "une passe" in body
+        assert '<option value="qwen3asr"' in body and "runtime servi audio.cpp" in body
+        assert '<option value="nemotron_diar"' in body and "GPU ou CPU, 8 voix au plus" in body
+
+    def test_runtimes_servis_proposes_dans_le_backend_principal(self):
+        field = next(f for sec in CONFIG_FORM_SECTIONS for f in sec["fields"] if f["path"] == "models.stt_backend")
+        for served in ("qwen3asr", "nemotron", "voxtralrt"):
+            assert served in field["options"]
+        assert set(field["option_labels"]) <= set(field["options"])

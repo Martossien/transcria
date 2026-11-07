@@ -89,7 +89,7 @@
               {% elif field.type == "select" %}
               <select class="form-select" id="f-{{ field.path }}" name="{{ field.path }}">
                 {% for opt in field.options %}
-                <option value="{{ opt }}" {% if values[field.path] == opt %}selected{% endif %}>{{ opt }}</option>
+                <option value="{{ opt }}" {% if values[field.path] == opt %}selected{% endif %}>{{ field.option_labels[opt] if field.option_labels and opt in field.option_labels else opt }}</option>
                 {% endfor %}
               </select>
               {% elif field.type == "csv" %}
