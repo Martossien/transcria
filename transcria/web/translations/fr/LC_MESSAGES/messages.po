@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 17:09+0100\n"
+"POT-Creation-Date: 2026-11-07 17:36+0100\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -1801,289 +1801,293 @@ msgstr "Génération impossible : %(e)s"
 msgid "Voix désactivée."
 msgstr "Voix désactivée."
 
-#: transcria/web/admin_routes.py:190 transcria/web/admin_routes.py:249
+#: transcria/web/admin_routes.py:195 transcria/web/admin_routes.py:254
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s erreur(s) de validation. Sauvegarde annulée."
 
-#: transcria/web/admin_routes.py:194
+#: transcria/web/admin_routes.py:199
 msgid "Réglages sauvegardés."
 msgstr "Réglages sauvegardés."
 
-#: transcria/web/admin_routes.py:199
+#: transcria/web/admin_routes.py:204
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:225
+#: transcria/web/admin_routes.py:230
 msgid "Aucun prompt modifié."
 msgstr "Aucun prompt modifié."
 
-#: transcria/web/admin_routes.py:232
+#: transcria/web/admin_routes.py:237
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "YAML invalide : %(e)s"
 
-#: transcria/web/admin_routes.py:236
+#: transcria/web/admin_routes.py:241
 msgid "La configuration doit être un objet YAML racine."
 msgstr "La configuration doit être un objet YAML racine."
 
-#: transcria/web/admin_routes.py:252
+#: transcria/web/admin_routes.py:257
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration sauvegardée dans %(p)s."
 
-#: transcria/web/admin_routes.py:332
+#: transcria/web/admin_routes.py:337
 #, python-format
 msgid "Vérification impossible : %(e)s"
 msgstr "Vérification impossible : %(e)s"
 
-#: transcria/web/admin_routes.py:336
+#: transcria/web/admin_routes.py:341
 #, python-format
 msgid "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
 msgstr "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
 
-#: transcria/web/admin_routes.py:339
+#: transcria/web/admin_routes.py:344
 #, python-format
 msgid "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
 msgstr "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
 
-#: transcria/web/admin_routes.py:356
+#: transcria/web/admin_routes.py:361
 msgid "Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image (docker pull) ; sans systemd, utilisez la CLI maintenance."
 msgstr "Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image (docker pull) ; sans systemd, utilisez la CLI maintenance."
 
-#: transcria/web/admin_routes.py:360
+#: transcria/web/admin_routes.py:365
 msgid "Confirmation requise : la mise à niveau sauvegarde, bascule le code, migre la base et redémarre le service."
 msgstr "Confirmation requise : la mise à niveau sauvegarde, bascule le code, migre la base et redémarre le service."
 
-#: transcria/web/admin_routes.py:370
+#: transcria/web/admin_routes.py:375
 msgid "Cible de mise à niveau invalide ou périmée — relancez « Vérifier maintenant » puis réessayez."
 msgstr "Cible de mise à niveau invalide ou périmée — relancez « Vérifier maintenant » puis réessayez."
 
-#: transcria/web/admin_routes.py:383
+#: transcria/web/admin_routes.py:388
 #, python-format
 msgid "Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, migration, redémarrage. La page suit la progression."
 msgstr "Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, migration, redémarrage. La page suit la progression."
 
-#: transcria/web/admin_routes.py:386
+#: transcria/web/admin_routes.py:391
 #, python-format
 msgid "Échec du déclenchement de la mise à niveau : %(e)s"
 msgstr "Échec du déclenchement de la mise à niveau : %(e)s"
 
-#: transcria/web/admin_routes.py:417
+#: transcria/web/admin_routes.py:422
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Sauvegarde planifiée activée (cadence %(c)s)."
 
-#: transcria/web/admin_routes.py:422
+#: transcria/web/admin_routes.py:427
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Sauvegarde planifiée désactivée."
 
-#: transcria/web/admin_routes.py:424
+#: transcria/web/admin_routes.py:429
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Échec de la planification : %(e)s"
 
-#: transcria/web/admin_routes.py:438
+#: transcria/web/admin_routes.py:443
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation requise : la restauration remplace les données et redémarre le service."
 
-#: transcria/web/admin_routes.py:441
+#: transcria/web/admin_routes.py:446
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 
-#: transcria/web/admin_routes.py:449
+#: transcria/web/admin_routes.py:454
 msgid "Archive invalide — restauration refusée : "
 msgstr "Archive invalide — restauration refusée : "
 
-#: transcria/web/admin_routes.py:461
+#: transcria/web/admin_routes.py:466
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 
-#: transcria/web/admin_routes.py:464
+#: transcria/web/admin_routes.py:469
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Échec du déclenchement de la restauration : %(e)s"
 
-#: transcria/web/admin_routes.py:516
+#: transcria/web/admin_routes.py:521
 msgid "La diarisation « auto » est déjà active (ou la recommandation a été écartée)."
 msgstr "La diarisation « auto » est déjà active (ou la recommandation a été écartée)."
 
-#: transcria/web/admin_routes.py:519
+#: transcria/web/admin_routes.py:524
 msgid "Téléchargez d'abord le runtime audio.cpp et les poids Nemotron 3 (lignes « recommandé » ci-dessus) avant d'activer la diarisation automatique."
 msgstr "Téléchargez d'abord le runtime audio.cpp et les poids Nemotron 3 (lignes « recommandé » ci-dessus) avant d'activer la diarisation automatique."
 
-#: transcria/web/admin_routes.py:528 transcria/web/admin_routes.py:1020
+#: transcria/web/admin_routes.py:533 transcria/web/admin_routes.py:1028
 msgid "Bascule refusée — configuration invalide : "
 msgstr "Bascule refusée — configuration invalide : "
 
-#: transcria/web/admin_routes.py:531
+#: transcria/web/admin_routes.py:536
 msgid "Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."
 msgstr "Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."
 
-#: transcria/web/admin_routes.py:558
+#: transcria/web/admin_routes.py:563
 msgid "Activation refusée — configuration invalide : "
 msgstr "Activation refusée — configuration invalide : "
 
-#: transcria/web/admin_routes.py:565
+#: transcria/web/admin_routes.py:570
 #, python-format
 msgid "Moteur %(n)s activé pour la transcription (port %(p)s, carte GPU %(g)s) : TranscrIA le lance à la demande. Pris en compte au prochain traitement."
 msgstr "Moteur %(n)s activé pour la transcription (port %(p)s, carte GPU %(g)s) : TranscrIA le lance à la demande. Pris en compte au prochain traitement."
 
-#: transcria/web/admin_routes.py:568
+#: transcria/web/admin_routes.py:573
 #, python-format
 msgid "Moteur %(n)s activé pour la phase résumé seule (port %(p)s, carte GPU %(g)s) ; le pipeline garde son moteur. Pris en compte au prochain traitement."
 msgstr "Moteur %(n)s activé pour la phase résumé seule (port %(p)s, carte GPU %(g)s) ; le pipeline garde son moteur. Pris en compte au prochain traitement."
 
-#: transcria/web/admin_routes.py:586
+#: transcria/web/admin_routes.py:591
 msgid "Choix non enregistré — configuration invalide : "
 msgstr "Choix non enregistré — configuration invalide : "
 
-#: transcria/web/admin_routes.py:589
+#: transcria/web/admin_routes.py:594
 msgid "Réglage conservé : la diarisation « auto » ne sera plus proposée."
 msgstr "Réglage conservé : la diarisation « auto » ne sera plus proposée."
 
-#: transcria/web/admin_routes.py:698
+#: transcria/web/admin_routes.py:703
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 
-#: transcria/web/admin_routes.py:702
+#: transcria/web/admin_routes.py:707
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 
-#: transcria/web/admin_routes.py:705
+#: transcria/web/admin_routes.py:710
 msgid "Cette réunion est déjà surveillée."
 msgstr "Cette réunion est déjà surveillée."
 
-#: transcria/web/admin_routes.py:707
+#: transcria/web/admin_routes.py:712
 msgid "Aucun lien de réunion fourni."
 msgstr "Aucun lien de réunion fourni."
 
-#: transcria/web/admin_routes.py:780
+#: transcria/web/admin_routes.py:785
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "Test %(id)s : %(verdict)s"
 
-#: transcria/web/admin_routes.py:799
+#: transcria/web/admin_routes.py:804
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Test Zoom : %(verdict)s"
 
-#: transcria/web/admin_routes.py:829
+#: transcria/web/admin_routes.py:834
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "Fichier « %(label)s » refusé : %(raison)s"
 
-#: transcria/web/admin_routes.py:866
+#: transcria/web/admin_routes.py:871
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 
-#: transcria/web/admin_routes.py:867
+#: transcria/web/admin_routes.py:872
 msgid "Aucun changement."
 msgstr "Aucun changement."
 
-#: transcria/web/admin_routes.py:885
+#: transcria/web/admin_routes.py:890
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Activez d'abord la fonctionnalité (bouton « Activer »)."
 
-#: transcria/web/admin_routes.py:890
+#: transcria/web/admin_routes.py:895
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 
-#: transcria/web/admin_routes.py:897
+#: transcria/web/admin_routes.py:902
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 
-#: transcria/web/admin_routes.py:902
+#: transcria/web/admin_routes.py:907
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Compte de service absent — utilisez d'abord le bouton « Activer »."
 
-#: transcria/web/admin_routes.py:921
+#: transcria/web/admin_routes.py:926
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Exécutant « %(name)s » révoqué."
 
-#: transcria/web/admin_routes.py:938
+#: transcria/web/admin_routes.py:943
 msgid "Ce modèle est servi par un fournisseur cloud, rien à télécharger."
 msgstr "Ce modèle est servi par un fournisseur cloud, rien à télécharger."
 
-#: transcria/web/admin_routes.py:941
+#: transcria/web/admin_routes.py:946
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 
-#: transcria/web/admin_routes.py:946
+#: transcria/web/admin_routes.py:951
 msgid "Téléchargement refusé — "
 msgstr "Téléchargement refusé — "
 
-#: transcria/web/admin_routes.py:949
+#: transcria/web/admin_routes.py:954
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Téléchargement de « %(l)s » lancé en arrière-plan."
 
-#: transcria/web/admin_routes.py:955
-msgid "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
-msgstr "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
+#: transcria/web/admin_routes.py:961
+msgid "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans l'écran « LLM d'arbitrage » puis redémarrez — cette page ne pilote que la LLM locale."
+msgstr "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans l'écran « LLM d'arbitrage » puis redémarrez — cette page ne pilote que la LLM locale."
 
-#: transcria/web/admin_routes.py:972
+#: transcria/web/admin_routes.py:963
+msgid "La LLM d'arbitrage est un serveur de votre organisation : TranscrIA ne la lance ni ne la change — cette page ne pilote que la LLM locale (écran « LLM d'arbitrage » pour en changer)."
+msgstr "La LLM d'arbitrage est un serveur de votre organisation : TranscrIA ne la lance ni ne la change — cette page ne pilote que la LLM locale (écran « LLM d'arbitrage » pour en changer)."
+
+#: transcria/web/admin_routes.py:980
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Téléchargez d'abord ce modèle avant de l'activer."
 
-#: transcria/web/admin_routes.py:981
+#: transcria/web/admin_routes.py:989
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:984
+#: transcria/web/admin_routes.py:992
 msgid "Échec de l'activation : "
 msgstr "Échec de l'activation : "
 
-#: transcria/web/admin_routes.py:986
+#: transcria/web/admin_routes.py:994
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Échec de l'activation : %(e)s"
 
-#: transcria/web/admin_routes.py:1008
+#: transcria/web/admin_routes.py:1016
 msgid "Modèle Ollama inconnu ou hors des choix proposés."
 msgstr "Modèle Ollama inconnu ou hors des choix proposés."
 
-#: transcria/web/admin_routes.py:1011
+#: transcria/web/admin_routes.py:1019
 #, python-format
 msgid "« %(m)s » est déjà le modèle actif."
 msgstr "« %(m)s » est déjà le modèle actif."
 
-#: transcria/web/admin_routes.py:1032
+#: transcria/web/admin_routes.py:1040
 #, python-format
 msgid "Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py."
 msgstr "Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py."
 
-#: transcria/web/admin_routes.py:1040
+#: transcria/web/admin_routes.py:1048
 #, python-format
 msgid "Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull)."
 msgstr "Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull)."
 
-#: transcria/web/admin_routes.py:1043
+#: transcria/web/admin_routes.py:1051
 #, python-format
 msgid "Modèle « %(m)s » activé — aucun redémarrage requis."
 msgstr "Modèle « %(m)s » activé — aucun redémarrage requis."
 
-#: transcria/web/admin_routes.py:1066
+#: transcria/web/admin_routes.py:1074
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 
-#: transcria/web/admin_routes.py:1100
+#: transcria/web/admin_routes.py:1108
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Rien à appliquer : le plan n'est plus d'actualité."
 
-#: transcria/web/admin_routes.py:1105
+#: transcria/web/admin_routes.py:1113
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Échec de l'application du plan : %(err)s"
 
-#: transcria/web/admin_routes.py:1111
+#: transcria/web/admin_routes.py:1119
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
@@ -7391,4 +7395,7 @@ msgstr "Générer le résumé"
 
 #~ msgid "Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris."
 #~ msgstr "Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris."
+
+#~ msgid "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
+#~ msgstr "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
 

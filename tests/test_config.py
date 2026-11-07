@@ -402,6 +402,12 @@ class TestAppDebugResolution:
 
 
 class TestBootstrapConfig:
+    @pytest.fixture(autouse=True)
+    def _defaults_only(self, monkeypatch, tmp_path):
+        # Ces tests portent sur les DÉFAUTS du produit, jamais sur le config.yaml de la machine
+        # (vécu 2026-11-07 : STT passée à kroko sur la machine de test → faux rouge).
+        monkeypatch.setenv("TRANSCRIA_CONFIG", str(tmp_path / "absent.yaml"))
+
     def test_validate_config_accepts_execution_section(self):
         cfg = load_config()
         cfg["workflow"]["execution"] = {"max_concurrent_jobs": 1}

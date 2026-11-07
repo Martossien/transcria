@@ -35,7 +35,12 @@ from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu import inventory
-from transcria.gpu.arbitrage_endpoint import arbitrage_api_key_env, default_base_url, is_cloud_backend
+from transcria.gpu.arbitrage_endpoint import (
+    arbitrage_api_key_env,
+    default_base_url,
+    is_cloud_backend,
+    is_remote_arbitrage,
+)
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
 from transcria.ingestion.meet_links import MeetLinkError, normalize_meeting_input
@@ -951,9 +956,12 @@ def admin_models_download():
 
 
 def _cloud_switch_refused_message() -> str:
-    """Message de refus des bascules de modèle quand la LLM d'arbitrage est un fournisseur cloud."""
-    return _("La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml "
-             "(model_id) puis redémarrez — cette page ne pilote que la LLM locale.")
+    """Message de refus des bascules de modèle quand la LLM d'arbitrage n'est pas locale."""
+    if is_cloud_backend(ConfigService.get_singleton()):
+        return _("La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans l'écran "
+                 "« LLM d'arbitrage » puis redémarrez — cette page ne pilote que la LLM locale.")
+    return _("La LLM d'arbitrage est un serveur de votre organisation : TranscrIA ne la lance ni ne la "
+             "change — cette page ne pilote que la LLM locale (écran « LLM d'arbitrage » pour en changer).")
 
 
 @web_bp.route("/admin/models/activate", methods=["POST"])
@@ -962,7 +970,7 @@ def _cloud_switch_refused_message() -> str:
 def admin_models_activate():
     # Relie le téléchargement au SERVING : bascule le profil llama.cpp sur le GGUF téléchargé
     # (scripts/switch_arbitrage_llm.sh régénère le wrapper + met à jour services.arbitrage_script).
-    if is_cloud_backend(ConfigService.get_singleton()):
+    if is_remote_arbitrage(ConfigService.get_singleton()):
         flash(_cloud_switch_refused_message(), "error")
         return redirect(url_for("web.admin_models"))
     item = next((it for it in _models_view()["items"] if it["spec"].role == "arbitrage_llm"), None)
@@ -998,7 +1006,7 @@ def admin_models_ollama_activate():
     modèle en arrière-plan s'il est absent. Aucun redémarrage : Ollama charge à la
     demande et l'endpoint ne change pas.
     """
-    if is_cloud_backend(ConfigService.get_singleton()):
+    if is_remote_arbitrage(ConfigService.get_singleton()):
         flash(_cloud_switch_refused_message(), "error")
         return redirect(url_for("web.admin_models"))
     model = (request.form.get("model") or "").strip()

@@ -273,11 +273,18 @@ class TestOllamaBackendCatalog:
         specs = build_catalog(self._cfg(model_id=""), total_vram_mb=64000)
         assert not [s for s in specs if s.role == "arbitrage_llm"]
 
-    def test_backend_llamacpp_inchange(self):
+    def test_backend_script_inchange(self):
+        cfg = self._cfg()
+        cfg["services"]["backend"] = "script"
+        llm = next(s for s in build_catalog(cfg, total_vram_mb=64000) if s.role == "arbitrage_llm")
+        assert llm.kind == "gguf"
+
+    def test_backend_http_declare_ligne_d_information(self):
+        """Serveur de l'organisation déclaré (2026-11-07) : jamais un GGUF « requis » — TranscrIA ne sert rien."""
         cfg = self._cfg()
         cfg["services"]["backend"] = "http"
         llm = next(s for s in build_catalog(cfg, total_vram_mb=64000) if s.role == "arbitrage_llm")
-        assert llm.kind == "gguf"
+        assert llm.kind == "cloud" and llm.file is None and "serveur de l'organisation" in llm.label
 
     def _spec(self) -> ModelSpec:
         return ModelSpec("arbitrage_llm", "LLM (Ollama : qwen3.6:27b)", "qwen3.6:27b",

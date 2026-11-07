@@ -24,8 +24,10 @@ from pathlib import Path
 from transcria.config.local_dirs import resolve_models_dir, resolve_runtimes_dir
 from transcria.gpu.arbitrage_endpoint import (
     cloud_view,
+    default_base_url,
     is_cloud_backend,
     is_ollama_backend,
+    is_remote_arbitrage,
     ollama_model_name,
     ollama_name_matches,
     resolve_arbitrage_endpoint,
@@ -231,6 +233,14 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
             role="arbitrage_llm", label=f"LLM d'arbitrage (cloud : {view.provider or '?'} / {view.model or '?'})",
             repo_id=f"{view.provider}/{view.model}", file=None, kind="cloud", target_subdir="",
             gated=False, license="selon le fournisseur", license_url="", est_gb=0.0,
+        ))
+    # Serveur de l'organisation DÉCLARÉ (backend http) : même traitement que le cloud côté
+    # catalogue — information seule, aucun GGUF à télécharger ni à activer ici.
+    elif is_remote_arbitrage(cfg):
+        specs.append(ModelSpec(
+            role="arbitrage_llm", label=f"LLM d'arbitrage (serveur de l'organisation : {default_base_url(cfg)})",
+            repo_id="organisation/arbitrage", file=None, kind="cloud", target_subdir="",
+            gated=False, license="selon le serveur de l'organisation", license_url="", est_gb=0.0,
         ))
     # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort).
     elif total_vram_mb:

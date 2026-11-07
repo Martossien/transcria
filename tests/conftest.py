@@ -74,6 +74,11 @@ def _test_config(database_url: str):
             "first_admin_password": "mdp-admin-de-test",
         },
         "server": {"debug": False},
+        # LLM d'arbitrage LOCALE (défaut historique) : la suite ne doit pas dépendre du mode déclaré
+        # dans le config.yaml de la machine (vécu : backend http → bascules refusées, GGUF absent).
+        "services": {"backend": "script", "arbitrage_llm_host": "127.0.0.1", "arbitrage_llm_port": 8080},
+        # Moteurs par défaut du produit : idem, la machine peut avoir choisi kroko/Nemotron.
+        "models": {"stt_backend": "cohere", "summary_stt_backend": None},
         "workflow": {
             "enable_quick_summary": False,
             "enable_speaker_detection": False,

@@ -8,8 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
-from transcria.diagnostics.checks.probes import _probe_openai_models
-from transcria.gpu.arbitrage_endpoint import cloud_view, is_cloud_backend
+from transcria.diagnostics.checks.probes import _probe_openai_models, _probe_openai_models_url
+from transcria.gpu.arbitrage_endpoint import (
+    arbitrage_auth_headers,
+    arbitrage_root_url,
+    cloud_view,
+    is_cloud_backend,
+    is_remote_arbitrage,
+)
 from transcria.installer.opencode_lib import opencode_version
 from transcria.llm_tools.opencode_cli import parse_opencode_version
 
@@ -45,6 +51,9 @@ def check_arbitrage_script(
     if is_cloud_backend(cfg):
         # LLM chez un fournisseur externe : aucun script local à lancer (docs/LLM_CLOUD.md § 3.3.1).
         return CheckResult(name, OK, _t("na_cloud"))
+    if is_remote_arbitrage(cfg):
+        # Serveur de l'organisation déclaré : TranscrIA ne lance rien — le script est sans objet.
+        return CheckResult(name, OK, _t("na_remote"))
     services = cfg.get("services", {})
     script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
     if not script:
@@ -106,6 +115,8 @@ def check_llm_placement_declaration(
     name = _t("chk_llm_placement")
     if is_cloud_backend(cfg):
         return CheckResult(name, OK, _t("na_cloud"))
+    if is_remote_arbitrage(cfg):
+        return CheckResult(name, OK, _t("na_remote"))
     services = cfg.get("services", {})
     script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
     if not script or not is_file(script):
@@ -156,14 +167,22 @@ def check_arbitrage_llm(
     expected_model = (services.get("arbitrage_api_model_id") or "").strip()
     log_path = services.get("arbitrage_log_path") or f"/tmp/arbitrage_llm_{port}.log"
 
-    probe = probe or _probe_openai_models
+    remote = is_remote_arbitrage(cfg)
+    root = arbitrage_root_url(cfg) if remote else ""
     try:
-        models = probe(port)
+        if remote and probe is None:
+            # Serveur de l'organisation : sonde à l'URL déclarée (schéma, hôte, clé) — jamais 127.0.0.1:port.
+            models = _probe_openai_models_url(root, arbitrage_auth_headers(cfg))
+        else:
+            models = (probe or _probe_openai_models)(port)
     except Exception as exc:  # noqa: BLE001
         models = None
         _ = exc
 
     if not models:
+        if remote:
+            # Rien n'est lancé ici : un serveur déclaré qui ne répond pas, c'est à l'admin de le démarrer.
+            return CheckResult(name, WARN, _t("arbl_remote_down", url=root), hint=_t("arbl_remote_hint"))
         # Non bloquant : la LLM est lancée à la demande par le workflow.
         return CheckResult(
             name, WARN, _t("arbl_down", port=port),
@@ -178,7 +197,8 @@ def check_arbitrage_llm(
             name, WARN, _t("arbl_mismatch", port=port, active=active, expected=expected_model),
             hint=_t("arbl_mismatch_hint"),
         )
-    return CheckResult(name, OK, _t("arbl_ok", port=port) + (_t("arbl_ok_model", active=active) if active else ""))
+    where = _t("arbl_remote_ok", url=root) if remote else _t("arbl_ok", port=port)
+    return CheckResult(name, OK, where + (_t("arbl_ok_model", active=active) if active else ""))
 
 def check_opencode(
     cfg: dict,

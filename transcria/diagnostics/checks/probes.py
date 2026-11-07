@@ -68,6 +68,19 @@ def _probe_openai_models(port: int, timeout: int = 3) -> dict | None:
         return None
     return None
 
+def _probe_openai_models_url(root_url: str, headers: dict | None = None, timeout: int = 3) -> dict | None:
+    """GET <root>/v1/models (serveur déclaré : schéma http/https et clé éventuelle) ; None si injoignable."""
+    import requests
+
+    try:
+        resp = requests.get(f"{root_url}/v1/models", timeout=timeout, headers=headers or None)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def _probe_node_health(url: str, timeout: int = 3) -> bool:
     import requests
 

@@ -14,9 +14,12 @@ import subprocess
 import time
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 from transcria.context.meeting_type_prompts import substitute_placeholders
 from transcria.gpu.arbitrage_endpoint import (
+    arbitrage_auth_headers,
+    arbitrage_root_url,
     describe_arbitrage_endpoint,
     is_cloud_backend,
     resolve_arbitrage_endpoint,
@@ -353,13 +356,14 @@ class OpenCodeRunner:
         try:
             import requests
 
-            host, port = resolve_arbitrage_endpoint(self._config)
-            base = f"http://{host}:{port}"
+            base = arbitrage_root_url(self._config)        # schéma http/https du serveur déclaré
+            headers = arbitrage_auth_headers(self._config)
+            auth: dict[str, Any] = {"headers": headers} if headers else {}   # sans clé : appel inchangé
             refused = 0
 
             # llama.cpp — /slots
             try:
-                r = requests.get(f"{base}/slots", timeout=3)
+                r = requests.get(f"{base}/slots", timeout=3, **auth)
                 if r.status_code == 200:
                     slots = r.json()
                     if isinstance(slots, list):
@@ -374,7 +378,7 @@ class OpenCodeRunner:
 
             # vLLM — /metrics (Prometheus)
             try:
-                r = requests.get(f"{base}/metrics", timeout=3)
+                r = requests.get(f"{base}/metrics", timeout=3, **auth)
                 if r.status_code == 200:
                     return self._vllm_metrics_busy(r.text)
             except requests.exceptions.ConnectionError:

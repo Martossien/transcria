@@ -163,3 +163,82 @@ def test_vram_manager_ne_lance_ni_n_arrete_un_serveur_http_declare(monkeypatch):
     assert vm.ensure_arbitrage_llm_ready(expected_model_id="arbitrage") is False   # indisponible : échec explicite
     assert vm.stop_arbitrage_llm() is True                                          # no-op
     assert launched == []
+
+
+# ── Cohérence de la DÉCLARATION à tous les points de décision (revue du 2026-11-07) ──────────
+
+def _org_http_cfg():
+    return make_config({"services": {"backend": "http", "arbitrage_llm_host": "llm.example.org", "arbitrage_llm_port": 8443,
+                                     "arbitrage_api_model_id": "arbitrage", "arbitrage_script": "./scripts/launch_arbitrage.sh"},
+                        "workflow": {"arbitration_llm": {"enabled": True, "model_id": "local/arbitrage",
+                                                         "api_base": "https://llm.example.org:8443/v1",
+                                                         "api_key_env": "ORG_LLM_KEY"},
+                                     "summary_llm": {"enabled": True, "model_id": "local/arbitrage"}}})
+
+
+def test_admission_ne_reserve_aucune_vram_locale_pour_un_serveur_declare(monkeypatch):
+    from transcria.services import pipeline_admission
+    from transcria.workflow.profiles import get_profile
+
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    assert pipeline_admission.llm_uses_local_resources(_org_http_cfg()) is False
+    assert pipeline_admission.llm_uses_local_resources(make_config({"services": {"backend": "script"}})) is True
+    res = pipeline_admission.estimate_profile_resources(_org_http_cfg(), get_profile("word_corrige"))
+    assert "llm_arbitration" not in res["phases"]
+
+
+def test_doctor_sans_objet_et_sonde_a_l_url_declaree(monkeypatch):
+    from transcria.diagnostics import doctor as doc
+    from transcria.diagnostics.checks import llm as llm_checks
+
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    monkeypatch.setenv("ORG_LLM_KEY", "secret-de-test")
+    cfg = _org_http_cfg()
+    assert doc.check_arbitrage_script(cfg).status == doc.OK and "sans objet" in doc.check_arbitrage_script(cfg).detail
+    assert "sans objet" in doc.check_llm_placement_declaration(cfg).detail
+    seen: list[tuple] = []
+
+    def fake_probe(root_url, headers=None, timeout=3):
+        seen.append((root_url, headers))
+        return {"data": [{"id": "arbitrage"}]}
+    monkeypatch.setattr(llm_checks, "_probe_openai_models_url", fake_probe)
+    res = doc.check_arbitrage_llm(cfg)
+    assert res.status == doc.OK and "https://llm.example.org:8443" in res.detail
+    assert seen == [("https://llm.example.org:8443", {"Authorization": "Bearer secret-de-test"})]
+    monkeypatch.setattr(llm_checks, "_probe_openai_models_url", lambda *a, **k: None)
+    down = doc.check_arbitrage_llm(cfg)
+    assert down.status == doc.WARN and "ne le lance pas" in down.detail
+
+
+def test_catalogue_et_bascules_de_modele_pour_un_serveur_declare(monkeypatch):
+    from transcria.models_catalog import build_catalog
+
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    specs = build_catalog(_org_http_cfg(), total_vram_mb=24000)
+    llm = [s for s in specs if s.role == "arbitrage_llm"]
+    assert len(llm) == 1 and llm[0].kind == "cloud" and "serveur de l'organisation" in llm[0].label
+    assert "llm.example.org" in llm[0].label and llm[0].file is None      # aucun GGUF « requis »
+
+
+def test_watchdog_sonde_l_url_declaree_avec_le_schema_et_la_cle(monkeypatch):
+    from transcria.llm_tools.opencode_runner import OpenCodeRunner
+
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    monkeypatch.setenv("ORG_LLM_KEY", "secret-de-test")
+    calls: list[tuple] = []
+
+    class _R:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return [{"is_processing": True}]
+
+    fake_requests = SimpleNamespace(get=lambda url, timeout=3, headers=None: calls.append((url, headers)) or _R(),
+                                    exceptions=SimpleNamespace(ConnectionError=ConnectionError, RequestException=Exception),
+                                    RequestException=Exception)
+    monkeypatch.setitem(__import__("sys").modules, "requests", fake_requests)
+    runner = OpenCodeRunner.__new__(OpenCodeRunner)
+    runner._config = _org_http_cfg()
+    assert runner._llm_is_processing() is True
+    assert calls[0] == ("https://llm.example.org:8443/slots", {"Authorization": "Bearer secret-de-test"})

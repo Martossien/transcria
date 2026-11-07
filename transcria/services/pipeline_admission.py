@@ -6,7 +6,7 @@ l'admission (`QueueScheduler`) et les routes wizard via les délégateurs
 statiques du service.
 """
 from transcria.config.views import GpuView, SttView, WorkflowView
-from transcria.gpu.arbitrage_endpoint import is_cloud_backend
+from transcria.gpu.arbitrage_endpoint import is_remote_arbitrage
 from transcria.stt.diarizer_factory import get_diarizer_vram_mb
 from transcria.stt.transcriber_factory import get_backend_vram_mb
 from transcria.workflow.profiles import get_profile, profile_to_legacy_mode, resolve_legacy_mode
@@ -15,10 +15,12 @@ from transcria.workflow.profiles import get_profile, profile_to_legacy_mode, res
 def llm_uses_local_resources(config: dict) -> bool:
     """La LLM d'arbitrage consomme-t-elle des ressources de CETTE machine (VRAM, process) ?
 
-    Faux en CLOUD (fournisseur externe, docs/LLM_CLOUD.md § 3.1.1) : ni part VRAM à
-    l'admission, ni verrou/sonde/arrêt en fin de pipeline. Prédicat unique : ``is_cloud_backend``.
+    Faux en CLOUD (fournisseur externe, docs/LLM_CLOUD.md § 3.1.1) et pour un « serveur de
+    mon organisation » déclaré (backend http, même sur 127.0.0.1) : ni part VRAM à l'admission,
+    ni verrou/sonde/arrêt en fin de pipeline. Prédicat unique : ``is_remote_arbitrage`` (sinon
+    un frontal sans GPU exigerait `can_host_llm` pour une LLM qui tourne ailleurs).
     """
-    return not is_cloud_backend(config)
+    return not is_remote_arbitrage(config)
 
 
 def estimate_profile_resources(config: dict, profile) -> dict:

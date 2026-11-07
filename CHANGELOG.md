@@ -129,6 +129,19 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Serveur de mon organisation = consommé, jamais géré** : un backend `http` déclaré n'est plus
+  lancé, arrêté ni préempté par TranscrIA, même sur `127.0.0.1` (un vLLM de l'admin a été tué par
+  le script d'arrêt puis remplacé par llama-server). Cohérence à tous les points de décision :
+  cycle de vie, verrou, admission VRAM, sondes du chien de garde (schéma https + clé), doctor
+  (script/placement « sans objet », sonde à l'URL déclarée), page Modèles (ligne d'information,
+  bascules refusées).
+- **Le worker suit la configuration vivante** : un changement de moteur STT/diarisation dans
+  Réglages vaut pour le job suivant (le résumé partait encore avec l'ancien moteur).
+- **Diariseur sans torchcodec** : extraits et empreintes locuteurs lus par libsndfile depuis le
+  WAV PCM (segfault réel dans le décodeur AAC appelé par torchcodec).
+- **`config.yaml` garde son propriétaire** quand le service (root) le sauvegarde depuis
+  l'interface.
+
 - Plus d'animation « en cours » après la fin d'un traitement ; participants : nom et fonction
   séparés à l'étape 5.
 
