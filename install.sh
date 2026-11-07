@@ -1770,9 +1770,9 @@ fi
 # Jamais dans le flux par défaut : builds CUDA de plusieurs minutes + ~4 Go de modèle.
 if [[ "$WITH_STT_RUNTIMES" = true ]]; then
     log_info "Runtimes STT servis : provisionnement audio.cpp (qwen3asr) + parakeet.cpp (nemotron)…"
-    python_module transcria.installer.cli audiocpp --runtimes-dir "$INSTALL_DIR/runtimes" --with-model \
+    python_module transcria.installer.cli audiocpp --runtimes-dir "$INSTALL_DIR/runtimes" --with-model --config "$INSTALL_DIR/config.yaml" \
         || log_warn "Provisionnement audio.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli audiocpp --with-model)"
-    python_module transcria.installer.cli parakeetcpp --runtimes-dir "$INSTALL_DIR/runtimes" \
+    python_module transcria.installer.cli parakeetcpp --runtimes-dir "$INSTALL_DIR/runtimes" --config "$INSTALL_DIR/config.yaml" \
         || log_warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
     log_info "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
     log_info "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."

@@ -20,9 +20,9 @@ from flask_babel import lazy_gettext as _l
 _STT_OPTION_LABELS = {
     "kroko": _l("kroko — CPU uniquement (zéro VRAM)"),
     "moss": _l("moss — transcription ET locuteurs en une passe (expérimental, GPU)"),
-    "qwen3asr": _l("qwen3asr — runtime servi audio.cpp (URL requise)"),
-    "nemotron": _l("nemotron — runtime servi audio.cpp (URL requise)"),
-    "voxtralrt": _l("voxtralrt — runtime servi parakeet.cpp (URL requise)"),
+    "qwen3asr": _l("qwen3asr — runtime servi audio.cpp (auto-configuré sur cette machine)"),
+    "nemotron": _l("nemotron — runtime servi parakeet.cpp (auto-configuré sur cette machine)"),
+    "voxtralrt": _l("voxtralrt — runtime servi audio.cpp (auto-configuré sur cette machine)"),
     "remote": _l("remote — nœud de ressources distant"),
 }
 _DIAR_OPTION_LABELS = {
@@ -68,8 +68,9 @@ CONFIG_FORM_SECTIONS: list[dict] = [
                          "qwen3asr", "nemotron", "voxtralrt", "remote"],
              "option_labels": _STT_OPTION_LABELS,
              "help": _l("Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement "
-                        "(zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp : "
-                        "refusés tant qu'aucune URL n'est posée dans inference.stt.backends.<nom> "
+                        "(zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp, "
+                        "auto-configurés à l'enregistrement si le runtime est installé (port conventionnel, "
+                        "carte la plus libre) ; en topologie split, poser l'URL du nœud dans l'onglet YAML "
                         "(cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
             {"path": "models.summary_stt_backend", "label": _l("Backend STT du résumé"), "type": "select",
              "nullable": True,

@@ -70,7 +70,7 @@ from transcria.models_catalog import (
 )
 from transcria.services.config_service import ConfigService
 from transcria.stt.diarizer_factory import configured_diarization_backend
-from transcria.web import first_run, prompt_files
+from transcria.web import first_run, prompt_files, served_stt_views
 from transcria.web.blueprint import web_bp
 from transcria.web.config_form import (
     CONFIG_FORM_SECTIONS,
@@ -166,6 +166,19 @@ def admin_config():
         partial = build_partial_config(request.form, CONFIG_FORM_SECTIONS)
         partial = restore_masked_secrets(partial, cfg, CONFIG_FORM_SECTIONS)
         merged = _deep_merge(cfg, partial)
+        # Un moteur STT servi choisi sans route est auto-configuré (runtime présent) — sinon refus guidé.
+        provisioned = served_stt_views.auto_provision(merged)
+        for msg in provisioned.warnings:
+            flash(msg, "warning")
+        for msg in provisioned.infos:
+            flash(msg, "info")
+        if provisioned.errors:
+            for msg in provisioned.errors:
+                flash(msg, "error")
+            config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)
+            return _render_config_form(config_yaml, config_path, list(provisioned.errors), 400,
+                                       values=display_values(merged, CONFIG_FORM_SECTIONS))
+        merged = provisioned.config
         ok, errors, warnings = ConfigService.save_if_valid(merged, config_path)
 
         for warn in warnings:
@@ -483,7 +496,8 @@ def admin_models():
     return render_template("admin_models.html", view=view, ollama_choices=_ollama_choices(view),
                            has_token=bool(os.environ.get("HF_TOKEN")),
                            diar_reco=diarization_auto_recommendation(cfg),
-                           diar_backend=configured_diarization_backend(cfg))
+                           diar_backend=configured_diarization_backend(cfg),
+                           served_stt=served_stt_views.served_stt_rows(cfg))
 
 
 @web_bp.route("/admin/models/diarization-activate", methods=["POST"])
@@ -516,6 +530,43 @@ def admin_models_diarization_activate():
     audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label="models.diarization_backend=auto")
     flash(_("Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), "
             "pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."), "success")
+    return redirect(url_for("web.admin_models"))
+
+
+@web_bp.route("/admin/models/served-stt-activate", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_served_stt_activate():
+    """Active un moteur STT servi (qwen3asr/nemotron/voxtralrt) en un clic : route + moteur déclaré sur la
+    carte la plus libre, puis choisi comme moteur du pipeline (``target=pipeline``) ou du résumé seul
+    (``target=summary``). Refusé tant que le runtime n'est pas construit ; poids manquants = avertissement
+    (téléchargeables ensuite depuis cette page). Pris en compte au prochain traitement."""
+    name = str(request.form.get("backend") or "").strip()
+    target = str(request.form.get("target") or "pipeline").strip()
+    if name not in served_stt_views.SERVED_STT or target not in served_stt_views.TARGETS:
+        abort(400)
+    out = served_stt_views.provision_backend(copy.deepcopy(ConfigService.get_singleton()), name)
+    if out.errors or out.provision is None:
+        for msg in out.errors:
+            flash(msg, "error")
+        return redirect(url_for("web.admin_models"))
+    cfg, prov = out.config, out.provision
+    key = "stt_backend" if target == "pipeline" else "summary_stt_backend"
+    cfg.setdefault("models", {})[key] = name
+    ok, errors, _warnings = ConfigService.save_if_valid(cfg)
+    if not ok:
+        flash(_("Activation refusée — configuration invalide : ") + "; ".join(errors)[:300], "error")
+        return redirect(url_for("web.admin_models"))
+    audit_log(AuditAction.CONFIG_EDIT, target_type="config",
+              target_label=f"models.{key}={name}", details={"port": prov.port, "gpu": prov.gpu})
+    for msg in out.warnings:
+        flash(msg, "warning")
+    if target == "pipeline":
+        flash(_("Moteur %(n)s activé pour la transcription (port %(p)s, carte GPU %(g)s) : TranscrIA le lance à la "
+                "demande. Pris en compte au prochain traitement.", n=name, p=prov.port, g=prov.gpu), "success")
+    else:
+        flash(_("Moteur %(n)s activé pour la phase résumé seule (port %(p)s, carte GPU %(g)s) ; le pipeline garde "
+                "son moteur. Pris en compte au prochain traitement.", n=name, p=prov.port, g=prov.gpu), "success")
     return redirect(url_for("web.admin_models"))
 
 

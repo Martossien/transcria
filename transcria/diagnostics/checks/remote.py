@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlparse
 
 from transcria.diagnostics.checks.common import FAIL, OK, WARN, CheckResult, _t
 from transcria.diagnostics.checks.probes import (
@@ -34,6 +35,7 @@ from transcria.installer.parakeetcpp_phase import (
 from transcria.models_catalog import diarization_auto_recommendation
 from transcria.stt.diarizer_factory import DIARIZATION_AUTO, configured_diarization_backend
 from transcria.stt.nemotron_diarizer import NEMOTRON_MAX_SPEAKERS, NemotronDiarizer, cli_is_cpu_only
+from transcria.stt.served_runtimes import declared_engine, referenced_served_backends, routed_url
 
 
 def check_inference_nodes(
@@ -150,6 +152,36 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
             hint=_t("served_rt_hint", cli=cli_names),
         )
     return CheckResult(name, OK, _t("served_rt_ok", engines=", ".join(concerned)))
+
+def check_served_stt_routing(cfg: dict) -> CheckResult:
+    """Moteur STT servi CHOISI (pipeline/résumé) : route déclarée ET moteur homonyme sur le même port.
+
+    Sans route, le schéma refuse la config ; avec une route loopback sans moteur déclaré, rien ne
+    lance le serveur (job en attente) ; route et moteur sur deux ports = le pré-vol lance un
+    serveur que personne n'appelle. L'activation en un clic (page Modèles, Réglages) pose les
+    deux ensemble — ce check attrape les éditions YAML à la main."""
+    name = _t("chk_served_routing")
+    chosen = referenced_served_backends(cfg)
+    if not chosen:
+        return CheckResult(name, OK, _t("served_route_none"))
+    problems: list[str] = []
+    for backend in chosen:
+        url = routed_url(cfg, backend)
+        engine = declared_engine(cfg, backend)
+        if not url:
+            problems.append(_t("served_route_missing", backend=backend))
+            continue
+        host = (urlparse(url).hostname or "").lower()
+        if host not in ("127.0.0.1", "localhost", "::1"):
+            continue                                   # servi par un nœud distant : rien à lancer ici
+        if engine is None:
+            problems.append(_t("served_route_no_engine", backend=backend, url=url))
+        elif urlparse(url).port != int(engine.get("port") or 0):
+            problems.append(_t("served_route_port", backend=backend, url=url, port=engine.get("port")))
+    if problems:
+        return CheckResult(name, WARN, " ; ".join(problems), hint=_t("served_route_hint"))
+    return CheckResult(name, OK, _t("served_route_ok", backends=", ".join(chosen)))
+
 
 def check_nemotron_diar_runtime(cfg: dict, *, cli_loads: Callable[[Path], bool] | None = None) -> CheckResult:
     """Diarisation Nemotron 3 (`auto` ou `nemotron_diar`) : binaire `audiocpp_cli` ET GGUF.

@@ -294,3 +294,61 @@ class TestDiarizationActivate:
     def test_interdit_aux_non_admins(self, viewer_client):
         assert viewer_client.post("/admin/models/diarization-activate").status_code == 403
         assert viewer_client.post("/admin/models/diarization-keep").status_code == 403
+
+
+class TestServedSttActivate:
+    """Activation en un clic d'un moteur STT servi : route + moteur déclarés, backend choisi, jamais de YAML."""
+    _SAVE = "transcria.services.config_service.ConfigService.save_if_valid"
+    _VIEWS = "transcria.web.served_stt_views"
+
+    def _setup(self, monkeypatch, saved: dict, *, runtime: bool, weights: bool = True):
+        from types import SimpleNamespace
+
+        from transcria.web import served_stt_views as views
+
+        _no_detect(monkeypatch)
+        monkeypatch.setattr(views, "runtime_present", lambda name: runtime)
+        monkeypatch.setattr(views, "served_stt_weights_present", lambda name: weights)
+        monkeypatch.setattr(views.inventory, "snapshot", lambda: (SimpleNamespace(id=1, free_gib=20.0),))
+
+        def fake_save(cfg, config_path=None):
+            saved.update(cfg)
+            return True, [], []
+        monkeypatch.setattr(self._SAVE, staticmethod(fake_save))
+
+    def test_page_liste_les_moteurs_servis(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=True)
+        body = admin_client.get("/admin/models").get_data(as_text=True)
+        assert "data-served-stt" in body and 'data-served-stt-row="qwen3asr"' in body
+        assert "Activer (transcription)" in body and "Résumé seul" in body
+
+    def test_activation_pose_route_moteur_et_backend(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=True)
+        resp = admin_client.post("/admin/models/served-stt-activate", data={"backend": "qwen3asr", "target": "pipeline"})
+        assert resp.status_code == 302
+        assert saved["models"]["stt_backend"] == "qwen3asr"
+        assert saved["inference"]["stt"]["backends"]["qwen3asr"]["url"] == "http://127.0.0.1:8021/v1"
+        engine = next(e for e in saved["resource_node"]["engines"] if e["name"] == "qwen3asr")
+        assert engine["gpu"] == 1 and engine["port"] == 8021 and engine["script"].endswith("launch_stt_qwen3asr.sh")
+        assert saved["inference"]["mode"] == "hybrid"
+
+    def test_activation_resume_seul_garde_le_pipeline(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=True)
+        admin_client.post("/admin/models/served-stt-activate", data={"backend": "nemotron", "target": "summary"})
+        assert saved["models"]["summary_stt_backend"] == "nemotron"
+        assert saved["models"].get("stt_backend") != "nemotron"
+
+    def test_refus_sans_runtime_avec_la_commande(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=False)
+        resp = admin_client.post("/admin/models/served-stt-activate", data={"backend": "qwen3asr"}, follow_redirects=True)
+        assert saved == {} and "installer.cli audiocpp" in resp.get_data(as_text=True)
+
+    def test_moteur_ou_cible_inconnus(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=True)
+        assert admin_client.post("/admin/models/served-stt-activate", data={"backend": "whisper"}).status_code == 400
+        assert admin_client.post("/admin/models/served-stt-activate", data={"backend": "qwen3asr", "target": "x"}).status_code == 400

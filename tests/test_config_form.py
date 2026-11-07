@@ -240,3 +240,39 @@ class TestLibellesDesMoteurs:
         for served in ("qwen3asr", "nemotron", "voxtralrt"):
             assert served in field["options"]
         assert set(field["option_labels"]) <= set(field["options"])
+
+
+class TestAutoProvisionMoteurServi:
+    """Réglages : choisir un moteur servi sans route l'auto-configure (runtime présent) ou refuse avec la commande."""
+
+    def _setup(self, monkeypatch, saved: dict, *, runtime: bool):
+        from types import SimpleNamespace
+
+        from transcria.services.config_service import ConfigService
+        from transcria.web import served_stt_views as views
+
+        monkeypatch.setattr(views, "runtime_present", lambda name: runtime)
+        monkeypatch.setattr(views, "served_stt_weights_present", lambda name: True)
+        monkeypatch.setattr(views.inventory, "snapshot", lambda: (SimpleNamespace(id=0, free_gib=10.0),))
+
+        def fake_save(cfg, config_path=None):
+            saved.update(cfg)
+            return True, [], []
+        monkeypatch.setattr(ConfigService, "save_if_valid", staticmethod(fake_save))
+
+    def test_choix_d_un_moteur_servi_est_auto_configure(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=True)
+        resp = admin_client.post("/admin/config", data={"_mode": "form", "models.stt_backend": "qwen3asr"},
+                                 follow_redirects=True)
+        assert resp.status_code == 200 and "auto-configuré sur cette machine" in resp.get_data(as_text=True)
+        assert saved["models"]["stt_backend"] == "qwen3asr"
+        assert saved["inference"]["stt"]["backends"]["qwen3asr"]["url"] == "http://127.0.0.1:8021/v1"
+        assert any(e["name"] == "qwen3asr" for e in saved["resource_node"]["engines"])
+
+    def test_runtime_absent_refuse_avec_la_commande(self, admin_client, monkeypatch):
+        saved: dict = {}
+        self._setup(monkeypatch, saved, runtime=False)
+        resp = admin_client.post("/admin/config", data={"_mode": "form", "models.summary_stt_backend": "nemotron"})
+        assert resp.status_code == 400 and "installer.cli parakeetcpp" in resp.get_data(as_text=True)
+        assert saved == {}

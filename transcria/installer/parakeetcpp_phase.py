@@ -109,7 +109,4 @@ def apply_parakeetcpp(plan: ParakeetcppPlan, *, console, runner: Runner) -> None
     (home / "COMMIT").write_text(plan.commit + "\n", encoding="utf-8")
     if not parakeetcpp_is_complete(home, plan.commit):
         raise ParakeetcppPhaseError(f"provisionnement incomplet après build : {home}")
-    console.ok(
-        f"parakeet.cpp prêt : {home} (commit {plan.commit[:12]}) — GGUF Nemotron via la page "
-        "« Modèles » puis déclarer le moteur nemotron (cf. config.example.yaml)"
-    )
+    console.ok(f"parakeet.cpp prêt : {home} (commit {plan.commit[:12]}) — GGUF Nemotron via la page « Modèles »")

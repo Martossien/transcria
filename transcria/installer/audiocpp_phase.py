@@ -346,10 +346,7 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
     (home / "COMMIT").write_text(plan.commit + "\n", encoding="utf-8")
     if not audiocpp_is_complete(home, plan.commit):
         raise AudiocppPhaseError(f"provisionnement incomplet après build : {home}")
-    console.ok(
-        f"audio.cpp prêt : {home} (commit {plan.commit[:12]}) — déclarer le moteur "
-        "qwen3asr dans resource_node.engines + inference.stt.backends (cf. config.example.yaml)"
-    )
+    console.ok(f"audio.cpp prêt : {home} (commit {plan.commit[:12]})")
 
 
 def _emit_config_main() -> int:

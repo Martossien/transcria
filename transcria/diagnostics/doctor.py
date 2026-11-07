@@ -89,6 +89,7 @@ from transcria.diagnostics.checks.remote import (  # noqa: F401 — façade
     check_meeting_scheduling,
     check_nemotron_diar_runtime,
     check_remote_stt_control_plane,
+    check_served_stt_routing,
     check_served_stt_runtimes,
     check_stt_instances_vram,
 )
@@ -131,6 +132,8 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_inference_nodes,
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
+    # Ajout 2026-11-07 (activation en un clic des moteurs servis) : route ↔ moteur cohérents.
+    check_served_stt_routing,
     check_nemotron_diar_runtime,
     check_diarization_auto_suggestion,
     check_meeting_scheduling,

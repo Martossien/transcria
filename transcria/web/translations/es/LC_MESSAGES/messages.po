@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 16:23+0100\n"
+"POT-Creation-Date: 2026-11-07 16:40+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -1801,275 +1801,289 @@ msgstr "No se pudo generar: %(e)s"
 msgid "Voix désactivée."
 msgstr "Voz desactivada."
 
-#: transcria/web/admin_routes.py:177 transcria/web/admin_routes.py:236
+#: transcria/web/admin_routes.py:190 transcria/web/admin_routes.py:249
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "Se detectaron errores de validación (%(n)s). Guardado cancelado."
 
-#: transcria/web/admin_routes.py:181
+#: transcria/web/admin_routes.py:194
 msgid "Réglages sauvegardés."
 msgstr "Ajustes guardados."
 
-#: transcria/web/admin_routes.py:186
+#: transcria/web/admin_routes.py:199
 msgid "Backend d'identité modifié : redémarrez le service pour l'appliquer (sudo systemctl restart transcria)."
 msgstr "Backend de identidad modificado: reinicie el servicio para aplicarlo (sudo systemctl restart transcria)."
 
-#: transcria/web/admin_routes.py:212
+#: transcria/web/admin_routes.py:225
 msgid "Aucun prompt modifié."
 msgstr "Ningún prompt modificado."
 
-#: transcria/web/admin_routes.py:219
+#: transcria/web/admin_routes.py:232
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "YAML no válido: %(e)s"
 
-#: transcria/web/admin_routes.py:223
+#: transcria/web/admin_routes.py:236
 msgid "La configuration doit être un objet YAML racine."
 msgstr "La configuración debe ser un objeto YAML raíz."
 
-#: transcria/web/admin_routes.py:239
+#: transcria/web/admin_routes.py:252
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuración guardada en %(p)s."
 
-#: transcria/web/admin_routes.py:319
+#: transcria/web/admin_routes.py:332
 #, python-format
 msgid "Vérification impossible : %(e)s"
 msgstr "No se pudo comprobar: %(e)s"
 
-#: transcria/web/admin_routes.py:323
+#: transcria/web/admin_routes.py:336
 #, python-format
 msgid "Nouvelle version disponible : %(tag)s (vous utilisez %(cur)s)."
 msgstr "Nueva versión disponible: %(tag)s (está utilizando %(cur)s)."
 
-#: transcria/web/admin_routes.py:326
+#: transcria/web/admin_routes.py:339
 #, python-format
 msgid "Vous êtes à jour (%(cur)s — dernière publication : %(tag)s)."
 msgstr "Está actualizado (%(cur)s — última publicación: %(tag)s)."
 
-#: transcria/web/admin_routes.py:343
+#: transcria/web/admin_routes.py:356
 msgid "Mise à niveau indisponible ici : en conteneur, tirez la nouvelle image (docker pull) ; sans systemd, utilisez la CLI maintenance."
 msgstr "Actualización no disponible aquí: en contenedor, descargue la nueva imagen (docker pull); sin systemd, utilice la CLI de mantenimiento."
 
-#: transcria/web/admin_routes.py:347
+#: transcria/web/admin_routes.py:360
 msgid "Confirmation requise : la mise à niveau sauvegarde, bascule le code, migre la base et redémarre le service."
 msgstr "Confirmación requerida: la actualización realiza una copia de seguridad, cambia el código, migra la base de datos y reinicia el servicio."
 
-#: transcria/web/admin_routes.py:357
+#: transcria/web/admin_routes.py:370
 msgid "Cible de mise à niveau invalide ou périmée — relancez « Vérifier maintenant » puis réessayez."
 msgstr "El objetivo de la actualización no es válido o está obsoleto — vuelva a ejecutar «Comprobar ahora» y, después, vuelva a intentarlo."
 
-#: transcria/web/admin_routes.py:370
+#: transcria/web/admin_routes.py:383
 #, python-format
 msgid "Mise à niveau vers %(tag)s lancée : sauvegarde, bascule du code, migration, redémarrage. La page suit la progression."
 msgstr "Actualización a %(tag)s iniciada: copia de seguridad, cambio de código, migración, reinicio. Esta página muestra el progreso."
 
-#: transcria/web/admin_routes.py:373
+#: transcria/web/admin_routes.py:386
 #, python-format
 msgid "Échec du déclenchement de la mise à niveau : %(e)s"
 msgstr "No se pudo iniciar la actualización: %(e)s"
 
-#: transcria/web/admin_routes.py:404
+#: transcria/web/admin_routes.py:417
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Copia de seguridad programada activada (cadencia %(c)s)."
 
-#: transcria/web/admin_routes.py:409
+#: transcria/web/admin_routes.py:422
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Copia de seguridad programada desactivada."
 
-#: transcria/web/admin_routes.py:411
+#: transcria/web/admin_routes.py:424
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "No se pudo programar: %(e)s"
 
-#: transcria/web/admin_routes.py:425
+#: transcria/web/admin_routes.py:438
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmación requerida: la restauración sustituye los datos y reinicia el servicio."
 
-#: transcria/web/admin_routes.py:428
+#: transcria/web/admin_routes.py:441
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "El nombre reintroducido no coincide con el archivo — restauración cancelada."
 
-#: transcria/web/admin_routes.py:436
+#: transcria/web/admin_routes.py:449
 msgid "Archive invalide — restauration refusée : "
 msgstr "Archivo no válido — restauración rechazada: "
 
-#: transcria/web/admin_routes.py:448
+#: transcria/web/admin_routes.py:461
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restauración iniciada. El servicio se detendrá, restaurará los datos y, después, se reiniciará — vuelva a conectarse en aproximadamente un minuto."
 
-#: transcria/web/admin_routes.py:451
+#: transcria/web/admin_routes.py:464
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "No se pudo iniciar la restauración: %(e)s"
 
-#: transcria/web/admin_routes.py:502
+#: transcria/web/admin_routes.py:516
 msgid "La diarisation « auto » est déjà active (ou la recommandation a été écartée)."
 msgstr "La diarización «auto» ya está activa (o la recomendación fue descartada)."
 
-#: transcria/web/admin_routes.py:505
+#: transcria/web/admin_routes.py:519
 msgid "Téléchargez d'abord le runtime audio.cpp et les poids Nemotron 3 (lignes « recommandé » ci-dessus) avant d'activer la diarisation automatique."
 msgstr "Descargue primero el runtime audio.cpp y los pesos Nemotron 3 (filas «recomendado» arriba) antes de activar la diarización automática."
 
-#: transcria/web/admin_routes.py:514 transcria/web/admin_routes.py:969
+#: transcria/web/admin_routes.py:528 transcria/web/admin_routes.py:1020
 msgid "Bascule refusée — configuration invalide : "
 msgstr "Cambio rechazado — configuración no válida: "
 
-#: transcria/web/admin_routes.py:517
+#: transcria/web/admin_routes.py:531
 msgid "Diarisation « auto » activée : Nemotron 3 de 1 à 8 voix (sans token, en quelques secondes), pyannote au-delà ou pour un comptage exact. Aucun redémarrage requis."
 msgstr "Diarización «auto» activada: Nemotron 3 de 1 a 8 voces (sin token, en segundos), pyannote por encima o para un recuento exacto. No requiere reinicio."
 
-#: transcria/web/admin_routes.py:535
+#: transcria/web/admin_routes.py:558
+msgid "Activation refusée — configuration invalide : "
+msgstr "Activación rechazada: configuración no válida: "
+
+#: transcria/web/admin_routes.py:565
+#, python-format
+msgid "Moteur %(n)s activé pour la transcription (port %(p)s, carte GPU %(g)s) : TranscrIA le lance à la demande. Pris en compte au prochain traitement."
+msgstr "Motor %(n)s activado para la transcripción (puerto %(p)s, GPU %(g)s): TranscrIA lo arranca bajo demanda. Se aplica al próximo tratamiento."
+
+#: transcria/web/admin_routes.py:568
+#, python-format
+msgid "Moteur %(n)s activé pour la phase résumé seule (port %(p)s, carte GPU %(g)s) ; le pipeline garde son moteur. Pris en compte au prochain traitement."
+msgstr "Motor %(n)s activado solo para la fase de resumen (puerto %(p)s, GPU %(g)s); el pipeline conserva su motor. Se aplica al próximo tratamiento."
+
+#: transcria/web/admin_routes.py:586
 msgid "Choix non enregistré — configuration invalide : "
 msgstr "Elección no guardada — configuración no válida: "
 
-#: transcria/web/admin_routes.py:538
+#: transcria/web/admin_routes.py:589
 msgid "Réglage conservé : la diarisation « auto » ne sera plus proposée."
 msgstr "Ajuste conservado: la diarización «auto» ya no se propondrá."
 
-#: transcria/web/admin_routes.py:647
+#: transcria/web/admin_routes.py:698
 #, python-format
 msgid "Réunion retirée : %(m)s — son abonnement sera laissé en place jusqu'à expiration (7 jours)."
 msgstr "Reunión eliminada: %(m)s — su suscripción se mantendrá hasta que expire (7 días)."
 
-#: transcria/web/admin_routes.py:651
+#: transcria/web/admin_routes.py:702
 #, python-format
 msgid "Réunion ajoutée : %(m)s — le service posera l'abonnement au prochain tour."
 msgstr "Reunión añadida: %(m)s — el servicio creará la suscripción en el próximo ciclo."
 
-#: transcria/web/admin_routes.py:654
+#: transcria/web/admin_routes.py:705
 msgid "Cette réunion est déjà surveillée."
 msgstr "Esta reunión ya se está vigilando."
 
-#: transcria/web/admin_routes.py:656
+#: transcria/web/admin_routes.py:707
 msgid "Aucun lien de réunion fourni."
 msgstr "No se ha proporcionado ningún enlace de reunión."
 
-#: transcria/web/admin_routes.py:729
+#: transcria/web/admin_routes.py:780
 #, python-format
 msgid "Test %(id)s : %(verdict)s"
 msgstr "Prueba %(id)s: %(verdict)s"
 
-#: transcria/web/admin_routes.py:748
+#: transcria/web/admin_routes.py:799
 #, python-format
 msgid "Test Zoom : %(verdict)s"
 msgstr "Prueba de Zoom: %(verdict)s"
 
-#: transcria/web/admin_routes.py:778
+#: transcria/web/admin_routes.py:829
 #, python-format
 msgid "Fichier « %(label)s » refusé : %(raison)s"
 msgstr "Archivo «%(label)s» rechazado: %(raison)s"
 
-#: transcria/web/admin_routes.py:815
+#: transcria/web/admin_routes.py:866
 #, python-format
 msgid "Identités « %(name)s » enregistrées — remises aux exécutants au prochain claim."
 msgstr "Identidades «%(name)s» guardadas — se entregarán a los ejecutores en el próximo claim."
 
-#: transcria/web/admin_routes.py:816
+#: transcria/web/admin_routes.py:867
 msgid "Aucun changement."
 msgstr "Sin cambios."
 
-#: transcria/web/admin_routes.py:834
+#: transcria/web/admin_routes.py:885
 msgid "Activez d'abord la fonctionnalité (bouton « Activer »)."
 msgstr "Active primero la función (botón «Activar»)."
 
-#: transcria/web/admin_routes.py:839
+#: transcria/web/admin_routes.py:890
 msgid "Nom d'exécutant invalide (lettres/chiffres/._-, 64 max)."
 msgstr "Nombre de ejecutor no válido (letras/dígitos/._-, 64 máx.)."
 
-#: transcria/web/admin_routes.py:846
+#: transcria/web/admin_routes.py:897
 #, python-format
 msgid "URL du portail invalide (%(motif)s) — indiquez celle que la machine DISTANTE peut joindre."
 msgstr "URL del portal no válida (%(motif)s) — indique la que la máquina REMOTA pueda alcanzar."
 
-#: transcria/web/admin_routes.py:851
+#: transcria/web/admin_routes.py:902
 msgid "Compte de service absent — utilisez d'abord le bouton « Activer »."
 msgstr "Cuenta de servicio ausente — use primero el botón «Activar»."
 
-#: transcria/web/admin_routes.py:870
+#: transcria/web/admin_routes.py:921
 #, python-format
 msgid "Exécutant « %(name)s » révoqué."
 msgstr "Ejecutor «%(name)s» revocado."
 
-#: transcria/web/admin_routes.py:887
+#: transcria/web/admin_routes.py:938
 msgid "Ce modèle est servi par un fournisseur cloud, rien à télécharger."
 msgstr "Este modelo lo presta un proveedor en la nube, no hay nada que descargar."
 
-#: transcria/web/admin_routes.py:890
+#: transcria/web/admin_routes.py:941
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "«%(l)s» es un modelo *gated*: se requiere un token de HuggingFace (y aceptar su licencia en huggingface.co)."
 
-#: transcria/web/admin_routes.py:895
+#: transcria/web/admin_routes.py:946
 msgid "Téléchargement refusé — "
 msgstr "Descarga rechazada — "
 
-#: transcria/web/admin_routes.py:898
+#: transcria/web/admin_routes.py:949
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Descarga de «%(l)s» iniciada en segundo plano."
 
-#: transcria/web/admin_routes.py:904
+#: transcria/web/admin_routes.py:955
 msgid "La LLM d'arbitrage est un fournisseur cloud : changez de modèle dans config.yaml (model_id) puis redémarrez — cette page ne pilote que la LLM locale."
 msgstr "La LLM de arbitraje es un proveedor en la nube: cambie de modelo en config.yaml (model_id) y reinicie — esta página solo gestiona la LLM local."
 
-#: transcria/web/admin_routes.py:921
+#: transcria/web/admin_routes.py:972
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Descargue primero este modelo antes de activarlo."
 
-#: transcria/web/admin_routes.py:930
+#: transcria/web/admin_routes.py:981
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modelo LLM activado (perfil %(t)s). Reinicie el servicio para aplicarlo: sudo systemctl restart transcria"
 
-#: transcria/web/admin_routes.py:933
+#: transcria/web/admin_routes.py:984
 msgid "Échec de l'activation : "
 msgstr "No se pudo activar: "
 
-#: transcria/web/admin_routes.py:935
+#: transcria/web/admin_routes.py:986
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "No se pudo activar: %(e)s"
 
-#: transcria/web/admin_routes.py:957
+#: transcria/web/admin_routes.py:1008
 msgid "Modèle Ollama inconnu ou hors des choix proposés."
 msgstr "Modelo de Ollama desconocido o fuera de las opciones propuestas."
 
-#: transcria/web/admin_routes.py:960
+#: transcria/web/admin_routes.py:1011
 #, python-format
 msgid "« %(m)s » est déjà le modèle actif."
 msgstr "«%(m)s» ya es el modelo activo."
 
-#: transcria/web/admin_routes.py:981
+#: transcria/web/admin_routes.py:1032
 #, python-format
 msgid "Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py."
 msgstr "Proveedor de opencode no realineado (%(e)s) — vuelva a ejecutar scripts/setup_opencode.py."
 
-#: transcria/web/admin_routes.py:989
+#: transcria/web/admin_routes.py:1040
 #, python-format
 msgid "Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull)."
 msgstr "Modelo «%(m)s» activado — descarga iniciada en segundo plano (ollama pull)."
 
-#: transcria/web/admin_routes.py:992
+#: transcria/web/admin_routes.py:1043
 #, python-format
 msgid "Modèle « %(m)s » activé — aucun redémarrage requis."
 msgstr "Modelo «%(m)s» activado — no se requiere reinicio."
 
-#: transcria/web/admin_routes.py:1015
+#: transcria/web/admin_routes.py:1066
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Copia de seguridad iniciada en segundo plano. Actualice la página dentro de unos instantes."
 
-#: transcria/web/admin_routes.py:1049
+#: transcria/web/admin_routes.py:1100
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nada que aplicar: el plan ya no está vigente."
 
-#: transcria/web/admin_routes.py:1054
+#: transcria/web/admin_routes.py:1105
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "No se pudo aplicar el plan: %(err)s"
 
-#: transcria/web/admin_routes.py:1060
+#: transcria/web/admin_routes.py:1111
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Plan multiinstancia aplicado (instancias: %(n)s). Reinicie el servicio para aplicarlo: sudo systemctl restart transcria"
@@ -2115,16 +2129,16 @@ msgid "moss — transcription ET locuteurs en une passe (expérimental, GPU)"
 msgstr "moss — transcripción Y hablantes en una pasada (experimental, GPU)"
 
 #: transcria/web/config_form.py:23
-msgid "qwen3asr — runtime servi audio.cpp (URL requise)"
-msgstr "qwen3asr — runtime servido audio.cpp (URL requerida)"
+msgid "qwen3asr — runtime servi audio.cpp (auto-configuré sur cette machine)"
+msgstr "qwen3asr — runtime servido audio.cpp (autoconfigurado en esta máquina)"
 
 #: transcria/web/config_form.py:24
-msgid "nemotron — runtime servi audio.cpp (URL requise)"
-msgstr "nemotron — runtime servido audio.cpp (URL requerida)"
+msgid "nemotron — runtime servi parakeet.cpp (auto-configuré sur cette machine)"
+msgstr "nemotron — runtime servido parakeet.cpp (autoconfigurado en esta máquina)"
 
 #: transcria/web/config_form.py:25
-msgid "voxtralrt — runtime servi parakeet.cpp (URL requise)"
-msgstr "voxtralrt — runtime servido parakeet.cpp (URL requerida)"
+msgid "voxtralrt — runtime servi audio.cpp (auto-configuré sur cette machine)"
+msgstr "voxtralrt — runtime servido audio.cpp (autoconfigurado en esta máquina)"
 
 #: transcria/web/config_form.py:26 transcria/web/config_form.py:33
 msgid "remote — nœud de ressources distant"
@@ -2183,534 +2197,534 @@ msgid "Backend STT"
 msgstr "Backend de STT"
 
 #: transcria/web/config_form.py:70
-msgid "Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement (zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp : refusés tant qu'aucune URL n'est posée dans inference.stt.backends.<nom> (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
-msgstr "Motor de transcripción por defecto (cohere recomendado). kroko = solo CPU (cero VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIDOS audio.cpp/parakeet.cpp: rechazados mientras no haya una URL en inference.stt.backends.<nombre> (ver docs/EXTERNAL_STT_RUNTIMES.md)."
+msgid "Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement (zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp, auto-configurés à l'enregistrement si le runtime est installé (port conventionnel, carte la plus libre) ; en topologie split, poser l'URL du nœud dans l'onglet YAML (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
+msgstr "Motor de transcripción por defecto (cohere recomendado). kroko = solo CPU (cero VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIDOS audio.cpp/parakeet.cpp, autoconfigurados al guardar si el runtime está instalado (puerto convencional, GPU más libre); en topología dividida, indique la URL del nodo en la pestaña YAML (ver docs/EXTERNAL_STT_RUNTIMES.md)."
 
-#: transcria/web/config_form.py:74
+#: transcria/web/config_form.py:75
 msgid "Backend STT du résumé"
 msgstr "Backend de STT del resumen"
 
-#: transcria/web/config_form.py:79
+#: transcria/web/config_form.py:80
 msgid "Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron/voxtralrt exigent le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
 msgstr "Motor dedicado a la transcripción rápida de la fase de resumen — vacío = mismo motor que el pipeline. kroko = CPU puro (cero VRAM); qwen3asr/nemotron/voxtralrt requieren el runtime servido audio.cpp/parakeet.cpp (véase docs/EXTERNAL_STT_RUNTIMES.md)."
 
-#: transcria/web/config_form.py:82
+#: transcria/web/config_form.py:83
 msgid "Backend STT live (temps réel)"
 msgstr "Backend de STT en directo (tiempo real)"
 
-#: transcria/web/config_form.py:85
+#: transcria/web/config_form.py:86
 msgid "Chaîne temps réel (faible latence) — vide = pas de live. Exige un moteur CONÇU streaming (nemotron-streaming, voxtralrt) ; jamais un moteur batch (cf. docs/TEMPS_REEL_REUNIONS.md)."
 msgstr "Cadena en tiempo real (baja latencia) — vacío = sin modo en directo. Requiere un motor DISEÑADO para streaming (nemotron-streaming, voxtralrt); nunca un motor por lotes (véase docs/TEMPS_REEL_REUNIONS.md)."
 
-#: transcria/web/config_form.py:88
+#: transcria/web/config_form.py:89
 msgid "Backend diarisation"
 msgstr "Backend de diarización"
 
-#: transcria/web/config_form.py:91
+#: transcria/web/config_form.py:92
 msgid "Détection des locuteurs : auto (Nemotron 3 de 1 à 8 voix, pyannote au-delà ou pour un comptage exact — recommandé), pyannote (illimité, token HF), sortformer (≤ 4, non gated), nemotron_diar (≤ 8, non gated, runtime audio.cpp, GPU ou CPU)."
 msgstr "Detección de hablantes: auto (Nemotron 3 de 1 a 8 voces, pyannote por encima o para un recuento exacto — recomendado), pyannote (ilimitado, token HF), sortformer (≤ 4, no gated), nemotron_diar (≤ 8, no gated, runtime audio.cpp, GPU o CPU)."
 
-#: transcria/web/config_form.py:94
+#: transcria/web/config_form.py:95
 msgid "Proposer la diarisation « auto »"
 msgstr "Proponer la diarización «auto»"
 
-#: transcria/web/config_form.py:95
+#: transcria/web/config_form.py:96
 msgid "Tant que le backend reste pyannote/sortformer explicite, la page Modèles, l'accueil et le doctor proposent de passer en « auto ». Décocher pour ne plus le voir."
 msgstr "Mientras el backend siga siendo pyannote/sortformer explícito, la página Modelos, el inicio y el doctor proponen pasar a «auto». Desmarque para no verlo más."
 
-#: transcria/web/config_form.py:100
+#: transcria/web/config_form.py:101
 msgid "Temps réel & connecteurs"
 msgstr "Tiempo real y conectores"
 
-#: transcria/web/config_form.py:101
+#: transcria/web/config_form.py:102
 msgid "Façade STT et ingestion des réunions (opt-in, désactivé par défaut)."
 msgstr "Fachada STT e ingesta de reuniones (opcional, desactivada de forma predeterminada)."
 
-#: transcria/web/config_form.py:103
+#: transcria/web/config_form.py:104
 msgid "Façade STT temps réel"
 msgstr "Fachada STT en tiempo real"
 
-#: transcria/web/config_form.py:104
+#: transcria/web/config_form.py:105
 msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST /v1/audio/ingest (dépôt d'un enregistrement de réunion → job). Désactivé = endpoints absents. Authentifié par jeton d'API personnel (cf. docs/TEMPS_REEL_REUNIONS.md)."
 msgstr "Expone POST /v1/audio/transcriptions (transcripción OpenAI-audio) y POST /v1/audio/ingest (carga de una grabación de reunión → trabajo). Desactivado = endpoints ausentes. Autenticado mediante un token de API personal (véase docs/TEMPS_REEL_REUNIONS.md)."
 
-#: transcria/web/config_form.py:111
+#: transcria/web/config_form.py:112
 #: transcria/web/templates/admin_llm_cloud.html:2
 #: transcria/web/templates/admin_llm_cloud.html:4
 #: transcria/web/templates/base.html:74
 msgid "LLM d'arbitrage"
 msgstr "LLM de arbitraje"
 
-#: transcria/web/config_form.py:112
+#: transcria/web/config_form.py:113
 msgid "Résumé et correction par la LLM locale OpenAI-compatible. Pour confier ces phases à un fournisseur externe (services.backend: cloud), voir l'écran /admin/llm-cloud : périmètre de ce qui part, validation administrateur, bascule au redémarrage."
 msgstr "Resumen y corrección por la LLM local compatible con OpenAI. Para confiar estas fases a un proveedor externo (services.backend: cloud), consulte la pantalla /admin/llm-cloud: alcance de lo que se envía, validación del administrador, cambio al reiniciar."
 
-#: transcria/web/config_form.py:116
+#: transcria/web/config_form.py:117
 msgid "Activer la correction LLM"
 msgstr "Activar la corrección LLM"
 
-#: transcria/web/config_form.py:117
+#: transcria/web/config_form.py:118
 msgid "Désactiver pour produire un SRT brut sans correction."
 msgstr "Desactívela para generar un SRT en bruto sin corrección."
 
-#: transcria/web/config_form.py:118 transcria/web/templates/ask_meetings.html:2
+#: transcria/web/config_form.py:119 transcria/web/templates/ask_meetings.html:2
 #: transcria/web/templates/ask_meetings.html:5
 #: transcria/web/templates/meetings_actions.html:6
 msgid "Discuter avec mes réunions"
 msgstr "Conversar con mis reuniones"
 
-#: transcria/web/config_form.py:119
+#: transcria/web/config_form.py:120
 msgid "Page « Discuter » : questions en langage libre sur les réunions visibles, réponses citées de la LLM d'arbitrage, traitées par le worker."
 msgstr "Página «Conversar»: preguntas en lenguaje libre sobre las reuniones visibles, respuestas citadas de la LLM de arbitraje, procesadas por el worker."
 
-#: transcria/web/config_form.py:121
+#: transcria/web/config_form.py:122
 msgid "Modèle de résumé"
 msgstr "Modelo de resumen"
 
-#: transcria/web/config_form.py:122
+#: transcria/web/config_form.py:123
 msgid "Identifiant opencode, ex. local/arbitrage."
 msgstr "Identificador de opencode, ej. local/arbitrage."
 
-#: transcria/web/config_form.py:123
+#: transcria/web/config_form.py:124
 msgid "Modèle de correction"
 msgstr "Modelo de corrección"
 
-#: transcria/web/config_form.py:124
+#: transcria/web/config_form.py:125
 msgid "Identifiant opencode du modèle de correction du SRT."
 msgstr "Identificador de opencode del modelo de corrección del SRT."
 
-#: transcria/web/config_form.py:125
+#: transcria/web/config_form.py:126
 msgid "Port du serveur LLM"
 msgstr "Puerto del servidor LLM"
 
-#: transcria/web/config_form.py:126
+#: transcria/web/config_form.py:127
 msgid "Port du backend OpenAI-compatible (llama-server par défaut : 8080)."
 msgstr "Puerto del backend compatible con OpenAI (llama-server de forma predeterminada: 8080)."
 
-#: transcria/web/config_form.py:127
+#: transcria/web/config_form.py:128
 msgid "Alias modèle rapporté par le serveur"
 msgstr "Alias del modelo indicado por el servidor"
 
-#: transcria/web/config_form.py:128
+#: transcria/web/config_form.py:129
 msgid "Doit correspondre à l'alias servi (cf. scripts/check_arbitrage_llm.sh)."
 msgstr "Debe coincidir con el alias servido (véase scripts/check_arbitrage_llm.sh)."
 
-#: transcria/web/config_form.py:132
+#: transcria/web/config_form.py:133
 msgid "File & exécution"
 msgstr "Cola y ejecución"
 
-#: transcria/web/config_form.py:133
+#: transcria/web/config_form.py:134
 msgid "File GPU persistante et parallélisme des jobs."
 msgstr "Cola GPU persistente y paralelismo de los trabajos."
 
-#: transcria/web/config_form.py:135
+#: transcria/web/config_form.py:136
 msgid "File persistante activée"
 msgstr "Cola persistente activada"
 
-#: transcria/web/config_form.py:136
+#: transcria/web/config_form.py:137
 msgid "Mise en file des traitements (recommandé)."
 msgstr "Puesta en cola de los trabajos (recomendada)."
 
-#: transcria/web/config_form.py:137 transcria/web/templates/schedule.html:160
+#: transcria/web/config_form.py:138 transcria/web/templates/schedule.html:160
 msgid "Jobs simultanés max"
 msgstr "Trabajos simultáneos máx."
 
-#: transcria/web/config_form.py:138
+#: transcria/web/config_form.py:139
 msgid "Concurrence par défaut (1 = comportement historique)."
 msgstr "Concurrencia predeterminada (1 = comportamiento histórico)."
 
-#: transcria/web/config_form.py:139
+#: transcria/web/config_form.py:140
 #: transcria/web/templates/dashboard_status.html:88
 msgid "Stockage des fichiers de jobs"
 msgstr "Almacenamiento de los archivos de los trabajos"
 
-#: transcria/web/config_form.py:141
+#: transcria/web/config_form.py:142
 msgid "fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la frontale (role=web) et le worker (role=scheduler) sont sur deux machines sans filesystem commun (cf. docs/STOCKAGE_PARTAGE_JOBS.md)."
 msgstr "fs (predeterminado): disco local — suficiente en modo todo en uno o con un jobs_dir compartido (NFS). pg: archivos replicados mediante PostgreSQL — OBLIGATORIO cuando el frontend (role=web) y el worker (role=scheduler) están en dos máquinas sin sistema de archivos compartido (véase docs/STOCKAGE_PARTAGE_JOBS.md)."
 
-#: transcria/web/config_form.py:148
+#: transcria/web/config_form.py:149
 msgid "Ressources GPU"
 msgstr "Recursos GPU"
 
-#: transcria/web/config_form.py:149
+#: transcria/web/config_form.py:150
 msgid "Récupération de la VRAM quand un job est bloqué faute de mémoire GPU."
 msgstr "Recuperación de la VRAM cuando un trabajo está bloqueado por falta de memoria GPU."
 
-#: transcria/web/config_form.py:151
+#: transcria/web/config_form.py:152
 msgid "Politique de préemption VRAM"
 msgstr "Política de preempción de VRAM"
 
-#: transcria/web/config_form.py:153
+#: transcria/web/config_form.py:154
 msgid "own-only (recommandé) : n'arrête que NOS process gérés inactifs (LLM d'arbitrage), jamais un process tiers. aggressive : préempte aussi les serveurs d'inférence tiers, uniquement dans la fenêtre calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."
 msgstr "own-only (recomendado): solo detiene NUESTROS procesos gestionados inactivos (LLM de arbitraje), nunca un proceso de terceros. aggressive: también detiene los servidores de inferencia de terceros, únicamente dentro de la franja horaria «force_gpu» — reservar para una GPU dedicada a TranscrIA."
 
-#: transcria/web/config_form.py:157
+#: transcria/web/config_form.py:158
 msgid "VRAM libre minimale (Mo)"
 msgstr "VRAM libre mínima (MB)"
 
-#: transcria/web/config_form.py:158
+#: transcria/web/config_form.py:159
 msgid "Marge libre exigée en plus du besoin d'une phase avant de l'allouer."
 msgstr "Margen libre exigido, además de la necesidad de una fase, antes de asignarla."
 
-#: transcria/web/config_form.py:162
+#: transcria/web/config_form.py:163
 msgid "Sécurité & upload"
 msgstr "Seguridad y carga de archivos"
 
-#: transcria/web/config_form.py:163
+#: transcria/web/config_form.py:164
 msgid "Limites d'upload et suppression des jobs."
 msgstr "Límites de carga y eliminación de trabajos."
 
-#: transcria/web/config_form.py:165
+#: transcria/web/config_form.py:166
 msgid "Taille max d'upload (Mo)"
 msgstr "Tamaño máx. de carga (MB)"
 
-#: transcria/web/config_form.py:166
+#: transcria/web/config_form.py:167
 msgid "Taille maximale d'un fichier déposé."
 msgstr "Tamaño máximo de un archivo cargado."
 
-#: transcria/web/config_form.py:167
+#: transcria/web/config_form.py:168
 msgid "Extensions autorisées"
 msgstr "Extensiones permitidas"
 
-#: transcria/web/config_form.py:168
+#: transcria/web/config_form.py:169
 msgid "Liste séparée par des virgules, ex. mp3, wav, mp4, m4a."
 msgstr "Lista separada por comas, ej. mp3, wav, mp4, m4a."
 
-#: transcria/web/config_form.py:169
+#: transcria/web/config_form.py:170
 msgid "Autoriser la suppression de jobs"
 msgstr "Permitir la eliminación de trabajos"
 
-#: transcria/web/config_form.py:170
+#: transcria/web/config_form.py:171
 msgid "Permet aux admins de supprimer un job et ses fichiers."
 msgstr "Permite a los administradores eliminar un trabajo y sus archivos."
 
-#: transcria/web/config_form.py:174
+#: transcria/web/config_form.py:175
 msgid "Durcissement HTTP(S)"
 msgstr "Endurecimiento de HTTP(S)"
 
-#: transcria/web/config_form.py:175
+#: transcria/web/config_form.py:176
 msgid "Sécurité du transport. Tout est opt-in (défaut = HTTP, dev/tout-en-un). Le proxy TLS et le cookie sécurisé exigent un redémarrage du service."
 msgstr "Seguridad del transporte. Todo es opcional (predeterminado = HTTP, desarrollo/todo en uno). El proxy TLS y la cookie segura requieren un reinicio del servicio."
 
-#: transcria/web/config_form.py:178
+#: transcria/web/config_form.py:179
 msgid "Derrière un proxy TLS (HTTPS)"
 msgstr "Detrás de un proxy TLS (HTTPS)"
 
-#: transcria/web/config_form.py:179
+#: transcria/web/config_form.py:180
 msgid "À activer si un reverse-proxy (nginx, Caddy…) termine le HTTPS devant TranscrIA : l'app reconnaît alors HTTPS (via X-Forwarded-Proto), marque le cookie de session Secure et peut émettre le HSTS. L'adresse cliente n'est JAMAIS lue depuis X-Forwarded-For (anti-usurpation). Redémarrage requis."
 msgstr "Actívelo si un proxy inverso (nginx, Caddy…) termina el HTTPS delante de TranscrIA: la aplicación reconoce entonces HTTPS (mediante X-Forwarded-Proto), marca la cookie de sesión como Secure y puede emitir HSTS. La dirección del cliente NUNCA se lee desde X-Forwarded-For (antisuplantación). Requiere reinicio."
 
-#: transcria/web/config_form.py:183
+#: transcria/web/config_form.py:184
 msgid "Cookie de session « Secure »"
 msgstr "Cookie de sesión «Secure»"
 
-#: transcria/web/config_form.py:184
+#: transcria/web/config_form.py:185
 msgid "Marque le cookie de session Secure (envoyé seulement en HTTPS). Implicite si « Derrière un proxy TLS » est activé. Redémarrage requis."
 msgstr "Marca la cookie de sesión como Secure (enviada solo por HTTPS). Implícito si «Detrás de un proxy TLS» está activado. Requiere reinicio."
 
-#: transcria/web/config_form.py:186
+#: transcria/web/config_form.py:187
 msgid "HSTS (forcer HTTPS côté navigateur)"
 msgstr "HSTS (forzar HTTPS en el navegador)"
 
-#: transcria/web/config_form.py:187
+#: transcria/web/config_form.py:188
 msgid "Émet l'en-tête Strict-Transport-Security, uniquement sur une réponse servie en HTTPS réel (nécessite « Derrière un proxy TLS »). Anti-rétrogradation HTTP."
 msgstr "Emite la cabecera Strict-Transport-Security, únicamente en una respuesta servida por HTTPS real (requiere «Detrás de un proxy TLS»). Antidegradación a HTTP."
 
-#: transcria/web/config_form.py:189
+#: transcria/web/config_form.py:190
 msgid "Contrôle d'origine (anti-CSRF renforcé)"
 msgstr "Control de origen (anti-CSRF reforzado)"
 
-#: transcria/web/config_form.py:191
+#: transcria/web/config_form.py:192
 msgid "Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les requêtes sans en-tête Origin."
 msgstr "Rechaza el envío de un formulario procedente de otro sitio (cabecera Origin cruzada), como complemento de SameSite. No afecta ni a la API por token ni a las solicitudes sin cabecera Origin."
 
-#: transcria/web/config_form.py:194
+#: transcria/web/config_form.py:195
 msgid "Jetons CSRF (protection forte)"
 msgstr "Tokens CSRF (protección fuerte)"
 
-#: transcria/web/config_form.py:195
+#: transcria/web/config_form.py:196
 msgid "Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie (injecté automatiquement dans les formulaires et les appels de l'interface). Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée."
 msgstr "Exige un token anti-CSRF en cada solicitud que modifica datos y está autenticada por cookie (se inyecta automáticamente en los formularios y en las llamadas de la interfaz). Es la defensa más fuerte; la API por token Bearer (scripts) queda exenta."
 
-#: transcria/web/config_form.py:198
+#: transcria/web/config_form.py:199
 msgid "Content-Security-Policy (CSP)"
 msgstr "Content-Security-Policy (CSP)"
 
-#: transcria/web/config_form.py:200
+#: transcria/web/config_form.py:201
 msgid "Politique de sécurité du contenu. off : désactivée. report-only : le navigateur SIGNALE les violations sans rien bloquer (à déployer d'abord, pour observer). enforce : appliquée. Verrouille cadres, objets, base, formulaires et origines des ressources."
 msgstr "Política de seguridad del contenido. off: desactivada. report-only: el navegador NOTIFICA las infracciones sin bloquear nada (se recomienda desplegarla primero, para observar). enforce: aplicada. Restringe marcos, objetos, base, formularios y orígenes de los recursos."
 
-#: transcria/web/config_form.py:207
+#: transcria/web/config_form.py:208
 msgid "Notifications email"
 msgstr "Notificaciones por correo electrónico"
 
-#: transcria/web/config_form.py:208
+#: transcria/web/config_form.py:209
 msgid "Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."
 msgstr "Correo electrónico de fin de trabajo (SMTP). Requiere una dirección en el perfil del usuario."
 
-#: transcria/web/config_form.py:210
+#: transcria/web/config_form.py:211
 msgid "Activer les emails"
 msgstr "Activar los correos electrónicos"
 
-#: transcria/web/config_form.py:211
+#: transcria/web/config_form.py:212
 msgid "Envoie un email au propriétaire à la fin (succès/échec)."
 msgstr "Envía un correo electrónico al propietario al finalizar (éxito/error)."
 
-#: transcria/web/config_form.py:212
+#: transcria/web/config_form.py:213
 msgid "Serveur SMTP"
 msgstr "Servidor SMTP"
 
-#: transcria/web/config_form.py:213
+#: transcria/web/config_form.py:214
 msgid "Port SMTP"
 msgstr "Puerto SMTP"
 
-#: transcria/web/config_form.py:214
+#: transcria/web/config_form.py:215
 msgid "Ex. 587 (STARTTLS) ou 465 (SSL)."
 msgstr "Ej. 587 (STARTTLS) o 465 (SSL)."
 
-#: transcria/web/config_form.py:215
+#: transcria/web/config_form.py:216
 msgid "STARTTLS"
 msgstr "STARTTLS"
 
-#: transcria/web/config_form.py:216
+#: transcria/web/config_form.py:217
 msgid "SSL/SMTPS"
 msgstr "SSL/SMTPS"
 
-#: transcria/web/config_form.py:217
+#: transcria/web/config_form.py:218
 msgid "Adresse expéditeur"
 msgstr "Dirección del remitente"
 
-#: transcria/web/config_form.py:218
+#: transcria/web/config_form.py:219
 msgid "URL de base du portail"
 msgstr "URL base del portal"
 
-#: transcria/web/config_form.py:219
+#: transcria/web/config_form.py:220
 msgid "Utilisée dans les liens des emails, ex. http://localhost:7870."
 msgstr "Se utiliza en los enlaces de los correos electrónicos, ej. http://localhost:7870."
 
-#: transcria/web/config_form.py:223 transcria/web/templates/base.html:63
+#: transcria/web/config_form.py:224 transcria/web/templates/base.html:63
 #: transcria/web/templates/voices.html:2 transcria/web/templates/voices.html:6
 msgid "Voix enregistrées"
 msgstr "Voces registradas"
 
-#: transcria/web/config_form.py:224
+#: transcria/web/config_form.py:225
 msgid "Référentiel de voix connues (consentement requis)."
 msgstr "Repositorio de voces conocidas (se requiere consentimiento)."
 
-#: transcria/web/config_form.py:226
+#: transcria/web/config_form.py:227
 msgid "Activer les voix enregistrées"
 msgstr "Activar las voces registradas"
 
-#: transcria/web/config_form.py:227
+#: transcria/web/config_form.py:228
 msgid "Répertoire de stockage"
 msgstr "Directorio de almacenamiento"
 
-#: transcria/web/config_form.py:228
+#: transcria/web/config_form.py:229
 msgid "Stockage local protégé des voix et consentements."
 msgstr "Almacenamiento local protegido de las voces y los consentimientos."
 
-#: transcria/web/config_form.py:232
+#: transcria/web/config_form.py:233
 msgid "Identité d'entreprise (SSO)"
 msgstr "Identidad corporativa (SSO)"
 
-#: transcria/web/config_form.py:233
+#: transcria/web/config_form.py:234
 msgid "Connexion via un fournisseur OIDC (Keycloak, Entra ID, Authentik…). Redémarrage du service requis après changement. Compte local de secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."
 msgstr "Inicio de sesión mediante un proveedor OIDC (Keycloak, Entra ID, Authentik…). Requiere reinicio del servicio tras cualquier cambio. Cuenta local de emergencia: /login?local=1 (véase docs/GESTION_IDENTITE.md)."
 
-#: transcria/web/config_form.py:237
+#: transcria/web/config_form.py:238
 msgid "Backend d'identité"
 msgstr "Backend de identidad"
 
-#: transcria/web/config_form.py:239
+#: transcria/web/config_form.py:240
 msgid "local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. proxy : identité fournie par un proxy d'authentification frontal (Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory en direct. Renseignez les champs correspondants avant d'activer."
 msgstr "local (predeterminado): cuentas de este portal. oidc: SSO corporativo. proxy: identidad proporcionada por un proxy de autenticación frontal (Authelia, oauth2-proxy…). ldap: acceso directo al directorio LDAP / Active Directory. Complete los campos correspondientes antes de activar."
 
-#: transcria/web/config_form.py:243
+#: transcria/web/config_form.py:244
 msgid "Émetteur (issuer)"
 msgstr "Emisor (issuer)"
 
-#: transcria/web/config_form.py:244
+#: transcria/web/config_form.py:245
 msgid "URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise (la découverte /.well-known est automatique)."
 msgstr "URL del emisor OIDC, ej. https://sso.ejemplo.es/realms/empresa (el descubrimiento /.well-known es automático)."
 
-#: transcria/web/config_form.py:246
+#: transcria/web/config_form.py:247
 msgid "Identifiant client"
 msgstr "Identificador de cliente"
 
-#: transcria/web/config_form.py:247
+#: transcria/web/config_form.py:248
 msgid "Secret client"
 msgstr "Secreto de cliente"
 
-#: transcria/web/config_form.py:249
+#: transcria/web/config_form.py:250
 msgid "Laissez vide si le secret est fourni par variable d'environnement."
 msgstr "Déjelo vacío si el secreto se proporciona mediante una variable de entorno."
 
-#: transcria/web/config_form.py:250
+#: transcria/web/config_form.py:251
 msgid "Variable d'environnement du secret"
 msgstr "Variable de entorno del secreto"
 
-#: transcria/web/config_form.py:251
+#: transcria/web/config_form.py:252
 msgid "Nom d'une variable d'environnement contenant le secret — prioritaire sur le champ précédent, évite le secret en clair dans config.yaml."
 msgstr "Nombre de una variable de entorno que contiene el secreto — tiene prioridad sobre el campo anterior y evita el secreto en texto claro en config.yaml."
 
-#: transcria/web/config_form.py:253
+#: transcria/web/config_form.py:254
 msgid "Libellé du bouton SSO"
 msgstr "Etiqueta del botón SSO"
 
-#: transcria/web/config_form.py:254
+#: transcria/web/config_form.py:255
 msgid "Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». Vide = libellé par défaut."
 msgstr "Texto del botón en la página de inicio de sesión, ej. «Acceso corporativo». Vacío = etiqueta predeterminada."
 
-#: transcria/web/config_form.py:256
+#: transcria/web/config_form.py:257
 msgid "Adresses de confiance du proxy"
 msgstr "Direcciones de confianza del proxy"
 
-#: transcria/web/config_form.py:257
+#: transcria/web/config_form.py:258
 msgid "Backend proxy uniquement : adresses IP ou réseaux CIDR du proxy frontal, ex. 127.0.0.1, 10.0.0.0/24. Les en-têtes d'identité ne sont crus QUE depuis ces adresses (adresse socket réelle, jamais X-Forwarded-For)."
 msgstr "Solo backend proxy: direcciones IP o redes CIDR del proxy frontal, ej. 127.0.0.1, 10.0.0.0/24. Las cabeceras de identidad SOLO se consideran fiables desde estas direcciones (dirección de socket real, nunca X-Forwarded-For)."
 
-#: transcria/web/config_form.py:261
+#: transcria/web/config_form.py:262
 msgid "En-tête utilisateur du proxy"
 msgstr "Cabecera de usuario del proxy"
 
-#: transcria/web/config_form.py:262
+#: transcria/web/config_form.py:263
 msgid "Nom de l'en-tête portant l'identifiant (convention : Remote-User)."
 msgstr "Nombre de la cabecera que contiene el identificador (convención: Remote-User)."
 
-#: transcria/web/config_form.py:263
+#: transcria/web/config_form.py:264
 msgid "En-tête groupes du proxy"
 msgstr "Cabecera de grupos del proxy"
 
-#: transcria/web/config_form.py:264
+#: transcria/web/config_form.py:265
 msgid "Nom de l'en-tête portant les groupes, séparés par des virgules (convention : Remote-Groups)."
 msgstr "Nombre de la cabecera que contiene los grupos, separados por comas (convención: Remote-Groups)."
 
-#: transcria/web/config_form.py:266
+#: transcria/web/config_form.py:267
 msgid "Connexion automatique via le proxy"
 msgstr "Inicio de sesión automático mediante el proxy"
 
-#: transcria/web/config_form.py:267
+#: transcria/web/config_form.py:268
 msgid "Activée : /login connecte directement depuis les en-têtes. Désactivée : la page affiche un bouton de connexion."
 msgstr "Activada: /login inicia sesión directamente a partir de las cabeceras. Desactivada: la página muestra un botón de inicio de sesión."
 
-#: transcria/web/config_form.py:269
+#: transcria/web/config_form.py:270
 msgid "Contrôleurs LDAP/AD"
 msgstr "Controladores LDAP/AD"
 
-#: transcria/web/config_form.py:270
+#: transcria/web/config_form.py:271
 msgid "Backend ldap : un ou plusieurs contrôleurs, ex. ldaps://dc1.corp, ldaps://dc2.corp (essayés dans l'ordre pour la haute disponibilité). LDAPS (ldaps://) fortement recommandé."
 msgstr "Backend ldap: uno o varios controladores, ej. ldaps://dc1.corp, ldaps://dc2.corp (se prueban en orden para lograr alta disponibilidad). Se recomienda encarecidamente LDAPS (ldaps://)."
 
-#: transcria/web/config_form.py:273
+#: transcria/web/config_form.py:274
 msgid "LDAPS (TLS)"
 msgstr "LDAPS (TLS)"
 
-#: transcria/web/config_form.py:274
+#: transcria/web/config_form.py:275
 msgid "Chiffre la liaison à l'annuaire. À désactiver seulement avec auth.ldap.allow_plaintext en connaissance de cause (mot de passe en clair)."
 msgstr "Cifra la conexión con el directorio. Desactívela solo con auth.ldap.allow_plaintext y con pleno conocimiento de causa (contraseña en texto claro)."
 
-#: transcria/web/config_form.py:276
+#: transcria/web/config_form.py:277
 msgid "Mode de connexion LDAP"
 msgstr "Modo de conexión LDAP"
 
-#: transcria/web/config_form.py:278
+#: transcria/web/config_form.py:279
 msgid "service (recommandé AD) : un compte de service recherche l'utilisateur puis on valide son mot de passe. direct : bind direct via un gabarit de DN."
 msgstr "service (recomendado para AD): una cuenta de servicio busca al usuario y después se valida su contraseña. direct: bind directo mediante una plantilla de DN."
 
-#: transcria/web/config_form.py:280
+#: transcria/web/config_form.py:281
 msgid "DN du compte de service"
 msgstr "DN de la cuenta de servicio"
 
-#: transcria/web/config_form.py:281
+#: transcria/web/config_form.py:282
 msgid "Mode service : compte de lecture de l'annuaire, ex. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 msgstr "Modo service: cuenta de lectura del directorio, ej. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 
-#: transcria/web/config_form.py:283
+#: transcria/web/config_form.py:284
 msgid "Mot de passe du compte de service"
 msgstr "Contraseña de la cuenta de servicio"
 
-#: transcria/web/config_form.py:285
+#: transcria/web/config_form.py:286
 msgid "Laissez vide si fourni par variable d'environnement."
 msgstr "Déjelo vacío si se proporciona mediante una variable de entorno."
 
-#: transcria/web/config_form.py:286
+#: transcria/web/config_form.py:287
 msgid "Variable d'environnement du mot de passe de service"
 msgstr "Variable de entorno de la contraseña de servicio"
 
-#: transcria/web/config_form.py:288
+#: transcria/web/config_form.py:289
 msgid "Nom d'une variable d'environnement portant le mot de passe — prioritaire, évite le secret en clair dans config.yaml."
 msgstr "Nombre de una variable de entorno que contiene la contraseña — tiene prioridad y evita el secreto en texto claro en config.yaml."
 
-#: transcria/web/config_form.py:290
+#: transcria/web/config_form.py:291
 msgid "Base de recherche (base DN)"
 msgstr "Base de búsqueda (base DN)"
 
-#: transcria/web/config_form.py:291
+#: transcria/web/config_form.py:292
 msgid "Racine de recherche des comptes, ex. DC=corp,DC=example."
 msgstr "Raíz de búsqueda de las cuentas, ej. DC=corp,DC=example."
 
-#: transcria/web/config_form.py:292
+#: transcria/web/config_form.py:293
 msgid "Filtre de recherche utilisateur"
 msgstr "Filtro de búsqueda de usuario"
 
-#: transcria/web/config_form.py:293
+#: transcria/web/config_form.py:294
 #, python-brace-format
 msgid "Doit contenir {username} (échappé automatiquement). AD : (&(objectClass=user)(sAMAccountName={username}))."
 msgstr "Debe contener {username} (se escapa automáticamente). AD: (&(objectClass=user)(sAMAccountName={username}))."
 
-#: transcria/web/config_form.py:295
+#: transcria/web/config_form.py:296
 msgid "Résoudre les groupes imbriqués (AD)"
 msgstr "Resolver los grupos anidados (AD)"
 
-#: transcria/web/config_form.py:297
+#: transcria/web/config_form.py:298
 msgid "Suit l'appartenance transitive des groupes (règle en chaîne AD). Plus complet mais plus coûteux — laisser désactivé si non nécessaire."
 msgstr "Sigue la pertenencia transitiva a grupos (regla en cadena de AD). Más completo, pero más costoso — déjelo desactivado si no es necesario."
 
-#: transcria/web/config_form.py:299
+#: transcria/web/config_form.py:300
 msgid "Claim des groupes"
 msgstr "Claim de los grupos"
 
-#: transcria/web/config_form.py:300
+#: transcria/web/config_form.py:301
 msgid "Nom du claim OIDC portant les groupes (généralement « groups »). Ignoré en LDAP (memberOf) et proxy (en-tête des groupes)."
 msgstr "Nombre del claim OIDC que contiene los grupos (normalmente «groups»). Se ignora en LDAP (memberOf) y en proxy (cabecera de grupos)."
 
-#: transcria/web/config_form.py:302
+#: transcria/web/config_form.py:303
 msgid "Règles groupe → rôle"
 msgstr "Reglas grupo → rol"
 
-#: transcria/web/config_form.py:303
+#: transcria/web/config_form.py:304
 msgid "Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : transcria-admins = admin"
 msgstr "Una regla por línea: «grupo = rol» (roles: admin, manager, operator, viewer). Gana el primer grupo coincidente; la coincidencia debe ser exacta. Ej.: transcria-admins = admin"
 
-#: transcria/web/config_form.py:306
+#: transcria/web/config_form.py:307
 msgid "Rôle par défaut (aucun groupe reconnu)"
 msgstr "Rol predeterminado (ningún grupo reconocido)"
 
-#: transcria/web/config_form.py:308
+#: transcria/web/config_form.py:309
 msgid "deny (recommandé) : connexion refusée sans groupe reconnu. viewer : accès en lecture seule."
 msgstr "deny (recomendado): conexión rechazada sin grupo reconocido. viewer: acceso de solo lectura."
 
-#: transcria/web/config_form.py:313
+#: transcria/web/config_form.py:314
 msgid "Serveur & compte admin"
 msgstr "Servidor y cuenta de administrador"
 
-#: transcria/web/config_form.py:314
+#: transcria/web/config_form.py:315
 msgid "Écoute du portail et mot de passe du premier administrateur."
 msgstr "Escucha del portal y contraseña del primer administrador."
 
-#: transcria/web/config_form.py:316
+#: transcria/web/config_form.py:317
 msgid "Hôte d'écoute"
 msgstr "Host de escucha"
 
-#: transcria/web/config_form.py:317
+#: transcria/web/config_form.py:318
 msgid "Port d'écoute"
 msgstr "Puerto de escucha"
 
-#: transcria/web/config_form.py:318
+#: transcria/web/config_form.py:319
 msgid "Mot de passe admin initial"
 msgstr "Contraseña inicial de administrador"
 
-#: transcria/web/config_form.py:320
+#: transcria/web/config_form.py:321
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Cambie el valor predeterminado antes de cualquier uso real."
 
@@ -3001,6 +3015,21 @@ msgstr "%(label)s: contenido demasiado voluminoso (máx. %(kb)s KB)."
 msgid "%(label)s : prompt sauvegardé (copie de secours .bak conservée)."
 msgstr "%(label)s: prompt guardado (copia de seguridad .bak conservada)."
 
+#: transcria/web/served_stt_views.py:40
+#, python-format
+msgid "Moteur %(n)s : runtime %(r)s non installé sur cette machine. Lancez « %(cmd)s » puis réessayez (ou choisissez un autre moteur)."
+msgstr "Motor %(n)s: el runtime %(r)s no está instalado en esta máquina. Ejecute «%(cmd)s» y vuelva a intentarlo (o elija otro motor)."
+
+#: transcria/web/served_stt_views.py:52
+#, python-format
+msgid "Les poids du moteur %(n)s ne sont pas encore téléchargés : page Modèles, ligne « STT servi »."
+msgstr "Los pesos del motor %(n)s aún no están descargados: página Modelos, fila «STT servido»."
+
+#: transcria/web/served_stt_views.py:54
+#, python-format
+msgid "Moteur %(n)s auto-configuré sur cette machine : port %(p)s, carte GPU %(g)s, lancé à la demande par TranscrIA. Modifiable dans Réglages → YAML (inference.stt.backends, resource_node.engines)."
+msgstr "Motor %(n)s autoconfigurado en esta máquina: puerto %(p)s, GPU %(g)s, arrancado bajo demanda por TranscrIA. Modificable en Ajustes → YAML (inference.stt.backends, resource_node.engines)."
+
 #: transcria/web/ui_labels.py:18
 msgid "Créé"
 msgstr "Creado"
@@ -3231,6 +3260,7 @@ msgid "Dernier usage"
 msgstr "Último uso"
 
 #: transcria/web/templates/account_tokens.html:44
+#: transcria/web/templates/admin_models.html:210
 #: transcria/web/templates/queue.html:96
 #: transcria/web/templates/schedule.html:199
 msgid "État"
@@ -3363,6 +3393,7 @@ msgid "Les scripts sont affichés en <strong>lecture seule</strong> : les édite
 msgstr "Los scripts se muestran en <strong>solo lectura</strong>: editarlos desde el navegador permitiría ejecutar código arbitrario en el servidor. Sus <em>rutas</em> se configuran en la pestaña Ajustes / YAML; su contenido se modifica por SSH."
 
 #: transcria/web/templates/admin_config.html:161
+#: transcria/web/templates/admin_models.html:225
 msgid "non configuré"
 msgstr "no configurado"
 
@@ -4229,6 +4260,7 @@ msgstr "Estado"
 
 #: transcria/web/templates/admin_models.html:33
 #: transcria/web/templates/admin_models.html:163
+#: transcria/web/templates/admin_models.html:210
 #: transcria/web/templates/audit.html:59
 msgid "Action"
 msgstr "Acción"
@@ -4273,6 +4305,7 @@ msgid "La LLM servie actuellement (%(name)s) fonctionne. Ce modèle est celui re
 msgstr "El LLM servido actualmente (%(name)s) funciona. Este modelo es la recomendación de hoy para su hardware: descárguelo y luego pulse «Activar» para cambiar."
 
 #: transcria/web/templates/admin_models.html:73
+#: transcria/web/templates/admin_models.html:217
 #: transcria/web/templates/voices.html:40
 msgid "absent"
 msgstr "ausente"
@@ -4361,6 +4394,71 @@ msgstr "Usar este modelo"
 #: transcria/web/templates/admin_models.html:193
 msgid "Aucun redémarrage requis : Ollama charge le modèle à la demande. Un modèle absent est tiré en arrière-plan à l'activation."
 msgstr "No requiere reinicio: Ollama carga el modelo a demanda. Un modelo ausente se descarga en segundo plano al activarlo."
+
+#: transcria/web/templates/admin_models.html:205
+msgid "Moteurs STT servis (audio.cpp / parakeet.cpp) — activation en un clic"
+msgstr "Motores STT servidos (audio.cpp / parakeet.cpp): activación con un clic"
+
+#: transcria/web/templates/admin_models.html:210
+msgid "Moteur"
+msgstr "Motor"
+
+#: transcria/web/templates/admin_models.html:210
+msgid "Runtime"
+msgstr "Runtime"
+
+#: transcria/web/templates/admin_models.html:210
+msgid "Poids"
+msgstr "Pesos"
+
+#: transcria/web/templates/admin_models.html:216
+msgid "installé"
+msgstr "instalado"
+
+#: transcria/web/templates/admin_models.html:219
+msgid "présents"
+msgstr "presentes"
+
+#: transcria/web/templates/admin_models.html:220
+msgid "à télécharger (ligne « STT servi » ci-dessus)"
+msgstr "por descargar (fila «STT servido» arriba)"
+
+#: transcria/web/templates/admin_models.html:221
+msgid "après activation"
+msgstr "tras la activación"
+
+#: transcria/web/templates/admin_models.html:222
+msgid "transcription"
+msgstr "transcripción"
+
+#: transcria/web/templates/admin_models.html:223
+msgid "résumé"
+msgstr "resumen"
+
+#: transcria/web/templates/admin_models.html:224
+msgid "déclaré, non choisi"
+msgstr "declarado, no elegido"
+
+#: transcria/web/templates/admin_models.html:230
+#, python-format
+msgid "Route et moteur déclarés automatiquement (port %(p)s), choisi pour la transcription"
+msgstr "Ruta y motor declarados automáticamente (puerto %(p)s), elegido para la transcripción"
+
+#: transcria/web/templates/admin_models.html:231
+msgid "Activer (transcription)"
+msgstr "Activar (transcripción)"
+
+#: transcria/web/templates/admin_models.html:236
+msgid "Pour la transcription rapide de la phase résumé seulement"
+msgstr "Solo para la transcripción rápida de la fase de resumen"
+
+#: transcria/web/templates/admin_models.html:237
+msgid "Résumé seul"
+msgstr "Solo resumen"
+
+#: transcria/web/templates/admin_models.html:245
+msgid "Un moteur servi est un serveur STT que TranscrIA lance et arrête lui-même sur cette machine (mémoire GPU réservée à l'admission). Aucun YAML : l'activation pose la route et le moteur ; tout reste modifiable dans Réglages → YAML."
+msgstr "Un motor servido es un servidor STT que TranscrIA arranca y detiene por sí mismo en esta máquina (memoria GPU reservada en la admisión). Sin YAML: la activación establece la ruta y el motor; todo sigue siendo modificable en Ajustes → YAML."
 
 #: transcria/web/templates/ask_meetings.html:6
 #: transcria/web/templates/meetings_actions.html:2
@@ -7238,4 +7336,16 @@ msgstr "Generar el resumen"
 
 #~ msgid "Moteur de transcription par défaut (cohere recommandé)."
 #~ msgstr "Motor de transcripción predeterminado (se recomienda cohere)."
+
+#~ msgid "qwen3asr — runtime servi audio.cpp (URL requise)"
+#~ msgstr "qwen3asr — runtime servido audio.cpp (URL requerida)"
+
+#~ msgid "nemotron — runtime servi audio.cpp (URL requise)"
+#~ msgstr "nemotron — runtime servido audio.cpp (URL requerida)"
+
+#~ msgid "voxtralrt — runtime servi parakeet.cpp (URL requise)"
+#~ msgstr "voxtralrt — runtime servido parakeet.cpp (URL requerida)"
+
+#~ msgid "Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement (zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp : refusés tant qu'aucune URL n'est posée dans inference.stt.backends.<nom> (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
+#~ msgstr "Motor de transcripción por defecto (cohere recomendado). kroko = solo CPU (cero VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIDOS audio.cpp/parakeet.cpp: rechazados mientras no haya una URL en inference.stt.backends.<nombre> (ver docs/EXTERNAL_STT_RUNTIMES.md)."
 

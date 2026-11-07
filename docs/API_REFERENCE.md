@@ -169,6 +169,7 @@
 | `/admin/models/download` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/models/ollama-activate` | POST | connexion + Permission.MANAGE_CONFIG | Bascule le modèle Ollama servi — symétrique du « Activer (servir) » des GGUF. | `transcria.web.admin_routes` |
 | `/admin/models/progress/<role>` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
+| `/admin/models/served-stt-activate` | POST | connexion + Permission.MANAGE_CONFIG | Active un moteur STT servi (qwen3asr/nemotron/voxtralrt) en un clic : route + moteur déclaré sur la | `transcria.web.admin_routes` |
 | `/api/jobs/<job_id>/analyze` | POST | connexion requise | _(docstring manquante)_ | `transcria.web.wizard_api` |
 | `/api/jobs/<job_id>/audio/excerpt` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.downloads_api` |
 | `/api/jobs/<job_id>/available-lexicons` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.lexicon_api` |
@@ -234,7 +235,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 168 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 169 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

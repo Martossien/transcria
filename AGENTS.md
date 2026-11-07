@@ -154,6 +154,7 @@ transcria/
       env_file.py           # update_env_file() — écriture idempotente du .env
       gpu_calibration.py    # apply_gpu_calibration() — écrit gpu.llm_vram_mb/llm_gpu_indices (ruamel non destructif)
       stt_instances_config.py # apply_stt_instances() — écrit engines/extra_urls/concurrency (ruamel non destructif)
+      served_stt_provisioning.py # ACTIVATION EN UN CLIC d'un moteur STT servi : plan PUR (route loopback + resource_node.engines + mode hybrid, conventions de stt/served_runtimes, port déjà pris évité, réglages existants conservés) → apply_in_memory (Réglages) / apply_to_file (ruamel, propriétaire conservé — installateur, page Modèles)
       resource_node_manifest.py # manifeste resource_node.engines (specs des moteurs STT servis)
     cli_i18n.py             # i18n des sorties CLI HORS-web (installateur + doctor) : resolve_cli_locale (env TRANSCRIA_DEFAULT_LOCALE, défaut fr) + make_translator(catalogue fr/en) ; sans dépendance, distinct de Flask-Babel (web)
     database.py             # db = SQLAlchemy()
@@ -167,6 +168,7 @@ transcria/
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
       messages.py           # catalogue fr/en des messages installateur ; fr = libellés historiques mot pour mot
       python_env.py / i18n_phase.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
+      served_stt_config.py  # fin de phase audiocpp/parakeetcpp (--config) : DÉCLARE le moteur servi dans config.yaml (route + moteur, carte la plus libre) sans le choisir — best-effort
       moss_site_phase.py / audiocpp_phase.py / parakeetcpp_phase.py # phases OPT-IN : site Transformers 5 du backend moss ; runtimes STT servis ÉPINGLÉS (clone SHA complet + build CUDA arch native — pièges vécus : SHA court refusé par git fetch, arch 75 par défaut ⇒ SIGABRT ggml). audiocpp_phase porte AUSSI install_prebuilt_audiocpp (archive CPU « portable » de la release épinglée, sha256 vérifié, posée sous runtimes/audiocpp/prebuilt/ — JAMAIS dans bin/ : ses libggml*.so à RUNPATH $ORIGIN seraient chargées par un build CUDA voisin)
       llm_cloud_phase.py    # phase OPT-IN `llm-cloud` (install.sh --llm-cloud, docs/LLM_CLOUD.md § 5) : clé lue dans opencode SOUS LE HOME DU SERVICE (auth export v2 / auth.json v1) ou saisie masquée → .env (0600, jamais affichée), backend cloud + deux model_id, opencode.json share disabled ; n'écrit JAMAIS la validation admin. yaml_text_edit.py = écriture chirurgicale de config.yaml (diff minimal, mode/propriétaire conservés, relecture vérifiée)
       nemotron_diar_phase.py # phase PAR DÉFAUT d'install.sh (0.4.7) : audiocpp_cli (build CUDA s'il existe, sinon précompilé) + GGUF Nemotron 3 (199 Mo, non gated) — stdlib-pur en tête (huggingface_hub différé), `--no-nemotron-diar` pour s'en passer
@@ -323,6 +325,7 @@ transcria/
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       nemotron_diarizer.py  # NemotronDiarizer(BaseDiarizer) — NVIDIA Nemotron 3 (≤ 8 locuteurs, non gated) via le binaire `audiocpp_cli` en SOUS-PROCESS (aucun serveur ; GPU ou CPU). NeMo PyPI ne charge pas ce modèle (encodeur RoPE) → audio.cpp. Post-traitement PUR : tours exclusifs (confiance, continuité), locuteurs fantômes rattachés au voisin, renumérotation par arrivée
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend ; apply_speaker_hint() applique la fourchette de locuteurs du job (+ guard BACKEND_MAX_SPEAKERS : Sortformer ≤ 4, Nemotron 3 ≤ 8) ; « auto » (défaut 0.4.7) résolu PAR JOB par resolve_auto_backend() (PUR : Nemotron absent → pyannote ; sans token HF → Nemotron ; comptage exact → pyannote ; > 8 → pyannote ; sinon Nemotron 3) — configured_diarization_backend() = l'UNIQUE lecture de la clé
+      served_runtimes.py    # SOURCE UNIQUE des moteurs STT SERVIS (qwen3asr/nemotron/voxtralrt : port conventionnel, modèle servi, lanceur, repli natif, gpu_mem, runtime) + runtime_present/routed_url/declared_engine — consommé par l'installateur, la page Modèles, Réglages et le doctor ; les POIDS restent dans models_catalog._SERVED_STT_SOURCES
       remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)
       remote_diarizer.py    # RemoteDiarizer(BaseDiarizer) — diarisation distante via inference_service ; transmet la fourchette de locuteurs (_effective_speaker_params → client.diarize(speaker_params) → /infer/diarize), parité local/distant
       speaker_detection.py  # SpeakerDetector
@@ -426,6 +429,7 @@ transcria/
       job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job
       request_helpers.py    # json_body (corps JSON typé/tolérant), clean_job_title, audit_origin_from_url
       lexicon_views.py      # vues lexique partagées wizard/API : promote_*_view, enrich_lexicon_context_audio, resolve_context_audio_range
+      served_stt_views.py   # moteurs STT servis côté web : lignes de la page Modèles, provision_backend/auto_provision (runtime requis, poids = avertissement) — admin_routes ne porte que les routes
       refine_shared.py      # état d'affinage partagé refine_api/éditeur : refine_running, refine_store_for
       maintenance_service.py # orchestration LÉGÈRE de la page Maintenance (listing archives, lancement backup en sous-process détaché, garde anti path-traversal)
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran

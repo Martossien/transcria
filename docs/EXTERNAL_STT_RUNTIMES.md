@@ -41,6 +41,28 @@ déjà téléchargés sous `src/models` sont préservés).
 Le build utilise `CMAKE_CUDA_ARCHITECTURES=native` (l'arch du GPU de la machine —
 un défaut inadapté produit des kernels qui plantent à l'inférence).
 
+## Activation en un clic (2026-11-07) — plus de YAML à recopier
+
+Le projet construit ces runtimes lui-même : l'administrateur ne doit pas avoir à recopier les
+blocs ci-dessous. Source unique des conventions (port loopback, identifiant servi, lanceur,
+repli natif, admission VRAM) : `transcria/stt/served_runtimes.py` (`SERVED_STT`). Trois voies
+posent **les mêmes deux fragments** (`inference.stt.backends.<nom>` + `resource_node.engines[]`,
+et `inference.mode: hybrid` si la config était `local`), sans jamais écraser ce que l'admin a
+déjà réglé (port, carte, URL d'un nœud distant) :
+
+| Voie | Quand | Ce qu'elle fait |
+|---|---|---|
+| **Installateur** (`installer.cli audiocpp --config config.yaml`, idem `parakeetcpp` ; `install.sh --with-stt-runtimes` le passe) | fin de phase | **déclare** le moteur (route loopback, carte la plus libre) **sans le choisir** comme backend — best-effort, config absente = message |
+| **Page Modèles** → carte « Moteurs STT servis » | runtime construit | « Activer (transcription) » ou « Résumé seul » : fragments + `models.stt_backend` / `summary_stt_backend` ; pris en compte au prochain traitement ; poids manquants = avertissement, ligne « STT servi » à télécharger |
+| **Réglages** → Backend STT / Backend STT du résumé | moteur servi choisi sans route | auto-configuré à l'enregistrement ; runtime absent = sauvegarde refusée avec la commande à lancer |
+
+Module pur : `transcria/config/served_stt_provisioning.py` (`plan_served_backend` → `apply_in_memory` /
+`apply_to_file`, round-trip ruamel : commentaires, mode et propriétaire du fichier conservés). Doctor :
+« Moteur STT servi choisi (route ↔ moteur) » — un moteur choisi sans route, une route loopback
+sans moteur déclaré, ou deux ports différents sont nommés (éditions YAML à la main). En topologie
+**split**, l'URL du nœud reste à saisir dans l'onglet YAML (rien à lancer sur la frontale) : le
+doctor ne réclame alors aucun moteur local.
+
 ## Configuration
 
 ```yaml

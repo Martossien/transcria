@@ -774,6 +774,9 @@ def _add_audiocpp_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--with-model", action="store_true",
                    help="Télécharge aussi le modèle recommandé Qwen3-ASR-1.7B GGUF Q8 (~1,9 Go)")
     p.add_argument("--force", action="store_true", help="Reconstruire même si le runtime semble complet")
+    p.add_argument("--config", default=None,
+                   help="config.yaml à compléter : déclare le moteur servi (route loopback + resource_node.engines) "
+                        "sans le choisir comme backend")
     p.add_argument("--prebuilt", action="store_true",
                    help="Poser SEULEMENT audiocpp_cli précompilé (CPU, 55 Mo, sha256 vérifié) sous "
                         "runtimes/audiocpp/prebuilt/ — aucune compilation (diarisation Nemotron 3)")
@@ -839,6 +842,11 @@ def _cmd_audiocpp(args: argparse.Namespace) -> int:
     except AudiocppPhaseError as exc:
         console.error(str(exc))
         return 1
+    # Différé : la tête de ce CLI reste stdlib-pure (phase python-env sous le python système) ;
+    # la déclaration du moteur lit config.yaml (PyYAML/ruamel, présents une fois le venv installé).
+    from transcria.installer.served_stt_config import declare_served_engine
+
+    declare_served_engine(args.config, "qwen3asr", console)
     return 0
 
 
@@ -851,6 +859,9 @@ def _add_parakeetcpp_parser(sub: argparse._SubParsersAction) -> None:
                    help="Racine des runtimes (défaut ./runtimes, surchargeable TRANSCRIA_RUNTIMES_DIR)")
     p.add_argument("--commit", default=None, help="Commit épinglé (défaut : celui qualifié sur le benchmark)")
     p.add_argument("--force", action="store_true", help="Reconstruire même si le runtime semble complet")
+    p.add_argument("--config", default=None,
+                   help="config.yaml à compléter : déclare le moteur servi (route loopback + resource_node.engines) "
+                        "sans le choisir comme backend")
 
 
 def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
@@ -871,6 +882,9 @@ def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
     except ParakeetcppPhaseError as exc:
         console.error(str(exc))
         return 1
+    from transcria.installer.served_stt_config import declare_served_engine  # différé : tête stdlib-pure
+
+    declare_served_engine(args.config, "nemotron", console)
     return 0
 
 

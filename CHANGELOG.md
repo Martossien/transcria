@@ -24,6 +24,19 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   (`Authorization: Bearer` sur les sondes et l'appel direct, `apiKey: {env:VAR}` pour opencode)
   et le schéma https de `api_base`. Audit `config_llm_mode_change`, `maintenance_service_restart`.
 
+#### Moteurs STT servis (audio.cpp / parakeet.cpp) : activation en un clic
+
+- **Plus de YAML à recopier** : carte « Moteurs STT servis » sur la page Modèles (« Activer
+  (transcription) » / « Résumé seul »), auto-configuration à l'enregistrement dans Réglages
+  quand un moteur servi est choisi sans route, et déclaration par l'installateur en fin de
+  phase (`--config`). Conventions en source unique (`stt/served_runtimes.py` : port 8021/8022/8024,
+  modèle servi, lanceur, repli, admission VRAM) ; fragments posés sans écraser un réglage
+  existant ; runtime absent = refus guidé avec la commande. Doctor : « Moteur STT servi choisi
+  (route ↔ moteur) ».
+- **Listes STT et diarisation lisibles** dans Réglages : chaque moteur dit sa nature (CPU seul,
+  runtime servi auto-configuré, une passe, GPU/jeton) ; les runtimes servis sont proposés dans
+  le backend principal.
+
 #### LLM d'arbitrage « cloud » (fournisseur externe, opt-in)
 
 - **`services.backend: cloud`** — résumé, correction, relecture finale et affinage confiés à un

@@ -89,6 +89,16 @@ _SERVED_STT_SOURCES: dict[str, dict] = {
 
 
 
+def served_stt_weights_present(name: str) -> bool:
+    """Les poids du moteur servi ``name`` sont-ils sur disque (sans réseau) — même quand le moteur
+    n'est pas encore déclaré dans la config (page Modèles : activation en un clic)."""
+    src = _SERVED_STT_SOURCES.get(name)
+    if not src:
+        return False
+    spec = _spec_from_source("stt_served", f"STT servi — {name}", src)
+    return bool(model_status(spec, hf_home=resolve_hf_home(), models_dir=resolve_models_dir())["present"])
+
+
 def _declared_engine_names(cfg: dict) -> list[str]:
     engines = ((cfg.get("resource_node", {}) or {}).get("engines") or [])
     return [str(e.get("name")) for e in engines if isinstance(e, dict) and e.get("name")]

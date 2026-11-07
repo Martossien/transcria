@@ -196,6 +196,58 @@
 </div>
 {% endif %}
 
+{% if served_stt %}
+{# Moteurs STT servis (audio.cpp / parakeet.cpp) : activation EN UN CLIC — route + moteur déclaré
+   sur la carte la plus libre, sans YAML. Runtime = binaire construit par l'installateur ;
+   poids = ligne « STT servi » du tableau une fois le moteur déclaré. #}
+<div class="card mt-4" data-served-stt>
+  <div class="card-header">
+    <i class="bi bi-cpu me-2"></i>{{ _('Moteurs STT servis (audio.cpp / parakeet.cpp) — activation en un clic') }}
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr><th>{{ _('Moteur') }}</th><th>{{ _('Runtime') }}</th><th>{{ _('Poids') }}</th><th>{{ _('État') }}</th><th class="text-end">{{ _('Action') }}</th></tr>
+      </thead>
+      <tbody>
+        {% for e in served_stt %}
+        <tr data-served-stt-row="{{ e.name }}">
+          <td><code>{{ e.name }}</code><div class="small text-muted">{{ e.label }}</div></td>
+          <td>{% if e.runtime_present %}<span class="badge bg-success">{{ _('installé') }}</span>
+              {% else %}<span class="badge bg-secondary">{{ _('absent') }}</span>
+              <div class="small text-muted"><code>{{ e.install_cmd }}</code></div>{% endif %}</td>
+          <td>{% if e.weights_present %}<span class="badge bg-success">{{ _('présents') }}</span>
+              {% elif e.routed %}<span class="badge bg-warning text-dark">{{ _('à télécharger (ligne « STT servi » ci-dessus)') }}</span>
+              {% else %}<span class="badge bg-secondary">{{ _('après activation') }}</span>{% endif %}</td>
+          <td>{% if e.is_pipeline %}<span class="badge bg-primary">{{ _('transcription') }}</span>{% endif %}
+              {% if e.is_summary %}<span class="badge bg-info text-dark">{{ _('résumé') }}</span>{% endif %}
+              {% if e.routed and not e.is_pipeline and not e.is_summary %}<span class="small text-muted">{{ _('déclaré, non choisi') }}</span>{% endif %}
+              {% if not e.routed %}<span class="small text-muted">{{ _('non configuré') }}</span>{% endif %}</td>
+          <td class="text-end text-nowrap">
+            <form method="post" action="{{ url_for('web.admin_models_served_stt_activate') }}" class="d-inline">
+              <input type="hidden" name="backend" value="{{ e.name }}"><input type="hidden" name="target" value="pipeline">
+              <button type="submit" class="btn btn-success btn-sm" {% if not e.runtime_present or e.is_pipeline %}disabled{% endif %}
+                      title="{{ _('Route et moteur déclarés automatiquement (port %(p)s), choisi pour la transcription', p=e.port) }}">
+                <i class="bi bi-play-circle"></i> {{ _('Activer (transcription)') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('web.admin_models_served_stt_activate') }}" class="d-inline ms-1">
+              <input type="hidden" name="backend" value="{{ e.name }}"><input type="hidden" name="target" value="summary">
+              <button type="submit" class="btn btn-outline-success btn-sm" {% if not e.runtime_present or e.is_summary %}disabled{% endif %}
+                      title="{{ _('Pour la transcription rapide de la phase résumé seulement') }}">
+                {{ _('Résumé seul') }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="small text-muted px-3 py-2">
+      {{ _("Un moteur servi est un serveur STT que TranscrIA lance et arrête lui-même sur cette machine (mémoire GPU réservée à l'admission). Aucun YAML : l'activation pose la route et le moteur ; tout reste modifiable dans Réglages → YAML.") }}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# Progression des téléchargements : JS extrait (vague A3) — admin_models_page.js. #}
 <script src="{{ asset_url('js/admin_models_page.js') }}"></script>
 {% endblock %}
