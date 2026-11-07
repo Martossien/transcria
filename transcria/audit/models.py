@@ -48,6 +48,8 @@ class AuditAction(str, enum.Enum):
     CONFIG_EDIT = "config_edit"
     CONFIG_LLM_CLOUD_ACKNOWLEDGE = "config_llm_cloud_acknowledge"
     CONFIG_LLM_CLOUD_REVOKE = "config_llm_cloud_revoke"
+    CONFIG_LLM_MODE_CHANGE = "config_llm_mode_change"          # local / serveur de l'organisation / cloud (jamais la clé)
+    MAINTENANCE_SERVICE_RESTART = "maintenance_service_restart"  # redémarrage demandé depuis l'administration
     AUDIT_EXPORT = "audit_export"
 
     USER_CREATE = "user_create"
@@ -110,6 +112,7 @@ _VERB_FR = {
     "external_llm": "Traitement par LLM externe (cloud)",
     "ask_meetings": "Discussion avec les réunions", "ask_meetings_transcript": "Discussion — lecture d'une transcription",
     "llm_cloud_acknowledge": "Validation de la LLM cloud", "llm_cloud_revoke": "Retrait de la validation LLM cloud",
+    "llm_mode_change": "Changement de LLM d'arbitrage", "service_restart": "Redémarrage du service",
     "backup_create": "Création de sauvegarde", "backup_restore": "Restauration de sauvegarde",
 }
 _DOMAIN_FR = {

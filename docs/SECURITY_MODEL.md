@@ -291,7 +291,15 @@ serveur** vers un fournisseur choisi par l'administrateur. Mode désactivé par 
   silencieux sur une LLM locale. **Limite** : un admin de groupe peut retirer un membre du
   groupe interdit, ce qui lève l'interdiction pour lui (action auditée `group_member_remove`) —
   c'est une politique de groupe, pas de personne.
-- **Audit** : `config_llm_cloud_acknowledge`, `config_llm_cloud_revoke`, `job_external_llm`
+- **Activation graphique** (`/admin/llm-cloud`, `MANAGE_CONFIG`) : la clé d'API saisie dans le
+  formulaire est écrite côté serveur dans le `.env` du service (0600, quotée), jamais réaffichée
+  (l'écran dit seulement « clé déjà enregistrée »), jamais dans `config.yaml`, `opencode.json`
+  (`{env:VAR}`) ni le journal (`config_llm_mode_change` : mode, modèle, nom de la variable,
+  booléen « clé fournie »). Le mode « serveur de mon organisation » est **déclaré** par l'admin
+  comme LLM locale : aucune règle cloud ne s'y applique — la responsabilité est la sienne, et
+  l'écran le dit. Le redémarrage depuis l'écran passe par un one-shot systemd `User=root`
+  (`transcria-restart.service`, sans `[Install]`), audité `maintenance_service_restart`.
+- **Audit** : `config_llm_mode_change`, `maintenance_service_restart`, `config_llm_cloud_acknowledge`, `config_llm_cloud_revoke`, `job_external_llm`
   (métadonnées seules, voir [AUDIT_DPO.md](AUDIT_DPO.md)) ; provenance par job dans
   `metadata/llm_provenance.json` et au pied du DOCX.
 - **Réunions captées par connecteurs/bots** : refusées en cloud tant que la case dédiée de la

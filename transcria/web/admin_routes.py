@@ -35,7 +35,7 @@ from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge
 from transcria.config.stt_instances_config import apply_stt_instances
 from transcria.gpu import inventory
-from transcria.gpu.arbitrage_endpoint import default_base_url, is_cloud_backend
+from transcria.gpu.arbitrage_endpoint import arbitrage_api_key_env, default_base_url, is_cloud_backend
 from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
 from transcria.ingestion.meet_links import MeetLinkError, normalize_meeting_input
@@ -975,7 +975,8 @@ def admin_models_ollama_activate():
         from transcria.llm_tools import opencode_setup
 
         opencode_setup.ensure_local_provider(opencode_setup.resolve_config_path(),
-                                             default_base_url(cfg), model)
+                                             default_base_url(cfg), model,
+                                             api_key_env=arbitrage_api_key_env(cfg))
     except Exception as exc:  # noqa: BLE001 — surfacé à l'opérateur, jamais bloquant
         flash(_("Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py.", e=exc),
               "warning")

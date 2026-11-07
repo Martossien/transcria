@@ -10,6 +10,20 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Ajouté
 
+#### Activation graphique de la LLM d'arbitrage (écran « LLM d'arbitrage »)
+
+- **Trois modes déclarés** dans `/admin/llm-cloud` : *sur cette machine*, *serveur de mon
+  organisation* (OpenAI-compatible sur le réseau de l'organisation, http ou https, clé
+  facultative — une LLM **locale**, sans gouvernance cloud), *fournisseur externe* (avertissement
+  sur le choix, validation administrateur ensuite). La nature de la LLM est **déclarée**, jamais
+  déduite de l'adresse. Clé saisie dans le formulaire → `.env` 0600, jamais réaffichée ;
+  `config.yaml` écrit par diff minimal avec schéma revérifié ; `opencode.json` réaligné ; retour
+  en local par photographie `services.local_llm_snapshot`. Bouton « Redémarrer le service »
+  (one-shot systemd privilégié) + bandeau « changement enregistré, pas encore appliqué ».
+- **`workflow.arbitration_llm.api_key_env`** : le backend `http` accepte enfin une clé
+  (`Authorization: Bearer` sur les sondes et l'appel direct, `apiKey: {env:VAR}` pour opencode)
+  et le schéma https de `api_base`. Audit `config_llm_mode_change`, `maintenance_service_restart`.
+
 #### LLM d'arbitrage « cloud » (fournisseur externe, opt-in)
 
 - **`services.backend: cloud`** — résumé, correction, relecture finale et affinage confiés à un

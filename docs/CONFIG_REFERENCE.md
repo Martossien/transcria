@@ -1208,7 +1208,8 @@ Configuration du LLM d'arbitrage/correction SRT.
 |---|---|---|---|
 | `enabled` | bool | `false` | Active l'arbitrage LLM |
 | `model_id` | string | `""` (obligatoire) | Identifiant du modèle — doit être défini dans `config.yaml`, `OpenCodeRunner` lève `ValueError` si absent |
-| `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
+| `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API. En mode « serveur de mon organisation » (backend `http`, écran `/admin/llm-cloud`), son schéma (`http`/`https`) est celui des sondes et des appels directs (`arbitrage_root_url`) |
+| `api_key_env` | string | `""` | **Serveur de mon organisation** : NOM de la variable d'environnement qui porte la clé d'un serveur OpenAI-compatible protégé (défaut posé par l'écran : `TRANSCRIA_ARBITRAGE_API_KEY`, valeur dans `.env` 0600). Vide = serveur sans clé. Hors cloud seulement (le cloud a `workflow.llm_cloud.api_key_env`) ; envoyée en `Authorization: Bearer` par les sondes, les appels directs et opencode (`apiKey: {env:VAR}`) |
 | `timeout_seconds` | int | `7200` | Garde-fou ABSOLU du run opencode de correction (cf. `summary_llm.timeout_seconds`) |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
 | `keep_warm` | bool | `false` | Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en file : le suivant la réutilise chaude (CAS A, ~17 s de démarrage llama.cpp économisées ; **fortement recommandé en vLLM local** où chaque relance coûte des minutes). Décision prise sous le verrou LLM (pas de course avec un lancement concurrent) ; file vide → arrêt comme avant |
@@ -1665,6 +1666,7 @@ Limites :
 | `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
 | `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
+| `services.local_llm_snapshot` | absent | **Interne** (écrit par l'écran `/admin/llm-cloud`) : photographie JSON des clés de la LLM locale au moment où l'administrateur quitte le mode « sur cette machine » ; le retour en local la remet telle quelle. Ne pas éditer |
 | `services.backend` | absent (auto) | Backend de la LLM d'arbitrage : `script` (llama.cpp/vLLM via `arbitrage_script`), `ollama` (démon), `http` (serveur OpenAI externe), `cloud` (fournisseur externe, cf. `workflow.llm_cloud` et [LLM_CLOUD.md](LLM_CLOUD.md)). Absent ou `""` ⇒ auto-détection (`ollama_url` ⇒ ollama ; `arbitrage_script` ⇒ script ; sinon http). **Toute autre valeur est REFUSÉE** par la validation (jamais de repli silencieux). Cf. [LLM_BACKENDS.md](LLM_BACKENDS.md) |
 | `services.ollama_url` | `http://127.0.0.1:11434` | Endpoint du démon Ollama (source unique de l'endpoint pour ce backend ; port custom via cette URL, PAS via `arbitrage_llm_port`) |
 | `services.ollama_model` | absent | Nom NATIF du modèle Ollama (ex. `qwen3.6:35b`) ; opencode le voit `local/<modèle>`. Écrit par la phase d'install selon le matériel (catalogue de profils) |

@@ -428,6 +428,35 @@ Voix (patron) : `voice/models.py:78`, `voice/routes.py:48,194`. Groupes : `auth/
 `.env` montés, config en lecture seule) ; `scripts/docker_quickstart.sh:176-183` ;
 `scripts/switch_arbitrage_llm.sh:47`.
 
+## 8 bis. Activation graphique (2026-11-07)
+
+Retour du mainteneur au premier essai réel : l'écran disait « réglez `config.yaml` » — pas
+acceptable pour un projet qui se veut simple. L'écran `/admin/llm-cloud` (renommé « LLM
+d'arbitrage ») porte désormais un formulaire à **trois modes déclarés** : sur cette machine /
+serveur de mon organisation / fournisseur externe. Décisions :
+
+- **Déclaré, jamais inféré** : la nature de la LLM ne se devine pas à l'adresse (le mainteneur
+  travaille sur une plage publique achetée par l'organisation et utilisée en LAN). Le mode
+  « serveur de mon organisation » est une **LLM locale** : aucune gouvernance cloud, un journal
+  d'audit (`config_llm_mode_change`, sans la clé) ; il comble aussi un trou : le backend `http`
+  n'avait **aucune** clé d'API — `workflow.arbitration_llm.api_key_env` est désormais honorée par
+  les sondes (`vram_manager`), l'appel direct (`refine_llm.chat_completion`) et opencode
+  (`apiKey: {env:VAR}`), avec le schéma https de `api_base` (`arbitrage_root_url`).
+- **Clé par formulaire** (champ masqué, `autocomplete=new-password`) → `.env` 0600 côté
+  serveur, jamais réaffichée (« clé déjà enregistrée » seulement), jamais journalisée ; refusée
+  si elle contient blanc/guillemet/contrôle (quoting simple du `.env`).
+- **Écriture** : `config.yaml` par diff minimal (`yaml_text_edit`, propriétaire conservé), schéma
+  revérifié avant et après (fichier restauré sinon) ; `opencode.json` share disabled + permissions
+  d'agent ; retour en local via la photographie `services.local_llm_snapshot`.
+- **Redémarrage** : bouton → one-shot systemd privilégié (`maintenance/restart_service.py`,
+  patron de `restore_service`), sinon la commande manuelle est affichée ; bandeau « changement
+  enregistré, pas encore appliqué » quand la config sur disque diffère de celle du process.
+- Le cloud garde tout son § 3.2 : l'avertissement est sur le bouton radio lui-même, la
+  validation administrateur reste une seconde étape après redémarrage.
+
+Tests : `tests/test_llm_activation.py` (plan/apply, 28), `tests/test_llm_org_server_key.py`
+(Bearer/https/opencode, 9), routes dans `tests/test_llm_cloud_web.py`.
+
 ## 8. Questions ouvertes
 - ~~Le fournisseur d'opencode et OpenRouter exposent-ils `GET /v1/models` avec la même clé ?~~
   **Répondu le 2026-11-01 (sondes réelles, clé bidon)** : OpenRouter `GET /api/v1/models` → 200

@@ -255,7 +255,8 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         model = llm.get("model_id") or "arbitrage"
         if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"
             model = model.split("/", 1)[1]
-        opencode_setup.ensure_local_provider(config_path, base_url, model)
+        opencode_setup.ensure_local_provider(config_path, base_url, model,
+                                             api_key_env=arbitrage_endpoint.arbitrage_api_key_env(cfg))
         # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch
         # des agents, deny ailleurs) — sinon le défaut opencode `ask` suspend `opencode run`.
         opencode_setup.ensure_agent_permissions(config_path, work_root)

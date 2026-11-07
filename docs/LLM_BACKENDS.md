@@ -47,6 +47,24 @@ doivent être identiques ; l'alias `arbitrage` reste réservé à la LLM locale.
 serveur** : validation administrateur en base, bandeau permanent, interdiction par groupe,
 provenance par job (cf. [SECURITY_MODEL.md](SECURITY_MODEL.md) § 9).
 
+### Trois modes déclarés dans l'interface (`/admin/llm-cloud`, écran « LLM d'arbitrage »)
+
+L'administrateur **déclare** où tourne la LLM — jamais déduit de l'adresse (une plage publique
+peut être un réseau interne, une adresse privée un relais vers un tiers) :
+
+| Mode déclaré | Config écrite | Nature | Gouvernance |
+|---|---|---|---|
+| **Sur cette machine** | `services.backend: script`/`ollama`, hôte `127.0.0.1` (ou la photographie `services.local_llm_snapshot` prise au départ) | locale | aucune |
+| **Serveur de mon organisation** | `services.backend: http`, hôte/port de l'URL, `workflow.*.api_base` (http **ou https**), `model_id: local/<alias>`, clé facultative → `workflow.arbitration_llm.api_key_env` = `TRANSCRIA_ARBITRAGE_API_KEY` (valeur dans `.env` 0600) | **locale** (LAN, VPN, plage d'adresses de l'organisation) | journal d'audit `config_llm_mode_change` seulement — pas d'avertissement, pas de validation, pas de bandeau, pas de provenance |
+| **Fournisseur externe (cloud)** | `services.backend: cloud`, `model_id: <fournisseur>/<modèle>`, clé → variable du fournisseur dans `.env` | externe | avertissement, validation administrateur, bandeau, interdiction par groupe, provenance ([LLM_CLOUD.md](LLM_CLOUD.md)) |
+
+La clé saisie dans le formulaire est écrite côté serveur dans `.env` (quotée, 0600) et n'est
+**jamais** réaffichée ni journalisée ; `opencode.json` reçoit `apiKey: "{env:VAR}"` (jamais la
+valeur). La bascule prend effet au **redémarrage du service** : bouton « Redémarrer le service »
+(one-shot systemd privilégié `transcria-restart.service`, patron de la restauration) ou
+`sudo systemctl restart transcria` ; un bandeau sur l'écran signale qu'un changement attend
+son redémarrage. Module : `transcria/llm_cloud/activation.py` (plan pur + application).
+
 ## Choisir un backend
 
 - **Ollama** — *défaut « facile »* en all-in-one. `curl … | sh` auto-suffisant (runtime CUDA

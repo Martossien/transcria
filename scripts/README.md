@@ -37,6 +37,7 @@ relevé des corrections humaines et du devenir des termes douteux (COMPTAGES seu
 terme ni un nom) : `lexicon_edits_survey.py` — à rejouer sur une instance d'usage réel ;
 banc Playwright de « Discuter avec mes réunions » (instance jetable + LLM factice, gestes réels,
 captures à relire) : `ask_meetings_walkthrough.py` (`seed` / `fake-llm` / `walk`).
+- `bench/llm_mode_walkthrough.py` — banc Playwright de l'écran « LLM d'arbitrage » (trois modes déclarés, clé jamais réaffichée, repli du bouton de redémarrage) sur instance jetable (seed / walk)
 Mode d'emploi : `docs/BENCHMARKING.md`.
 
 > Historique : jusqu'à la vague 0 de consolidation (2026-07), tout vivait à plat (63

@@ -11,6 +11,8 @@ from transcria.gpu import inventory, pid_registry
 from transcria.gpu._port_utils import generation_confirmed, kill_port_listeners
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.arbitrage_endpoint import (
+    arbitrage_auth_headers,
+    arbitrage_root_url,
     describe_arbitrage_endpoint,
     is_cloud_backend,
     is_remote_arbitrage,
@@ -44,6 +46,13 @@ def should_recalibrate(current_mb: int, measured_mb: int, *, threshold_pct: floa
     if current_mb <= 0:
         return True
     return abs(measured_mb - current_mb) / current_mb > threshold_pct
+
+
+def _auth_kwargs(config: dict) -> dict:
+    """``headers=`` des sondes seulement quand une clé est configurée (doublures de test et
+    serveurs sans clé inchangés)."""
+    headers = arbitrage_auth_headers(config)
+    return {"headers": headers} if headers else {}
 
 
 class VRAMManager:
@@ -262,8 +271,8 @@ class VRAMManager:
 
             try:
                 r = requests.get(
-                    f"http://{self.arbitrage_llm_host}:{self.arbitrage_llm_port}/v1/models",
-                    timeout=5,
+                    f"{arbitrage_root_url(self.config)}/v1/models",
+                    timeout=5, **_auth_kwargs(self.config),
                 )
                 return r.status_code == 200
             except Exception:
@@ -547,11 +556,12 @@ class VRAMManager:
 
         active_model_id: str | None = None
         server_healthy = False
-        base = f"http://{self.arbitrage_llm_host}:{self.arbitrage_llm_port}"
+        base = arbitrage_root_url(self.config)
+        auth = _auth_kwargs(self.config)
 
         try:
             r = requests.get(
-                f"{base}/v1/models", timeout=5
+                f"{base}/v1/models", timeout=5, **auth
             )
             if r.status_code == 200:
                 data = r.json().get("data", [])
@@ -573,7 +583,7 @@ class VRAMManager:
                                 "max_tokens": 64,
                                 "temperature": 0,
                             },
-                            timeout=60,
+                            timeout=60, **auth,
                         )
                         if r2.status_code == 200:
                             # Preuve de génération unifiée (texte / raisonnement / tokens

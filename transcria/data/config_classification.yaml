@@ -89,6 +89,7 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
+- workflow.arbitration_llm.api_key_env
 - workflow.ask_meetings.max_cards
 - workflow.ask_meetings.max_context_tokens
 - workflow.ask_meetings.level2_meetings

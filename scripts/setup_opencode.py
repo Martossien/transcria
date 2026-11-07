@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from transcria.gpu.arbitrage_endpoint import cloud_view, default_base_url, is_cloud_backend  # noqa: E402
+from transcria.gpu.arbitrage_endpoint import arbitrage_api_key_env, cloud_view, default_base_url, is_cloud_backend  # noqa: E402
 from transcria.llm_tools.opencode_setup import (  # noqa: E402
     ensure_agent_permissions,
     ensure_cloud_provider,
@@ -79,7 +79,8 @@ def main() -> int:
             return 1
         print("✅ opencode configuré pour la LLM cloud. Vérifiez avec scripts/doctor.py.")
         return 0
-    data = ensure_local_provider(path, base_url, model, context=args.context, output=args.output)
+    data = ensure_local_provider(path, base_url, model, context=args.context, output=args.output,
+                                 api_key_env=arbitrage_api_key_env(cfg))
     limit = data["provider"]["local"]["models"][model].get("limit", {})
     # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch des
     # agents, deny ailleurs). Sans ça, le défaut opencode `ask` suspend `opencode run` dès

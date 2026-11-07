@@ -91,8 +91,12 @@ def local_provider_block(
     display_name: str = "LLM d'arbitrage (local)",
     context: int | None = None,
     output: int | None = None,
+    api_key_env: str = "",
 ) -> dict:
     """Bloc `provider.local` au format opencode courant (openai-compatible).
+
+    ``api_key_env`` : « serveur de mon organisation » protégé par une clé — opencode lit
+    ``{env:VAR}`` dans l'environnement du run ; la clé n'est jamais écrite dans le fichier.
 
     Si `context`/`output` sont fournis, ils alimentent le `limit` du modèle — sans
     quoi opencode retombe sur un défaut interne et peut tronquer l'historique sur
@@ -104,7 +108,9 @@ def local_provider_block(
     return {
         "npm": "@ai-sdk/openai-compatible",
         "name": display_name,
-        "options": {"baseURL": base_url, "apiKey": "dummy-key", "timeout": 9999999},
+        "options": {"baseURL": base_url,
+                    "apiKey": ("{env:" + api_key_env + "}") if api_key_env else "dummy-key",
+                    "timeout": 9999999},
         "models": {model_id: model_entry},
     }
 
@@ -171,6 +177,7 @@ def ensure_local_provider(
     display_name: str = "LLM d'arbitrage (local)",
     context: int | None = None,
     output: int | None = None,
+    api_key_env: str = "",
 ) -> dict:
     """Écrit/met à jour le provider `local` dans opencode.json, **sans rien casser**.
 
@@ -193,7 +200,7 @@ def ensure_local_provider(
     ctx = context if context is not None else existing.get("context", _DEFAULT_LIMIT_CONTEXT)
     out = output if output is not None else existing.get("output", _DEFAULT_LIMIT_OUTPUT)
     provider["local"] = local_provider_block(
-        base_url, model_id, display_name=display_name, context=ctx, output=out
+        base_url, model_id, display_name=display_name, context=ctx, output=out, api_key_env=api_key_env,
     )
     _apply_share_policy(data)
 

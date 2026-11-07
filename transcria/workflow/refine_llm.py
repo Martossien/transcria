@@ -16,6 +16,7 @@ import re
 
 from transcria.config.llm_profiles import load_llm_profiles, select_profile
 from transcria.gpu import inventory
+from transcria.gpu.arbitrage_endpoint import arbitrage_auth_headers
 from transcria.gpu.llm_backend import CloudLLMBackend, create_llm_backend, is_cloud_backend
 
 logger = logging.getLogger(__name__)
@@ -262,7 +263,11 @@ def chat_completion(
         # (observé en réel sur llama-server). Honoré par llama-server et vLLM.
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    resp = post(url, json=payload, timeout=timeout_s)
+    # « Serveur de mon organisation » avec clé : Bearer ; sans clé, aucun en-tête (les doublures
+    # de test historiques `post(url, json, timeout)` restent valides).
+    auth = arbitrage_auth_headers(config)
+    extra = {"headers": auth} if auth else {}
+    resp = post(url, json=payload, timeout=timeout_s, **extra)
     try:
         resp.raise_for_status()
     except Exception:
@@ -270,7 +275,7 @@ def chat_completion(
         # seconde tentative sans lui (le thinking éventuel est alors filtré plus bas).
         logger.info("Affinage discuss : retry sans chat_template_kwargs")
         payload.pop("chat_template_kwargs", None)
-        resp = post(url, json=payload, timeout=timeout_s)
+        resp = post(url, json=payload, timeout=timeout_s, **extra)
         resp.raise_for_status()
     data = resp.json()
     content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""

@@ -182,6 +182,7 @@ transcria/
     maintenance/            # Backup/restore/upgrade LOCAL + planification + one-shot restore (opérateur)
       backup.py / restore.py / upgrade.py # sauvegarde (pg_dump -Fc / sqlite .backup + manifeste), restauration gardée (refus base vivante), montée de version outillée
       schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
+      restart_service.py    # redémarrage depuis l'UI = one-shot privilégié transcria-restart.service (même patron) ; échec ⇒ commande manuelle affichée
       restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge, rebuild-job-cards
       retention.py          # purge_expired(cfg) = l'UNIQUE endroit qui sait tout ce qui expire (jobs, audit par famille, conversations ask_meetings) — appelé par la page d'accueil et par `purge` ; une donnée nouvelle qui expire s'ajoute ICI
@@ -190,6 +191,7 @@ transcria/
       policy.py             #   politique PURE (CLOUD_NOTICE_TEXT_VERSION = version du texte lu par l'admin → validation CADUQUE si elle change ; decide_gate ; un utilisateur est interdit dès qu'UN de ses groupes l'est)
       models.py / store.py  #   table llm_cloud_acknowledgements (append-only, revoked_at) + LlmCloudStore (current/acknowledge/revoke/user_forbidden via groups.llm_cloud_forbidden)
       gate.py               #   check_cloud_gate = JUGE UNIQUE des entrées (web : process/autostart/résumé/affinage/sync éditeur/ingest ; worker : services/llm_cloud_guard) ; cloud_status pour bandeau/écran
+      activation.py         #   ACTIVATION GRAPHIQUE (/admin/llm-cloud) : trois modes DÉCLARÉS (local / serveur de mon organisation = LLM LOCALE, clé facultative via workflow.arbitration_llm.api_key_env / cloud) — plan PUR + apply (.env 0600, config.yaml diff minimal + schéma revérifié, opencode.json) ; jamais déduit de l'adresse ; clé jamais réaffichée ni journalisée
       provenance.py         #   metadata/llm_provenance.json + miroir extra_data.llm_provider + audit job_external_llm — écrit par l'EXÉCUTEUR hors fenêtre AgentWorkspace
     models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF) ; backend Ollama → ligne du modèle CONFIGURÉ (kind ollama, présence via /api/tags), jamais un GGUF re-déduit
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
@@ -363,7 +365,7 @@ transcria/
       llm_prelaunch.py      # lot 2 : pré-lancement opt-in de la LLM à l'étape analyse (sous verrou LLM, jamais de préemption)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI (prompts → prompt_locator.py, parsing pur → llm_parsing.py, vague C2)
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
-      arbitrage_endpoint.py # SOURCE UNIQUE hôte/port/URL de la LLM d'arbitrage + prédicats is_ollama_backend / is_remote_arbitrage / is_cloud_backend (services.backend: cloud ⇒ distante : ni lancement, ni VRAM, ni chien de garde d'inactivité) + describe_arbitrage_endpoint (journaux)
+      arbitrage_endpoint.py # SOURCE UNIQUE hôte/port/URL de la LLM d'arbitrage (+ arbitrage_root_url = schéma http/https d'api_base, arbitrage_auth_headers = Bearer de workflow.arbitration_llm.api_key_env hors cloud — sondes, appel direct, opencode) + prédicats is_ollama_backend / is_remote_arbitrage / is_cloud_backend (services.backend: cloud ⇒ distante : ni lancement, ni VRAM, ni chien de garde d'inactivité) + describe_arbitrage_endpoint (journaux)
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
       stt_vram_planner.py   # SttVramPlanner — pré-check VRAM (fraction×total vLLM) + relocalisation GPU

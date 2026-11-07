@@ -1,16 +1,108 @@
 {% extends "base.html" %}
-{% block title %}{{ _('LLM cloud') }} — TranscrIA{% endblock %}
+{% block title %}{{ _('LLM d\'arbitrage') }} — TranscrIA{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3"><i class="bi bi-cloud-arrow-up me-2"></i>{{ _('LLM d\'arbitrage cloud') }}</h1>
+<h1 class="h3 mb-3"><i class="bi bi-cpu me-2"></i>{{ _('LLM d\'arbitrage') }}</h1>
+<p class="text-muted">{{ _('La LLM d\'arbitrage rédige le résumé, corrige la transcription, relit les livrables, répond dans « Discuter avec mes réunions ». Dites où elle tourne : c\'est cette déclaration qui décide des protections, jamais l\'adresse.') }}</p>
 
-{% if not cloud.active %}
-<div class="alert alert-secondary" role="status" data-llm-cloud-inactive>
-  <p class="mb-2"><strong>{{ _('La LLM cloud n\'est pas active sur cette instance.') }}</strong>
-    {{ _('Les phases LLM (résumé, correction, relecture, affinage) sont traitées par la LLM d\'arbitrage locale : rien ne part vers un fournisseur externe.') }}</p>
-  <p class="mb-0">{% trans %}Pour l'activer, réglez <code>services.backend: cloud</code> et <code>workflow.arbitration_llm.model_id</code> (forme <code>fournisseur/modèle</code>) dans <code>config.yaml</code>, fournissez la clé du fournisseur par variable d'environnement, puis <strong>redémarrez le service</strong> : la bascule ne prend effet qu'au redémarrage. Revenez ensuite sur cet écran pour la valider.{% endtrans %}</p>
+{% if pending_restart %}
+<div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="status" data-llm-pending-restart>
+  <span><i class="bi bi-arrow-repeat me-1"></i>{{ _('Un changement de LLM est enregistré mais pas encore appliqué : le service doit redémarrer.') }}</span>
+  <form method="POST" action="{{ url_for('web.admin_llm_cloud_restart') }}" class="m-0"
+        data-confirm="{{ _('Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris.') }}">
+    <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Redémarrer le service') }}</button>
+  </form>
 </div>
-{% else %}
+{% endif %}
 
+<div class="card mb-4" data-llm-mode-card>
+  <div class="card-header">{{ _('Où tourne la LLM d\'arbitrage ?') }}
+    <span class="badge text-bg-secondary ms-2" data-llm-mode-running>
+      {% if mode_running == 'cloud' %}{{ _('actuellement : fournisseur externe') }}
+      {% elif mode_running == 'organisation' %}{{ _('actuellement : serveur de mon organisation') }}
+      {% else %}{{ _('actuellement : sur cette machine') }}{% endif %}</span>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('web.admin_llm_cloud_activate') }}" id="llm-mode-form" autocomplete="off">
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="mode" id="llm-mode-local" value="local" {% if mode_on_disk == 'local' %}checked{% endif %}>
+        <label class="form-check-label fw-semibold" for="llm-mode-local">{{ _('Sur cette machine') }}</label>
+        <div class="small text-muted">{{ _('llama-server ou Ollama, lancés et arrêtés par TranscrIA selon la mémoire GPU disponible. Rien ne quitte la machine.') }}</div>
+      </div>
+
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="mode" id="llm-mode-organisation" value="organisation" {% if mode_on_disk == 'organisation' %}checked{% endif %}>
+        <label class="form-check-label fw-semibold" for="llm-mode-organisation">{{ _('Un serveur de mon organisation') }}</label>
+        <div class="small text-muted">{{ _('Un serveur OpenAI-compatible (vLLM, llama-server, Ollama…) sur votre réseau, votre VPN ou une plage d\'adresses qui vous appartient — même si elle ressemble à une adresse publique. Une LLM locale : les transcriptions restent chez vous, sous votre responsabilité ; aucune validation cloud.') }}</div>
+      </div>
+      <div class="ms-4 mb-3 d-none" data-llm-section="organisation">
+        <div class="row g-2">
+          <div class="col-md-7">
+            <label class="form-label small mb-0" for="org-api-base">{{ _('Adresse OpenAI-compatible') }}</label>
+            <input type="url" class="form-control form-control-sm" id="org-api-base" name="org_api_base"
+                   placeholder="https://llm.exemple.local:8443/v1" value="{{ org.api_base if mode_on_disk == 'organisation' else '' }}">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small mb-0" for="org-model-alias">{{ _('Nom du modèle servi') }}</label>
+            <input type="text" class="form-control form-control-sm" id="org-model-alias" name="org_model_alias"
+                   placeholder="arbitrage" value="{{ org.model_alias if mode_on_disk == 'organisation' else 'arbitrage' }}">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label small mb-0" for="org-api-key">{{ _('Clé d\'API (facultative)') }}</label>
+            <input type="password" class="form-control form-control-sm" id="org-api-key" name="org_api_key" autocomplete="new-password"
+                   placeholder="{% if org.key_present %}{{ _('clé déjà enregistrée — laisser vide pour la conserver') }}{% else %}{{ _('laisser vide si le serveur n\'en demande pas') }}{% endif %}">
+            <div class="form-text">{{ _('Enregistrée dans le fichier .env du service (lecture réservée), jamais réaffichée.') }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="mode" id="llm-mode-cloud" value="cloud" {% if mode_on_disk == 'cloud' %}checked{% endif %}>
+        <label class="form-check-label fw-semibold" for="llm-mode-cloud">{{ _('Un fournisseur externe (cloud)') }}</label>
+        <div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>{{ _('Moins maîtrisé qu\'une LLM locale : la transcription intégrale de chaque réunion, le brief, les documents joints, le lexique et les noms des participants partent chez ce tiers. Jamais l\'audio ni les voix. Un administrateur devra ensuite valider ce fournisseur ci-dessous, un bandeau l\'annoncera à tous, et chaque réunion traitée gardera la trace du fournisseur.') }}</div>
+      </div>
+      <div class="ms-4 mb-3 d-none" data-llm-section="cloud">
+        <div class="row g-2">
+          <div class="col-md-5">
+            <label class="form-label small mb-0" for="cloud-provider">{{ _('Fournisseur') }}</label>
+            <select class="form-select form-select-sm" id="cloud-provider" name="cloud_provider">
+              {% for p in providers %}
+              <option value="{{ p.id }}" data-key-present="{{ 'yes' if p.key_present else 'no' }}"
+                      {% if cloud_model_on_disk.startswith(p.id ~ '/') %}selected{% endif %}>{{ p.label }}{% if p.key_present %} — {{ _('clé enregistrée') }}{% endif %}</option>
+              {% endfor %}
+              <option value="__other__">{{ _('Autre (catalogue opencode ou hors table)…') }}</option>
+            </select>
+          </div>
+          <div class="col-md-7 d-none" data-llm-section="cloud-other">
+            <label class="form-label small mb-0" for="cloud-provider-other">{{ _('Identifiant du fournisseur') }}</label>
+            <input type="text" class="form-control form-control-sm" id="cloud-provider-other" name="cloud_provider_other" placeholder="ex. deepseek">
+            <label class="form-label small mb-0 mt-2" for="cloud-custom-api-base">{{ _('URL https (seulement si le fournisseur est inconnu du catalogue opencode)') }}</label>
+            <input type="url" class="form-control form-control-sm" id="cloud-custom-api-base" name="cloud_custom_api_base" placeholder="https://api.exemple.com/v1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="cloud-model">{{ _('Modèle') }}</label>
+            <input type="text" class="form-control form-control-sm" id="cloud-model" name="cloud_model"
+                   placeholder="ex. mistral-large-4" value="{{ cloud_model_on_disk.partition('/')[2] if mode_on_disk == 'cloud' else '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="cloud-summary-model">{{ _('Modèle de résumé (facultatif, sinon le même)') }}</label>
+            <input type="text" class="form-control form-control-sm" id="cloud-summary-model" name="cloud_summary_model">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label small mb-0" for="cloud-api-key">{{ _('Clé d\'API du fournisseur') }}</label>
+            <input type="password" class="form-control form-control-sm" id="cloud-api-key" name="cloud_api_key" autocomplete="new-password"
+                   placeholder="{{ _('requise, sauf si une clé est déjà enregistrée pour ce fournisseur') }}">
+            <div class="form-text">{{ _('Enregistrée dans le fichier .env du service (lecture réservée), jamais réaffichée.') }}</div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ _('Enregistrer ce choix') }}</button>
+      <span class="small text-muted ms-2">{{ _('puis redémarrage du service') }}</span>
+    </form>
+  </div>
+</div>
+
+{% if cloud.active %}
 <div class="card mb-4">
   <div class="card-header">{{ _('Fournisseur configuré') }}</div>
   <div class="card-body">
@@ -91,5 +183,14 @@
     {% endif %}
   </div>
 </div>
+{% else %}
+<div class="alert alert-secondary" role="status" data-llm-cloud-inactive>
+  <strong>{{ _('Aucun fournisseur externe actif :') }}</strong>
+  {{ _('les phases LLM sont traitées par une LLM locale (cette machine ou un serveur de votre organisation). Rien ne part vers un tiers.') }}
+  {% if mode_on_disk == 'cloud' %}<span data-llm-cloud-pending>{{ _('Le fournisseur externe enregistré ci-dessus apparaîtra ici après le redémarrage du service.') }}</span>{% endif %}
+</div>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ asset_url('js/admin_llm_cloud_page.js') }}"></script>
 {% endblock %}

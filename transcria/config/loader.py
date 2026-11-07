@@ -736,6 +736,9 @@ _DEFAULT_CONFIG = {
             "enabled": False,
             "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
+            # « Serveur de mon organisation » protégé par une clé : NOM de la variable
+            # d'environnement qui la porte (jamais la clé) ; vide = sans clé.
+            "api_key_env": "",
             # Même garde-fou pour la correction (cf. summary_llm ci-dessus).
             "timeout_seconds": 7200,
             "opencode_bin": "opencode",

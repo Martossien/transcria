@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-06 23:34+0100\n"
+"POT-Creation-Date: 2026-11-07 11:24+0100\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -2041,68 +2041,68 @@ msgstr "Unknown Ollama model, or outside the offered choices."
 msgid "« %(m)s » est déjà le modèle actif."
 msgstr "“%(m)s” is already the active model."
 
-#: transcria/web/admin_routes.py:980
+#: transcria/web/admin_routes.py:981
 #, python-format
 msgid "Provider opencode non réaligné (%(e)s) — relancer scripts/setup_opencode.py."
 msgstr "opencode provider not realigned (%(e)s) — re-run scripts/setup_opencode.py."
 
-#: transcria/web/admin_routes.py:988
+#: transcria/web/admin_routes.py:989
 #, python-format
 msgid "Modèle « %(m)s » activé — téléchargement lancé en arrière-plan (ollama pull)."
 msgstr "Model “%(m)s” activated — download started in the background (ollama pull)."
 
-#: transcria/web/admin_routes.py:991
+#: transcria/web/admin_routes.py:992
 #, python-format
 msgid "Modèle « %(m)s » activé — aucun redémarrage requis."
 msgstr "Model “%(m)s” activated — no restart required."
 
-#: transcria/web/admin_routes.py:1014
+#: transcria/web/admin_routes.py:1015
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
-#: transcria/web/admin_routes.py:1048
+#: transcria/web/admin_routes.py:1049
 msgid "Rien à appliquer : le plan n'est plus d'actualité."
 msgstr "Nothing to apply: the plan is no longer current."
 
-#: transcria/web/admin_routes.py:1053
+#: transcria/web/admin_routes.py:1054
 #, python-format
 msgid "Échec de l'application du plan : %(err)s"
 msgstr "Failed to apply the plan: %(err)s"
 
-#: transcria/web/admin_routes.py:1059
+#: transcria/web/admin_routes.py:1060
 #, python-format
 msgid "Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Multi-instance plan applied (%(n)s instance(s)). Restart the service to apply it: sudo systemctl restart transcria"
 
-#: transcria/web/ask_routes.py:42
+#: transcria/web/ask_routes.py:50
 msgid "La question est vide."
 msgstr "The question is empty."
 
-#: transcria/web/ask_routes.py:43
+#: transcria/web/ask_routes.py:51
 msgid "La question est trop longue."
 msgstr "The question is too long."
 
-#: transcria/web/ask_routes.py:44
+#: transcria/web/ask_routes.py:52
 msgid "Niveau demandé invalide."
 msgstr "Invalid requested level."
 
-#: transcria/web/ask_routes.py:45
+#: transcria/web/ask_routes.py:53
 msgid "Réunion cible invalide."
 msgstr "Invalid target meeting."
 
-#: transcria/web/ask_routes.py:46
+#: transcria/web/ask_routes.py:54
 msgid "Identifiant de conversation invalide."
 msgstr "Invalid conversation identifier."
 
-#: transcria/web/ask_routes.py:124 transcria/web/templates/ask_meetings.html:16
+#: transcria/web/ask_routes.py:145 transcria/web/templates/ask_meetings.html:16
 msgid "La discussion avec les réunions est désactivée par l'administrateur."
 msgstr "Chatting with meetings has been disabled by the administrator."
 
-#: transcria/web/ask_routes.py:159
+#: transcria/web/ask_routes.py:180
 msgid "Demande introuvable."
 msgstr "Request not found."
 
-#: transcria/web/ask_routes.py:225
+#: transcria/web/ask_routes.py:246
 msgid "non attribué"
 msgstr "unassigned"
 
@@ -2195,6 +2195,9 @@ msgid "Expose POST /v1/audio/transcriptions (transcription OpenAI-audio) et POST
 msgstr "Exposes POST /v1/audio/transcriptions (OpenAI-audio transcription) and POST /v1/audio/ingest (upload a meeting recording → job). Disabled = endpoints absent. Authenticated by a personal API token (see docs/TEMPS_REEL_REUNIONS.md)."
 
 #: transcria/web/config_form.py:86
+#: transcria/web/templates/admin_llm_cloud.html:2
+#: transcria/web/templates/admin_llm_cloud.html:4
+#: transcria/web/templates/base.html:74
 msgid "LLM d'arbitrage"
 msgstr "Arbitration LLM"
 
@@ -2671,28 +2674,84 @@ msgstr "Initial admin password"
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Change the default value before any real use."
 
-#: transcria/web/llm_cloud_routes.py:54
+#: transcria/web/llm_cloud_routes.py:38
+msgid "Mode inconnu."
+msgstr "Unknown mode."
+
+#: transcria/web/llm_cloud_routes.py:39
+msgid "Adresse du serveur invalide : attendu http(s)://hôte[:port]/v1, sans identifiants ni paramètres."
+msgstr "Invalid server address: expected http(s)://host[:port]/v1, without credentials or parameters."
+
+#: transcria/web/llm_cloud_routes.py:40
+msgid "Alias du modèle invalide (lettres, chiffres, . _ : -)."
+msgstr "Invalid model alias (letters, digits, . _ : -)."
+
+#: transcria/web/llm_cloud_routes.py:41
+msgid "Clé d'API invalide ou manquante (pas d'espace ni de guillemet, 512 caractères au plus)."
+msgstr "Invalid or missing API key (no spaces or quotes, 512 characters at most)."
+
+#: transcria/web/llm_cloud_routes.py:42
+msgid "Identifiant de fournisseur invalide."
+msgstr "Invalid provider identifier."
+
+#: transcria/web/llm_cloud_routes.py:43
+msgid "Modèle invalide."
+msgstr "Invalid model."
+
+#: transcria/web/llm_cloud_routes.py:44
+msgid "Fournisseur hors table : une URL https:// non locale est requise."
+msgstr "Provider not in the table: a non-local https:// URL is required."
+
+#: transcria/web/llm_cloud_routes.py:127
+#, python-format
+msgid "Enregistrement impossible : %(detail)s"
+msgstr "Could not save: %(detail)s"
+
+#: transcria/web/llm_cloud_routes.py:135
+#, python-format
+msgid "Fournisseur externe enregistré (%(m)s). Redémarrez le service, puis validez ce fournisseur ci-dessous : tant que ce n'est pas fait, les traitements LLM sont refusés."
+msgstr "External provider saved (%(m)s). Restart the service, then approve this provider below: until then, LLM processing is refused."
+
+#: transcria/web/llm_cloud_routes.py:138
+#, python-format
+msgid "Serveur de votre organisation enregistré (%(m)s) : une LLM locale, sans validation cloud. Redémarrez le service pour l'appliquer."
+msgstr "Your organisation's server saved (%(m)s): a local LLM, no cloud approval needed. Restart the service to apply it."
+
+#: transcria/web/llm_cloud_routes.py:141
+msgid "LLM sur cette machine rétablie. Redémarrez le service pour l'appliquer."
+msgstr "LLM on this machine restored. Restart the service to apply it."
+
+#: transcria/web/llm_cloud_routes.py:155
+#, python-format
+msgid "Redémarrage automatique impossible (%(e)s). Lancez sur le serveur : %(cmd)s"
+msgstr "Automatic restart impossible (%(e)s). Run on the server: %(cmd)s"
+
+#: transcria/web/llm_cloud_routes.py:159
+msgid "Redémarrage lancé : le service revient dans une minute environ, reconnectez-vous ensuite."
+msgstr "Restart started: the service will be back in about a minute, then sign in again."
+
+#: transcria/web/llm_cloud_routes.py:170
 msgid "La LLM cloud n'est pas active sur cette instance (services.backend ≠ cloud) : rien à valider."
 msgstr "The cloud LLM is not active on this instance (services.backend ≠ cloud): nothing to validate."
 
-#: transcria/web/llm_cloud_routes.py:58
+#: transcria/web/llm_cloud_routes.py:174
 msgid "Fournisseur ou modèle cloud non résolu depuis la configuration : corrigez workflow.arbitration_llm.model_id (forme fournisseur/modèle) puis redémarrez le service."
 msgstr "Cloud provider or model could not be resolved from the configuration: fix workflow.arbitration_llm.model_id (provider/model form), then restart the service."
 
-#: transcria/web/llm_cloud_routes.py:77
+#: transcria/web/llm_cloud_routes.py:193
 #, python-format
 msgid "Validation enregistrée : les traitements LLM peuvent désormais partir vers %(p)s."
 msgstr "Validation recorded: LLM processing may now be sent to %(p)s."
 
-#: transcria/web/llm_cloud_routes.py:89
+#: transcria/web/llm_cloud_routes.py:205
 msgid "Aucune LLM cloud configurée : aucune validation à retirer."
 msgstr "No cloud LLM configured: no validation to withdraw."
 
-#: transcria/web/llm_cloud_routes.py:99
+#: transcria/web/llm_cloud_routes.py:215
 msgid "Validation retirée : les traitements LLM vers le fournisseur externe sont refusés."
 msgstr "Validation withdrawn: LLM processing to the external provider is now refused."
 
-#: transcria/web/llm_cloud_routes.py:101
+#: transcria/web/llm_cloud_routes.py:217
 msgid "Aucune validation en cours à retirer."
 msgstr "No current validation to withdraw."
 
@@ -3610,158 +3669,267 @@ msgstr "A service restart will be required."
 msgid "Aucune préconisation : aucun backend STT servi n'est configuré (voir la documentation des moteurs servis)."
 msgstr "No recommendation: no served STT backend is configured (see the served engines documentation)."
 
-#: transcria/web/templates/admin_llm_cloud.html:2
-#: transcria/web/templates/admin_models.html:88
-#: transcria/web/templates/base.html:74
-msgid "LLM cloud"
-msgstr "Cloud LLM"
-
-#: transcria/web/templates/admin_llm_cloud.html:4
-msgid "LLM d'arbitrage cloud"
-msgstr "Cloud arbitration LLM"
-
-#: transcria/web/templates/admin_llm_cloud.html:8
-msgid "La LLM cloud n'est pas active sur cette instance."
-msgstr "The cloud LLM is not active on this instance."
+#: transcria/web/templates/admin_llm_cloud.html:5
+msgid "La LLM d'arbitrage rédige le résumé, corrige la transcription, relit les livrables, répond dans « Discuter avec mes réunions ». Dites où elle tourne : c'est cette déclaration qui décide des protections, jamais l'adresse."
+msgstr "The arbitration LLM writes the summary, corrects the transcript, proofreads the deliverables and answers in “Talk to my meetings”. Say where it runs: this declaration decides the safeguards, never the address."
 
 #: transcria/web/templates/admin_llm_cloud.html:9
-msgid "Les phases LLM (résumé, correction, relecture, affinage) sont traitées par la LLM d'arbitrage locale : rien ne part vers un fournisseur externe."
-msgstr "The LLM phases (summary, correction, review, refinement) are handled by the local arbitration LLM: nothing is sent to an external provider."
+msgid "Un changement de LLM est enregistré mais pas encore appliqué : le service doit redémarrer."
+msgstr "An LLM change is saved but not yet applied: the service must restart."
 
-#: transcria/web/templates/admin_llm_cloud.html:10
-msgid "Pour l'activer, réglez <code>services.backend: cloud</code> et <code>workflow.arbitration_llm.model_id</code> (forme <code>fournisseur/modèle</code>) dans <code>config.yaml</code>, fournissez la clé du fournisseur par variable d'environnement, puis <strong>redémarrez le service</strong> : la bascule ne prend effet qu'au redémarrage. Revenez ensuite sur cet écran pour la valider."
-msgstr "To enable it, set <code>services.backend: cloud</code> and <code>workflow.arbitration_llm.model_id</code> (<code>provider/model</code> form) in <code>config.yaml</code>, supply the provider's key through an environment variable, then <strong>restart the service</strong>: the switch only takes effect at restart. Then come back to this screen to validate it."
+#: transcria/web/templates/admin_llm_cloud.html:11
+msgid "Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris."
+msgstr "Restart the service now? Running jobs will be interrupted and resumed."
 
-#: transcria/web/templates/admin_llm_cloud.html:15
-msgid "Fournisseur configuré"
-msgstr "Configured provider"
+#: transcria/web/templates/admin_llm_cloud.html:12
+msgid "Redémarrer le service"
+msgstr "Restart the service"
 
 #: transcria/web/templates/admin_llm_cloud.html:18
+msgid "Où tourne la LLM d'arbitrage ?"
+msgstr "Where does the arbitration LLM run?"
+
+#: transcria/web/templates/admin_llm_cloud.html:20
+msgid "actuellement : fournisseur externe"
+msgstr "currently: external provider"
+
+#: transcria/web/templates/admin_llm_cloud.html:21
+msgid "actuellement : serveur de mon organisation"
+msgstr "currently: my organisation's server"
+
+#: transcria/web/templates/admin_llm_cloud.html:22
+msgid "actuellement : sur cette machine"
+msgstr "currently: on this machine"
+
+#: transcria/web/templates/admin_llm_cloud.html:28
+msgid "Sur cette machine"
+msgstr "On this machine"
+
+#: transcria/web/templates/admin_llm_cloud.html:29
+msgid "llama-server ou Ollama, lancés et arrêtés par TranscrIA selon la mémoire GPU disponible. Rien ne quitte la machine."
+msgstr "llama-server or Ollama, started and stopped by TranscrIA according to available GPU memory. Nothing leaves the machine."
+
+#: transcria/web/templates/admin_llm_cloud.html:34
+msgid "Un serveur de mon organisation"
+msgstr "A server of my organisation"
+
+#: transcria/web/templates/admin_llm_cloud.html:35
+msgid "Un serveur OpenAI-compatible (vLLM, llama-server, Ollama…) sur votre réseau, votre VPN ou une plage d'adresses qui vous appartient — même si elle ressemble à une adresse publique. Une LLM locale : les transcriptions restent chez vous, sous votre responsabilité ; aucune validation cloud."
+msgstr "An OpenAI-compatible server (vLLM, llama-server, Ollama…) on your network, your VPN or an address range you own — even if it looks like a public address. A local LLM: transcripts stay with you, under your responsibility; no cloud approval."
+
+#: transcria/web/templates/admin_llm_cloud.html:40
+msgid "Adresse OpenAI-compatible"
+msgstr "OpenAI-compatible address"
+
+#: transcria/web/templates/admin_llm_cloud.html:45
+msgid "Nom du modèle servi"
+msgstr "Name of the served model"
+
+#: transcria/web/templates/admin_llm_cloud.html:50
+msgid "Clé d'API (facultative)"
+msgstr "API key (optional)"
+
+#: transcria/web/templates/admin_llm_cloud.html:52
+msgid "clé déjà enregistrée — laisser vide pour la conserver"
+msgstr "key already saved — leave empty to keep it"
+
+#: transcria/web/templates/admin_llm_cloud.html:52
+msgid "laisser vide si le serveur n'en demande pas"
+msgstr "leave empty if the server does not require one"
+
+#: transcria/web/templates/admin_llm_cloud.html:53
+#: transcria/web/templates/admin_llm_cloud.html:94
+msgid "Enregistrée dans le fichier .env du service (lecture réservée), jamais réaffichée."
+msgstr "Saved in the service's .env file (restricted read access), never displayed again."
+
+#: transcria/web/templates/admin_llm_cloud.html:60
+msgid "Un fournisseur externe (cloud)"
+msgstr "An external provider (cloud)"
+
+#: transcria/web/templates/admin_llm_cloud.html:61
+msgid "Moins maîtrisé qu'une LLM locale : la transcription intégrale de chaque réunion, le brief, les documents joints, le lexique et les noms des participants partent chez ce tiers. Jamais l'audio ni les voix. Un administrateur devra ensuite valider ce fournisseur ci-dessous, un bandeau l'annoncera à tous, et chaque réunion traitée gardera la trace du fournisseur."
+msgstr "Less under your control than a local LLM: the full transcript of every meeting, the brief, the attached documents, the glossary and the participants' names go to this third party. Never the audio or the voices. An administrator will then have to approve this provider below, a banner will tell everyone, and every processed meeting will keep a record of the provider."
+
+#: transcria/web/templates/admin_llm_cloud.html:66
+#: transcria/web/templates/admin_llm_cloud.html:110
 msgid "Fournisseur"
 msgstr "Provider"
 
-#: transcria/web/templates/admin_llm_cloud.html:20
-msgid "catalogue opencode, non qualifié"
-msgstr "opencode catalog, not qualified"
+#: transcria/web/templates/admin_llm_cloud.html:70
+msgid "clé enregistrée"
+msgstr "key saved"
 
-#: transcria/web/templates/admin_llm_cloud.html:21
-msgid "hors table des fournisseurs connus"
-msgstr "not in the table of known providers"
+#: transcria/web/templates/admin_llm_cloud.html:72
+msgid "Autre (catalogue opencode ou hors table)…"
+msgstr "Other (opencode catalogue or outside the table)…"
 
-#: transcria/web/templates/admin_llm_cloud.html:22
+#: transcria/web/templates/admin_llm_cloud.html:76
+msgid "Identifiant du fournisseur"
+msgstr "Provider identifier"
+
+#: transcria/web/templates/admin_llm_cloud.html:78
+msgid "URL https (seulement si le fournisseur est inconnu du catalogue opencode)"
+msgstr "https URL (only if the provider is unknown to the opencode catalogue)"
+
+#: transcria/web/templates/admin_llm_cloud.html:82
+#: transcria/web/templates/admin_llm_cloud.html:114
 #: transcria/web/templates/admin_models.html:33
 #: transcria/web/templates/admin_models.html:163
 msgid "Modèle"
 msgstr "Model"
 
-#: transcria/web/templates/admin_llm_cloud.html:24
+#: transcria/web/templates/admin_llm_cloud.html:87
+msgid "Modèle de résumé (facultatif, sinon le même)"
+msgstr "Summary model (optional, otherwise the same)"
+
+#: transcria/web/templates/admin_llm_cloud.html:91
+msgid "Clé d'API du fournisseur"
+msgstr "Provider API key"
+
+#: transcria/web/templates/admin_llm_cloud.html:93
+msgid "requise, sauf si une clé est déjà enregistrée pour ce fournisseur"
+msgstr "required, unless a key is already saved for this provider"
+
+#: transcria/web/templates/admin_llm_cloud.html:99
+msgid "Enregistrer ce choix"
+msgstr "Save this choice"
+
+#: transcria/web/templates/admin_llm_cloud.html:100
+msgid "puis redémarrage du service"
+msgstr "then restart the service"
+
+#: transcria/web/templates/admin_llm_cloud.html:107
+msgid "Fournisseur configuré"
+msgstr "Configured provider"
+
+#: transcria/web/templates/admin_llm_cloud.html:112
+msgid "catalogue opencode, non qualifié"
+msgstr "opencode catalog, not qualified"
+
+#: transcria/web/templates/admin_llm_cloud.html:113
+msgid "hors table des fournisseurs connus"
+msgstr "not in the table of known providers"
+
+#: transcria/web/templates/admin_llm_cloud.html:116
 msgid "URL"
 msgstr "URL"
 
-#: transcria/web/templates/admin_llm_cloud.html:26
+#: transcria/web/templates/admin_llm_cloud.html:118
 msgid "Hébergement"
 msgstr "Hosting"
 
-#: transcria/web/templates/admin_llm_cloud.html:27
+#: transcria/web/templates/admin_llm_cloud.html:119
 msgid "non renseigné : vérifiez-le auprès du fournisseur"
 msgstr "not provided: check with the provider"
 
-#: transcria/web/templates/admin_llm_cloud.html:30
+#: transcria/web/templates/admin_llm_cloud.html:122
 msgid "Ce fournisseur vient du catalogue models.dev d'opencode : TranscrIA n'a vérifié ni son hébergement, ni sa conservation des données, ni ses conditions. Vérifiez-les vous-même avant de valider."
 msgstr "This provider comes from opencode's models.dev catalog: TranscrIA has verified neither its hosting, nor its data retention, nor its terms. Check them yourself before approving."
 
-#: transcria/web/templates/admin_llm_cloud.html:39
+#: transcria/web/templates/admin_llm_cloud.html:131
 msgid "Conditions du fournisseur"
 msgstr "Provider terms"
 
-#: transcria/web/templates/admin_llm_cloud.html:45
+#: transcria/web/templates/admin_llm_cloud.html:137
 msgid "Ce qui part chez le fournisseur"
 msgstr "What is sent to the provider"
 
-#: transcria/web/templates/admin_llm_cloud.html:48
+#: transcria/web/templates/admin_llm_cloud.html:140
 msgid "la transcription intégrale de chaque réunion traitée ;"
 msgstr "the full transcript of each processed meeting;"
 
-#: transcria/web/templates/admin_llm_cloud.html:49
+#: transcria/web/templates/admin_llm_cloud.html:141
 msgid "le brief d'invitation collé ;"
 msgstr "the pasted invitation brief;"
 
-#: transcria/web/templates/admin_llm_cloud.html:50
+#: transcria/web/templates/admin_llm_cloud.html:142
 msgid "le texte extrait des documents joints ;"
 msgstr "the text extracted from attached documents;"
 
-#: transcria/web/templates/admin_llm_cloud.html:51
+#: transcria/web/templates/admin_llm_cloud.html:143
 msgid "le lexique de session filtré ;"
 msgstr "the filtered session lexicon;"
 
-#: transcria/web/templates/admin_llm_cloud.html:52
+#: transcria/web/templates/admin_llm_cloud.html:144
 msgid "les noms et fonctions des participants ;"
 msgstr "the names and roles of participants;"
 
-#: transcria/web/templates/admin_llm_cloud.html:53
+#: transcria/web/templates/admin_llm_cloud.html:145
 msgid "le contexte de la réunion (type, titre, champs saisis)."
 msgstr "the meeting context (type, title, entered fields)."
 
-#: transcria/web/templates/admin_llm_cloud.html:55
+#: transcria/web/templates/admin_llm_cloud.html:147
 msgid "Jamais l'audio ni les voix :"
 msgstr "Never the audio or voices:"
 
-#: transcria/web/templates/admin_llm_cloud.html:55
+#: transcria/web/templates/admin_llm_cloud.html:147
 msgid "la transcription et la diarisation restent sur cette instance."
 msgstr "transcription and diarization stay on this instance."
 
-#: transcria/web/templates/admin_llm_cloud.html:56
+#: transcria/web/templates/admin_llm_cloud.html:148
 msgid "La LLM peut éditer des fichiers dans un espace isolé, comme la LLM locale."
 msgstr "The LLM can edit files in an isolated workspace, like the local LLM."
 
-#: transcria/web/templates/admin_llm_cloud.html:57
+#: transcria/web/templates/admin_llm_cloud.html:149
 msgid "Les coûts, la consommation et la disponibilité du fournisseur relèvent de l'administrateur."
 msgstr "Costs, usage and availability of the provider are the administrator's responsibility."
 
-#: transcria/web/templates/admin_llm_cloud.html:58
+#: transcria/web/templates/admin_llm_cloud.html:150
 msgid "La bascule prend effet au redémarrage du service ; les jobs en file seront traités par le nouveau backend."
 msgstr "The switch takes effect when the service restarts; queued jobs will be processed by the new backend."
 
-#: transcria/web/templates/admin_llm_cloud.html:63
+#: transcria/web/templates/admin_llm_cloud.html:155
 msgid "Validation administrateur"
 msgstr "Administrator validation"
 
-#: transcria/web/templates/admin_llm_cloud.html:67
+#: transcria/web/templates/admin_llm_cloud.html:159
 #, python-format
 msgid "Validée par <strong>%(who)s</strong> le %(when)s (UTC)."
 msgstr "Validated by <strong>%(who)s</strong> on %(when)s (UTC)."
 
-#: transcria/web/templates/admin_llm_cloud.html:68
+#: transcria/web/templates/admin_llm_cloud.html:160
 msgid "Réunions captées par connecteurs et bots : autorisées."
 msgstr "Meetings captured by connectors and bots: allowed."
 
-#: transcria/web/templates/admin_llm_cloud.html:68
+#: transcria/web/templates/admin_llm_cloud.html:160
 msgid "Réunions captées par connecteurs et bots : refusées."
 msgstr "Meetings captured by connectors and bots: refused."
 
-#: transcria/web/templates/admin_llm_cloud.html:71
+#: transcria/web/templates/admin_llm_cloud.html:163
 msgid "Validation <strong>CADUQUE</strong> : le texte d'avertissement a changé depuis. Relisez cet écran et validez de nouveau ; d'ici là, les traitements LLM sont refusés."
 msgstr "Validation <strong>EXPIRED</strong>: the warning text has changed since. Review this screen and validate again; until then, LLM processing is refused."
 
-#: transcria/web/templates/admin_llm_cloud.html:74
+#: transcria/web/templates/admin_llm_cloud.html:166
 msgid "Non validée : tant qu'un administrateur n'a pas validé ce fournisseur et ce modèle, les traitements LLM sont refusés."
 msgstr "Not validated: until an administrator has validated this provider and model, LLM processing is refused."
 
-#: transcria/web/templates/admin_llm_cloud.html:81
+#: transcria/web/templates/admin_llm_cloud.html:173
 msgid "Autoriser aussi les réunions captées par connecteurs et bots"
 msgstr "Also allow meetings captured by connectors and bots"
 
-#: transcria/web/templates/admin_llm_cloud.html:83
+#: transcria/web/templates/admin_llm_cloud.html:175
 msgid "Je valide"
 msgstr "I validate"
 
-#: transcria/web/templates/admin_llm_cloud.html:88
+#: transcria/web/templates/admin_llm_cloud.html:180
 msgid "Retirer la validation ? Les traitements LLM vers ce fournisseur seront refusés."
 msgstr "Withdraw the validation? LLM processing to this provider will be refused."
 
-#: transcria/web/templates/admin_llm_cloud.html:89
+#: transcria/web/templates/admin_llm_cloud.html:181
 msgid "Retirer la validation"
 msgstr "Withdraw the validation"
+
+#: transcria/web/templates/admin_llm_cloud.html:188
+msgid "Aucun fournisseur externe actif :"
+msgstr "No external provider active:"
+
+#: transcria/web/templates/admin_llm_cloud.html:189
+msgid "les phases LLM sont traitées par une LLM locale (cette machine ou un serveur de votre organisation). Rien ne part vers un tiers."
+msgstr "LLM phases are handled by a local LLM (this machine or a server of your organisation). Nothing goes to a third party."
+
+#: transcria/web/templates/admin_llm_cloud.html:190
+msgid "Le fournisseur externe enregistré ci-dessus apparaîtra ici après le redémarrage du service."
+msgstr "The external provider saved above will appear here after the service restarts."
 
 #: transcria/web/templates/admin_maintenance.html:2
 #: transcria/web/templates/admin_maintenance.html:5
@@ -4072,6 +4240,10 @@ msgstr "Ollama daemon unreachable — start it to know the real status"
 #: transcria/web/templates/admin_models.html:78
 msgid "taille selon le modèle (magasin Ollama)"
 msgstr "size depends on the model (Ollama store)"
+
+#: transcria/web/templates/admin_models.html:88
+msgid "LLM cloud"
+msgstr "Cloud LLM"
 
 #: transcria/web/templates/admin_models.html:96
 msgid "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
@@ -7046,4 +7218,16 @@ msgstr "Generate summary"
 
 #~ msgid "Aucun GPU détecté sur cette machine — la transcription CPU reste possible, et les phases LLM sont servies par le fournisseur cloud."
 #~ msgstr "No GPU detected on this machine — CPU transcription remains possible, and the LLM phases are served by the cloud provider."
+
+#~ msgid "LLM d'arbitrage cloud"
+#~ msgstr "Cloud arbitration LLM"
+
+#~ msgid "La LLM cloud n'est pas active sur cette instance."
+#~ msgstr "The cloud LLM is not active on this instance."
+
+#~ msgid "Les phases LLM (résumé, correction, relecture, affinage) sont traitées par la LLM d'arbitrage locale : rien ne part vers un fournisseur externe."
+#~ msgstr "The LLM phases (summary, correction, review, refinement) are handled by the local arbitration LLM: nothing is sent to an external provider."
+
+#~ msgid "Pour l'activer, réglez <code>services.backend: cloud</code> et <code>workflow.arbitration_llm.model_id</code> (forme <code>fournisseur/modèle</code>) dans <code>config.yaml</code>, fournissez la clé du fournisseur par variable d'environnement, puis <strong>redémarrez le service</strong> : la bascule ne prend effet qu'au redémarrage. Revenez ensuite sur cet écran pour la valider."
+#~ msgstr "To enable it, set <code>services.backend: cloud</code> and <code>workflow.arbitration_llm.model_id</code> (<code>provider/model</code> form) in <code>config.yaml</code>, supply the provider's key through an environment variable, then <strong>restart the service</strong>: the switch only takes effect at restart. Then come back to this screen to validate it."
 

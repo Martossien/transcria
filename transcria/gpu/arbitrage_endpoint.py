@@ -21,6 +21,7 @@ from transcria.config.views import LlmCloudView
 
 __all__ = [
     "ARBITRAGE_BACKENDS", "CLOUD_BACKEND", "PROVIDER_SOURCE_CATALOG", "PROVIDER_SOURCE_CUSTOM",
+    "arbitrage_api_key_env", "arbitrage_auth_headers", "arbitrage_root_url", "arbitrage_scheme",
     "PROVIDER_SOURCE_TABLE", "cloud_base_url", "cloud_view", "configured_backend",
     "default_base_url", "describe_arbitrage_endpoint", "is_cloud_backend", "is_ollama_backend",
     "is_remote_arbitrage", "ollama_model_name", "ollama_name_matches", "resolve_arbitrage_endpoint",
@@ -139,6 +140,44 @@ def cloud_base_url(config: dict) -> str:
     return cloud_view(config).base_url
 
 
+def arbitrage_scheme(config: dict) -> str:
+    """``http`` ou ``https`` pour une LLM d'arbitrage HORS cloud.
+
+    Un « serveur de mon organisation » (backend ``http``) peut être servi en https : le schéma
+    est celui de ``workflow.arbitration_llm.api_base`` quand elle est renseignée ; ``http`` sinon
+    (LLM locale, Ollama). Jamais déduit de l'adresse : une plage publique utilisée en LAN reste
+    ce que l'administrateur a déclaré.
+    """
+    api_base = str(((config.get("workflow") or {}).get("arbitration_llm") or {}).get("api_base") or "").strip()
+    return "https" if api_base.lower().startswith("https://") else "http"
+
+
+def arbitrage_root_url(config: dict) -> str:
+    """``<schéma>://<hôte>:<port>`` de la LLM d'arbitrage HORS cloud — pour les sondes (``/v1/models``,
+    test d'inférence). Source unique avec :func:`resolve_arbitrage_endpoint`."""
+    host, port = resolve_arbitrage_endpoint(config)
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"      # IPv6 nue
+    return f"{arbitrage_scheme(config)}://{host}:{port}"
+
+
+def arbitrage_api_key_env(config: dict) -> str:
+    """Nom de la variable d'environnement qui porte la clé d'un « serveur de mon organisation »
+    (``workflow.arbitration_llm.api_key_env``) ; vide = serveur sans clé (défaut historique)."""
+    return str(((config.get("workflow") or {}).get("arbitration_llm") or {}).get("api_key_env") or "").strip()
+
+
+def arbitrage_auth_headers(config: dict) -> dict[str, str]:
+    """En-tête ``Authorization: Bearer`` des appels DIRECTS à une LLM d'arbitrage hors cloud, quand
+    une clé est configurée ET présente dans l'environnement ; ``{}`` sinon (la clé n'est jamais
+    lue ailleurs que dans l'environnement du process, jamais journalisée)."""
+    if is_cloud_backend(config):
+        return {}
+    env_name = arbitrage_api_key_env(config)
+    key = os.environ.get(env_name, "") if env_name else ""
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
 def default_base_url(config: dict) -> str:
     """URL OpenAI de la LLM d'arbitrage (cf. :func:`resolve_arbitrage_endpoint`).
 
@@ -146,8 +185,7 @@ def default_base_url(config: dict) -> str:
     """
     if is_cloud_backend(config):
         return cloud_base_url(config)
-    host, port = resolve_arbitrage_endpoint(config)
-    return f"http://{host}:{port}/v1"
+    return f"{arbitrage_root_url(config)}/v1"
 
 
 def describe_arbitrage_endpoint(config: dict) -> str:

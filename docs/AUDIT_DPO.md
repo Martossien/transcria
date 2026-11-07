@@ -87,8 +87,13 @@ leur consentement à leur place.
   (OIDC/proxy/LDAP) journalisent la source et le groupe décisif ; un refus de mapping
   journalise les groupes reçus (diagnostic administrateur) — jamais de mot de passe, de
   secret de jeton ni d'email dans les détails d'audit.
-- **LLM d'arbitrage cloud** (fournisseur externe, `docs/LLM_CLOUD.md`) : trois actions,
+- **LLM d'arbitrage** (`docs/LLM_BACKENDS.md`, `docs/LLM_CLOUD.md`) : cinq actions,
   métadonnées seules — jamais de contenu de transcription, de prompt ou de clé d'API.
+  `config_llm_mode_change` (un administrateur change le mode de la LLM d'arbitrage depuis
+  l'écran : mode déclaré — sur cette machine, serveur de l'organisation, fournisseur externe —,
+  référence du modèle, nom de la variable d'environnement de la clé et si une clé a été fournie,
+  jamais sa valeur) ; `maintenance_service_restart` (redémarrage du service demandé depuis
+  l'écran) ;
   `config_llm_cloud_acknowledge` (un administrateur valide le couple fournisseur/modèle :
   fournisseur, modèle, version du texte d'information lu, réunions de connecteurs
   autorisées ou non) ; `config_llm_cloud_revoke` (retrait de la validation) ;
