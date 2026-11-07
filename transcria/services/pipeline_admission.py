@@ -41,7 +41,7 @@ def estimate_profile_resources(config: dict, profile) -> dict:
     if rr.needs_stt:
         phases["stt"] = get_backend_vram_mb(stt.stt_backend, config)
     if rr.needs_diarization:
-        phases["diarization"] = get_diarizer_vram_mb(stt.diarization_backend, config)
+        phases["diarization"] = get_diarizer_vram_mb(stt.diarization_backend, config, for_admission=True)
     # La LLM (résumé/correction) partage le même serveur d'arbitrage : on conditionne sa
     # réservation au flag global `arbitration_llm.enabled` (comme l'estimateur historique),
     # en plus du besoin du profil. En CLOUD, aucune part : la LLM ne consomme aucune VRAM

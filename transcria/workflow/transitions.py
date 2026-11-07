@@ -116,8 +116,25 @@ def mark_execution_started(job_id: str) -> None:
             "started_at": utcnow_iso(),
             "finished_at": None,
             "last_error": None,
+            "deferred_reason": None,
+            "deferred_required_mb": None,
         },
     )
+
+
+DEFERRED_LOCAL_VRAM = "local_vram"
+DEFERRED_LLM_VRAM = "llm_vram"
+DEFERRED_REMOTE_VRAM = "remote_vram"
+
+
+def mark_execution_deferred(job_id: str, *, reason: str, required_mb: int = 0) -> None:
+    """Un job en file que l'ordonnanceur n'admet pas DIT pourquoi (statut `queued` inchangé).
+
+    Vécu 2026-11-07 : une heure d'attente muette derrière 2 Go de VRAM que des cartes pleines ne
+    libéreraient jamais. La raison est lue par `GET /api/jobs/<id>/status` et affichée par le wizard ;
+    `mark_execution_started` l'efface."""
+    _merge_execution(job_id, {"deferred_reason": reason, "deferred_required_mb": int(required_mb or 0),
+                              "deferred_at": utcnow_iso()})
 
 
 def mark_execution_completed(job_id: str) -> None:

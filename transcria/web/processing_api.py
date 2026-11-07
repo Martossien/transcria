@@ -308,6 +308,11 @@ def api_job_status(job_id: str):
     queue_info = _queue_wait_info(job)
     if queue_info:
         payload.update(queue_info)
+        # Additif : POURQUOI le job attend (ordonnanceur) — posé par `mark_execution_deferred`.
+        execution = (job.get_extra_data() or {}).get("execution") or {}
+        if execution.get("deferred_reason"):
+            payload["deferred_reason"] = execution["deferred_reason"]
+            payload["deferred_required_mb"] = int(execution.get("deferred_required_mb") or 0)
     # Additif (lot 2, §3-b) : l'attente VRAM a dépassé la borne configurée
     # (workflow.vram_wait.max_wait_s) — le propriétaire doit le voir sans attendre
     # qu'un admin lise ses e-mails.

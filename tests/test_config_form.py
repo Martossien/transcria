@@ -233,7 +233,8 @@ class TestLibellesDesMoteurs:
         assert '<option value="kroko"' in body and "kroko — CPU uniquement (zéro VRAM)" in body
         assert '<option value="moss"' in body and "une passe" in body
         assert '<option value="qwen3asr"' in body and "runtime servi audio.cpp" in body
-        assert '<option value="nemotron_diar"' in body and "GPU ou CPU, 8 voix au plus" in body
+        assert '<option value="nemotron_diar"' in body and "GPU si libre sinon CPU, 8 voix au plus" in body
+        assert "automatique — GPU si une carte est libre, sinon CPU" in body
 
     def test_runtimes_servis_proposes_dans_le_backend_principal(self):
         field = next(f for sec in CONFIG_FORM_SECTIONS for f in sec["fields"] if f["path"] == "models.stt_backend")

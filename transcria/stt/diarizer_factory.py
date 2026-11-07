@@ -247,7 +247,8 @@ def create_diarizer(config: dict, device: str | None = None, progress_callback=N
     return DiarizerService(**kwargs)
 
 
-def get_diarizer_vram_mb(backend: str, config: dict, *, at_upload: bool = False) -> int:
+def get_diarizer_vram_mb(backend: str, config: dict, *, at_upload: bool = False,
+                         for_admission: bool = False) -> int:
     """Retourne la VRAM requise (Mo) pour le backend de diarisation donné.
 
     Args:
@@ -258,6 +259,11 @@ def get_diarizer_vram_mb(backend: str, config: dict, *, at_upload: bool = False)
                  ``nemotron_diar.backend: auto`` y tourne sur CPU (0 Mo) : rien n'attend
                  la carte, la LLM n'est jamais préemptée, et le pipeline réutilise le
                  checkpoint. ``cuda`` explicite garde le GPU partout.
+        for_admission: estimation pour l'ORDONNANCEUR. Nemotron 3 en ``auto`` n'y exige rien :
+                 la phase prend une carte si elle est libre, sinon tourne sur CPU
+                 (``nemotron_auto_cpu_fallback``). Vécu 2026-11-07 : un job attendait sans fin
+                 2 Go que des cartes pleines ne libéreraient jamais, alors que la phase savait
+                 se passer de GPU.
 
     Returns:
         Valeur en Mo lue depuis ``config.gpu.*_vram_mb``, avec défaut intégré.
@@ -271,7 +277,7 @@ def get_diarizer_vram_mb(backend: str, config: dict, *, at_upload: bool = False)
         # Backend CPU forcé ⇒ aucune VRAM (comme Kroko : la phase saute la réservation).
         section = config.get("nemotron_diar") or {}
         mode = str(section.get("backend") or "auto").lower()
-        if mode == "cpu" or (mode == "auto" and at_upload):
+        if mode == "cpu" or (mode == "auto" and (at_upload or for_admission)):
             return 0
         if cli_is_cpu_only(effective_cli(config)):
             # Précompilé CPU seul : réserver un GPU n'aurait aucun sens (et le binaire
@@ -279,6 +285,20 @@ def get_diarizer_vram_mb(backend: str, config: dict, *, at_upload: bool = False)
             return 0
         return int(gpu_cfg.get("nemotron_diar_vram_mb", default_at("gpu.nemotron_diar_vram_mb")))
     return int(gpu_cfg.get("pyannote_vram_mb", default_at("gpu.pyannote_vram_mb")))
+
+
+def nemotron_auto_cpu_fallback(backend: str, config: dict) -> bool:
+    """La diarisation finale peut-elle basculer sur CPU faute de carte libre ?
+
+    Vrai pour Nemotron 3 en ``nemotron_diar.backend: auto`` (le contrat de ``auto`` : GPU
+    réservé par la phase, SINON CPU — jamais une attente). ``cuda`` explicite garde l'attente
+    VRAM ; pyannote/Sortformer ne basculent pas (GPU indispensable en pratique)."""
+    if backend == DIARIZATION_AUTO:
+        backend = resolve_diarization_backend(config).backend
+    if backend != "nemotron_diar":
+        return False
+    mode = str(((config.get("nemotron_diar") or {}).get("backend")) or "auto").lower()
+    return mode in ("auto", "cpu")
 
 
 def list_available_backends() -> tuple[str, ...]:

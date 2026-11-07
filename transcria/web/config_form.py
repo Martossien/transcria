@@ -29,8 +29,13 @@ _DIAR_OPTION_LABELS = {
     "auto": _l("auto — Nemotron 3 jusqu'à 8 voix, pyannote au-delà (recommandé)"),
     "pyannote": _l("pyannote — GPU, nombre de voix illimité, jeton HF requis"),
     "sortformer": _l("sortformer — GPU, 4 voix au plus, sans jeton"),
-    "nemotron_diar": _l("nemotron_diar — GPU ou CPU, 8 voix au plus, sans jeton (audio.cpp)"),
+    "nemotron_diar": _l("nemotron_diar — GPU si libre sinon CPU, 8 voix au plus, sans jeton (audio.cpp)"),
     "remote": _l("remote — nœud de ressources distant"),
+}
+_NEMOTRON_COMPUTE_LABELS = {
+    "auto": _l("automatique — GPU si une carte est libre, sinon CPU (recommandé)"),
+    "cuda": _l("GPU seulement — attend une carte libre"),
+    "cpu": _l("CPU seulement — aucune mémoire GPU réservée"),
 }
 
 # Marqueur d'un secret masqué côté UI (aligné sur web.admin_routes.CONFIG_SECRET_SENTINEL).
@@ -92,6 +97,11 @@ CONFIG_FORM_SECTIONS: list[dict] = [
              "help": _l("Détection des locuteurs : auto (Nemotron 3 de 1 à 8 voix, pyannote au-delà ou pour un "
                         "comptage exact — recommandé), pyannote (illimité, token HF), sortformer (≤ 4, non gated), "
                         "nemotron_diar (≤ 8, non gated, runtime audio.cpp, GPU ou CPU).")},
+            {"path": "nemotron_diar.backend", "label": _l("Nemotron 3 : calcul"), "type": "select",
+             "options": ["auto", "cuda", "cpu"], "option_labels": _NEMOTRON_COMPUTE_LABELS,
+             "help": _l("Où tourne la diarisation Nemotron 3 (backends auto et nemotron_diar). En automatique, le "
+                        "traitement n'attend jamais une carte : il prend un GPU libre, sinon le CPU (quelques "
+                        "secondes par réunion).")},
             {"path": "models.diarization_suggest_auto", "label": _l("Proposer la diarisation « auto »"), "type": "bool",
              "help": _l("Tant que le backend reste pyannote/sortformer explicite, la page Modèles, l'accueil et le "
                         "doctor proposent de passer en « auto ». Décocher pour ne plus le voir.")},

@@ -485,7 +485,7 @@ bascule sur pyannote (comme Sortformer au-delà de 4).
 |---|---|---|---|
 | `cli_path` | string | `""` | Binaire `audiocpp_cli` ; vide = `<runtimes>/audiocpp/bin/audiocpp_cli` (build CUDA) sinon `<runtimes>/audiocpp/prebuilt/audiocpp_cli` (précompilé CPU) |
 | `model_path` | string | `""` | GGUF ; vide = `<models>/nemotron-3-diarization/nemotron-3-diarization-bf16.gguf` |
-| `backend` | string | `"auto"` | `auto` (CPU pour la passe lancée à l'upload, GPU réservé par le pipeline final), `cuda` (GPU partout), `cpu` (aucune VRAM réservée). Avec le binaire **précompilé** (marqueur `PREBUILT`, CPU seul — il refuse `--backend cuda`), tout tourne sur CPU et rien n'est réservé, quelle que soit cette valeur |
+| `backend` | string | `"auto"` | Exposé dans Réglages (« Nemotron 3 : calcul »). `auto` = CPU pour la passe lancée à l'upload ; pour le pipeline final, **GPU si une carte est libre, sinon CPU** — l'admission de l'ordonnanceur n'exige alors **aucune** VRAM (vécu 2026-11-07 : un job attendait sans fin 2 Go que des cartes pleines ne libéreraient jamais). `cuda` = GPU partout (le job attend une carte), `cpu` = aucune VRAM réservée. Avec le binaire **précompilé** (marqueur `PREBUILT`, CPU seul — il refuse `--backend cuda`), tout tourne sur CPU et rien n'est réservé, quelle que soit cette valeur |
 | `threads` | int | `0` | Threads du runtime ; `0` = min(16, cœurs) |
 | `timeout_s` | int | `1800` | Délai maximal du sous-process |
 | `min_speaker_total_s` | float | `2.0` | Sous ce total de parole, un locuteur est rattaché à son voisin |

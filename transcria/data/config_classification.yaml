@@ -2,6 +2,7 @@ _doc: 'Classification des clés de configuration (C2.2, RELEASE_0.2.0). TOUTE cl
   ici (garde CI) : exposed = dans le formulaire admin ; internal = jamais exposée (raison) ; deferred
   = à instruire domaine par domaine (exposer avec aide, ou justifier interne).'
 exposed:
+- nemotron_diar.backend
 - auth.backend
 - auth.first_admin_password
 - auth.ldap.base_dn
@@ -290,7 +291,6 @@ deferred:
 - sortformer.vram_mb
 - nemotron_diar.cli_path
 - nemotron_diar.model_path
-- nemotron_diar.backend
 - nemotron_diar.threads
 - nemotron_diar.timeout_s
 - nemotron_diar.min_speaker_total_s

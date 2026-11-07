@@ -37,7 +37,15 @@ from transcria.queue.notify_listener import QueueNotifyListener
 from transcria.queue.scheduler_lock import SchedulerLock
 from transcria.queue.store import QueueStore
 from transcria.workflow.resume import get_completed_phases
-from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
+from transcria.workflow.transitions import (
+    DEFERRED_LLM_VRAM,
+    DEFERRED_LOCAL_VRAM,
+    DEFERRED_REMOTE_VRAM,
+    get_execution_status,
+    is_cancel_requested,
+    mark_execution_deferred,
+    mark_execution_queued,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +65,7 @@ class QueueScheduler:
                  ask_fn: Callable[[], str] | None = None):
         self.app = app
         self.config = config
+        self._deferrals: dict[str, tuple[str, int]] = {}
         self.process_fn = process_fn
         # « Discuter avec mes réunions » : une demande à la fois, dans son propre thread, à chaque
         # itération de dispatch — injectée par l'exécuteur (le scheduler ne connaît pas les demandes).
@@ -319,7 +328,8 @@ class QueueScheduler:
         profile = entry.get_vram_profile()
         remote_vram = remote_vram_admits(self.config, remote_capabilities, profile)
         if remote_vram is False:
-            logger.info("Dispatch job différé: VRAM distante insuffisante", extra={"job_id": entry.job_id})
+            self._note_deferral(entry.job_id, DEFERRED_REMOTE_VRAM, 0,
+                                "Dispatch job différé: VRAM distante insuffisante")
             return False
         done_phases = self._done_profile_phases(entry.job_id)
         # La LLM d'arbitrage est un besoin MULTI-GPU (total ÷ nb de cartes du placement),
@@ -328,10 +338,8 @@ class QueueScheduler:
         # (L'ancien drapeau stocké `llm_shared` était TOUJOURS vrai — l'admission ne
         # vérifiait jamais la LLM, même éteinte : audit du 11/06/2026.)
         if not self._llm_admissible(profile, done_phases):
-            logger.info(
-                "Dispatch job différé: VRAM multi-GPU insuffisante pour (re)lancer la LLM d'arbitrage",
-                extra={"job_id": entry.job_id},
-            )
+            self._note_deferral(entry.job_id, DEFERRED_LLM_VRAM, 0,
+                                "Dispatch job différé: VRAM multi-GPU insuffisante pour (re)lancer la LLM d'arbitrage")
             return False
         required_mb = self._local_required_mb(profile, done_phases)
         # `required_mb` = max mono-GPU des phases NON-LLM restantes (STT/diarisation).
@@ -339,6 +347,13 @@ class QueueScheduler:
             return True
         if self.allocator.can_allocate(required_mb) is not None:
             return True
+        admitted = self._resources_after_reclaim(required_mb)
+        if not admitted:
+            self._note_deferral(entry.job_id, DEFERRED_LOCAL_VRAM, required_mb,
+                                f"Dispatch job différé: {required_mb} Mo de VRAM requis, aucune carte ne les offre")
+        return admitted
+
+    def _resources_after_reclaim(self, required_mb: int) -> bool:
 
         # Bloqué : une phase NON-LLM manque de VRAM. Catégorie 1 (TOUJOURS, indépendante
         # du calendrier) : si NOTRE LLM d'arbitrage inactive occupe la VRAM, on l'arrête
@@ -354,6 +369,19 @@ class QueueScheduler:
             self.allocator.force_free_gpu(self.allocator.preferred_gpu, allow_kill=True)
             return self.allocator.can_allocate(required_mb) is not None
         return False
+
+    def _note_deferral(self, job_id: str, reason: str, required_mb: int, message: str) -> None:
+        """Journalise UNE fois par (job, raison) et pose la raison dans l'état d'exécution — un job
+        qui attend doit le dire (journal + wizard), pas se taire à chaque tour de 5 s."""
+        key = (reason, int(required_mb or 0))
+        if self._deferrals.get(job_id) == key:
+            return
+        self._deferrals[job_id] = key
+        logger.info(message, extra={"job_id": job_id})
+        try:
+            mark_execution_deferred(job_id, reason=reason, required_mb=required_mb)
+        except Exception:  # noqa: BLE001 — l'information est best-effort, jamais bloquante
+            logger.debug("Raison d'attente non persistée", exc_info=True)
 
     def _preemption_aggressive(self) -> bool:
         policy = str((self.config.get("gpu", {}) or {}).get("preemption", "own-only")).strip().lower()

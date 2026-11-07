@@ -1078,6 +1078,20 @@ var TranscrIA = window.TranscrIA || {};
         return rest > 0 ? t('%(h)s h %(m)s min', { h: h, m: rest }) : t('%(h)s h', { h: h });
     }
 
+    function _deferredReasonText(reason, requiredMb) {
+        // Pourquoi l'ordonnanceur n'admet pas encore le job (posé par le serveur, jamais deviné ici).
+        if (reason === 'local_vram') {
+            return t("⏳ En attente de mémoire GPU : %(mb)s Mo requis, aucune carte ne les offre — le traitement partira dès qu'une carte se libère.", { mb: requiredMb || '?' });
+        }
+        if (reason === 'llm_vram') {
+            return t("⏳ En attente : mémoire GPU insuffisante pour relancer la LLM d'arbitrage.");
+        }
+        if (reason === 'remote_vram') {
+            return t("⏳ En attente : le nœud de ressources manque de mémoire GPU.");
+        }
+        return '';
+    }
+
     function _renderWorkflowStatusBanner(banner, state, progress, queueInfo, executionStatus) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
         var isTerminal = _TERMINAL_STATES.indexOf(state) !== -1;
@@ -1108,6 +1122,10 @@ var TranscrIA = window.TranscrIA || {};
                     : t('démarrage imminent'));
             }
             message = message ? (message + ' · ' + queueText) : queueText;
+        }
+        if (queueInfo && queueInfo.deferredReason) {
+            var whyText = _deferredReasonText(queueInfo.deferredReason, queueInfo.deferredRequiredMb);
+            if (whyText) message = message ? (message + ' · ' + whyText) : whyText;
         }
         if (queueInfo && queueInfo.vramWaitExceeded) {
             var vramText = t("⚠ L'attente GPU dépasse la limite configurée — vous pouvez patienter ou soumettre en profil express (moins de ressources)");
@@ -1151,7 +1169,8 @@ var TranscrIA = window.TranscrIA || {};
                 var state = r.data.state;
                 var progress = r.data.progress || null;
                 var queueInfo = r.data.queue_position
-                    ? { position: r.data.queue_position, estimate: r.data.wait_estimate || null }
+                    ? { position: r.data.queue_position, estimate: r.data.wait_estimate || null,
+                        deferredReason: r.data.deferred_reason || null, deferredRequiredMb: r.data.deferred_required_mb || 0 }
                     : null;
                 if (r.data.vram_wait_exceeded) {
                     queueInfo = queueInfo || {};

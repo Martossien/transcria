@@ -97,7 +97,16 @@ class JobService:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Résumé audio non persisté pour %s: %s", job.id, exc)
 
-        JobStore.update_state(job.id, JobState.ANALYZED)
+        # L'état n'avance vers ANALYZED que depuis UPLOADED/ANALYZED : l'autostart analyse en
+        # arrière-plan (plus d'une minute avec DNSMOS) pendant que l'utilisateur peut déjà avoir
+        # lancé le résumé — vécu 2026-11-07 : SUMMARY_RUNNING écrasé en ANALYZED, puis un second
+        # résumé enfilé et exécuté EN PARALLÈLE du premier (fichiers canoniques altérés).
+        current = JobStore.get_by_id(job.id)
+        if current is not None and current.state in (JobState.CREATED.value, JobState.UPLOADED.value, JobState.ANALYZED.value):
+            JobStore.update_state(job.id, JobState.ANALYZED)
+        else:
+            logger.info("Analyse audio terminée sans toucher à l'état du job %s (%s) — une étape a déjà pris la main",
+                        job.id, getattr(current, "state", "?"))
 
         sl = get_structured_logger(__name__)
         sl.info("Audio analysé", job_id=job.id,

@@ -129,6 +129,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Un job qui attend dit pourquoi** : l'ordonnanceur pose la raison du report (mémoire GPU locale
+  avec le besoin en Mo, LLM d'arbitrage, nœud distant) dans l'état d'exécution, exposée par
+  `GET /api/jobs/<id>/status` et affichée par le wizard ; journal une fois par raison (une heure
+  d'attente muette vécue le 2026-11-07).
+- **Nemotron 3 en `auto` n'attend jamais une carte** : aucune VRAM exigée à l'admission, la
+  diarisation finale bascule sur CPU faute de GPU libre ; le choix GPU/CPU est désormais dans
+  Réglages (« Nemotron 3 : calcul »).
+- **Plus de résumé en double** : l'analyse audio lancée en arrière-plan n'écrase plus l'état d'un
+  résumé déjà en cours (deux résumés tournaient en parallèle sur le même dossier).
 - **Serveur de mon organisation = consommé, jamais géré** : un backend `http` déclaré n'est plus
   lancé, arrêté ni préempté par TranscrIA, même sur `127.0.0.1` (un vLLM de l'admin a été tué par
   le script d'arrêt puis remplacé par llama-server). Cohérence à tous les points de décision :

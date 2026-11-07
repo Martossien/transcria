@@ -17,6 +17,7 @@ from transcria.stt.diarizer_factory import (
     configured_diarization_backend,
     create_diarizer,
     get_diarizer_vram_mb,
+    nemotron_auto_cpu_fallback,
 )
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.workflow.progress import progress_msg
@@ -138,6 +139,8 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
         percent=60,
         force=True,
     )
+    diar_vram_mb = 0   # lu par le `except GPUSessionError` final même si l'échec précède l'estimation
+
     try:
         # Tours issus du MANIFESTE (réunion, pistes) : re-diariser le mix écraserait la
         # segmentation exacte des pistes — et les sous-voix PISTE_<pid>_Sn du lot B2 —
@@ -218,6 +221,17 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
                 diarizer.offload()
                 return res
 
+        def _run_on_cpu() -> dict:
+            diarizer = create_diarizer(
+                config,
+                device="cpu",
+                progress_callback=runner._pyannote_progress_callback(job, "processing"),
+            )
+            try:
+                return diarizer.diarize(job, Path(audio_path))
+            finally:
+                diarizer.offload()
+
         if runs_remote:
             logger.info("[diarization] backend distant — aucune réservation VRAM locale")
             diarizer = create_diarizer(
@@ -237,19 +251,16 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
                 # retente une fois avant de basculer en attente VRAM.
                 if runner._reclaim_vram_from_idle_arbitrage_llm(logger):
                     result = _attempt_cuda()
+                elif nemotron_auto_cpu_fallback(diar_backend, config):
+                    # Contrat de `nemotron_diar.backend: auto` : GPU si libre, SINON CPU — jamais
+                    # une attente (vécu 2026-11-07 : cartes pleines par une LLM déclarée, job figé).
+                    logger.info("[diarization] aucune carte libre — Nemotron 3 (auto) bascule sur CPU")
+                    result = _run_on_cpu()
                 else:
                     raise
         else:
             logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
-            diarizer = create_diarizer(
-                config,
-                device="cpu",
-                progress_callback=runner._pyannote_progress_callback(job, "processing"),
-            )
-            try:
-                result = diarizer.diarize(job, Path(audio_path))
-            finally:
-                diarizer.offload()
+            result = _run_on_cpu()
 
         # Attribution genre par locuteur — audio_scene.json disponible à ce stade
         # (PipelineService le produit avant d'appeler run_diarization)
