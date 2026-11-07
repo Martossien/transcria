@@ -42,6 +42,9 @@ from transcria.config.llm_providers import (
     load_llm_providers,
     opencode_models_cache_path,
 )
+from transcria.config.llm_providers import (
+    catalog_models as catalog_models_for,
+)
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_value
 from transcria.installer.yaml_text_edit import YamlTextEditError, edit_yaml_text, write_text_preserving_owner
 from transcria.llm_tools.opencode_setup import (
@@ -94,12 +97,14 @@ _RESERVED_ENV = frozenset({
 
 
 class ActivationError(ValueError):
-    """Refus AVANT toute écriture : ``code`` stable (message localisé côté web), ``message`` français."""
+    """Refus AVANT toute écriture : ``code`` stable (message localisé côté web), ``message`` français,
+    ``extra`` = données pour le message (ex. suggestions de modèles)."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, extra: dict | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.extra = extra or {}
 
 
 @dataclass(frozen=True)
@@ -310,9 +315,36 @@ def _plan_organisation(req: ActivationRequest, cfg: dict, env_has_key: Callable[
                           opencode_base_url=url, opencode_model=alias, warnings=warnings)
 
 
+def _normalize_model_id(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def check_model_known(pid: str, model: str, known: tuple[str, ...] | list[str], label: str) -> None:
+    """Un identifiant hors catalogue est refusé AVANT écriture, avec la bonne graphie proposée.
+
+    Vécu 2026-11-07 : « GLM-5.3 » (le nom affiché) saisi pour Mistral, identifiant réel
+    « zai-glm-5-3 » → résumé en échec « Model not found » après redémarrage et validation. Le doctor
+    le disait après coup ; l'écran doit le dire avant."""
+    if not known or model in known:
+        return
+    import difflib
+
+    wanted = _normalize_model_id(model)
+    close = [m for m in known if wanted and wanted in _normalize_model_id(m)]
+    close += [m for m in difflib.get_close_matches(model, list(known), n=3, cutoff=0.5) if m not in close]
+    suggestions = close[:3]
+    hint = f" Vouliez-vous dire : {', '.join(suggestions)} ?" if suggestions else ""
+    raise ActivationError(
+        "model_unknown",
+        f"Modèle « {model} » inconnu du catalogue opencode pour {label} ({len(known)} modèles).{hint}",
+        extra={"model": model, "provider": pid, "suggestions": suggestions, "count": len(known)},
+    )
+
+
 def _plan_cloud(req: ActivationRequest, cfg: dict, *, providers: dict[str, LlmProvider],
                 catalog_lookup: Callable[[str], CatalogProvider | None],
-                env_has_key: Callable[[str], bool]) -> ActivationPlan:
+                env_has_key: Callable[[str], bool],
+                catalog_models: Callable[[str], tuple[str, ...]] | None = None) -> ActivationPlan:
     pid = (req.provider or "").strip().lower()
     if not _PROVIDER_ID_RE.match(pid):
         raise ActivationError("provider", "Identifiant de fournisseur invalide.")
@@ -328,6 +360,11 @@ def _plan_cloud(req: ActivationRequest, cfg: dict, *, providers: dict[str, LlmPr
         raise ActivationError("model", "Modèle de résumé invalide.")
     listed = providers.get(pid)
     catalog = None if listed is not None else catalog_lookup(pid)
+    known = tuple(catalog_models(pid)) if catalog_models is not None else ()
+    label_for_models = listed.label if listed is not None else (catalog.label if catalog is not None else pid)
+    check_model_known(pid, model, known, label_for_models)
+    if summary != model:
+        check_model_known(pid, summary, known, label_for_models)
     custom_base = ""
     if listed is not None:
         key_env, label, opencode = listed.api_key_env, listed.label, "share"
@@ -359,9 +396,14 @@ def _plan_cloud(req: ActivationRequest, cfg: dict, *, providers: dict[str, LlmPr
                           opencode_base_url=custom_base, opencode_model=model)
 
 
+def _default_catalog_models(pid: str) -> tuple[str, ...]:
+    return tuple(m["id"] for m in catalog_models_for(pid))
+
+
 def plan_activation(req: ActivationRequest, cfg: dict, *, providers: dict[str, LlmProvider] | None = None,
                     catalog_lookup: Callable[[str], CatalogProvider | None] | None = None,
-                    env_has_key: Callable[[str], bool] | None = None) -> ActivationPlan:
+                    env_has_key: Callable[[str], bool] | None = None,
+                    catalog_models: Callable[[str], tuple[str, ...]] | None = None) -> ActivationPlan:
     """Valide la demande et projette ce qui sera écrit — sans rien écrire.
 
     Quitter le mode local pose une photographie des clés locales (``services.local_llm_snapshot``)
@@ -377,7 +419,8 @@ def plan_activation(req: ActivationRequest, cfg: dict, *, providers: dict[str, L
     else:
         plan = _plan_cloud(req, cfg, providers=providers if providers is not None else load_llm_providers(),
                            catalog_lookup=catalog_lookup or (lambda pid: get_catalog_provider(pid)),
-                           env_has_key=has_key)
+                           env_has_key=has_key,
+                           catalog_models=catalog_models if catalog_models is not None else _default_catalog_models)
     if req.mode != MODE_LOCAL and current_mode(cfg) == MODE_LOCAL:
         # À chaque départ : un réglage local fait entre deux allers-retours (port, modèle Ollama)
         # doit être celui que le retour remet, pas une photographie d'origine.

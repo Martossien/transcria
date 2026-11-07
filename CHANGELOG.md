@@ -12,6 +12,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 #### Activation graphique de la LLM d'arbitrage (écran « LLM d'arbitrage »)
 
+- **Modèles cloud proposés depuis le catalogue d'opencode** : la liste des modèles du fournisseur
+  choisi se déroule sous le champ (identifiants, avec le nom affiché), et un identifiant inconnu du
+  catalogue est refusé avant toute écriture, avec la bonne graphie proposée (« GLM-5.3 » saisi →
+  « zai-glm-5-3 »). Route `GET /admin/llm-cloud/models/<fournisseur>`.
+
 - **Trois modes déclarés** dans `/admin/llm-cloud` : *sur cette machine*, *serveur de mon
   organisation* (OpenAI-compatible sur le réseau de l'organisation, http ou https, clé
   facultative — une LLM **locale**, sans gouvernance cloud), *fournisseur externe* (avertissement

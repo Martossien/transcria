@@ -457,6 +457,16 @@ serveur de mon organisation / fournisseur externe. Décisions :
 Tests : `tests/test_llm_activation.py` (plan/apply, 28), `tests/test_llm_org_server_key.py`
 (Bearer/https/opencode, 9), routes dans `tests/test_llm_cloud_web.py`.
 
+### 8 ter. Identifiant de modèle : liste du catalogue, refus avant écriture (2026-11-07, soir)
+
+Première qualification réelle du mode cloud par le mainteneur : « GLM-5.3 » saisi pour Mistral (le
+nom affiché), identifiant réel du catalogue « zai-glm-5-3 » → redémarrage, validation, puis résumé
+en échec « Model not found ». Le doctor le disait, mais après coup. Désormais : l'écran propose la
+liste des modèles du fournisseur depuis le cache models.dev d'opencode du compte de service
+(`llm_providers.catalog_models`, route `/admin/llm-cloud/models/<fournisseur>`), et
+`activation.check_model_known` refuse un identifiant absent du catalogue AVANT d'écrire, avec les
+graphies proches. Sans catalogue (fournisseur inconnu d'opencode), la saisie libre reste acceptée.
+
 ## 8. Questions ouvertes
 - ~~Le fournisseur d'opencode et OpenRouter exposent-ils `GET /v1/models` avec la même clé ?~~
   **Répondu le 2026-11-01 (sondes réelles, clé bidon)** : OpenRouter `GET /api/v1/models` → 200

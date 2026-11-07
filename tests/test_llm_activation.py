@@ -391,3 +391,46 @@ def test_env_cree_de_zero_est_0600_et_garde_le_proprietaire(files, tmp_path):
     act.apply_activation(plan, config_path=files.config, env_file=env, opencode_config=files.opencode, chown=seen.append)
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
     assert env in seen and files.opencode in seen
+
+
+# ── Identifiant de modèle vérifié contre le catalogue (2026-11-07) ──────────
+
+def test_modele_hors_catalogue_refuse_avec_suggestion():
+    known = ("mistral-large-latest", "zai-glm-5-3", "zai-glm-5-3-flash", "devstral-2512")
+    with pytest.raises(act.ActivationError) as exc:
+        act.plan_activation(act.ActivationRequest(mode="cloud", provider="mistral", model="GLM-5.3", api_key="k"),
+                            LOCAL_CFG, providers=_providers(), catalog_lookup=_no_catalog, env_has_key=NO_KEY,
+                            catalog_models=lambda pid: known)
+    assert exc.value.code == "model_unknown"
+    assert exc.value.extra["suggestions"][0] == "zai-glm-5-3" and exc.value.extra["count"] == 4
+    plan = act.plan_activation(act.ActivationRequest(mode="cloud", provider="mistral", model="zai-glm-5-3", api_key="k"),
+                               LOCAL_CFG, providers=_providers(), catalog_lookup=_no_catalog, env_has_key=NO_KEY,
+                               catalog_models=lambda pid: known)
+    assert plan.model_ref == "mistral/zai-glm-5-3"
+    # Sans catalogue (fournisseur inconnu d'opencode), aucune vérification possible : accepté tel quel.
+    plan2 = act.plan_activation(act.ActivationRequest(mode="cloud", provider="mistral", model="GLM-5.3", api_key="k"),
+                                LOCAL_CFG, providers=_providers(), catalog_lookup=_no_catalog, env_has_key=NO_KEY,
+                                catalog_models=lambda pid: ())
+    assert plan2.model_ref == "mistral/GLM-5.3"
+
+
+def test_modele_de_resume_aussi_verifie():
+    known = ("a-1", "b-2")
+    with pytest.raises(act.ActivationError) as exc:
+        act.plan_activation(act.ActivationRequest(mode="cloud", provider="mistral", model="a-1", summary_model="c-3", api_key="k"),
+                            LOCAL_CFG, providers=_providers(), catalog_lookup=_no_catalog, env_has_key=NO_KEY,
+                            catalog_models=lambda pid: known)
+    assert exc.value.code == "model_unknown" and exc.value.extra["model"] == "c-3"
+
+
+def test_catalogue_expose_les_noms_des_modeles(tmp_path):
+    from transcria.config import llm_providers as lp
+
+    cache = tmp_path / "models.json"
+    cache.write_text(json.dumps({"acme": {"name": "Acme", "api": "https://api.acme.example/v1", "env": ["ACME_API_KEY"],
+                                          "npm": "@ai-sdk/openai-compatible",
+                                          "models": {"zai-glm-5-3": {"name": "GLM 5.3"}, "acme-mini": {}}}}), encoding="utf-8")
+    with lp.catalog_path_override(cache):
+        models = lp.catalog_models("acme")
+    assert models == [{"id": "acme-mini", "name": "acme-mini"}, {"id": "zai-glm-5-3", "name": "GLM 5.3"}]
+    assert lp.catalog_models("inconnu") == [] and lp.catalog_models("") == []

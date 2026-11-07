@@ -199,6 +199,10 @@ def activation_files(tmp_path, monkeypatch, local_cfg):
     monkeypatch.setattr(ConfigService, "get_path", staticmethod(lambda config_path=None: str(config)))
     monkeypatch.setattr(llm_cloud_routes, "resolve_opencode_path", lambda: str(opencode))
     monkeypatch.setattr(activation, "ORG_KEY_ENV", "TRANSCRIA_TEST_ORG_KEY")
+    # Les clés de fournisseur de la MACHINE (dotenv de l'app) ne doivent pas rendre un test vert :
+    # « clé requise » se teste sans clé dans l'environnement du process.
+    for var in ("MISTRAL_API_KEY", "OLLAMA_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
     return {"config": config, "env": env, "opencode": opencode}
 
 
@@ -282,3 +286,23 @@ def test_restart_button_uses_oneshot_and_falls_back_to_command(app, admin_client
     resp = admin_client.post("/admin/llm-cloud/restart")
     assert resp.status_code == 500
     assert "sudo systemctl restart transcria" in resp.get_data(as_text=True)
+
+
+def test_models_route_lists_catalog_models(admin_client, monkeypatch):
+    monkeypatch.setattr(llm_cloud_routes, "catalog_models",
+                        lambda pid: [{"id": "zai-glm-5-3", "name": "GLM 5.3"}] if pid == "mistral" else [])
+    assert admin_client.get("/admin/llm-cloud/models/mistral").get_json() == {
+        "provider": "mistral", "models": [{"id": "zai-glm-5-3", "name": "GLM 5.3"}]}
+    assert admin_client.get("/admin/llm-cloud/models/inconnu").get_json()["models"] == []
+    assert admin_client.get("/admin/llm-cloud/models/Pas%20Valide!").status_code == 400
+
+
+def test_activate_cloud_unknown_model_refused_with_suggestion(admin_client, activation_files, monkeypatch):
+    from transcria.llm_cloud import activation
+
+    monkeypatch.setattr(activation, "_default_catalog_models", lambda pid: ("zai-glm-5-3", "mistral-large-latest"))
+    resp = admin_client.post("/admin/llm-cloud/activate", data={
+        "mode": "cloud", "cloud_provider": "mistral", "cloud_model": "GLM-5.3", "cloud_api_key": "cle-x"})
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 400 and "inconnu du catalogue opencode" in html and "zai-glm-5-3" in html
+    assert "backend: cloud" not in activation_files["config"].read_text(encoding="utf-8")

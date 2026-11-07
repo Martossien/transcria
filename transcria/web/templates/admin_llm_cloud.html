@@ -80,12 +80,15 @@
           </div>
           <div class="col-md-6">
             <label class="form-label small mb-0" for="cloud-model">{{ _('Modèle') }}</label>
-            <input type="text" class="form-control form-control-sm" id="cloud-model" name="cloud_model"
-                   placeholder="ex. mistral-large-4" value="{{ cloud_model_on_disk.partition('/')[2] if mode_on_disk == 'cloud' else '' }}">
+            <input type="text" class="form-control form-control-sm" id="cloud-model" name="cloud_model" list="cloud-model-list"
+                   autocomplete="off" placeholder="{{ _('choisir dans la liste…') }}"
+                   value="{{ cloud_model_on_disk.partition('/')[2] if mode_on_disk == 'cloud' else '' }}">
+            <datalist id="cloud-model-list" data-models-url="{{ url_for('web.admin_llm_cloud_models', provider='__PROVIDER__') }}"></datalist>
+            <div class="form-text" data-cloud-models-hint>{{ _("Identifiant du catalogue opencode (ex. zai-glm-5-3), pas le nom affiché par le fournisseur. La liste se remplit selon le fournisseur choisi.") }}</div>
           </div>
           <div class="col-md-6">
             <label class="form-label small mb-0" for="cloud-summary-model">{{ _('Modèle de résumé (facultatif, sinon le même)') }}</label>
-            <input type="text" class="form-control form-control-sm" id="cloud-summary-model" name="cloud_summary_model">
+            <input type="text" class="form-control form-control-sm" id="cloud-summary-model" name="cloud_summary_model" list="cloud-model-list" autocomplete="off">
           </div>
           <div class="col-md-7">
             <label class="form-label small mb-0" for="cloud-api-key">{{ _('Clé d\'API du fournisseur') }}</label>

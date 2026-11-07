@@ -11,9 +11,10 @@ Trois décisions qui ne bougent pas :
   bascule prend effet au redémarrage du service (bouton one-shot privilégié, ou commande).
 """
 import logging
+import re
 from pathlib import Path
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_babel import gettext as _
 from flask_login import current_user, login_required
@@ -22,7 +23,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, requires
 from transcria.config import get_config
-from transcria.config.llm_providers import load_llm_providers
+from transcria.config.llm_providers import catalog_models, load_llm_providers
 from transcria.i18n import select_locale
 from transcria.llm_cloud import activation
 from transcria.llm_cloud.gate import cloud_status
@@ -120,6 +121,14 @@ def admin_llm_cloud_activate() -> ResponseReturnValue:
     except activation.ActivationError as exc:
         audit_log(AuditAction.CONFIG_LLM_MODE_CHANGE, target_type="config", target_label="llm_arbitrage",
                   details={"mode": req.mode, "refused": exc.code, "key_set": bool(req.api_key.strip())})
+        if exc.code == "model_unknown":
+            suggestions = ", ".join(exc.extra.get("suggestions") or [])
+            flash(_("Modèle « %(m)s » inconnu du catalogue opencode pour ce fournisseur (%(n)s modèles connus). "
+                    "Saisissez l'identifiant du catalogue, pas le nom affiché — la liste se déroule sous le champ.",
+                    m=exc.extra.get("model", ""), n=exc.extra.get("count", 0)), "error")
+            if suggestions:
+                flash(_("Vouliez-vous dire : %(s)s ?", s=suggestions), "warning")
+            return _render_screen(400)
         builder = _ACTIVATION_MESSAGES.get(exc.code)
         if builder:
             flash(builder(), "error")
@@ -140,6 +149,18 @@ def admin_llm_cloud_activate() -> ResponseReturnValue:
     else:
         flash(_("LLM sur cette machine rétablie. Redémarrez le service pour l'appliquer."), "success")
     return redirect(url_for("web.admin_llm_cloud"))
+
+
+@web_bp.route("/admin/llm-cloud/models/<provider>")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_llm_cloud_models(provider: str) -> ResponseReturnValue:
+    """Modèles connus d'opencode pour un fournisseur (catalogue models.dev du compte de service) — liste
+    déroulante de l'écran ; ``[]`` si le fournisseur est inconnu du catalogue."""
+    pid = str(provider or "").strip().lower()
+    if not re.match(r"^[a-z0-9][a-z0-9._-]{0,63}$", pid):
+        return jsonify({"provider": pid, "models": []}), 400
+    return jsonify({"provider": pid, "models": catalog_models(pid)})
 
 
 @web_bp.route("/admin/llm-cloud/restart", methods=["POST"])

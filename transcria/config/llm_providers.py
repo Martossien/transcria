@@ -133,6 +133,9 @@ class CatalogProvider:
     model_ids: tuple[str, ...]
     npm: str = ""
     env_count: int = 0
+    #: (identifiant, nom affiché) — l'écran d'activation propose les identifiants, que l'admin ne
+    #: devine jamais (vécu : « GLM-5.3 » saisi, identifiant Mistral/opencode « zai-glm-5-3 »).
+    model_names: tuple[tuple[str, str], ...] = ()
 
     @property
     def resolvable(self) -> bool:
@@ -162,6 +165,9 @@ def _parse_catalog_provider(provider_id: str, raw: object) -> CatalogProvider | 
     env_list = [str(e).strip() for e in env if isinstance(e, str) and str(e).strip()] if isinstance(env, list) else []
     models = raw.get("models")
     model_ids = tuple(sorted(str(k) for k in models)) if isinstance(models, dict) else ()
+    model_names = tuple(
+        (str(k), str((v or {}).get("name") or k) if isinstance(v, dict) else str(k))
+        for k, v in sorted(models.items())) if isinstance(models, dict) else ()
     return CatalogProvider(
         id=provider_id,
         label=str(raw.get("name") or provider_id),
@@ -170,6 +176,7 @@ def _parse_catalog_provider(provider_id: str, raw: object) -> CatalogProvider | 
         model_ids=model_ids,
         npm=str(raw.get("npm") or ""),
         env_count=len(env_list),
+        model_names=model_names,
     )
 
 
@@ -219,6 +226,18 @@ def load_opencode_catalog(path: str | Path | None = None) -> dict[str, CatalogPr
     except OSError:
         return {}
     return _load_catalog(str(resolved), (int(st.st_mtime), int(st.st_size)))
+
+
+def catalog_models(provider_id: str | None, path: str | Path | None = None) -> list[dict[str, str]]:
+    """Les modèles qu'opencode connaît pour ce fournisseur — [{id, name}], triés par identifiant ;
+    ``[]`` sans catalogue ou fournisseur inconnu. Pour TOUT fournisseur du catalogue (table comprise :
+    Mistral y est aussi), résoluble ou non — c'est une liste à proposer, pas une autorisation."""
+    if not provider_id:
+        return []
+    found = load_opencode_catalog(path).get(str(provider_id).strip().lower())
+    if found is None:
+        return []
+    return [{"id": mid, "name": name} for mid, name in found.model_names]
 
 
 def get_catalog_provider(provider_id: str | None, path: str | Path | None = None) -> CatalogProvider | None:
