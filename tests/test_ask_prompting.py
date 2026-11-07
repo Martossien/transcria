@@ -102,3 +102,16 @@ def test_card_doc_tolere_une_fiche_vide():
     doc = card_doc("j", "", empty)
     assert isinstance(doc, CardDoc) and doc.rendered_chars > 0
     assert render_card(1, doc, date_is_import_fallback=True).startswith("[1] Réunion sans titre")
+
+
+def test_le_nom_du_traitement_est_montre_quand_il_differe_du_titre():
+    """L'utilisateur demande « la réunion show me the code » par le nom de l'accueil, pas par le
+    titre saisi à l'étape 4 : la fiche porte les deux (vécu 2026-11-07, lot E)."""
+    doc = card_doc("job-1", "show me the code", _fake_card(title="REX méthodologie"), locale="fr")
+    text = render_card(1, doc, date_is_import_fallback=False)
+    assert text.startswith("[1] REX méthodologie") and "Nom dans l'application: show me the code" in text
+    same = card_doc("job-1", "REX méthodologie", _fake_card(title="rex MÉTHODOLOGIE"), locale="fr")
+    assert "Nom dans l'application" not in render_card(1, same, date_is_import_fallback=False)
+    fallback = card_doc("job-1", "show me the code", _fake_card(title=""), locale="en")
+    assert "Name in the application" not in render_card(1, fallback, date_is_import_fallback=False)
+

@@ -507,6 +507,14 @@ coût : c'est ce que le worker sait déjà. Un voyant global d'état de la LLM r
 lot E (pièges par mode : « éteinte » est normal en tout-en-un ; jamais de sonde du fournisseur
 cloud depuis le web).
 
+**Complément (2026-11-07, première question réelle sur la machine de test)** — 25 fiches envoyées,
+4 citées, 3 min 40 dont le chargement du modèle (cache disque vide après redémarrage : le libellé
+« une à deux minutes » est optimiste dans ce cas, à revoir après le lot E). Défaut vu en lisant la
+réponse : la LLM disait qu'aucune réunion ne s'appelle « show me the code » alors qu'elle la citait
+en [1] — la fiche ne portait que le titre saisi à l'étape 4, pas le **nom du traitement** (celui de
+l'accueil, par lequel l'utilisateur la désigne). La fiche envoyée porte désormais « Nom dans
+l'application : … » quand les deux diffèrent, et la carte citée l'affiche en sous-titre.
+
 ### Lot D — documentation (2026-11-06)
 
 Livré : `TECHNICAL.md` § 4.18 (briques, invariants) et § 4.11/4.13 ; `DATA_MODEL.md` (quatre

@@ -156,6 +156,7 @@ def test_etat_d_une_demande_visible_par_son_auteur_seulement(app, user_client):
     assert body["level_reached"] == 2 and body["level_label"] == "d'après la synthèse des réunions les plus proches"
     assert [c["job_id"] for c in body["cited"]] == [mine]            # l'identifiant inconnu n'est pas détaillé
     assert body["cited"][0]["url"] == f"/jobs/{mine}/result" and body["cited"][0]["title"] == "Ma réunion budget"
+    assert body["cited"][0]["job_title"] == ""                       # même titre : pas de sous-titre
     assert body["cited"][0]["date"] == "2026-05-12"
 
     assert other.get(f"/api/meetings/ask/{req_id}").status_code == 404
@@ -403,4 +404,20 @@ def test_etape_affichee_dans_la_langue_de_l_interface(app, user_client):
         AskStore.complete(req_id, answer="ok", cited_job_ids=[], level_reached=1)
     body = user_client.client.get(f"/api/meetings/ask/{req_id}").get_json()
     assert body["stage"] == "" and body["stage_label"] == ""
+
+
+def test_carte_citee_porte_le_nom_du_traitement_quand_il_differe(app, user_client):
+    from transcria.jobs.store import JobStore
+
+    job_id = _meeting(app, user_client.user_id, title="Titre du contexte")
+    with app.app_context():
+        job = JobStore.get_by_id(job_id)
+        job.title = "show me the code"
+        db.session.commit()
+        req = AskStore.create_request(user_id=user_client.user_id, question="q")
+        req_id = req.id
+        AskStore.claim_next()
+        AskStore.complete(req_id, answer="x [1]", cited_job_ids=[job_id], level_reached=1)
+    cited = user_client.client.get(f"/api/meetings/ask/{req_id}").get_json()["cited"][0]
+    assert cited["title"] == "Titre du contexte" and cited["job_title"] == "show me the code"
 

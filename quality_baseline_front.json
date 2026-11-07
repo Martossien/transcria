@@ -3,7 +3,7 @@
  "js_lines": {
   "transcria/web/static/js/admin_maintenance_page.js": 60,
   "transcria/web/static/js/admin_models_page.js": 32,
-  "transcria/web/static/js/ask_meetings_page.js": 244,
+  "transcria/web/static/js/ask_meetings_page.js": 245,
   "transcria/web/static/js/csrf.js": 65,
   "transcria/web/static/js/dashboard_status_page.js": 68,
   "transcria/web/static/js/first_run_checklist.js": 15,

@@ -81,6 +81,7 @@
       var link = el("a", "fw-semibold text-decoration-none", m.title);
       link.href = m.url;
       card.appendChild(link);
+      if (m.job_title) card.appendChild(el("div", "text-muted fst-italic", m.job_title));
       var meta = [];
       if (m.date) meta.push(m.date + (m.date_is_import_fallback ? " (" + T.importDate + ")" : ""));
       if (m.meeting_type) meta.push(m.meeting_type);

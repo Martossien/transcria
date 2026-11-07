@@ -13,42 +13,48 @@ from datetime import date
 from transcria.search.preselect import CardDoc
 
 _LABELS: dict[str, dict[str, str]] = {
-    "fr": {"material": "Matière fournie", "level_cards": "fiches seules", "level_summaries": "fiches et synthèses",
+    "fr": {"app_name": "Nom dans l'application",
+           "material": "Matière fournie", "level_cards": "fiches seules", "level_summaries": "fiches et synthèses",
            "level_transcript": "fiche et transcription d'une réunion",
            "type": "Type", "date": "Date", "import_date": "date d'import", "participants": "Participants",
            "topic": "Sujet", "objective": "Objectif", "agenda": "Ordre du jour", "abstract": "Résumé",
            "decisions": "Décisions", "actions": "Actions", "next_date": "Prochaine échéance",
            "summary": "Synthèse", "transcript": "Transcription", "untitled": "Réunion sans titre",
            "meetings": "Réunions consultables", "truncated": "(transcription tronquée : {pct} % montrés)"},
-    "en": {"material": "Material provided", "level_cards": "cards only", "level_summaries": "cards and summaries",
+    "en": {"app_name": "Name in the application",
+           "material": "Material provided", "level_cards": "cards only", "level_summaries": "cards and summaries",
            "level_transcript": "card and transcript of one meeting",
            "type": "Type", "date": "Date", "import_date": "import date", "participants": "Participants",
            "topic": "Topic", "objective": "Objective", "agenda": "Agenda", "abstract": "Abstract",
            "decisions": "Decisions", "actions": "Actions", "next_date": "Next deadline",
            "summary": "Summary", "transcript": "Transcript", "untitled": "Untitled meeting",
            "meetings": "Meetings you can consult", "truncated": "(transcript truncated: {pct}% shown)"},
-    "de": {"material": "Bereitgestelltes Material", "level_cards": "nur Karten", "level_summaries": "Karten und Zusammenfassungen",
+    "de": {"app_name": "Name in der Anwendung",
+           "material": "Bereitgestelltes Material", "level_cards": "nur Karten", "level_summaries": "Karten und Zusammenfassungen",
            "level_transcript": "Karte und Transkription einer Besprechung",
            "type": "Typ", "date": "Datum", "import_date": "Importdatum", "participants": "Teilnehmer",
            "topic": "Thema", "objective": "Ziel", "agenda": "Tagesordnung", "abstract": "Kurzfassung",
            "decisions": "Entscheidungen", "actions": "Aufgaben", "next_date": "Nächster Termin",
            "summary": "Zusammenfassung", "transcript": "Transkription", "untitled": "Besprechung ohne Titel",
            "meetings": "Einsehbare Besprechungen", "truncated": "(Transkription gekürzt: {pct} % gezeigt)"},
-    "es": {"material": "Material proporcionado", "level_cards": "solo fichas", "level_summaries": "fichas y síntesis",
+    "es": {"app_name": "Nombre en la aplicación",
+           "material": "Material proporcionado", "level_cards": "solo fichas", "level_summaries": "fichas y síntesis",
            "level_transcript": "ficha y transcripción de una reunión",
            "type": "Tipo", "date": "Fecha", "import_date": "fecha de importación", "participants": "Participantes",
            "topic": "Tema", "objective": "Objetivo", "agenda": "Orden del día", "abstract": "Resumen",
            "decisions": "Decisiones", "actions": "Acciones", "next_date": "Próximo plazo",
            "summary": "Síntesis", "transcript": "Transcripción", "untitled": "Reunión sin título",
            "meetings": "Reuniones consultables", "truncated": "(transcripción truncada: {pct} % mostrado)"},
-    "it": {"material": "Materiale fornito", "level_cards": "solo schede", "level_summaries": "schede e sintesi",
+    "it": {"app_name": "Nome nell'applicazione",
+           "material": "Materiale fornito", "level_cards": "solo schede", "level_summaries": "schede e sintesi",
            "level_transcript": "scheda e trascrizione di una riunione",
            "type": "Tipo", "date": "Data", "import_date": "data di importazione", "participants": "Partecipanti",
            "topic": "Argomento", "objective": "Obiettivo", "agenda": "Ordine del giorno", "abstract": "Riassunto",
            "decisions": "Decisioni", "actions": "Azioni", "next_date": "Prossima scadenza",
            "summary": "Sintesi", "transcript": "Trascrizione", "untitled": "Riunione senza titolo",
            "meetings": "Riunioni consultabili", "truncated": "(trascrizione troncata: {pct} % mostrato)"},
-    "pt": {"material": "Material fornecido", "level_cards": "apenas fichas", "level_summaries": "fichas e sínteses",
+    "pt": {"app_name": "Nome na aplicação",
+           "material": "Material fornecido", "level_cards": "apenas fichas", "level_summaries": "fichas e sínteses",
            "level_transcript": "ficha e transcrição de uma reunião",
            "type": "Tipo", "date": "Data", "import_date": "data de importação", "participants": "Participantes",
            "topic": "Tema", "objective": "Objetivo", "agenda": "Ordem do dia", "abstract": "Resumo",
@@ -98,6 +104,10 @@ def render_card(index: int, doc: CardDoc, *, date_is_import_fallback: bool, loca
     title = doc.title or doc.job_title or lab["untitled"]
     lines = [f"[{index}] {title}",
              f"{lab['type']}: {doc.meeting_type or '?'} — {lab['date']}: {_fmt_date(doc.meeting_date, date_is_import_fallback, lab)}"]
+    # Le nom du traitement (celui de l'accueil) diffère souvent du titre saisi à l'étape 4 : un
+    # utilisateur demande « la réunion show me the code » par ce nom-là — la LLM doit le voir.
+    if doc.job_title and doc.title and doc.job_title.casefold().strip() != doc.title.casefold().strip():
+        lines.append(f"{lab['app_name']}: {doc.job_title}")
     if doc.participants:
         lines.append(f"{lab['participants']}: " + "; ".join(doc.participants))
     for key in ("topic", "objective", "agenda"):

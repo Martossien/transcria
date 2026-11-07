@@ -72,6 +72,8 @@ def _meeting_summaries(job_ids: list[str], user) -> list[dict]:
         out.append({
             "job_id": job_id,
             "title": (card.title if card and card.title else job.title),
+            # Nom du traitement (accueil) quand il diffère du titre du contexte : affiché en sous-titre.
+            "job_title": job.title if card and card.title and card.title.casefold().strip() != job.title.casefold().strip() else "",
             "date": card.meeting_date.isoformat() if card and card.meeting_date else None,
             "date_is_import_fallback": bool(card.date_is_import_fallback) if card else True,
             "meeting_type": card.meeting_type if card else "",
