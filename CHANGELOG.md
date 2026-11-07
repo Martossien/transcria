@@ -12,8 +12,22 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 #### Activation graphique de la LLM d'arbitrage (écran « LLM d'arbitrage »)
 
-- **Piège documenté** (AGENTS.md) : opencode v1 1.18.x rejette les appels d'outil des modèles GLM
-  servis par Mistral (chunk `tool_calls` sans `id`) ; la ligne v2 ou un modèle natif Mistral passent.
+- **Panne opencode reconnue → remède automatique** (`llm_tools/opencode_remediation.py`) : la
+  signature « v1 face au flux d'appels d'outil d'un modèle non natif chez un fournisseur cloud »
+  (vécu : GLM servi par Mistral, `tool_calls` sans `id`) est classée (`sdk_tool_call_incompat`) ;
+  si un opencode v2 **de confiance** existe sur la machine (propriétaire root, compte du service ou
+  propriétaire de `config.yaml`, non modifiable par d'autres), le pipeline bascule dessus
+  (config.yaml + mémoire, audité, **annulable** depuis l'écran) et rejoue le run une fois. Sans v2 :
+  la cause est nommée dans le wizard et les journaux, plus de triple tentative inutile.
+- **Écran « LLM d'arbitrage » — carte « Moteur opencode »** : binaire et ligne (v1/v2) affichés,
+  avertissement v1 + fournisseur externe, boutons **Tester la LLM maintenant** (appel réel minuscule
+  avec outil, même mesure que `doctor --llm-smoke`), **Utiliser l'opencode v2 trouvé**, **Installer
+  opencode v2** (copie privée épinglée, sans redémarrage), **Annuler la bascule** ; au clic « Je
+  valide », le test part aussitôt (case cochée par défaut) : la panne se voit là, pas sur le
+  premier traitement. Doctor : avertissement « ligne v1 avec un fournisseur cloud ».
+- **Installateur / Dockerfile épinglés sur opencode v2** (2.2.6, script officiel v2 —
+  le script v1 refuse une release ≥ 2) ; un opencode déjà présent reste utilisé tel quel, une v1
+  trouvée est avertie.
 - **Modèles cloud proposés depuis le catalogue d'opencode** : la liste des modèles du fournisseur
   choisi se déroule sous le champ (identifiants, avec le nom affiché), et un identifiant inconnu du
   catalogue est refusé avant toute écriture, avec la bonne graphie proposée (« GLM-5.3 » saisi →

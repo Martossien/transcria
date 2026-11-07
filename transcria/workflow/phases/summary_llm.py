@@ -14,6 +14,7 @@ from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.meeting_context import synthese_section
 from transcria.context.meeting_type_prompts import build_prompt_substitutions
 from transcria.jobs.models import Job
+from transcria.llm_tools.opencode_remediation import HARD_FAILURE_KINDS
 from transcria.llm_tools.opencode_runner import (
     _SUMMARY_MARKERS,
     OpenCodeRunner,
@@ -252,6 +253,12 @@ def _invoke_llm_with_retries(
         if runner._summary_usable(parsed):
             if attempt > 1:
                 sl.info("LLM résumé produit à la tentative %d/%d", attempt, _MAX_LLM_ATTEMPTS)
+            break
+        if parsed.get("_failure_kind") in HARD_FAILURE_KINDS:
+            # Panne RECONNUE et déterministe (binaire opencode v1 face au flux d'outils du
+            # fournisseur) : le runner a déjà tenté le remède automatique ; rejouer trois fois
+            # le même binaire ne change rien — échec explicite, cause nommée dans le bandeau.
+            sl.error("LLM résumé : %s — pas de nouvel essai", parsed.get("_failure_detail", ""))
             break
         if (parsed.get("_failure_kind") == "opencode_error"
                 and "timeout absolu" in str(parsed.get("_failure_detail", ""))

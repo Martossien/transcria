@@ -105,6 +105,56 @@
   </div>
 </div>
 
+<div class="card mb-4" data-opencode-card>
+  <div class="card-header">{{ _('Moteur opencode (exécute les phases LLM)') }}
+    {% if oc.resolved %}<span class="badge {% if oc.line >= 2 %}text-bg-success{% else %}text-bg-secondary{% endif %} ms-2" data-opencode-line>v{{ oc.version or oc.line }} — {{ _('ligne') }} v{{ oc.line or 1 }}</span>
+    {% else %}<span class="badge text-bg-danger ms-2" data-opencode-missing>{{ _('introuvable') }}</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <p class="mb-2"><code>{{ oc.resolved or oc.configured }}</code></p>
+
+    {% if oc.switch %}
+    <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2" role="status" data-opencode-switched>
+      <span><i class="bi bi-arrow-left-right me-1"></i>
+        {% trans frm=oc.switch.from, to=oc.switch.to, when=(oc.switch.at or '')[:16] | replace('T', ' '), why=oc.switch.reason %}Binaire opencode basculé le {{ when }} : <code>{{ frm }}</code> → <code>{{ to }}</code> ({{ why }}).{% endtrans %}</span>
+      <form method="POST" action="{{ url_for('web.admin_llm_cloud_opencode_revert') }}" class="m-0">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">{{ _('Annuler la bascule') }}</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if oc.is_v1 and (cloud.active or mode_on_disk == 'cloud') %}
+    <div class="alert alert-warning" role="status" data-opencode-v1-warning>
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      {{ _("Ligne v1 avec un fournisseur externe : certains modèles non natifs du fournisseur échouent à chaque appel d'outil (flux sans identifiant d'appel). La ligne v2 lit ce flux. Le pipeline bascule seul sur une v2 de confiance s'il en trouve une ; sinon installez-la ici.") }}
+    </div>
+    {% endif %}
+
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if oc.can_run %}
+      <form method="POST" action="{{ url_for('web.admin_llm_cloud_test') }}" class="m-0" data-busy="{{ _('Test en cours…') }}">
+        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-lightning-charge me-1"></i>{{ _('Tester la LLM maintenant') }}</button>
+      </form>
+      {% if oc.v2_candidate %}
+      <form method="POST" action="{{ url_for('web.admin_llm_cloud_opencode_switch') }}" class="m-0">
+        <input type="hidden" name="binary" value="{{ oc.v2_candidate.path }}">
+        <button type="submit" class="btn btn-success"><i class="bi bi-arrow-left-right me-1"></i>{{ _('Utiliser l\'opencode v%(v)s trouvé', v=oc.v2_candidate.version) }} <code class="text-reset">{{ oc.v2_candidate.path }}</code></button>
+      </form>
+      {% endif %}
+      {% if oc.is_v1 or not oc.resolved %}
+      <form method="POST" action="{{ url_for('web.admin_llm_cloud_opencode_install') }}" class="m-0" data-busy="{{ _('Installation en cours (≈ 1 min)…') }}"
+            data-confirm="{{ _('Télécharger et installer opencode v%(v)s (≈ 120 Mo, copie privée sous %(p)s) ? Les prochains traitements l\'utiliseront, sans redémarrage.', v=oc.pinned_version, p=oc.install_target) }}">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-download me-1"></i>{{ _('Installer opencode v%(v)s', v=oc.pinned_version) }}</button>
+      </form>
+      {% endif %}
+      {% else %}
+      <span class="text-muted small" data-opencode-web-tier>{{ _('Tier web : les phases LLM tournent sur l\'orchestrateur — test et installation s\'y font (transcria doctor --llm-smoke).') }}</span>
+      {% endif %}
+    </div>
+    <p class="small text-muted mt-2 mb-0">{{ _('Le test écrit « OK » dans un fichier par un appel d\'outil, comme le ferait un résumé : en cloud, une requête minuscule est facturée. Plafond : %(s)s s.', s=oc.test_timeout_s) }}</p>
+  </div>
+</div>
+
 {% if cloud.active %}
 <div class="card mb-4">
   <div class="card-header">{{ _('Fournisseur configuré') }}</div>
@@ -175,7 +225,13 @@
                {{ 'checked' if cloud.connectors_allowed else '' }}>
         <label class="form-check-label" for="llm-cloud-connectors">{{ _('Autoriser aussi les réunions captées par connecteurs et bots') }}</label>
       </div>
-      <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ _('Je valide') }}</button>
+      {% if oc.can_run %}
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="run_test" value="1" id="llm-cloud-run-test" checked>
+        <label class="form-check-label" for="llm-cloud-run-test">{{ _('Tester la LLM juste après (un appel minuscule, facturé) — la panne se voit ici, pas sur votre premier traitement') }}</label>
+      </div>
+      {% endif %}
+      <button type="submit" class="btn btn-primary" data-busy-label="{{ _('Validation et test en cours…') }}"><i class="bi bi-check2 me-1"></i>{{ _('Je valide') }}</button>
     </form>
 
     {% if cloud.acknowledged or cloud.stale_acknowledgement %}

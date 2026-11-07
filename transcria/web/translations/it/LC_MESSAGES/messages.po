@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 21:48+0100\n"
+"POT-Creation-Date: 2026-11-07 22:26+0100\n"
 "PO-Revision-Date: 2026-08-09 11:31+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -2765,94 +2765,162 @@ msgstr "Password amministratore iniziale"
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Modifichi il valore predefinito prima di qualsiasi uso reale."
 
-#: transcria/web/llm_cloud_routes.py:39
+#: transcria/web/llm_cloud_routes.py:45
 msgid "Mode inconnu."
 msgstr "Modalità sconosciuta."
 
-#: transcria/web/llm_cloud_routes.py:40
+#: transcria/web/llm_cloud_routes.py:46
 msgid "Adresse du serveur invalide : attendu http(s)://hôte[:port]/v1, sans identifiants ni paramètres."
 msgstr "Indirizzo del server non valido: atteso http(s)://host[:porta]/v1, senza credenziali né parametri."
 
-#: transcria/web/llm_cloud_routes.py:41
+#: transcria/web/llm_cloud_routes.py:47
 msgid "Alias du modèle invalide (lettres, chiffres, . _ : -)."
 msgstr "Alias del modello non valido (lettere, cifre, . _ : -)."
 
-#: transcria/web/llm_cloud_routes.py:42
+#: transcria/web/llm_cloud_routes.py:48
 msgid "Clé d'API invalide ou manquante (pas d'espace ni de guillemet, 512 caractères au plus)."
 msgstr "Chiave API non valida o mancante (niente spazi né virgolette, al massimo 512 caratteri)."
 
-#: transcria/web/llm_cloud_routes.py:43
+#: transcria/web/llm_cloud_routes.py:49
 msgid "Identifiant de fournisseur invalide."
 msgstr "Identificativo del fornitore non valido."
 
-#: transcria/web/llm_cloud_routes.py:44
+#: transcria/web/llm_cloud_routes.py:50
 msgid "Modèle invalide."
 msgstr "Modello non valido."
 
-#: transcria/web/llm_cloud_routes.py:45
+#: transcria/web/llm_cloud_routes.py:51
 msgid "Fournisseur hors table : une URL https:// non locale est requise."
 msgstr "Fornitore fuori tabella: è richiesto un URL https:// non locale."
 
-#: transcria/web/llm_cloud_routes.py:126
+#: transcria/web/llm_cloud_routes.py:180
 #, python-format
 msgid "Modèle « %(m)s » inconnu du catalogue opencode pour ce fournisseur (%(n)s modèles connus). Saisissez l'identifiant du catalogue, pas le nom affiché — la liste se déroule sous le champ."
 msgstr "Modello «%(m)s» sconosciuto al catalogo opencode di questo fornitore (%(n)s modelli noti). Inserire l'identificativo del catalogo, non il nome visualizzato — l'elenco si apre sotto il campo."
 
-#: transcria/web/llm_cloud_routes.py:130
+#: transcria/web/llm_cloud_routes.py:184
 #, python-format
 msgid "Vouliez-vous dire : %(s)s ?"
 msgstr "Intendevi: %(s)s?"
 
-#: transcria/web/llm_cloud_routes.py:136
+#: transcria/web/llm_cloud_routes.py:190
 #, python-format
 msgid "Enregistrement impossible : %(detail)s"
 msgstr "Salvataggio impossibile: %(detail)s"
 
-#: transcria/web/llm_cloud_routes.py:144
+#: transcria/web/llm_cloud_routes.py:198
 #, python-format
 msgid "Fournisseur externe enregistré (%(m)s). Redémarrez le service, puis validez ce fournisseur ci-dessous : tant que ce n'est pas fait, les traitements LLM sont refusés."
 msgstr "Fornitore esterno salvato (%(m)s). Riavviare il servizio, poi approvare il fornitore qui sotto: fino ad allora le elaborazioni LLM sono rifiutate."
 
-#: transcria/web/llm_cloud_routes.py:147
+#: transcria/web/llm_cloud_routes.py:201
 #, python-format
 msgid "Serveur de votre organisation enregistré (%(m)s) : une LLM locale, sans validation cloud. Redémarrez le service pour l'appliquer."
 msgstr "Server della vostra organizzazione salvato (%(m)s): una LLM locale, senza approvazione cloud. Riavviare il servizio per applicarlo."
 
-#: transcria/web/llm_cloud_routes.py:150
+#: transcria/web/llm_cloud_routes.py:204
 msgid "LLM sur cette machine rétablie. Redémarrez le service pour l'appliquer."
 msgstr "LLM su questa macchina ripristinata. Riavviare il servizio per applicarla."
 
-#: transcria/web/llm_cloud_routes.py:176
+#: transcria/web/llm_cloud_routes.py:230
 #, python-format
 msgid "Redémarrage automatique impossible (%(e)s). Lancez sur le serveur : %(cmd)s"
 msgstr "Riavvio automatico impossibile (%(e)s). Eseguire sul server: %(cmd)s"
 
-#: transcria/web/llm_cloud_routes.py:180
+#: transcria/web/llm_cloud_routes.py:234
 msgid "Redémarrage lancé : le service revient dans une minute environ, reconnectez-vous ensuite."
 msgstr "Riavvio avviato: il servizio torna tra circa un minuto, poi riconnettersi."
 
-#: transcria/web/llm_cloud_routes.py:191
+#: transcria/web/llm_cloud_routes.py:245
 msgid "La LLM cloud n'est pas active sur cette instance (services.backend ≠ cloud) : rien à valider."
 msgstr "La LLM cloud non è attiva su questa istanza (services.backend ≠ cloud): nulla da convalidare."
 
-#: transcria/web/llm_cloud_routes.py:195
+#: transcria/web/llm_cloud_routes.py:249
 msgid "Fournisseur ou modèle cloud non résolu depuis la configuration : corrigez workflow.arbitration_llm.model_id (forme fournisseur/modèle) puis redémarrez le service."
 msgstr "Fornitore o modello cloud non risolto dalla configurazione: corregga workflow.arbitration_llm.model_id (forma fornitore/modello), poi riavvii il servizio."
 
-#: transcria/web/llm_cloud_routes.py:214
+#: transcria/web/llm_cloud_routes.py:268
 #, python-format
 msgid "Validation enregistrée : les traitements LLM peuvent désormais partir vers %(p)s."
 msgstr "Convalida registrata: i trattamenti LLM possono ora essere inviati a %(p)s."
 
-#: transcria/web/llm_cloud_routes.py:226
+#: transcria/web/llm_cloud_routes.py:282
+#, python-format
+msgid "Test impossible : %(e)s"
+msgstr "Test impossibile: %(e)s"
+
+#: transcria/web/llm_cloud_routes.py:288
+#, python-format
+msgid "Pendant le test, opencode a été basculé automatiquement vers %(to)s (annulable ci-dessous)."
+msgstr "Durante il test, opencode è passato automaticamente a %(to)s (annullabile qui sotto)."
+
+#: transcria/web/llm_cloud_routes.py:291
+#, python-format
+msgid "LLM testée avec succès : réponse en %(s)s s (opencode → fournisseur → texte)."
+msgstr "LLM testato con successo: risposta in %(s)s s (opencode → fornitore → testo)."
+
+#: transcria/web/llm_cloud_routes.py:294
+msgid "Test échoué : le binaire opencode (ligne v1) ne lit pas le flux d'appels d'outil de ce modèle chez ce fournisseur — ni la clé, ni le réseau. Remède : « Installer opencode v2 » ci-dessous, ou un modèle natif du fournisseur."
+msgstr "Test fallito: il binario opencode (linea v1) non legge il flusso di chiamate agli strumenti di questo modello presso questo fornitore — né la chiave, né la rete. Rimedio: «Installa opencode v2» qui sotto, o un modello nativo del fornitore."
+
+#: transcria/web/llm_cloud_routes.py:298
+msgid "Test échoué : opencode a terminé sans produire de texte ni de fichier (modèle, prompt ou contexte)."
+msgstr "Test fallito: opencode è terminato senza produrre testo né file (modello, prompt o contesto)."
+
+#: transcria/web/llm_cloud_routes.py:300
+#, python-format
+msgid "Test échoué : %(e)s"
+msgstr "Test fallito: %(e)s"
+
+#: transcria/web/llm_cloud_routes.py:310
+msgid "Ce tier (rôle web) n'exécute pas de phase LLM : lancez le test sur l'orchestrateur (transcria doctor --llm-smoke)."
+msgstr "Questo livello (ruolo web) non esegue fasi LLM: avviate il test sull'orchestratore (transcria doctor --llm-smoke)."
+
+#: transcria/web/llm_cloud_routes.py:331
+msgid "Aucun opencode v2 de confiance trouvé sur cette machine : utilisez « Installer opencode v2 »."
+msgstr "Nessun opencode v2 affidabile trovato su questa macchina: usate «Installa opencode v2»."
+
+#: transcria/web/llm_cloud_routes.py:337
+#, python-format
+msgid "opencode v2 utilisé : %(to)s — effectif pour les prochains traitements, sans redémarrage. Testez la LLM ci-dessous."
+msgstr "opencode v2 in uso: %(to)s — effettivo per le prossime elaborazioni, senza riavvio. Testate il LLM qui sotto."
+
+#: transcria/web/llm_cloud_routes.py:338
+msgid "(config.yaml non modifiable : effectif jusqu'au redémarrage)"
+msgstr "(config.yaml non modificabile: effettivo fino al riavvio)"
+
+#: transcria/web/llm_cloud_routes.py:349
+msgid "Ce tier (rôle web) n'exécute pas de phase LLM : installez opencode sur l'orchestrateur."
+msgstr "Questo livello (ruolo web) non esegue fasi LLM: installate opencode sull'orchestratore."
+
+#: transcria/web/llm_cloud_routes.py:363
+#, python-format
+msgid "Installation d'opencode v2 échouée (réseau, proxy ou droits). Sur le serveur : %(cmd)s"
+msgstr "Installazione di opencode v2 fallita (rete, proxy o permessi). Sul server: %(cmd)s"
+
+#: transcria/web/llm_cloud_routes.py:369
+#, python-format
+msgid "opencode v%(v)s installé (%(p)s) et utilisé pour les prochains traitements, sans redémarrage. Testez la LLM ci-dessous."
+msgstr "opencode v%(v)s installato (%(p)s) e usato per le prossime elaborazioni, senza riavvio. Testate il LLM qui sotto."
+
+#: transcria/web/llm_cloud_routes.py:382
+msgid "Aucune bascule opencode à annuler."
+msgstr "Nessun passaggio di opencode da annullare."
+
+#: transcria/web/llm_cloud_routes.py:384
+#, python-format
+msgid "Bascule annulée : opencode_bin = %(p)s (effectif pour les prochains traitements)."
+msgstr "Passaggio annullato: opencode_bin = %(p)s (effettivo per le prossime elaborazioni)."
+
+#: transcria/web/llm_cloud_routes.py:395
 msgid "Aucune LLM cloud configurée : aucune validation à retirer."
 msgstr "Nessuna LLM cloud configurata: nessuna convalida da revocare."
 
-#: transcria/web/llm_cloud_routes.py:236
+#: transcria/web/llm_cloud_routes.py:405
 msgid "Validation retirée : les traitements LLM vers le fournisseur externe sont refusés."
 msgstr "Convalida revocata: i trattamenti LLM verso il fornitore esterno sono rifiutati."
 
-#: transcria/web/llm_cloud_routes.py:238
+#: transcria/web/llm_cloud_routes.py:407
 msgid "Aucune validation en cours à retirer."
 msgstr "Nessuna convalida in corso da revocare."
 
@@ -3445,6 +3513,7 @@ msgid "non configuré"
 msgstr "non configurato"
 
 #: transcria/web/templates/admin_config.html:162
+#: transcria/web/templates/admin_llm_cloud.html:111
 msgid "introuvable"
 msgstr "non trovato"
 
@@ -3873,7 +3942,7 @@ msgid "Moins maîtrisé qu'une LLM locale : la transcription intégrale de chaqu
 msgstr "Meno controllato di una LLM locale: la trascrizione integrale di ogni riunione, il brief, i documenti allegati, il lessico e i nomi dei partecipanti vanno a questo terzo. Mai l'audio né le voci. Un amministratore dovrà poi approvare il fornitore qui sotto, un banner lo annuncerà a tutti e ogni riunione elaborata conserverà la traccia del fornitore."
 
 #: transcria/web/templates/admin_llm_cloud.html:66
-#: transcria/web/templates/admin_llm_cloud.html:113
+#: transcria/web/templates/admin_llm_cloud.html:163
 msgid "Fournisseur"
 msgstr "Fornitore"
 
@@ -3894,7 +3963,7 @@ msgid "URL https (seulement si le fournisseur est inconnu du catalogue opencode)
 msgstr "URL https (solo se il fornitore è sconosciuto al catalogo opencode)"
 
 #: transcria/web/templates/admin_llm_cloud.html:82
-#: transcria/web/templates/admin_llm_cloud.html:117
+#: transcria/web/templates/admin_llm_cloud.html:167
 #: transcria/web/templates/admin_models.html:33
 #: transcria/web/templates/admin_models.html:163
 msgid "Modèle"
@@ -3928,136 +3997,201 @@ msgstr "Salvare questa scelta"
 msgid "puis redémarrage du service"
 msgstr "poi riavvio del servizio"
 
+#: transcria/web/templates/admin_llm_cloud.html:109
+msgid "Moteur opencode (exécute les phases LLM)"
+msgstr "Motore opencode (esegue le fasi LLM)"
+
 #: transcria/web/templates/admin_llm_cloud.html:110
+msgid "ligne"
+msgstr "linea"
+
+#: transcria/web/templates/admin_llm_cloud.html:119
+#, python-format
+msgid "Binaire opencode basculé le %(when)s : <code>%(frm)s</code> → <code>%(to)s</code> (%(why)s)."
+msgstr "Binario opencode cambiato il %(when)s: <code>%(frm)s</code> → <code>%(to)s</code> (%(why)s)."
+
+#: transcria/web/templates/admin_llm_cloud.html:121
+msgid "Annuler la bascule"
+msgstr "Annulla il passaggio"
+
+#: transcria/web/templates/admin_llm_cloud.html:129
+msgid "Ligne v1 avec un fournisseur externe : certains modèles non natifs du fournisseur échouent à chaque appel d'outil (flux sans identifiant d'appel). La ligne v2 lit ce flux. Le pipeline bascule seul sur une v2 de confiance s'il en trouve une ; sinon installez-la ici."
+msgstr "Linea v1 con un fornitore esterno: alcuni modelli non nativi del fornitore falliscono a ogni chiamata agli strumenti (flusso senza identificativo di chiamata). La linea v2 legge quel flusso. La pipeline passa da sola a una v2 affidabile se la trova; altrimenti installatela qui."
+
+#: transcria/web/templates/admin_llm_cloud.html:135
+msgid "Test en cours…"
+msgstr "Test in corso…"
+
+#: transcria/web/templates/admin_llm_cloud.html:136
+msgid "Tester la LLM maintenant"
+msgstr "Testa il LLM adesso"
+
+#: transcria/web/templates/admin_llm_cloud.html:141
+#, python-format
+msgid "Utiliser l'opencode v%(v)s trouvé"
+msgstr "Usa l'opencode v%(v)s trovato"
+
+#: transcria/web/templates/admin_llm_cloud.html:145
+msgid "Installation en cours (≈ 1 min)…"
+msgstr "Installazione in corso (≈ 1 min)…"
+
+#: transcria/web/templates/admin_llm_cloud.html:146
+#, python-format
+msgid "Télécharger et installer opencode v%(v)s (≈ 120 Mo, copie privée sous %(p)s) ? Les prochains traitements l'utiliseront, sans redémarrage."
+msgstr "Scaricare e installare opencode v%(v)s (≈ 120 MB, copia privata sotto %(p)s)? Le prossime elaborazioni lo useranno, senza riavvio."
+
+#: transcria/web/templates/admin_llm_cloud.html:147
+#, python-format
+msgid "Installer opencode v%(v)s"
+msgstr "Installa opencode v%(v)s"
+
+#: transcria/web/templates/admin_llm_cloud.html:151
+msgid "Tier web : les phases LLM tournent sur l'orchestrateur — test et installation s'y font (transcria doctor --llm-smoke)."
+msgstr "Livello web: le fasi LLM girano sull'orchestratore — test e installazione si fanno lì (transcria doctor --llm-smoke)."
+
+#: transcria/web/templates/admin_llm_cloud.html:154
+#, python-format
+msgid "Le test écrit « OK » dans un fichier par un appel d'outil, comme le ferait un résumé : en cloud, une requête minuscule est facturée. Plafond : %(s)s s."
+msgstr "Il test scrive «OK» in un file tramite una chiamata a strumento, come farebbe un riepilogo: con un fornitore cloud viene fatturata una richiesta minuscola. Limite: %(s)s s."
+
+#: transcria/web/templates/admin_llm_cloud.html:160
 msgid "Fournisseur configuré"
 msgstr "Fornitore configurato"
 
-#: transcria/web/templates/admin_llm_cloud.html:115
+#: transcria/web/templates/admin_llm_cloud.html:165
 msgid "catalogue opencode, non qualifié"
 msgstr "catalogo opencode, non qualificato"
 
-#: transcria/web/templates/admin_llm_cloud.html:116
+#: transcria/web/templates/admin_llm_cloud.html:166
 msgid "hors table des fournisseurs connus"
 msgstr "non presente nella tabella dei fornitori noti"
 
-#: transcria/web/templates/admin_llm_cloud.html:119
+#: transcria/web/templates/admin_llm_cloud.html:169
 msgid "URL"
 msgstr "URL"
 
-#: transcria/web/templates/admin_llm_cloud.html:121
+#: transcria/web/templates/admin_llm_cloud.html:171
 msgid "Hébergement"
 msgstr "Hosting"
 
-#: transcria/web/templates/admin_llm_cloud.html:122
+#: transcria/web/templates/admin_llm_cloud.html:172
 msgid "non renseigné : vérifiez-le auprès du fournisseur"
 msgstr "non indicato: verificatelo presso il fornitore"
 
-#: transcria/web/templates/admin_llm_cloud.html:125
+#: transcria/web/templates/admin_llm_cloud.html:175
 msgid "Ce fournisseur vient du catalogue models.dev d'opencode : TranscrIA n'a vérifié ni son hébergement, ni sa conservation des données, ni ses conditions. Vérifiez-les vous-même avant de valider."
 msgstr "Questo fornitore proviene dal catalogo models.dev di opencode: TranscrIA non ne ha verificato né l'hosting, né la conservazione dei dati, né le condizioni. Verificateli voi stessi prima di convalidare."
 
-#: transcria/web/templates/admin_llm_cloud.html:134
+#: transcria/web/templates/admin_llm_cloud.html:184
 msgid "Conditions du fournisseur"
 msgstr "Condizioni del fornitore"
 
-#: transcria/web/templates/admin_llm_cloud.html:140
+#: transcria/web/templates/admin_llm_cloud.html:190
 msgid "Ce qui part chez le fournisseur"
 msgstr "Ciò che viene inviato al fornitore"
 
-#: transcria/web/templates/admin_llm_cloud.html:143
+#: transcria/web/templates/admin_llm_cloud.html:193
 msgid "la transcription intégrale de chaque réunion traitée ;"
 msgstr "la trascrizione integrale di ogni riunione elaborata;"
 
-#: transcria/web/templates/admin_llm_cloud.html:144
+#: transcria/web/templates/admin_llm_cloud.html:194
 msgid "le brief d'invitation collé ;"
 msgstr "il brief d'invito incollato;"
 
-#: transcria/web/templates/admin_llm_cloud.html:145
+#: transcria/web/templates/admin_llm_cloud.html:195
 msgid "le texte extrait des documents joints ;"
 msgstr "il testo estratto dai documenti allegati;"
 
-#: transcria/web/templates/admin_llm_cloud.html:146
+#: transcria/web/templates/admin_llm_cloud.html:196
 msgid "le lexique de session filtré ;"
 msgstr "il lessico di sessione filtrato;"
 
-#: transcria/web/templates/admin_llm_cloud.html:147
+#: transcria/web/templates/admin_llm_cloud.html:197
 msgid "les noms et fonctions des participants ;"
 msgstr "i nomi e le funzioni dei partecipanti;"
 
-#: transcria/web/templates/admin_llm_cloud.html:148
+#: transcria/web/templates/admin_llm_cloud.html:198
 msgid "le contexte de la réunion (type, titre, champs saisis)."
 msgstr "il contesto della riunione (tipo, titolo, campi inseriti)."
 
-#: transcria/web/templates/admin_llm_cloud.html:150
+#: transcria/web/templates/admin_llm_cloud.html:200
 msgid "Jamais l'audio ni les voix :"
 msgstr "Mai l'audio né le voci:"
 
-#: transcria/web/templates/admin_llm_cloud.html:150
+#: transcria/web/templates/admin_llm_cloud.html:200
 msgid "la transcription et la diarisation restent sur cette instance."
 msgstr "la trascrizione e la diarizzazione restano su questa istanza."
 
-#: transcria/web/templates/admin_llm_cloud.html:151
+#: transcria/web/templates/admin_llm_cloud.html:201
 msgid "La LLM peut éditer des fichiers dans un espace isolé, comme la LLM locale."
 msgstr "La LLM può modificare file in uno spazio isolato, come la LLM locale."
 
-#: transcria/web/templates/admin_llm_cloud.html:152
+#: transcria/web/templates/admin_llm_cloud.html:202
 msgid "Les coûts, la consommation et la disponibilité du fournisseur relèvent de l'administrateur."
 msgstr "I costi, il consumo e la disponibilità del fornitore sono di competenza dell'amministratore."
 
-#: transcria/web/templates/admin_llm_cloud.html:153
+#: transcria/web/templates/admin_llm_cloud.html:203
 msgid "La bascule prend effet au redémarrage du service ; les jobs en file seront traités par le nouveau backend."
 msgstr "Il passaggio ha effetto al riavvio del servizio; i job in coda saranno elaborati dal nuovo backend."
 
-#: transcria/web/templates/admin_llm_cloud.html:158
+#: transcria/web/templates/admin_llm_cloud.html:208
 msgid "Validation administrateur"
 msgstr "Convalida dell'amministratore"
 
-#: transcria/web/templates/admin_llm_cloud.html:162
+#: transcria/web/templates/admin_llm_cloud.html:212
 #, python-format
 msgid "Validée par <strong>%(who)s</strong> le %(when)s (UTC)."
 msgstr "Convalidata da <strong>%(who)s</strong> il %(when)s (UTC)."
 
-#: transcria/web/templates/admin_llm_cloud.html:163
+#: transcria/web/templates/admin_llm_cloud.html:213
 msgid "Réunions captées par connecteurs et bots : autorisées."
 msgstr "Riunioni acquisite tramite connettori e bot: consentite."
 
-#: transcria/web/templates/admin_llm_cloud.html:163
+#: transcria/web/templates/admin_llm_cloud.html:213
 msgid "Réunions captées par connecteurs et bots : refusées."
 msgstr "Riunioni acquisite tramite connettori e bot: rifiutate."
 
-#: transcria/web/templates/admin_llm_cloud.html:166
+#: transcria/web/templates/admin_llm_cloud.html:216
 msgid "Validation <strong>CADUQUE</strong> : le texte d'avertissement a changé depuis. Relisez cet écran et validez de nouveau ; d'ici là, les traitements LLM sont refusés."
 msgstr "Convalida <strong>SCADUTA</strong>: il testo di avvertenza è cambiato nel frattempo. Rileggete questa schermata e convalidate di nuovo; nel frattempo i trattamenti LLM sono rifiutati."
 
-#: transcria/web/templates/admin_llm_cloud.html:169
+#: transcria/web/templates/admin_llm_cloud.html:219
 msgid "Non validée : tant qu'un administrateur n'a pas validé ce fournisseur et ce modèle, les traitements LLM sont refusés."
 msgstr "Non convalidata: finché un amministratore non ha convalidato questo fornitore e questo modello, i trattamenti LLM sono rifiutati."
 
-#: transcria/web/templates/admin_llm_cloud.html:176
+#: transcria/web/templates/admin_llm_cloud.html:226
 msgid "Autoriser aussi les réunions captées par connecteurs et bots"
 msgstr "Consentire anche le riunioni acquisite tramite connettori e bot"
 
-#: transcria/web/templates/admin_llm_cloud.html:178
+#: transcria/web/templates/admin_llm_cloud.html:231
+msgid "Tester la LLM juste après (un appel minuscule, facturé) — la panne se voit ici, pas sur votre premier traitement"
+msgstr "Testa il LLM subito dopo (una chiamata minuscola, fatturata) — il guasto si vede qui, non sulla prima elaborazione"
+
+#: transcria/web/templates/admin_llm_cloud.html:234
+msgid "Validation et test en cours…"
+msgstr "Convalida e test in corso…"
+
+#: transcria/web/templates/admin_llm_cloud.html:234
 msgid "Je valide"
 msgstr "Convalido"
 
-#: transcria/web/templates/admin_llm_cloud.html:183
+#: transcria/web/templates/admin_llm_cloud.html:239
 msgid "Retirer la validation ? Les traitements LLM vers ce fournisseur seront refusés."
 msgstr "Revocare la convalida? I trattamenti LLM verso questo fornitore saranno rifiutati."
 
-#: transcria/web/templates/admin_llm_cloud.html:184
+#: transcria/web/templates/admin_llm_cloud.html:240
 msgid "Retirer la validation"
 msgstr "Revocare la convalida"
 
-#: transcria/web/templates/admin_llm_cloud.html:191
+#: transcria/web/templates/admin_llm_cloud.html:247
 msgid "Aucun fournisseur externe actif :"
 msgstr "Nessun fornitore esterno attivo:"
 
-#: transcria/web/templates/admin_llm_cloud.html:192
+#: transcria/web/templates/admin_llm_cloud.html:248
 msgid "les phases LLM sont traitées par une LLM locale (cette machine ou un serveur de votre organisation). Rien ne part vers un tiers."
 msgstr "le fasi LLM sono gestite da una LLM locale (questa macchina o un server della vostra organizzazione). Nulla va a terzi."
 
-#: transcria/web/templates/admin_llm_cloud.html:193
+#: transcria/web/templates/admin_llm_cloud.html:249
 msgid "Le fournisseur externe enregistré ci-dessus apparaîtra ici après le redémarrage du service."
 msgstr "Il fornitore esterno salvato sopra comparirà qui dopo il riavvio del servizio."
 
@@ -6682,7 +6816,7 @@ msgstr "Analizza il file"
 #: transcria/web/templates/wizard/_step_analysis.html:131
 #: transcria/web/templates/wizard/_step_context.html:191
 #: transcria/web/templates/wizard/_step_participants.html:216
-#: transcria/web/templates/wizard/_step_summary.html:114
+#: transcria/web/templates/wizard/_step_summary.html:116
 msgid "Étapes optionnelles pour ce profil"
 msgstr "Passaggi facoltativi per questo profilo"
 
@@ -7343,10 +7477,14 @@ msgid "Le résumé a été refusé : cette instance confie les transcriptions à
 msgstr "Il riassunto è stato rifiutato: questa istanza affida le trascrizioni a una LLM esterna e questo trattamento non è autorizzato (convalida dell'amministratore assente o scaduta, gruppo vietato o riunione proveniente da un connettore). Si rivolga al suo amministratore."
 
 #: transcria/web/templates/wizard/_step_summary.html:100
+msgid "Le dernier résumé n'a pas pu être généré : le binaire opencode utilisé par le service (ligne v1) ne sait pas lire les appels d'outil de ce modèle chez ce fournisseur — ce n'est ni la clé, ni le réseau, ni le transcript. Remède (administrateur) : écran « LLM d'arbitrage » → « Installer opencode v2 » (ou un modèle natif du fournisseur), puis relancez le résumé ci-dessous."
+msgstr "L'ultimo riepilogo non è stato generato: il binario opencode usato dal servizio (linea v1) non sa leggere le chiamate agli strumenti di questo modello presso questo fornitore — non è la chiave, né la rete, né la trascrizione. Rimedio (amministratore): schermata «LLM di arbitrato» → «Installa opencode v2» (o un modello nativo del fornitore), poi riavviate il riepilogo qui sotto."
+
+#: transcria/web/templates/wizard/_step_summary.html:102
 msgid "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
 msgstr "Non è stato possibile generare l'ultima sintesi: la LLM di arbitraggio non ha prodotto alcun testo dopo 3 tentativi (causa frequente: trascrizione troppo lunga, modello o prompt). La trascrizione rapida viene mantenuta — rigeneri la sintesi qui sotto. Diagnostica admin: <code>transcria doctor --llm-smoke</code>."
 
-#: transcria/web/templates/wizard/_step_summary.html:105
+#: transcria/web/templates/wizard/_step_summary.html:107
 msgid "Générer le résumé"
 msgstr "Genera la sintesi"
 

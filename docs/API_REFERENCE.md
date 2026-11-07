@@ -153,8 +153,12 @@
 | `/admin/llm-cloud/acknowledge` | POST | connexion + Permission.MANAGE_CONFIG | Enregistre (en base, audité) la validation du couple fournisseur/modèle configuré. | `transcria.web.llm_cloud_routes` |
 | `/admin/llm-cloud/activate` | POST | connexion + Permission.MANAGE_CONFIG | Écrit le mode choisi (config.yaml, clé dans .env 0600, opencode.json) ; la bascule prend effet au redémarrage. | `transcria.web.llm_cloud_routes` |
 | `/admin/llm-cloud/models/<provider>` | GET | connexion + Permission.MANAGE_CONFIG | Modèles connus d'opencode pour un fournisseur (catalogue models.dev du compte de service) — liste | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/opencode/install` | POST | connexion + Permission.MANAGE_CONFIG | Installe une copie PRIVÉE épinglée d'opencode v2 (script officiel v2, sous le HOME du service) puis bascule dessus. | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/opencode/revert` | POST | connexion + Permission.MANAGE_CONFIG | Annule la dernière bascule de binaire opencode (automatique ou administrateur) : valeur d'avant rétablie. | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/opencode/switch` | POST | connexion + Permission.MANAGE_CONFIG | Bascule opencode_bin vers l'opencode v2 DE CONFIANCE trouvé sur la machine (redécouvert côté serveur, jamais un chemin libre). | `transcria.web.llm_cloud_routes` |
 | `/admin/llm-cloud/restart` | POST | connexion + Permission.MANAGE_CONFIG | Redémarre le service (one-shot systemd privilégié, non bloquant) pour appliquer la bascule. | `transcria.web.llm_cloud_routes` |
 | `/admin/llm-cloud/revoke` | POST | connexion + Permission.MANAGE_CONFIG | Retire (audité) la validation courante : les traitements LLM cloud sont de nouveau refusés. | `transcria.web.llm_cloud_routes` |
+| `/admin/llm-cloud/test` | POST | connexion + Permission.MANAGE_CONFIG | Test RÉEL opencode → LLM → texte (consigne triviale avec appel d'outil) ; payant en cloud, audité. | `transcria.web.llm_cloud_routes` |
 | `/admin/maintenance` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup/<name>/download` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -236,7 +240,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 170 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 174 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

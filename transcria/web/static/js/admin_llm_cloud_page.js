@@ -5,6 +5,26 @@
  */
 (function () {
   "use strict";
+  // Boutons « occupés » : un test réel ou une installation dure plusieurs secondes — le
+  // bouton le dit et ne se relance pas (double clic = double appel facturé).
+  document.querySelectorAll("form[data-busy], form button[data-busy-label]").forEach(function (el) {
+    var f = el.tagName === "FORM" ? el : el.form;
+    if (!f || f.getAttribute("data-busy-bound")) return;
+    f.setAttribute("data-busy-bound", "1");
+    f.addEventListener("submit", function (ev) {
+      var btn = f.querySelector("button[type=submit]");
+      var label = f.getAttribute("data-busy") || (btn && btn.getAttribute("data-busy-label"));
+      if (!btn || !label) return;
+      var runTest = f.querySelector("input[name=run_test]");
+      if (runTest && !runTest.checked) return;
+      // Après les autres écouteurs (data-confirm refusé ⇒ soumission annulée : rien à figer).
+      window.setTimeout(function () {
+        if (ev.defaultPrevented) return;
+        btn.disabled = true; btn.textContent = label;
+      }, 0);
+    });
+  });
+
   var form = document.getElementById("llm-mode-form");
   if (!form) return;
   var sections = form.querySelectorAll("[data-llm-section]");

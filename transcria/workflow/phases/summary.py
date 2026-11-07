@@ -156,7 +156,8 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
 
         runner.store.update_extra_data(
             job.id,
-            lambda extra: {**extra, "summary_llm_failed": {"attempts": 3, "at": utcnow_iso()}},
+            lambda extra: {**extra, "summary_llm_failed": {"attempts": 3, "at": utcnow_iso()},
+                           "summary_llm_error_kind": result.get("summary_llm_error_kind") or "empty_output"},
         )
         _restore_prior_state(runner, job.id, prior_state)
         runner.progress.clear(job.id)
@@ -180,7 +181,8 @@ def _finalize_success(runner, job: Job, result: dict, config: dict, sl, t0: floa
     """Valide le résumé : SUMMARY_DONE, historisation du temps, email « prêt »."""
     # Succès : effacer un éventuel drapeau d'échec antérieur, puis valider le résumé.
     runner.store.update_extra_data(
-        job.id, lambda extra: {k: v for k, v in extra.items() if k != "summary_llm_failed"}
+        job.id, lambda extra: {k: v for k, v in extra.items()
+                               if k not in ("summary_llm_failed", "summary_llm_error_kind")}
     )
     runner.store.update_state(job.id, JobState.SUMMARY_DONE)
     runner.progress.clear(job.id)

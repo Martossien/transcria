@@ -1,7 +1,7 @@
 {
  "inline_js_lines": 0,
  "js_lines": {
-  "transcria/web/static/js/admin_llm_cloud_page.js": 61,
+  "transcria/web/static/js/admin_llm_cloud_page.js": 81,
   "transcria/web/static/js/admin_maintenance_page.js": 60,
   "transcria/web/static/js/admin_models_page.js": 32,
   "transcria/web/static/js/ask_meetings_page.js": 245,
@@ -29,7 +29,7 @@
   "transcria/web/templates/admin_config.html": 197,
   "transcria/web/templates/admin_connectors.html": 369,
   "transcria/web/templates/admin_hardware.html": 55,
-  "transcria/web/templates/admin_llm_cloud.html": 199,
+  "transcria/web/templates/admin_llm_cloud.html": 255,
   "transcria/web/templates/admin_maintenance.html": 227,
   "transcria/web/templates/admin_models.html": 253,
   "transcria/web/templates/ask_meetings.html": 59,
@@ -66,6 +66,6 @@
   "transcria/web/templates/wizard/_step_lexicon.html": 174,
   "transcria/web/templates/wizard/_step_participants.html": 217,
   "transcria/web/templates/wizard/_step_quality.html": 61,
-  "transcria/web/templates/wizard/_step_summary.html": 115
+  "transcria/web/templates/wizard/_step_summary.html": 117
  }
 }

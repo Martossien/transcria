@@ -368,6 +368,8 @@ transcria/
       llm_prelaunch.py      # lot 2 : pré-lancement opt-in de la LLM à l'étape analyse (sous verrou LLM, jamais de préemption)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI (prompts → prompt_locator.py, parsing pur → llm_parsing.py, vague C2)
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
+      opencode_remediation.py # panne opencode RECONNUE → cause nommée → bascule automatique vers un v2 DE CONFIANCE (auditée, annulable) ; HARD_FAILURE_KINDS
+      opencode_smoke.py     # test RÉEL opencode → LLM → texte (appel d'outil forcé), partagé doctor / écran « LLM d'arbitrage »
       arbitrage_endpoint.py # SOURCE UNIQUE hôte/port/URL de la LLM d'arbitrage (+ arbitrage_root_url = schéma http/https d'api_base, arbitrage_auth_headers = Bearer de workflow.arbitration_llm.api_key_env hors cloud — sondes, appel direct, opencode) + prédicats is_ollama_backend / is_remote_arbitrage / is_cloud_backend (services.backend: cloud ⇒ distante : ni lancement, ni VRAM, ni chien de garde d'inactivité) + describe_arbitrage_endpoint (journaux)
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
@@ -890,11 +892,27 @@ non installables côte à côte, mises à jour automatiques. Règles (lu au sour
 - **Tuer = le groupe de process** (`start_new_session` + `killpg`) : wrapper npm et serveur privé
   v2 sont des enfants. Les `.opencode.pid` vivent dans le SCRATCH d'agent (`<agent_work_root>/<job>/`),
   c'est là que la réconciliation les cherche.
-- **L'installeur n'écrase jamais un opencode existant** (v1 ou v2, utilisé tel quel) ; en son
-  absence il pose une **copie privée épinglée** (`OPENCODE_PINNED_VERSION`, v1) sous
-  `~/.transcria/opencode/` (HOME du service) avec `--no-modify-path` — rien sur le PATH, le pipeline lit
-  `workflow.arbitration_llm.opencode_bin`. Le Dockerfile de base épingle la même version (garde
-  `test_docker_sync.py`).
+- **L'installeur n'écrase jamais un opencode existant** (v1 ou v2, utilisé tel quel — une v1
+  trouvée est AVERTIE, événement `found-v1`) ; en son absence il pose une **copie privée épinglée**
+  (`OPENCODE_PINNED_VERSION`, **ligne v2 depuis 2026-11-07**, via le script officiel v2
+  `opencode.ai/v2/install` — le script v1 REFUSE une release ≥ 2 ; `install_url_for_version` choisit)
+  sous `~/.transcria/opencode/` (HOME du service) avec `--no-modify-path` — rien sur le PATH, le
+  pipeline lit `workflow.arbitration_llm.opencode_bin`. Le Dockerfile de base épingle la même
+  version ET la même URL (garde `test_docker_sync.py`).
+- **Panne RECONNUE ⇒ remède automatique, jamais silencieux** (`llm_tools/opencode_remediation.py`,
+  2026-11-07) : `OpenCodeRunner.run` classe la sortie (`classify_failure` : signature
+  `AI_TypeValidationError … tool_calls[0].id … received undefined` = `sdk_tool_call_incompat`, la
+  v1 face au flux d'outils d'un modèle non natif chez un fournisseur cloud). Si le binaire est en
+  ligne v1 et qu'un **v2 de confiance** existe sur la machine (`find_v2_binary` : propriétaire
+  root / compte du service / propriétaire de `config.yaml`, non modifiable par d'autres — on
+  n'exécute jamais un fichier douteux), la configuration **bascule** (`switch_binary` : config.yaml
+  diff minimal + mémoire + audit `config_opencode_switch` + trace `opencode_bin_previous`, **annulable**
+  depuis l'écran « LLM d'arbitrage ») et le run est rejoué UNE fois. Sans v2 : la cause est NOMMÉE
+  (`cause_text`, bandeau du wizard, `summary_llm_error_kind`), les phases ne retentent pas
+  (`HARD_FAILURE_KINDS`), l'écran propose « Installer opencode v2 » (copie privée épinglée) et
+  « Tester la LLM maintenant » (`opencode_smoke.run_opencode_smoke`, partagé avec le doctor ; proposé
+  aussi au clic « Je valide »). Le doctor avertit « ligne v1 + fournisseur cloud ». Toute nouvelle
+  panne à remède mécanique suit ce motif : signature pure, remède borné, trace annulable.
 - Les clés v1 de `opencode.json` (`provider`, `permission`) sont lues et traduites par la v2 :
   un seul fichier sert les deux. Format des événements `--format json` (`text`/`tool_use` avec
   `part.text`/`part.tool`) vérifié identique en v2 sur un run réel.

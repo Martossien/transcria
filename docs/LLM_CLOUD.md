@@ -467,6 +467,29 @@ liste des modèles du fournisseur depuis le cache models.dev d'opencode du compt
 `activation.check_model_known` refuse un identifiant absent du catalogue AVANT d'écrire, avec les
 graphies proches. Sans catalogue (fournisseur inconnu d'opencode), la saisie libre reste acceptée.
 
+### 8 quater. Binaire opencode : panne reconnue, remède automatique, test depuis l'écran (2026-11-07, nuit)
+
+Même soirée, même machine, identifiant corrigé : le résumé échouait encore, cette fois à chaque
+appel d'outil — `AI_TypeValidationError … choices[0].delta.tool_calls[0].id : expected string,
+received undefined`. Mistral streame les deltas d'outil de GLM sans `id` et le SDK embarqué dans
+opencode **v1** (1.18.22) les refuse ; la **v2** les lit, les modèles natifs Mistral passent en v1.
+Trois mini-appels payants (« écris OK dans un fichier », qui force un outil) l'ont prouvé.
+
+Ce qui en est sorti, pour que la prochaine fois se détecte seule et se répare seule quand c'est à
+portée (`transcria/llm_tools/opencode_remediation.py`, `opencode_smoke.py`) :
+
+| Étage | Comportement |
+|---|---|
+| Détection | `OpenCodeRunner.run` classe la sortie : signature reconnue ⇒ `sdk_tool_call_incompat` (cause nommée dans le résultat, le journal, le bandeau du wizard, `summary_llm_error_kind`) ; les phases ne retentent pas une panne déterministe. |
+| Remède automatique | binaire en ligne v1 + un opencode **v2 de confiance** sur la machine (propriétaire root, compte du service ou propriétaire de `config.yaml` ; non modifiable par d'autres) ⇒ bascule `opencode_bin` (config.yaml diff minimal, mémoire, audit `config_opencode_switch`, trace `opencode_bin_previous`) et run rejoué une fois. Journal WARNING, jamais silencieux. |
+| Annulation | écran « LLM d'arbitrage » → carte « Moteur opencode » → « Annuler la bascule » (effet immédiat, sans redémarrage). |
+| Sans v2 | « Installer opencode v2 » : copie privée épinglée sous le HOME du service (script officiel v2), puis bascule ; ou choisir un modèle natif du fournisseur. |
+| Test | « Tester la LLM maintenant » et case « Tester la LLM juste après » au clic « Je valide » : la même mesure que `transcria doctor --llm-smoke` (une requête minuscule facturée en cloud, plafond `workflow.arbitration_llm.smoke_timeout_seconds`). |
+| Prévention | doctor : avertissement « ligne v1 avec un fournisseur cloud » ; installateur et Dockerfile épinglés sur la ligne v2 (un opencode déjà présent n'est jamais écrasé, une v1 trouvée est avertie). |
+
+Limite dite honnêtement : la bascule touche toutes les phases LLM, pas la seule qui a échoué —
+c'est voulu (le projet supporte les deux lignes), annoncé, audité et annulable en un clic.
+
 ## 8. Questions ouvertes
 - ~~Le fournisseur d'opencode et OpenRouter exposent-ils `GET /v1/models` avec la même clé ?~~
   **Répondu le 2026-11-01 (sondes réelles, clé bidon)** : OpenRouter `GET /api/v1/models` → 200

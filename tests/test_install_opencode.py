@@ -285,7 +285,33 @@ def test_install_opencode_binary_pins_the_release_and_leaves_the_shell_alone(tmp
 
 def test_private_home_lives_under_the_service_home():
     assert private_opencode_home(Path("/root")) == Path("/root/.transcria/opencode")
-    assert OPENCODE_PINNED_VERSION.count(".") == 2 and OPENCODE_PINNED_VERSION.startswith("1.")
+    # Ligne v2 depuis 2026-11-07 (la v1 refuse le flux d'outils de modèles cloud non natifs).
+    assert OPENCODE_PINNED_VERSION.count(".") == 2 and OPENCODE_PINNED_VERSION.startswith("2.")
+
+
+def test_install_url_follows_the_release_line():
+    from transcria.installer.opencode_lib import OPENCODE_INSTALL_URL_V2, install_url_for_version
+
+    assert install_url_for_version("1.19.5") == "https://opencode.ai/install"
+    assert install_url_for_version("2.2.6") == OPENCODE_INSTALL_URL_V2
+    assert install_url_for_version("v2.0.0") == OPENCODE_INSTALL_URL_V2
+    assert install_url_for_version("") == "https://opencode.ai/install"          # dernière v1 du jour
+    assert install_url_for_version("2.2.6", default="https://miroir/install") == OPENCODE_INSTALL_URL_V2
+
+
+def test_install_opencode_binary_uses_the_v2_script_for_a_v2_release(tmp_path: Path):
+    home = tmp_path / "private"
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append(cmd)
+        binary = home / ".opencode" / "bin" / "opencode"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    assert install_opencode_binary(opencode_home=home, run=fake_run, version="2.2.6", modify_path=False)
+    assert calls == [["bash", "-c", "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.6 --no-modify-path"]]
 
 
 def test_classify_recognizes_the_v2_npm_package(tmp_path: Path):
@@ -348,9 +374,10 @@ def test_render_setup_log_for_known_events():
     assert render_setup_log(event="manual-title") == (
         "INFO:Installation manuelle d'opencode (voir https://opencode.ai/download) :\n"
     )
-    assert render_setup_log(event="manual-curl") == "INFO:  curl -fsSL https://opencode.ai/install | bash\n"
+    assert render_setup_log(event="manual-curl") == "INFO:  curl -fsSL https://opencode.ai/v2/install | bash\n"
+    assert render_setup_log(event="found-v1").startswith("WARN:opencode de la ligne v1")
     assert render_setup_log(event="manual-alt") == (
-        "INFO:  ou : npm i -g opencode-ai  |  bun add -g opencode-ai  |  brew install anomalyco/tap/opencode\n"
+        "INFO:  ou : npm i -g @opencode/cli  |  brew install anomalyco/tap/opencode-v2  (v1 : npm i -g opencode-ai)\n"
     )
     assert render_setup_log(event="ignored") == "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
     assert render_setup_log(event="install-later") == "INFO:Pour installer plus tard : https://opencode.ai\n"

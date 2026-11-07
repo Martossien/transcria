@@ -31,6 +31,12 @@ from transcria.llm_tools.opencode_cli import (
     build_run_env,
     parse_opencode_version,
 )
+from transcria.llm_tools.opencode_remediation import (
+    HARD_FAILURE_KINDS,
+    auto_switch_for,
+    cause_text,
+    classify_failure,
+)
 from transcria.llm_tools.opencode_setup import find_opencode_binary
 
 # Politique de langue et résolution des prompts extraites vers gpu/prompt_locator.py
@@ -232,6 +238,11 @@ class OpenCodeRunner:
             self.provider, self.model = self.model.split("/", 1)
 
         self.model_ref = f"{self.provider}/{self.model}"
+        # Bascule automatique de binaire (opencode_remediation) : au plus UNE par runner,
+        # exposée pour l'écran/le doctor (`auto_switch`), jamais silencieuse.
+        self.auto_switch: dict | None = None
+        self._last_binary: str = ""
+        self._last_version: OpencodeVersion = OpencodeVersion(0)
 
     def _get_correction_timeout(self) -> int:
         llm = (self._config or {}).get("workflow", {}).get("arbitration_llm", {})
@@ -686,6 +697,29 @@ class OpenCodeRunner:
         return None
 
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
+        """Un run opencode, avec le remède automatique d'une panne RECONNUE.
+
+        Si la sortie porte une signature connue dont le remède est mécanique (ligne v1 qui ne
+        lit pas le flux d'outils du fournisseur) et qu'un binaire v2 de confiance existe sur
+        la machine, la configuration bascule (disque + mémoire, auditée, annulable) et le run
+        est rejoué UNE fois avec ce binaire. Sinon le résultat nomme la cause.
+        """
+        result = self._run_once(instruction, prompt_file, timeout)
+        kind = result.get("error_kind")
+        if result.get("success") or kind not in HARD_FAILURE_KINDS or self.auto_switch is not None:
+            return result
+        record = auto_switch_for(
+            self._config, current_bin=self._last_binary, current_version=self._last_version,
+            kind=kind, version_reader=self.opencode_version,
+        )
+        if record is None:
+            return result
+        self.auto_switch = record
+        self.opencode_bin = record["to"]
+        logger.warning("run opencode rejoué avec le binaire %s après bascule automatique", record["to"])
+        return self._run_once(instruction, prompt_file, timeout)
+
+    def _run_once(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         opencode_path = shutil.which(self.opencode_bin)
         if not opencode_path and os.path.isfile(self.opencode_bin):
             opencode_path = os.path.abspath(self.opencode_bin)
@@ -728,6 +762,7 @@ class OpenCodeRunner:
         # de PWD (posé par build_run_env) et --standalone évite le serveur partagé par
         # utilisateur (qui ignorerait XDG_DATA_HOME et survivrait au kill du client).
         version = self.opencode_version(opencode_path)
+        self._last_binary, self._last_version = opencode_path, version
         cmd = build_run_command(
             opencode_path, version=version, work_dir=str(self.work_dir),
             model_ref=self.model_ref, instruction=instruction, prompt_file=prompt_file,
@@ -792,8 +827,7 @@ class OpenCodeRunner:
             detail = opencode_error_detail(stderr, events)
             if stderr.strip():
                 logger.warning("opencode stderr (fin) : %s", stderr[-2000:].strip())
-            return {"success": False, "error_kind": "opencode_error",
-                    "error": f"opencode exit {proc.returncode}: {detail}".rstrip()}
+            return self._failure(f"opencode exit {proc.returncode}: {detail}".rstrip(), stderr, events, version)
 
         # Extraire le texte produit
         output_text = "\n".join(
@@ -801,6 +835,12 @@ class OpenCodeRunner:
             for ev in events
             if ev.get("type") == "text"
         )
+
+        if not output_text.strip() and total_tools == 0 and classify_failure(stderr, events):
+            # exit 0 « poli » : rien produit et un événement d'erreur RECONNU — une panne, pas
+            # un silence (la v1 termine à 0 après l'erreur de validation du flux d'outils).
+            return self._failure(f"opencode exit 0 sans production : {opencode_error_detail(stderr, events)}",
+                                 stderr, events, version)
 
         # Lister les fichiers produits dans le work_dir
         new_files = sorted(
@@ -815,6 +855,15 @@ class OpenCodeRunner:
             "events_count": len(events),
             "tool_calls": total_tools,
         }
+
+    @staticmethod
+    def _failure(error: str, stderr: str, events: list[dict], version: OpencodeVersion) -> dict:
+        """Résultat d'échec : classe générique ``opencode_error`` ou classe RECONNUE (cause nommée)."""
+        kind = classify_failure(stderr, events)
+        if kind is None:
+            return {"success": False, "error_kind": "opencode_error", "error": error}
+        return {"success": False, "error_kind": kind,
+                "error": f"{cause_text(kind, version=version)} Détail : {error}", "error_signature": error}
 
     def _materialize_prompt(self, prompt_file: str, substitutions: dict[str, str]) -> str:
         """Copie du prompt avec les placeholders substitués, DANS le scratch de l'agent.
@@ -963,7 +1012,8 @@ class OpenCodeRunner:
             #   - empty_output : opencode a fini (exit 0) mais n'a produit aucun texte
             #     → transcript trop long / modèle / prompt.
             if not result.get("success"):
-                parsed["_failure_kind"] = "opencode_error"
+                kind = result.get("error_kind")
+                parsed["_failure_kind"] = kind if kind in HARD_FAILURE_KINDS else "opencode_error"
                 parsed["_failure_detail"] = result.get("error", "")
             else:
                 parsed["_failure_kind"] = "empty_output"

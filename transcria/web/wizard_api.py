@@ -101,10 +101,23 @@ _SUMMARY_LLM_CLOUD_REFUSED_MESSAGE = (
 )
 
 
+# Panne RECONNUE (opencode_remediation.SDK_TOOL_CALL_INCOMPAT) : le binaire opencode v1 ne lit
+# pas le flux d'appels d'outil de ce modèle chez ce fournisseur. Remède connu, nommé ici.
+_SUMMARY_LLM_SDK_INCOMPAT_MESSAGE = (
+    "Le résumé n'a pas pu être généré : le binaire opencode utilisé par le service (ligne v1) "
+    "ne sait pas lire les appels d'outil de ce modèle chez ce fournisseur — ce n'est ni la clé, "
+    "ni le réseau, ni le transcript. La transcription rapide est conservée. Remède (administrateur) : "
+    "écran « LLM d'arbitrage » → « Installer opencode v2 » (ou choisir un modèle natif du fournisseur), "
+    "puis relancer le résumé."
+)
+
+
 def _summary_failure_message(error_kind: str) -> str:
     """Message FR du bandeau selon la CLASSE de panne du résumé LLM."""
     if error_kind == "cloud_refused":
         return _SUMMARY_LLM_CLOUD_REFUSED_MESSAGE
+    if error_kind == "sdk_tool_call_incompat":
+        return _SUMMARY_LLM_SDK_INCOMPAT_MESSAGE
     if error_kind == "opencode_error":
         return _SUMMARY_LLM_UNREACHABLE_MESSAGE
     return _SUMMARY_LLM_FAILED_MESSAGE

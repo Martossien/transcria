@@ -68,6 +68,9 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         # install_opencode (lignes curl/npm littérales)
         "oc_found": "opencode trouvé : {value}",
         "oc_missing_msg": "opencode non trouvé",
+        "oc_found_v1": "opencode de la ligne v1 : avec un fournisseur cloud, certains modèles non natifs échouent à chaque appel "
+                       "d'outil — la ligne v2 est recommandée (écran « LLM d'arbitrage » → Installer opencode v2, ou curl -fsSL "
+                       "https://opencode.ai/v2/install | bash)",
         "oc_download_start": "Installation d'opencode via l'installateur officiel (opencode.ai/install)…",
         "oc_installed": "opencode installé : {value}",
         "oc_download_failed": "Téléchargement opencode échoué — vérifiez la connectivité",
@@ -382,6 +385,9 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "sys_inference_missing_hint": "  Check that deploy/transcria-inference.service exists.",
         "oc_found": "opencode found: {value}",
         "oc_missing_msg": "opencode not found",
+        "oc_found_v1": "opencode v1 line: with a cloud provider, some non-native models fail at every tool call — the v2 line is "
+                       "recommended (“Arbitration LLM” screen → Install opencode v2, or curl -fsSL https://opencode.ai/v2/install | "
+                       "bash)",
         "oc_download_start": "Installing opencode via the official installer (opencode.ai/install)…",
         "oc_installed": "opencode installed: {value}",
         "oc_download_failed": "opencode download failed — check connectivity",

@@ -101,7 +101,21 @@ def test_detected_binary_is_recorded_and_provider_configured(tmp_path):
     assert runner.calls and runner.calls[0][0] == "/usr/bin/python3"
     assert "setup_opencode.py" in runner.calls[0][1]
     assert "found" in result.actions and "provider-ok" in result.actions
+    assert "found-v1" in result.actions                      # 1.2.3 = ligne v1 : avertie, jamais écrasée
     assert chown_calls  # chown best-effort tenté après configuration réussie
+
+
+def test_detected_v2_binary_is_not_warned(tmp_path):
+    from transcria.installer.opencode_lib import OpencodeDetection
+
+    binary = tmp_path / "opencode"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    plan = _plan(tmp_path)
+    result = apply_opencode(
+        plan, console=_console(), runner=_Runner(returncode=0), chown=lambda p, u: None,
+        detect=lambda: OpencodeDetection(binary=binary, version="opencode v2.2.6"),
+    )
+    assert "found" in result.actions and "found-v1" not in result.actions
 
 
 def test_missing_binary_non_interactive_auto_installs(tmp_path):
@@ -134,7 +148,9 @@ def test_missing_binary_non_interactive_auto_installs(tmp_path):
     # de l'opencode de l'exploitant (v1 ou v2) ; sans PATH, sans rc, version fixée.
     dest = home / ".transcria" / "opencode" / ".opencode" / "bin" / "opencode"
     install_cmds = [c for c in runner.calls if c[0] == "bash"]
-    assert install_cmds and "--version 1." in install_cmds[0][2] and "--no-modify-path" in install_cmds[0][2]
+    # Épingle v2 ⇒ script officiel v2 (le script v1 refuse une release ≥ 2).
+    assert install_cmds and "opencode.ai/v2/install" in install_cmds[0][2]
+    assert "--version 2." in install_cmds[0][2] and "--no-modify-path" in install_cmds[0][2]
     assert "installed" in result.actions
     assert "ignored" not in result.actions
     assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)

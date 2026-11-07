@@ -251,6 +251,10 @@ class TestOpencodePin:
         m = re.search(r"^ARG\s+OPENCODE_VERSION=(?P<value>\S+)\s*$", text, re.MULTILINE)
         assert m and m.group("value") == OPENCODE_PINNED_VERSION, "Dockerfile et installateur divergent sur opencode"
         assert '--version "${OPENCODE_VERSION}"' in text
+        # Le script v1 REFUSE une release ≥ 2 : l'URL du Dockerfile suit la ligne de l'épingle.
+        from transcria.installer.opencode_lib import install_url_for_version
+
+        assert f"curl -fsSL {install_url_for_version(OPENCODE_PINNED_VERSION)} | bash" in text
 
 
 # ── (e) image CPU : audiocpp_cli précompilé posé par la logique de l'installateur ──

@@ -233,6 +233,11 @@ def check_opencode(
     if not version.known:
         return CheckResult(name, WARN, _t("oc_found_unknown_version", resolved=resolved, raw=version.raw),
                            hint=_t("oc_version_hint"))
+    if version.line < 2 and is_cloud_backend(cfg):
+        # Vécu 2026-11-07 : la v1 refuse le flux d'appels d'outil de certains modèles NON natifs
+        # chez un fournisseur cloud (GLM servi par Mistral) — à chaque appel. La v2 le lit.
+        return CheckResult(name, WARN, _t("oc_v1_cloud", resolved=resolved, version=str(version)),
+                           hint=_t("oc_v1_cloud_hint"))
     return CheckResult(name, OK, _t("oc_found_versioned", resolved=resolved, version=str(version), line=version.line))
 
 def _opencode_config_path() -> str:
@@ -365,7 +370,6 @@ def check_opencode_smoke(
             or workflow.get("arbitration_llm", {}).get("enabled", False)):
         return CheckResult(name, OK, _t("smoke_disabled"))
 
-    import tempfile
 
     services = cfg.get("services", {})
     port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
@@ -392,48 +396,30 @@ def check_opencode_smoke(
                 hint=_t("smoke_down_hint", log=log_path),
             )
 
-    if runner_factory is None:
-        # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
-        from transcria.llm_tools.opencode_runner import OpenCodeRunner
+    # Mesure déléguée au module partagé avec l'écran « LLM d'arbitrage » (même consigne, même
+    # scratch jetable, même lecture des classes de panne) — le doctor ne fait que rédiger.
+    # Différé §8.3(c) : chargé seulement si ce check (opt-in) tourne.
+    from transcria.llm_tools.opencode_smoke import run_opencode_smoke, smoke_timeout_seconds
 
-        runner_factory = OpenCodeRunner
-
-    try:
-        timeout_s = int(workflow.get("arbitration_llm", {}).get("smoke_timeout_seconds", 120))
-    except (TypeError, ValueError):
-        timeout_s = 120
-
-    with tempfile.TemporaryDirectory(prefix="transcria_doctor_smoke_") as tmp:
-        work = Path(tmp)
-        prompt_file = work / "smoke_prompt.txt"
-        prompt_file.write_text(_t("smoke_prompt_sys"), encoding="utf-8")
-        runner = runner_factory(str(work), config=cfg)
-        result = runner.run(
-            _t("smoke_prompt_task"),
-            str(prompt_file),
-            timeout=timeout_s,
-        )
-        if not result.get("success"):
-            error = result.get("error", _t("smoke_unknown_error"))
-            if cloud:
-                return CheckResult(name, FAIL, _t("smoke_cloud_failed", paid=paid, error=error),
-                                   hint=_t("smoke_cloud_hint"))
-            return CheckResult(
-                name, FAIL, _t("smoke_failed", error=error),
-                hint=_t("smoke_failed_hint", port=port, log=log_path),
-            )
-        smoke = work / "smoke.md"
-        produced = bool(result.get("output")) or (
-            smoke.is_file() and bool(smoke.read_text(encoding="utf-8").strip())
-        )
-        if not produced:
+    outcome = run_opencode_smoke(
+        cfg, runner_factory=runner_factory, timeout_s=smoke_timeout_seconds(cfg),
+        system_prompt=_t("smoke_prompt_sys"), task=_t("smoke_prompt_task"),
+    )
+    switched = _t("smoke_switched", to=outcome.switched["to"]) if outcome.switched else ""
+    if not outcome.ok:
+        if outcome.no_production:
             if cloud:
                 return CheckResult(name, FAIL, _t("smoke_cloud_notext", paid=paid), hint=_t("smoke_cloud_hint"))
-            return CheckResult(
-                name, FAIL,
-                _t("smoke_notext"),
-                hint=_t("smoke_notext_hint", log=log_path),
-            )
+            return CheckResult(name, FAIL, _t("smoke_notext"), hint=_t("smoke_notext_hint", log=log_path))
+        error = outcome.error or _t("smoke_unknown_error")
+        if outcome.error_kind == "sdk_tool_call_incompat":
+            return CheckResult(name, FAIL, _t("smoke_sdk_incompat", error=error) + switched,
+                               hint=_t("smoke_sdk_incompat_hint"))
+        if cloud:
+            return CheckResult(name, FAIL, _t("smoke_cloud_failed", paid=paid, error=error) + switched,
+                               hint=_t("smoke_cloud_hint"))
+        return CheckResult(name, FAIL, _t("smoke_failed", error=error) + switched,
+                           hint=_t("smoke_failed_hint", port=port, log=log_path))
     if cloud:
-        return CheckResult(name, OK, _t("smoke_cloud_ok", paid=paid))
-    return CheckResult(name, OK, _t("smoke_ok", port=port))
+        return CheckResult(name, OK, _t("smoke_cloud_ok", paid=paid) + switched)
+    return CheckResult(name, OK, _t("smoke_ok", port=port) + switched)

@@ -130,6 +130,11 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "oc_found_versioned": "trouvé : {resolved} — version {version} (ligne de commande v{line})",
         "oc_found_unknown_version": "trouvé : {resolved} — version illisible ({raw!r}) : ligne de commande v1 supposée",
         "oc_version_hint": "vérifiez `opencode --version` ; v1 (opencode-ai) et v2 (@opencode/cli) sont toutes deux supportées",
+        "oc_v1_cloud": "trouvé : {resolved} — version {version} (ligne v1) avec un fournisseur cloud : certains modèles non natifs "
+                       "du fournisseur échouent à CHAQUE appel d'outil (flux sans identifiant d'appel, vécu GLM chez Mistral)",
+        "oc_v1_cloud_hint": "Installer la ligne v2 depuis l'écran « LLM d'arbitrage » (copie privée épinglée, un clic) ou pointer "
+                            "workflow.arbitration_llm.opencode_bin sur un opencode v2 déjà présent ; sinon choisir un modèle natif "
+                            "du fournisseur. Le pipeline bascule seul sur une v2 de confiance s'il en trouve une.",
         # check_opencode_model_resolution
         "mr_disabled": "phases LLM désactivées — résolution non requise",
         "mr_no_id": "workflow.arbitration_llm.model_id non défini",
@@ -158,6 +163,12 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                              "prompt inadapté). Lire {log}.",
         "smoke_ok": "opencode → LLM → texte : production confirmée (port {port})",
         "smoke_unknown_error": "inconnu",
+        "smoke_switched": " — binaire opencode basculé automatiquement vers {to} pendant le test (annulable dans l'écran « LLM "
+                          "d'arbitrage »)",
+        "smoke_sdk_incompat": "le binaire opencode (ligne v1) ne lit pas le flux d'appels d'outil de ce modèle chez ce fournisseur — "
+                              "{error}",
+        "smoke_sdk_incompat_hint": "Ni la clé, ni le réseau, ni le texte : installer la ligne v2 (écran « LLM d'arbitrage » → "
+                                   "Installer opencode v2) ou choisir un modèle natif du fournisseur.",
         # LLM d'arbitrage cloud (docs/LLM_CLOUD.md § 3.3.1)
         "na_cloud": "sans objet (LLM d'arbitrage cloud — rien ne tourne sur cette machine)",
         "na_remote": "sans objet (serveur de l'organisation déclaré — TranscrIA ne lance ni n'arrête cette LLM)",
@@ -568,6 +579,11 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "oc_found_versioned": "found: {resolved} — version {version} (v{line} command line)",
         "oc_found_unknown_version": "found: {resolved} — unreadable version ({raw!r}): v1 command line assumed",
         "oc_version_hint": "check `opencode --version`; both v1 (opencode-ai) and v2 (@opencode/cli) are supported",
+        "oc_v1_cloud": "found: {resolved} — version {version} (v1 line) with a cloud provider: some models that are not native to "
+                       "the provider fail at EVERY tool call (stream without call id, seen with GLM served by Mistral)",
+        "oc_v1_cloud_hint": "Install the v2 line from the “Arbitration LLM” screen (pinned private copy, one click) or point "
+                            "workflow.arbitration_llm.opencode_bin to an existing opencode v2; otherwise pick a model native to the "
+                            "provider. The pipeline switches by itself to a trusted v2 when it finds one.",
         "mr_disabled": "LLM phases disabled — resolution not required",
         "mr_no_id": "workflow.arbitration_llm.model_id not set",
         "mr_no_id_hint": "Set model_id (e.g. local/arbitrage) in config.yaml.",
@@ -594,6 +610,11 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
                              "prompt). Read {log}.",
         "smoke_ok": "opencode → LLM → text: production confirmed (port {port})",
         "smoke_unknown_error": "unknown",
+        "smoke_switched": " — opencode binary switched automatically to {to} during the test (revertable from the “Arbitration LLM” "
+                          "screen)",
+        "smoke_sdk_incompat": "the opencode binary (v1 line) cannot read this model's tool-call stream at this provider — {error}",
+        "smoke_sdk_incompat_hint": "Not the key, not the network, not the text: install the v2 line (“Arbitration LLM” screen → "
+                                   "Install opencode v2) or pick a model native to the provider.",
         "na_cloud": "not applicable (cloud arbitration LLM — nothing runs on this machine)",
         "na_remote": "not applicable (declared organisation server — TranscrIA never starts or stops this LLM)",
         "arbl_remote_down": "the declared server {url} does not respond — TranscrIA will not start it, start it yourself",

@@ -655,13 +655,19 @@ source venv/bin/activate
 opencode est l'orchestrateur qui pilote la LLM d'arbitrage pour le résumé et la correction SRT. La configuration ci-dessous utilise Qwen comme exemple historique local ; vous pouvez utiliser un autre modèle si le provider expose une API compatible et si `workflow.*.model_id` est aligné.
 
 ```bash
-# Installer opencode via l'installateur officiel (gère arch, libc musl, variante AVX2,
-# extraction et PATH) — installe dans $HOME/.opencode/bin/opencode
-curl -fsSL https://opencode.ai/install | bash
+# Installer opencode (ligne v2, recommandée) via l'installateur officiel (gère arch, libc musl,
+# variante AVX2, extraction et PATH) — installe dans $HOME/.opencode/bin/opencode
+curl -fsSL https://opencode.ai/v2/install | bash
 
 # Vérifier
 $HOME/.opencode/bin/opencode --version
 ```
+
+> **Pourquoi la v2 ?** Avec un fournisseur cloud, la ligne v1 (`opencode.ai/install`) refuse le flux
+> d'appels d'outil de certains modèles non natifs du fournisseur (vécu : GLM servi par Mistral) — à
+> chaque appel. La v2 le lit. `install.sh` épingle désormais la v2 pour sa copie privée ; un opencode
+> déjà présent n'est jamais écrasé (une v1 trouvée est avertie), et l'écran « LLM d'arbitrage »
+> propose « Installer opencode v2 » + « Tester la LLM maintenant ».
 
 > opencode peut aussi être installé autrement (`npm i -g opencode-ai`, `bun add -g opencode-ai`,
 > `brew install anomalyco/tap/opencode`, `paru -S opencode`). Voir <https://opencode.ai/download>.
@@ -1915,8 +1921,8 @@ python -c "from transcria.stt.diarizer_factory import create_diarizer; print(cre
 
 ```bash
 which opencode
-# Si absent (installateur officiel — gère arch/musl/AVX2/extraction) :
-curl -fsSL https://opencode.ai/install | bash
+# Si absent (installateur officiel v2 — gère arch/musl/AVX2/extraction) :
+curl -fsSL https://opencode.ai/v2/install | bash
 export TRANSCRIA_OPENCODE_BIN=~/.opencode/bin/opencode
 ```
 

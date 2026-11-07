@@ -96,6 +96,8 @@
         <i class="bi bi-exclamation-triangle"></i>
         {% if job.get_extra_data().get('summary_llm_error_kind') == 'cloud_refused' %}
         {% trans %}Le résumé a été refusé : cette instance confie les transcriptions à une LLM externe et ce traitement n'est pas autorisé (validation administrateur absente ou caduque, groupe interdit, ou réunion issue d'un connecteur). Rapprochez-vous de votre administrateur.{% endtrans %}
+        {% elif job.get_extra_data().get('summary_llm_error_kind') == 'sdk_tool_call_incompat' %}
+        {% trans %}Le dernier résumé n'a pas pu être généré : le binaire opencode utilisé par le service (ligne v1) ne sait pas lire les appels d'outil de ce modèle chez ce fournisseur — ce n'est ni la clé, ni le réseau, ni le transcript. Remède (administrateur) : écran « LLM d'arbitrage » → « Installer opencode v2 » (ou un modèle natif du fournisseur), puis relancez le résumé ci-dessous.{% endtrans %}
         {% else %}
         {% trans %}Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.{% endtrans %}
         {% endif %}

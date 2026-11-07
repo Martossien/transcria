@@ -79,6 +79,14 @@ def _emit(console: _ConsoleLike, event: str, *, value: str = "", profile: str = 
     {"OK": console.ok, "INFO": console.info, "WARN": console.warn, "ERROR": console.error}.get(prefix, console.info)(message)
 
 
+def _is_v1(version_text: str) -> bool:
+    """« 1.18.22 » / « opencode v1.19.5 » ⇒ ligne v1 ; illisible ⇒ False (pas d'avertissement à tort)."""
+    import re
+
+    m = re.search(r"\b(\d+)\.\d+(?:\.\d+)?", version_text or "")
+    return m is not None and int(m.group(1)) == 1
+
+
 def _configured_bin(config_path: Path) -> str | None:
     value = get_yaml_value(load_yaml_file(config_path), _OPENCODE_BIN_KEY)
     return str(value) if value else None
@@ -116,6 +124,10 @@ def apply_opencode(
         _emit(console, "found", value=f"{binary} ({detection.version})")
         set_yaml_file_value(plan.config_path, _OPENCODE_BIN_KEY, str(binary))
         result.record("found")
+        if _is_v1(detection.version):
+            # Jamais écrasé (c'est l'opencode de l'exploitant) — mais dit : vécu 2026-11-07.
+            _emit(console, "found-v1")
+            result.record("found-v1")
     else:
         _emit(console, "missing")
         result.record("missing")

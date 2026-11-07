@@ -22,12 +22,25 @@ RunFn = Callable[..., subprocess.CompletedProcess[str]]
 # cible (arch x64/arm64, libc musl, variante AVX2 *baseline*), nommage qu'un lien direct
 # ne suit plus (404). Le script gère archive/extraction/arch/musl/baseline/PATH.
 OPENCODE_INSTALL_URL = "https://opencode.ai/install"
+#: Installateur officiel de la LIGNE v2 (`@opencode/cli`) : le script v1 REFUSE toute version ≥ 2
+#: (« not an OpenCode 1 release »), même options (`--version`, `--no-modify-path`), même
+#: destination `$HOME/.opencode/bin/opencode`. Vérifié à la source le 2026-11-07.
+OPENCODE_INSTALL_URL_V2 = "https://opencode.ai/v2/install"
 
 # Ligne v1 épinglée pour la COPIE PRIVÉE de TranscrIA (installée seulement quand aucun
 # opencode n'est trouvé). Vérifié au registre le 2026-09-30 (opencode-ai 1.18.33). La v2
 # (@opencode/cli) est SUPPORTÉE à l'exécution (adaptateur transcria/llm_tools/opencode_cli)
 # mais pas installée par nous tant qu'un parcours réel ne l'a pas qualifiée.
-OPENCODE_PINNED_VERSION = "1.19.5"
+# Ligne v2 depuis le 2026-11-07 : la v1 (1.18/1.19) refuse le flux d'appels d'outil de modèles
+# non natifs chez des fournisseurs cloud (GLM servi par Mistral : `tool_calls` sans `id`) —
+# la v2 le lit. Un opencode DÉJÀ présent (v1 ou v2) reste utilisé tel quel (jamais écrasé).
+OPENCODE_PINNED_VERSION = "2.2.6"
+
+
+def install_url_for_version(version: str, default: str = OPENCODE_INSTALL_URL) -> str:
+    """Script officiel à utiliser pour ``version`` : v2 pour une release ≥ 2, sinon ``default``."""
+    major = str(version or "").lstrip("v").split(".", 1)[0]
+    return OPENCODE_INSTALL_URL_V2 if major.isdigit() and int(major) >= 2 else default
 
 
 def private_opencode_home(service_home: Path) -> Path:
@@ -112,6 +125,8 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
 
     if event == "found":
         return f"OK:{t('oc_found', value=value)}\n"
+    if event == "found-v1":
+        return f"WARN:{t('oc_found_v1')}\n"
     if event == "missing":
         return f"WARN:{t('oc_missing_msg')}\n"
     if event == "download-start":
@@ -123,9 +138,9 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
     if event == "manual-title":
         return f"INFO:{t('oc_manual_title')}\n"
     if event == "manual-curl":
-        return "INFO:  curl -fsSL https://opencode.ai/install | bash\n"
+        return "INFO:  curl -fsSL https://opencode.ai/v2/install | bash\n"
     if event == "manual-alt":
-        return "INFO:  ou : npm i -g opencode-ai  |  bun add -g opencode-ai  |  brew install anomalyco/tap/opencode\n"
+        return "INFO:  ou : npm i -g @opencode/cli  |  brew install anomalyco/tap/opencode-v2  (v1 : npm i -g opencode-ai)\n"
     if event == "ignored":
         return f"INFO:{t('oc_ignored')}\n"
     if event == "install-later":
@@ -185,6 +200,8 @@ def install_opencode_binary(
     opencode_home = Path(opencode_home)
     run_env = dict(os.environ if env is None else env)
     run_env["HOME"] = str(opencode_home)
+    if install_url == OPENCODE_INSTALL_URL:
+        install_url = install_url_for_version(version)   # une release v2 passe par le script v2
     args = []
     if version:
         args += ["--version", version]

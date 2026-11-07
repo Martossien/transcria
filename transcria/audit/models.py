@@ -50,6 +50,9 @@ class AuditAction(str, enum.Enum):
     CONFIG_LLM_CLOUD_REVOKE = "config_llm_cloud_revoke"
     CONFIG_LLM_MODE_CHANGE = "config_llm_mode_change"          # local / serveur de l'organisation / cloud (jamais la clé)
     MAINTENANCE_SERVICE_RESTART = "maintenance_service_restart"  # redémarrage demandé depuis l'administration
+    CONFIG_OPENCODE_SWITCH = "config_opencode_switch"            # bascule du binaire opencode (automatique ou admin, annulation)
+    CONFIG_OPENCODE_INSTALL = "config_opencode_install"          # installation d'une copie privée opencode depuis l'écran
+    CONFIG_LLM_TEST = "config_llm_test"                          # test réel opencode → LLM lancé depuis l'écran
     AUDIT_EXPORT = "audit_export"
 
     USER_CREATE = "user_create"
@@ -113,6 +116,8 @@ _VERB_FR = {
     "ask_meetings": "Discussion avec les réunions", "ask_meetings_transcript": "Discussion — lecture d'une transcription",
     "llm_cloud_acknowledge": "Validation de la LLM cloud", "llm_cloud_revoke": "Retrait de la validation LLM cloud",
     "llm_mode_change": "Changement de LLM d'arbitrage", "service_restart": "Redémarrage du service",
+    "opencode_switch": "Bascule du binaire opencode", "opencode_install": "Installation d'opencode",
+    "llm_test": "Test de la LLM d'arbitrage",
     "backup_create": "Création de sauvegarde", "backup_restore": "Restauration de sauvegarde",
 }
 _DOMAIN_FR = {
