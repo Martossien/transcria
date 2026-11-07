@@ -718,3 +718,65 @@ class TestDiarizeAudioSpeakerParams:
         # valeurs invalides (réseau) → ignorées, pas d'injection au pipeline
         svc.diarize_audio(audio_path, speaker_params={"num_speakers": 0, "min_speakers": "x"})
         assert "num_speakers" not in seen and "min_speakers" not in seen
+
+
+class TestClipsSansTorchcodec:
+    """Extraits et empreintes locuteurs lus par libsndfile depuis le WAV PCM — jamais torchaudio.load sur
+    la source (segfault réel du 2026-11-07 dans le décodeur AAC appelé par torchcodec)."""
+
+    def _job(self, tmp_path, sr: int):
+        import soundfile as sf
+
+        cfg = _default_cfg(tmp_path)
+        job = Job(id=f"dia-clips-sf-{sr}", owner_id="u1", title="Clips", state=JobState.ANALYZED.value)
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        t = np.arange(int(20 * sr)) / sr
+        audio = (0.3 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+        path = fs.job_dir / "input" / "source.wav"
+        sf.write(str(path), audio, sr)
+        turns = [{"start": 0.0, "end": 6.0, "speaker": "SPEAKER_00", "duration": 6.0},
+                 {"start": 8.0, "end": 15.0, "speaker": "SPEAKER_01", "duration": 7.0}]
+        return cfg, fs, path, turns
+
+    def _forbid_torchaudio_load(self, monkeypatch):
+        import torchaudio
+
+        def boom(*args, **kwargs):
+            raise AssertionError("torchaudio.load (torchcodec) ne doit plus décoder la source")
+        monkeypatch.setattr(torchaudio, "load", boom)
+
+    def test_extraits_et_empreintes_depuis_un_wav_16k(self, tmp_path, monkeypatch):
+        cfg, fs, path, turns = self._job(tmp_path, 16000)
+        self._forbid_torchaudio_load(monkeypatch)
+        ds = DiarizerService(cfg, device="cpu")
+        ds._extract_clips(path, turns, ["SPEAKER_00", "SPEAKER_01"], fs)
+        clips = fs.load_json("speakers/speaker_clips.json")
+        assert clips and len(clips["SPEAKER_00"]) == 1 and Path(clips["SPEAKER_01"][0]).is_file()
+        ds._cache_speaker_embeddings(path, turns, ["SPEAKER_00", "SPEAKER_01"], fs)
+        emb = fs.load_json("speakers/speaker_embeddings.json")
+        assert emb and set(emb["embeddings"]) == {"SPEAKER_00", "SPEAKER_01"}
+
+    def test_source_22k_est_reechantillonnee_sans_decoder_par_torchaudio(self, tmp_path, monkeypatch):
+        cfg, fs, path, turns = self._job(tmp_path, 22050)
+        self._forbid_torchaudio_load(monkeypatch)
+        ds = DiarizerService(cfg, device="cpu")
+        audio, sr = ds._load_mono_16k(path, fs)
+        assert sr == 16000 and abs(len(audio) / 16000 - 20.0) < 0.05
+        ds._extract_clips(path, turns, ["SPEAKER_00"], fs)
+        assert fs.load_json("speakers/speaker_clips.json")["SPEAKER_00"]
+
+    def test_repli_torchaudio_seulement_si_libsndfile_echoue(self, tmp_path, monkeypatch):
+        import soundfile as sf
+        import torchaudio
+
+        cfg, fs, path, turns = self._job(tmp_path, 16000)
+        monkeypatch.setattr(DiarizationPcmPreparer, "prepare", lambda self, fs_, src: src)
+
+        def refuse(*a, **k):
+            raise RuntimeError("format inconnu de libsndfile")
+        monkeypatch.setattr(sf, "read", refuse)
+        import torch
+        monkeypatch.setattr(torchaudio, "load", lambda p: (torch.zeros(1, 16000 * 2), 16000))
+        audio, sr = DiarizerService(cfg, device="cpu")._load_mono_16k(path, fs)
+        assert sr == 16000 and len(audio) == 32000

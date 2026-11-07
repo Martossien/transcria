@@ -207,7 +207,7 @@
   "transcria.services.pipeline_steps.scene_filter": 3,
   "transcria.services.pipeline_steps.source_separation": 3,
   "transcria.stt": 12,
-  "transcria.stt.base_diarizer": 2,
+  "transcria.stt.base_diarizer": 3,
   "transcria.stt.cohere_tf5_transcriber": 4,
   "transcria.stt.cohere_transcriber": 7,
   "transcria.stt.diarization": 7,

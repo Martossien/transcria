@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from transcria.audio.diarization_pcm import DiarizationPcmPreparer
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 
@@ -102,6 +103,44 @@ class BaseDiarizer(ABC):
     # Extraits audio par locuteur (utilisés par SpeakerDetector & voice)
     # ------------------------------------------------------------------
 
+    def _load_mono_16k(self, audio_path: Path, fs: JobFilesystem) -> tuple[np.ndarray, int]:
+        """Signal mono 16 kHz (float32) pour les extraits et les empreintes — SANS torchcodec.
+
+        Le MP4/AAC d'origine ne passe plus par ``torchaudio.load`` : segfault réel le 2026-11-07
+        (corruption du tas dans le décodeur AAC de libavcodec appelé par torchcodec, process du
+        service entier perdu, job marqué en échec). On lit le WAV PCM 16 kHz mono que le pipeline
+        produit déjà pour la diarisation (``speakers/diarization_16k_mono.wav``, converti par
+        ffmpeg en SOUS-PROCESS et vérifié en durée) avec libsndfile. Dernier recours seulement,
+        si rien de lisible n'existe : torchaudio, comme avant.
+        """
+        import soundfile as sf
+
+        pcm_config = dict(self.config)
+        pcm_config["diarization"] = {**(self.config.get("diarization") or {}), "prepare_pcm_audio": True}
+        try:
+            source = DiarizationPcmPreparer(pcm_config).prepare(fs, audio_path)
+        except Exception as exc:  # noqa: BLE001 — la conversion est best-effort, la lecture directe suit
+            logger.warning("Diarization: WAV PCM indisponible (%s), lecture directe de %s", exc, audio_path.name)
+            source = audio_path
+        try:
+            data, sr = sf.read(str(source), dtype="float32", always_2d=True)
+            audio = data.mean(axis=1) if data.shape[1] > 1 else data[:, 0]
+        except Exception as exc:  # noqa: BLE001 — source compressée sans WAV : repli historique
+            logger.warning("Diarization: libsndfile ne lit pas %s (%s) — repli torchaudio", source.name, exc)
+            import torchaudio
+
+            wave, sr = torchaudio.load(str(source))
+            if wave.shape[0] > 1:
+                wave = wave.mean(dim=0, keepdim=True)
+            audio = wave.squeeze(0).numpy()
+        if sr != 16000:
+            import torch
+            import torchaudio.transforms as T
+
+            audio = T.Resample(sr, 16000)(torch.from_numpy(np.ascontiguousarray(audio))[None, :]).squeeze(0).numpy()
+            sr = 16000
+        return np.asarray(audio, dtype=np.float32), int(sr)
+
     def _extract_clips(
         self,
         audio_path: Path,
@@ -115,16 +154,8 @@ class BaseDiarizer(ABC):
         """Extrait des extraits audio WAV pour chaque locuteur."""
         try:
             import soundfile as sf
-            import torchaudio
 
-            wave, sr = torchaudio.load(str(audio_path))
-            if wave.shape[0] > 1:
-                wave = wave.mean(dim=0, keepdim=True)
-            if sr != 16000:
-                import torchaudio.transforms as T
-                wave = T.Resample(sr, 16000)(wave)
-                sr = 16000
-            audio = wave.squeeze(0).numpy()
+            audio, sr = self._load_mono_16k(audio_path, fs)
 
             clips_dir = fs.job_dir / "speakers" / "samples"
             clips_dir.mkdir(parents=True, exist_ok=True)
@@ -165,16 +196,7 @@ class BaseDiarizer(ABC):
         if not diar_cfg.get("embedding_cache_enabled", True):
             return
         try:
-            import torchaudio
-
-            wave, sr = torchaudio.load(str(audio_path))
-            if wave.shape[0] > 1:
-                wave = wave.mean(dim=0, keepdim=True)
-            if sr != 16000:
-                import torchaudio.transforms as T
-                wave = T.Resample(sr, 16000)(wave)
-                sr = 16000
-            audio = wave.squeeze(0).numpy()
+            audio, sr = self._load_mono_16k(audio_path, fs)
             max_seconds = float(diar_cfg.get("embedding_clip_seconds", 12.0))
             embeddings = {}
             for speaker in speakers:
