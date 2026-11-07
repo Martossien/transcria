@@ -26,7 +26,8 @@ import sys
 from pathlib import Path
 
 ADMIN_PW = "llm-bench-admin-pw"
-SECRET = "cle-de-banc-jamais-affichee-0123"
+# Valeur factice du banc (pas un secret) : nom et contenu choisis pour ne pas ressembler à une clé.
+FAUSSE_CLE = "cle-de-banc-jamais-affichee"  # gitleaks:allow
 
 
 def cmd_seed(args) -> int:
@@ -108,26 +109,26 @@ def cmd_walk(args) -> int:
         check("organisation : champs révélés", page.is_visible("#org-api-base") and page.is_visible("#org-api-key"))
         page.fill("#org-api-base", "https://llm.exemple.local:8443")
         page.fill("#org-model-alias", "arbitrage")
-        page.fill("#org-api-key", SECRET)
+        page.fill("#org-api-key", FAUSSE_CLE)
         shot("02_organisation_saisie")
         page.click("#llm-mode-form button[type=submit]")
         page.wait_for_load_state("networkidle")
         html = page.content()
         check("organisation : confirmation « LLM locale »", "Serveur de votre organisation enregistré" in html and "LLM locale" in html)
         check("organisation : bandeau redémarrage requis", page.is_visible("[data-llm-pending-restart]"))
-        check("organisation : clé JAMAIS réaffichée", SECRET not in html)
+        check("organisation : clé JAMAIS réaffichée", FAUSSE_CLE not in html)
         check("organisation : champ clé vide, indication « déjà enregistrée »",
               page.input_value("#org-api-key") == "" and "déjà enregistrée" in (page.get_attribute("#org-api-key", "placeholder") or ""))
         env_text = (scratch / ".env").read_text(encoding="utf-8")
-        check("organisation : clé écrite dans le .env scratch", f"TRANSCRIA_ARBITRAGE_API_KEY='{SECRET}'" in env_text)
+        check("organisation : clé écrite dans le .env scratch", f"TRANSCRIA_ARBITRAGE_API_KEY='{FAUSSE_CLE}'" in env_text)
         check("organisation : .env en 0600", oct((scratch / ".env").stat().st_mode & 0o777) == "0o600")
         cfg_text = (scratch / "config.yaml").read_text(encoding="utf-8")
         check("organisation : config.yaml backend http + https",
               "backend: http" in cfg_text and "https://llm.exemple.local:8443/v1" in cfg_text)
-        check("organisation : config.yaml sans la clé", SECRET not in cfg_text)
+        check("organisation : config.yaml sans la clé", FAUSSE_CLE not in cfg_text)
         oc = scratch / "opencode.json"
         oc_text = oc.read_text(encoding="utf-8") if oc.exists() else ""
-        check("organisation : opencode.json {env:VAR}", "{env:TRANSCRIA_ARBITRAGE_API_KEY}" in oc_text and SECRET not in oc_text)
+        check("organisation : opencode.json {env:VAR}", "{env:TRANSCRIA_ARBITRAGE_API_KEY}" in oc_text and FAUSSE_CLE not in oc_text)
         shot("03_organisation_enregistree")
 
         # 2 bis. Redémarrer : hors root, le one-shot échoue → commande manuelle (jamais cliqué en root)
@@ -148,12 +149,12 @@ def cmd_walk(args) -> int:
         before = cfg_text
         page.check("#llm-mode-organisation")
         page.fill("#org-api-base", "http://utilisateur:secret@llm.exemple.local/v1")   # type=url accepte, le serveur refuse
-        page.fill("#org-api-key", SECRET + "-bis")
+        page.fill("#org-api-key", FAUSSE_CLE + "-bis")
         page.click("#llm-mode-form button[type=submit]")
         page.wait_for_load_state("networkidle")
         html = page.content()
         check("invalide : message FR qui guide", "Adresse du serveur invalide" in html)
-        check("invalide : la clé soumise n'est pas réaffichée", (SECRET + "-bis") not in html)
+        check("invalide : la clé soumise n'est pas réaffichée", (FAUSSE_CLE + "-bis") not in html)
         check("invalide : config inchangée", (scratch / "config.yaml").read_text(encoding="utf-8") == before)
         console_errors[:] = [e for e in console_errors if "status of 400" not in e]   # le 400 attendu ici
         shot("04_saisie_invalide")
@@ -165,13 +166,13 @@ def cmd_walk(args) -> int:
         check("cloud : avertissement « moins maîtrisé »", "Moins maîtrisé qu" in page.content())
         page.select_option("#cloud-provider", "mistral")
         page.fill("#cloud-model", "mistral-large-4")
-        page.fill("#cloud-api-key", SECRET + "-cloud")
+        page.fill("#cloud-api-key", FAUSSE_CLE + "-cloud")
         shot("05_cloud_saisie")
         page.click("#llm-mode-form button[type=submit]")
         page.wait_for_load_state("networkidle")
         html = page.content()
         check("cloud : confirmation + validation annoncée", "Fournisseur externe enregistré" in html and "validez ce fournisseur" in html)
-        check("cloud : clé jamais réaffichée", (SECRET + "-cloud") not in html)
+        check("cloud : clé jamais réaffichée", (FAUSSE_CLE + "-cloud") not in html)
         check("cloud : config backend cloud + photographie locale",
               "backend: cloud" in (scratch / "config.yaml").read_text(encoding="utf-8")
               and "local_llm_snapshot" in (scratch / "config.yaml").read_text(encoding="utf-8"))
