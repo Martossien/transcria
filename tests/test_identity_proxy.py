@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
+from conftest import _test_config
 
 from transcria.config import _deep_merge, load_config
 
@@ -26,7 +27,7 @@ _HEADERS_BOSS = {"Remote-User": "proxy-boss",
 
 def _make_app(_pg_database, **auth_overrides):
     os.environ["TRANSCRIA_DATABASE_URL"] = _pg_database
-    cfg = load_config()
+    cfg = _deep_merge(load_config(), _test_config(_pg_database))
     cfg = _deep_merge(cfg, {
         "auth": {"backend": "proxy",
                  # Même graine admin que conftest (robustesse à l'ordre des modules).
@@ -40,6 +41,17 @@ def _make_app(_pg_database, **auth_overrides):
     app = create_app(config=cfg, start_background_services=False)
     app.config.update({"TESTING": True})
     return app
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_config_singleton_after_module():
+    """Ce module crée sa PROPRE app (create_app remplace le singleton de configuration) : on le
+    remet à la fin — sinon les modules suivants lisent cette config (vécu 2026-11-07 : page
+    Modèles rouge en local après les tests d'identité)."""
+    from transcria.config import get_config, set_config
+    before = get_config()
+    yield
+    set_config(before)
 
 
 @pytest.fixture(scope="module")

@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 import oidc_provider_mock
 import pytest
 import requests
+from conftest import _test_config
 from oidc_provider_mock import User as IdpUser
 
 from transcria.config import _deep_merge, load_config
@@ -20,6 +21,17 @@ _MAPPING = {"claim": "groups",
             "rules": [{"group": "transcria-admins", "role": "admin"},
                       {"group": "transcria-lecteurs", "role": "viewer"}],
             "default": "deny"}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_config_singleton_after_module():
+    """Ce module crée sa PROPRE app (create_app remplace le singleton de configuration) : on le
+    remet à la fin — sinon les modules suivants lisent cette config (vécu 2026-11-07 : page
+    Modèles rouge en local après les tests d'identité)."""
+    from transcria.config import get_config, set_config
+    before = get_config()
+    yield
+    set_config(before)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +50,7 @@ def idp():
 @pytest.fixture(scope="module")
 def oidc_app(idp, _pg_database):
     os.environ["TRANSCRIA_DATABASE_URL"] = _pg_database
-    cfg = load_config()
+    cfg = _deep_merge(load_config(), _test_config(_pg_database))
     cfg = _deep_merge(cfg, {
         "auth": {"backend": "oidc",
                  # Même graine admin que conftest : cette app démarre AVANT la
@@ -114,7 +126,7 @@ class TestFluxComplet:
 class TestIdpEnPanne:
     def test_idp_injoignable_message_et_break_glass(self, _pg_database):
         os.environ["TRANSCRIA_DATABASE_URL"] = _pg_database
-        cfg = load_config()
+        cfg = _deep_merge(load_config(), _test_config(_pg_database))
         cfg = _deep_merge(cfg, {
             "auth": {"backend": "oidc",
                      "first_admin_password": "mdp-admin-de-test",  # même graine que conftest
