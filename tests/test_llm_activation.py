@@ -47,6 +47,8 @@ def test_mode_declare_jamais_deduit_de_l_adresse(monkeypatch):
     org["services"]["arbitrage_llm_host"] = "203.0.113.10"        # plage publique… utilisée en LAN : organisation
     assert act.current_mode(org) == "organisation"
     org["services"]["arbitrage_llm_host"] = "127.0.0.1"
+    assert act.current_mode(org) == "organisation"       # déclaré http : TranscrIA ne lance pas, même en local
+    org["services"]["backend"] = "script"
     assert act.current_mode(org) == "local"
     cloud = json.loads(json.dumps(LOCAL_CFG))
     cloud["services"]["backend"] = "cloud"
@@ -90,6 +92,9 @@ def test_plan_organisation_sans_cle_et_http_en_clair():
     with_key = act.plan_activation(act.ActivationRequest(mode="organisation", api_base="http://10.0.0.5:8000",
                                                          api_key="k"), LOCAL_CFG, env_has_key=NO_KEY)
     assert any("en clair" in w for w in with_key.warnings)
+    local_addr = act.plan_activation(act.ActivationRequest(mode="organisation", api_base="http://127.0.0.1:8080"),
+                                     LOCAL_CFG, env_has_key=NO_KEY)
+    assert any("Adresse locale" in w for w in local_addr.warnings)
     # Clé déjà présente dans l'environnement : la variable reste branchée sans re-saisie
     kept = act.plan_activation(req, LOCAL_CFG, env_has_key=lambda n: n == act.ORG_KEY_ENV)
     assert kept.values["workflow.arbitration_llm.api_key_env"] == act.ORG_KEY_ENV and kept.key is None

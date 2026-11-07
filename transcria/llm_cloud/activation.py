@@ -153,15 +153,14 @@ class ActivationResult:
 # ── Lecture ──────────────────────────────────────────────────────────────────
 
 def current_mode(cfg: dict) -> str:
-    """Mode DÉCLARÉ par la configuration : ``services.backend`` cloud → cloud ; ``http`` vers un
-    hôte non local → organisation ; sinon local (script, ollama, http sur 127.0.0.1)."""
+    """Mode DÉCLARÉ par la configuration — jamais l'adresse : ``services.backend`` cloud → cloud ;
+    ``http`` (un serveur que l'organisation gère, TranscrIA ne le lance pas) → organisation, même
+    sur 127.0.0.1 ; sinon local (script, ollama, auto-détection)."""
     backend = str(get_yaml_value(cfg, "services.backend") or "").strip().lower()
     if backend == CLOUD_BACKEND:
         return MODE_CLOUD
     if backend == "http":
-        host = str(os.environ.get("TRANSCRIA_ARBITRAGE_LLM_HOST") or get_yaml_value(cfg, "services.arbitrage_llm_host") or "")
-        if host.strip() not in _LOCAL_HOSTS:
-            return MODE_ORGANISATION
+        return MODE_ORGANISATION
     return MODE_LOCAL
 
 
@@ -301,6 +300,9 @@ def _plan_organisation(req: ActivationRequest, cfg: dict, env_has_key: Callable[
     if os.environ.get("TRANSCRIA_ARBITRAGE_LLM_HOST"):
         warnings.append("La variable d'environnement TRANSCRIA_ARBITRAGE_LLM_HOST est posée sur ce service : "
                         "elle primera sur l'hôte saisi pour les sondes. Retirez-la du .env ou de l'unité systemd.")
+    if host in _LOCAL_HOSTS:
+        warnings.append("Adresse locale : dans ce mode, TranscrIA ne lance ni n'arrête cette LLM (elle doit tourner "
+                        "en permanence). Pour qu'il la gère selon la mémoire GPU, choisissez « Sur cette machine ».")
     if url.startswith("http://") and host not in _LOCAL_HOSTS and key:
         warnings.append("La clé circulera en clair (http) sur votre réseau : préférez https si le serveur le permet.")
     return ActivationPlan(mode=MODE_ORGANISATION, values=values, key_env=key_env, key=key or None,

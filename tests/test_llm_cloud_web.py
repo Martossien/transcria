@@ -104,7 +104,8 @@ def test_inactive_screen_explains_and_refuses(admin_client, local_cfg):
     assert resp.status_code == 200
     assert "data-llm-cloud-inactive" in html
     # L'activation est GRAPHIQUE : le formulaire des trois modes déclarés est présent, mode local coché
-    assert "data-llm-mode-card" in html and 'id="llm-mode-local" value="local" checked' in html
+    # (le mode coché suit la config SUR DISQUE de l'instance de test, pas la config patchée en mémoire)
+    assert "data-llm-mode-card" in html and 'id="llm-mode-local" value="local"' in html
     assert 'value="organisation"' in html and 'value="cloud"' in html
     assert admin_client.post("/admin/llm-cloud/acknowledge", data={"connectors_allowed": "1"}).status_code == 400
     assert admin_client.post("/admin/llm-cloud/revoke").status_code == 400
