@@ -233,3 +233,38 @@ def test_version_de_projection_dans_l_empreinte(monkeypatch):
     base = _fp()
     monkeypatch.setattr(P, "CARD_VERSION", P.CARD_VERSION + 1)
     assert _fp() != base
+
+
+# ── Temps de parole ──────────────────────────────────────────────────────────
+
+def test_parts_de_temps_de_parole():
+    stats = {"speakers": [
+        {"speaker_id": "SPEAKER_00", "speaking_time_seconds": 120, "mapped_name": "Personne A"},
+        {"speaker_id": "SPEAKER_01", "speaking_time_seconds": 60},                  # nommé par le mapping (dict)
+        {"speaker_id": "SPEAKER_02", "speaking_time_seconds": 60},                  # nommé par le mapping (chaîne nue)
+        {"speaker_id": "SPEAKER_03", "speaking_time_seconds": 60},                  # non nommé
+        {"speaker_id": "SPEAKER_04", "speaking_time_seconds": 0},                   # muet : ignoré
+        {"speaker_id": "SPEAKER_05", "speaking_time_seconds": "n/a"},               # valeur impossible : ignorée
+        {"speaker_id": "SPEAKER_06", "speaking_time_seconds": 60, "mapped_name": "personne a"},  # autre graphie : non fusionnée
+        "pas un dict",
+    ]}
+    mapping = {"mapping": {"SPEAKER_01": {"name": "Personne B", "participant_id": "p2"}, "SPEAKER_02": "Personne C",
+                           "SPEAKER_03": "SPEAKER_03"}}
+    shares, unnamed = P.speaking_shares(stats, mapping)
+    assert shares == [{"name": "Personne A", "pct": 33}, {"name": "Personne B", "pct": 17},
+                      {"name": "Personne C", "pct": 17}, {"name": "personne a", "pct": 17}]
+    assert unnamed == 17
+    assert P.speaking_shares(None, None) == ([], 0)
+    assert P.speaking_shares({"speakers": "x"}, {}) == ([], 0)
+    assert P.speaking_shares({"speakers": [{"speaker_id": "S", "speaking_time_seconds": 10}]}, None) == ([], 100)
+    card = _card({}, [], )
+    assert (card.speaking, card.unnamed_speech_pct) == ([], 0)
+
+
+def test_empreinte_sensible_aux_fichiers_locuteurs():
+    base = _fp()
+    assert P.source_fingerprint(b"{}", b"[]", created_at=CREATED, confidential_types=CONFIDENTIAL, known_types=KNOWN,
+                                speaker_stats_raw=b'{"speakers": []}') != base
+    assert P.source_fingerprint(b"{}", b"[]", created_at=CREATED, confidential_types=CONFIDENTIAL, known_types=KNOWN,
+                                speaker_mapping_raw=b"{}") != base
+

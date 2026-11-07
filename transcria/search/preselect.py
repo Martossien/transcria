@@ -61,6 +61,10 @@ class CardDoc:
     meeting_type: str = ""
     meeting_date: date | None = None
     participants: tuple[str, ...] = ()
+    #: Parts du temps de parole rendues (« Personne A 42 % »), personnes nommées, décroissant —
+    #: affichage seulement : la présélection ne pèse pas le temps de parole.
+    speaking: tuple[str, ...] = ()
+    unnamed_speech_pct: int = 0
     topic: str = ""
     objective: str = ""
     agenda: str = ""

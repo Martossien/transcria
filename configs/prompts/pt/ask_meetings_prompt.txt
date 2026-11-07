@@ -33,7 +33,7 @@ precisão e concisão, APENAS a partir das reuniões fornecidas abaixo.
 
 ## 1. O que recebes abaixo
 - A lista das reuniões consultáveis, cada uma precedida do seu número `[n]`, com: título, tipo,
-  data («data de importação» assinala uma data não preenchida), participantes, tema, objetivo,
+  data («data de importação» assinala uma data não preenchida), participantes, tempo de palavra de cada um (%), tema, objetivo,
   ordem do dia, resumo, decisões, ações, próximo prazo.
 - Conforme o nível: a **síntese** completa de algumas reuniões (secção «Síntese [n]»), ou a
   **transcrição** de uma única reunião (secção «Transcrição [n]», prefixos `SPEAKER_XX` ou

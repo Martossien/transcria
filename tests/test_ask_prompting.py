@@ -115,3 +115,14 @@ def test_le_nom_du_traitement_est_montre_quand_il_differe_du_titre():
     fallback = card_doc("job-1", "show me the code", _fake_card(title=""), locale="en")
     assert "Name in the application" not in render_card(1, fallback, date_is_import_fallback=False)
 
+
+def test_le_temps_de_parole_est_rendu_sur_la_fiche():
+    card = _fake_card(speaking=[{"name": "Personne A", "pct": 60}, {"name": "Personne B", "pct": 25}], unnamed_speech_pct=15)
+    doc = card_doc("job-1", "t", card, locale="fr")
+    text = render_card(1, doc, date_is_import_fallback=False, locale="fr")
+    assert "Temps de parole: Personne A 60 %, Personne B 25 % (locuteurs non nommés : 15 %)" in text
+    doc_en = card_doc("job-1", "t", _fake_card(speaking=[{"name": "Personne A", "pct": 100}], unnamed_speech_pct=0), locale="en")
+    assert "Speaking time: Personne A 100 %" in render_card(1, doc_en, date_is_import_fallback=False, locale="en")
+    assert "unnamed" not in render_card(1, doc_en, date_is_import_fallback=False, locale="en")
+    assert "Temps de parole" not in render_card(1, card_doc("j", "t", _fake_card()), date_is_import_fallback=False)
+

@@ -66,7 +66,7 @@ def test_ecriture_directe_du_contexte_cree_la_fiche(job, tmp_path):
     assert card.to_dict() | {"updated_at": None} == {
         "job_id": job.id, "title": "Point d'avancement", "meeting_type": "Réunion projet",
         "meeting_date": "2026-02-10", "date_is_import_fallback": False, "confidential": False,
-        "sensitivity": "normal", "language": "fr", "participants": [],
+        "sensitivity": "normal", "language": "fr", "participants": [], "speaking": [], "unnamed_speech_pct": 0,
         "topic": "Avancement du projet", "objective": "Valider le budget", "agenda": "1. Budget 2. Planning",
         "abstract": "Le budget est validé.", "decisions": ["Budget validé"],
         "actions": ["Personne A : envoyer le devis (vendredi)"], "next_date": "10 mars", "updated_at": None,
@@ -453,3 +453,27 @@ def test_commande_rebuild_job_cards(app, job, tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Fiches réunions : 1 créées" in out and "Par la commande" not in out
     assert _card(job.id).title == "Par la commande"
+
+
+# ── Temps de parole (« qui parle le plus de… ») ──────────────────────────────
+
+def test_les_temps_de_parole_entrent_dans_la_fiche_et_la_suivent(job, tmp_path):
+    fs = JobFilesystem(str(tmp_path), job.id)
+    fs.save_json(CONTEXT, {"title": "Avec locuteurs"})
+    assert _card(job.id).speaking == []
+    fs.save_json("speakers/speaker_stats.json", {"speakers": [
+        {"speaker_id": "SPEAKER_00", "speaking_time_seconds": 300, "mapped_name": "Personne A"},
+        {"speaker_id": "SPEAKER_01", "speaking_time_seconds": 100},
+        {"speaker_id": "SPEAKER_02", "speaking_time_seconds": 100},
+    ]})
+    card = _card(job.id)
+    assert card.speaking == [{"name": "Personne A", "pct": 60}] and card.unnamed_speech_pct == 40
+    # Le mapping nomme SPEAKER_01 ensuite (éditeur : forme courte, une chaîne nue)
+    fs.save_json("speakers/speaker_mapping.json", {"mapping": {"SPEAKER_01": "Personne B"}})
+    card = _card(job.id)
+    assert card.speaking == [{"name": "Personne A", "pct": 60}, {"name": "Personne B", "pct": 20}]
+    assert card.unnamed_speech_pct == 20
+    (fs.job_dir / "speakers" / "speaker_stats.json").write_text("{ cassé", encoding="utf-8")
+    assert JobCardStore.refresh(job.id, str(tmp_path)) == UPDATED       # fichier illisible : fiche sans temps de parole
+    assert _card(job.id).speaking == []
+

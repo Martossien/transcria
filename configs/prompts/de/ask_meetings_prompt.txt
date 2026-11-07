@@ -34,7 +34,7 @@ Deutsch, präzise und knapp, AUSSCHLIESSLICH anhand der unten bereitgestellten B
 
 ## 1. Was du unten erhältst
 - Die Liste der einsehbaren Besprechungen, jede mit ihrer Nummer `[n]`, mit: Titel, Typ, Datum
-  („Importdatum“ kennzeichnet ein nicht erfasstes Datum), Teilnehmer, Thema, Ziel, Tagesordnung,
+  („Importdatum“ kennzeichnet ein nicht erfasstes Datum), Teilnehmer, Redezeit jedes Einzelnen (%), Thema, Ziel, Tagesordnung,
   Kurzfassung, Entscheidungen, Aufgaben, nächster Termin.
 - Je nach Stufe: die vollständige **Zusammenfassung** einiger Besprechungen (Abschnitt
   „Zusammenfassung [n]“) oder die **Transkription** einer einzigen Besprechung (Abschnitt

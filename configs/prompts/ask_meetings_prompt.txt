@@ -34,7 +34,7 @@ en français, avec précision et concision, UNIQUEMENT à partir des réunions f
 
 ## 1. Ce que tu reçois ci-dessous
 - La liste des réunions consultables, chacune précédée de son numéro `[n]`, avec : titre, type,
-  date (« date d'import » signale une date non renseignée), participants, sujet, objectif,
+  date (« date d'import » signale une date non renseignée), participants, temps de parole de chacun (en %), sujet, objectif,
   ordre du jour, résumé, décisions, actions, prochaine échéance.
 - Selon le niveau : la **synthèse** complète de quelques réunions (section « Synthèse [n] »), ou
   la **transcription** d'une seule réunion (section « Transcription [n] », préfixes `SPEAKER_XX`

@@ -260,7 +260,7 @@ Validation par un administrateur de l'usage d'une LLM d'arbitrage chez un fourni
 
 ### Table `job_cards`
 
-Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discuter avec mes réunions » et la vue « Mes actions » (`docs/DISCUTER_REUNIONS.md` § 2.3). Modèle : `transcria/job_cards/models.py` ; migration `alembic/versions/b4d1f6a8c2e9_add_job_cards.py`.
+Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discuter avec mes réunions » et la vue « Mes actions » (`docs/DISCUTER_REUNIONS.md` § 2.3). Modèle : `transcria/job_cards/models.py` ; migrations `alembic/versions/b4d1f6a8c2e9_add_job_cards.py` et `e9a4c6d2b8f1_add_job_cards_speaking.py`.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
@@ -273,6 +273,7 @@ Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discu
 | `sensitivity` | String(20) | NOT NULL, default="normal" | Copie de `meeting_context.sensitivity` |
 | `language` | String(8) | NOT NULL, default="" | Langue des livrables |
 | `participants_json` | Text | NOT NULL, default=`[]` | `[{name, function}]` — personnes nommées de `participants.json` (jamais une étiquette `SPEAKER_XX`) ; 60 au plus |
+| `speaking_json` / `unnamed_speech_pct` | Text / Integer | NOT NULL, default `[]` / 0 | Parts du temps de parole des personnes nommées (`[{name, pct}]`, décroissant) et part des locuteurs non nommés — depuis `speakers/speaker_stats.json` (`speaking_time_seconds`) et `speakers/speaker_mapping.json` (locuteur → personne) ; « qui parle le plus de… » |
 | `topic` / `objective` / `agenda` | Text | NOT NULL, default="" | Sujet, objectif, ordre du jour : champs de l'étape 4 si elle a été enregistrée, sinon suggestions de la LLM (400 / 300 / 700 caractères au plus) |
 | `abstract` | Text | NOT NULL, default="" | 800 premiers caractères au plus de la synthèse **effective** (éditée > harmonisée > brute), coupés en fin de phrase |
 | `decisions_json` / `actions_json` | Text | NOT NULL, default=`[]` | Listes de chaînes de `structured_data` (40 éléments de 400 caractères au plus) |
@@ -280,9 +281,9 @@ Fiche de réunion : projection **courte** du contexte d'un job, lue par « Discu
 | `source_sha256` | String(64) | NOT NULL | Empreinte de tout ce dont la fiche dépend |
 | `updated_at` | DateTime(tz) | NOT NULL | Dernier recalcul effectif |
 
-**Donnée dérivée.** Tout se recalcule depuis `context/meeting_context.json` et `context/participants.json` : la fiche ne porte ni propriétaire ni titre de job (le lecteur part de `JobStore.list_for_user`, il a la ligne `jobs`). **Jamais** de transcription ni de termes suspects.
+**Donnée dérivée.** Tout se recalcule depuis `context/meeting_context.json`, `context/participants.json` et, pour le temps de parole, `speakers/speaker_stats.json` + `speakers/speaker_mapping.json` : la fiche ne porte ni propriétaire ni titre de job (le lecteur part de `JobStore.list_for_user`, il a la ligne `jobs`). **Jamais** de transcription ni de termes suspects.
 
-**Mise à jour.** `JobFilesystem.save_json` prévient ses observateurs d'écriture (`jobs.filesystem.add_write_listener`) ; `job_cards.hooks` y accroche `JobCardStore.refresh` pour les deux fichiers — la dizaine de sites qui réécrivent le contexte est couverte en un point, comme tout site ajouté plus tard. `RefineStore.restore_version` (copie sans `save_json`) prévient les mêmes observateurs. Le recalcul est idempotent (`source_sha256` identique ⇒ aucune écriture), relit les fichiers après avoir écrit (deux recalculs simultanés ne laissent pas la version périmée) et son échec ne fait jamais échouer l'écriture du fichier. Rattrapage : au démarrage du process qui exécute la file, et à la demande par `python -m transcria.maintenance.cli rebuild-job-cards` — en stockage partagé `pg`, `context/` est tiré de la base avant chaque recalcul (le disque local n'est qu'un cache).
+**Mise à jour.** `JobFilesystem.save_json` prévient ses observateurs d'écriture (`jobs.filesystem.add_write_listener`) ; `job_cards.hooks` y accroche `JobCardStore.refresh` pour les quatre fichiers — la dizaine de sites qui réécrivent le contexte est couverte en un point, comme tout site ajouté plus tard. `RefineStore.restore_version` (copie sans `save_json`) prévient les mêmes observateurs. Le recalcul est idempotent (`source_sha256` identique ⇒ aucune écriture), relit les fichiers après avoir écrit (deux recalculs simultanés ne laissent pas la version périmée) et son échec ne fait jamais échouer l'écriture du fichier. Rattrapage : au démarrage du process qui exécute la file, et à la demande par `python -m transcria.maintenance.cli rebuild-job-cards` — en stockage partagé `pg`, `context/` est tiré de la base avant chaque recalcul (le disque local n'est qu'un cache).
 
 **Règle « confidentiel ».** Vrai si `sensitivity` ≠ `normal`, ou type choisi confidentiel (`behavior.confidential` du catalogue), ou type personnalisé matérialisé avec `behavior.confidential`, ou — tant que l'étape 4 n'a pas été enregistrée — type **suggéré** qui n'est pas un type intégré non confidentiel (suggestion confidentielle, ou inconnue du catalogue : dans le doute, confidentiel). « Étape 4 enregistrée » se lit dans le fichier : la clé `meeting_type` n'est posée que par `MeetingContextManager.save()`.
 

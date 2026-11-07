@@ -34,6 +34,9 @@ class JobCard(db.Model):
     sensitivity = db.Column(db.String(20), nullable=False, default="normal", server_default="normal")
     language = db.Column(db.String(8), nullable=False, default="", server_default="")
     participants_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")
+    # Temps de parole : ``[{"name", "pct"}]`` décroissant (personnes nommées) + part des non nommés.
+    speaking_json = db.Column(db.Text, nullable=False, default="[]", server_default="[]")
+    unnamed_speech_pct = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     # Sujet, objectif, ordre du jour : étape 4 si enregistrée, sinon suggestions de la LLM.
     topic = db.Column(db.Text, nullable=False, default="", server_default="")
     objective = db.Column(db.Text, nullable=False, default="", server_default="")
@@ -62,6 +65,10 @@ class JobCard(db.Model):
         return [p for p in self._load_list(self.participants_json) if isinstance(p, dict)]
 
     @property
+    def speaking(self) -> list[dict]:
+        return [p for p in self._load_list(self.speaking_json) if isinstance(p, dict)]
+
+    @property
     def decisions(self) -> list[str]:
         return [str(d) for d in self._load_list(self.decisions_json)]
 
@@ -80,6 +87,8 @@ class JobCard(db.Model):
             "sensitivity": self.sensitivity,
             "language": self.language,
             "participants": self.participants,
+            "speaking": self.speaking,
+            "unnamed_speech_pct": int(self.unnamed_speech_pct or 0),
             "topic": self.topic,
             "objective": self.objective,
             "agenda": self.agenda,

@@ -27,8 +27,11 @@ logger = logging.getLogger(__name__)
 
 MEETING_CONTEXT_FILE = "context/meeting_context.json"
 PARTICIPANTS_FILE = "context/participants.json"
-#: Les deux fichiers dont la fiche est le reflet — toute écriture de l'un d'eux la recalcule.
-CARD_SOURCE_FILES: tuple[str, ...] = (MEETING_CONTEXT_FILE, PARTICIPANTS_FILE)
+SPEAKER_STATS_FILE = "speakers/speaker_stats.json"
+SPEAKER_MAPPING_FILE = "speakers/speaker_mapping.json"
+#: Les fichiers dont la fiche est le reflet — toute écriture de l'un d'eux la recalcule. Les deux
+#: du contexte font exister la fiche ; les deux des locuteurs n'apportent que le temps de parole.
+CARD_SOURCE_FILES: tuple[str, ...] = (MEETING_CONTEXT_FILE, PARTICIPANTS_FILE, SPEAKER_STATS_FILE, SPEAKER_MAPPING_FILE)
 
 CREATED = "created"
 UPDATED = "updated"
@@ -38,6 +41,16 @@ SKIPPED = "skipped"
 _IN_CHUNK = 500
 #: Recalculs enchaînés au plus quand les fichiers changent pendant l'écriture de la fiche.
 _MAX_PASSES = 3
+
+
+def _load_json_or_none(raw: bytes | None) -> object:
+    """Fichier optionnel : absent ou illisible ⇒ ``None`` (la fiche se passe du temps de parole)."""
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return None
 
 
 def _read_bytes(path: Path) -> bytes | None:
@@ -62,6 +75,8 @@ def _apply(card: JobCard, data: CardData, fingerprint: str) -> None:
     card.sensitivity = data.sensitivity
     card.language = data.language
     card.participants_json = json.dumps(data.participants, ensure_ascii=False)
+    card.speaking_json = json.dumps(data.speaking, ensure_ascii=False)
+    card.unnamed_speech_pct = int(data.unnamed_speech_pct)
     card.topic = data.topic
     card.objective = data.objective
     card.agenda = data.agenda
@@ -107,12 +122,15 @@ class JobCardStore:
         participants_raw = _read_bytes(context_dir / PARTICIPANTS_FILE)
         if meeting_raw is None and participants_raw is None:
             return SKIPPED
+        stats_raw = _read_bytes(context_dir / SPEAKER_STATS_FILE)
+        mapping_raw = _read_bytes(context_dir / SPEAKER_MAPPING_FILE)
 
         confidential = confidential_types()
         known = frozenset(meeting_type_names())
         fingerprint = source_fingerprint(
             meeting_raw, participants_raw, created_at=job.created_at,
-            confidential_types=confidential, known_types=known)
+            confidential_types=confidential, known_types=known,
+            speaker_stats_raw=stats_raw, speaker_mapping_raw=mapping_raw)
         card = db.session.get(JobCard, job_id)
         if card is not None and card.source_sha256 == fingerprint:
             return UNCHANGED
@@ -126,7 +144,8 @@ class JobCardStore:
         data = project_card(
             meeting_ctx, participants, created_at=job.created_at, confidential_types=confidential,
             known_types=known,
-            summary_headings=summary_headings(meeting_ctx.get("language") if isinstance(meeting_ctx, dict) else None))
+            summary_headings=summary_headings(meeting_ctx.get("language") if isinstance(meeting_ctx, dict) else None),
+            speaker_stats=_load_json_or_none(stats_raw), speaker_mapping=_load_json_or_none(mapping_raw))
 
         outcome = UPDATED
         if card is None:

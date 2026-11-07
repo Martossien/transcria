@@ -31,7 +31,7 @@ concisely, ONLY from the meetings provided below.
 
 ## 1. What you receive below
 - The list of consultable meetings, each preceded by its number `[n]`, with: title, type, date
-  ("import date" flags a date that was not entered), participants, topic, objective, agenda,
+  ("import date" flags a date that was not entered), participants, each one's speaking time (%), topic, objective, agenda,
   abstract, decisions, actions, next deadline.
 - Depending on the level: the full **summary** of a few meetings (section "Summary [n]"), or
   the **transcript** of one single meeting (section "Transcript [n]", `SPEAKER_XX` prefixes or

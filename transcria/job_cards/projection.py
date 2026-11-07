@@ -18,7 +18,7 @@ from transcria.context.participants import is_label
 
 #: Version de la projection. Entre dans l'empreinte : la relever force le recalcul de toutes les
 #: fiches au prochain rattrapage (règle modifiée ⇒ fiches périmées, même si les fichiers n'ont pas bougé).
-CARD_VERSION = 1
+CARD_VERSION = 2
 
 ABSTRACT_MAX_CHARS = 800
 MAX_LIST_ITEMS = 40
@@ -54,6 +54,10 @@ class CardData:
     sensitivity: str
     language: str
     participants: list[dict]
+    #: Parts du temps de parole des personnes NOMMÉES (``{"name", "pct"}``, décroissant) et part
+    #: restante des locuteurs non nommés — « qui parle le plus de… » (retour utilisateurs 2026-11).
+    speaking: list[dict]
+    unnamed_speech_pct: int
     topic: str
     objective: str
     agenda: str
@@ -250,14 +254,59 @@ def _participants(value: object) -> list[dict]:
     return result
 
 
+def _speaker_name(entry: dict, mapping: dict) -> str:
+    """Nom d'un locuteur : ``mapped_name`` des statistiques, sinon le mapping (dict ou chaîne nue —
+    l'éditeur SRT écrit la forme courte), sinon rien (locuteur non nommé)."""
+    name = str(entry.get("mapped_name") or "").strip()
+    if not name:
+        raw = mapping.get(str(entry.get("speaker_id") or ""))
+        name = str((raw.get("name") if isinstance(raw, dict) else raw) or "").strip()
+    return "" if is_label(name) else name[:120]
+
+
+def speaking_shares(speaker_stats: object, speaker_mapping: object) -> tuple[list[dict], int]:
+    """Parts du temps de parole par personne nommée (en %, décroissant, mêmes noms fusionnés) et
+    part restante des locuteurs non nommés. Rien de mesurable ⇒ ``([], 0)``."""
+    stats = speaker_stats if isinstance(speaker_stats, dict) else {}
+    mapping_doc = speaker_mapping if isinstance(speaker_mapping, dict) else {}
+    raw_mapping = mapping_doc.get("mapping")
+    mapping: dict = raw_mapping if isinstance(raw_mapping, dict) else {}
+    per_name: dict[str, float] = {}
+    unnamed = 0.0
+    total = 0.0
+    for entry in stats.get("speakers") or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            seconds = float(entry.get("speaking_time_seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if seconds <= 0:
+            continue
+        total += seconds
+        name = _speaker_name(entry, mapping)
+        if name:
+            per_name[name] = per_name.get(name, 0.0) + seconds
+        else:
+            unnamed += seconds
+    if total <= 0:
+        return [], 0
+    shares = sorted(per_name.items(), key=lambda kv: -kv[1])[:MAX_PARTICIPANTS]
+    return ([{"name": name, "pct": int(round(100 * seconds / total))} for name, seconds in shares],
+            int(round(100 * unnamed / total)))
+
+
 def project_card(meeting_ctx: object, participants: object, *, created_at: datetime | None,
                  confidential_types: frozenset[str], known_types: frozenset[str],
-                 summary_headings: list[str]) -> CardData:
+                 summary_headings: list[str], speaker_stats: object = None,
+                 speaker_mapping: object = None) -> CardData:
     """Fiche d'une réunion depuis son contexte et ses participants.
 
     Args:
         meeting_ctx: contenu de ``context/meeting_context.json`` (ou ``None``/forme inattendue).
         participants: contenu de ``context/participants.json``.
+        speaker_stats: contenu de ``speakers/speaker_stats.json`` (temps de parole par locuteur).
+        speaker_mapping: contenu de ``speakers/speaker_mapping.json`` (locuteur → personne).
         created_at: date de création du job — repli de date, affiché « date d'import ».
         confidential_types: noms des types intégrés confidentiels.
         known_types: noms de tous les types intégrés.
@@ -267,6 +316,7 @@ def project_card(meeting_ctx: object, participants: object, *, created_at: datet
     structured = ctx.get("structured_data")
     structured = structured if isinstance(structured, dict) else {}
 
+    speaking = speaking_shares(speaker_stats, speaker_mapping)
     meeting_date = parse_meeting_date(ctx.get("date"))
     fallback = meeting_date is None
     if fallback and created_at is not None:
@@ -281,6 +331,8 @@ def project_card(meeting_ctx: object, participants: object, *, created_at: datet
         sensitivity=str(ctx.get("sensitivity") or "normal").strip()[:20] or "normal",
         language=str(ctx.get("language") or "").strip()[:8],
         participants=_participants(participants),
+        speaking=speaking[0],
+        unnamed_speech_pct=speaking[1],
         topic=_short_text(_validated_or_suggested(ctx, "topic", "sujet_suggere"), TOPIC_MAX_CHARS),
         objective=_short_text(_validated_or_suggested(ctx, "objective", "objectif_suggere"), OBJECTIVE_MAX_CHARS),
         agenda=_short_text(_validated_or_suggested(ctx, "notes", "notes_suggeres"), AGENDA_MAX_CHARS),
@@ -293,14 +345,17 @@ def project_card(meeting_ctx: object, participants: object, *, created_at: datet
 
 def source_fingerprint(meeting_raw: bytes | None, participants_raw: bytes | None, *,
                        created_at: datetime | None, confidential_types: frozenset[str],
-                       known_types: frozenset[str]) -> str:
-    """Empreinte de TOUT ce dont la fiche dépend : les deux fichiers (octets), la date de création,
+                       known_types: frozenset[str], speaker_stats_raw: bytes | None = None,
+                       speaker_mapping_raw: bytes | None = None) -> str:
+    """Empreinte de TOUT ce dont la fiche dépend : les quatre fichiers (octets), la date de création,
     le catalogue des types et la version de la projection. Même empreinte ⇒ même fiche ⇒ rien à écrire."""
     digest = hashlib.sha256()
     for part in (
         f"v{CARD_VERSION}".encode(),
         meeting_raw if meeting_raw is not None else b"\x00absent",
         participants_raw if participants_raw is not None else b"\x00absent",
+        speaker_stats_raw if speaker_stats_raw is not None else b"\x00absent",
+        speaker_mapping_raw if speaker_mapping_raw is not None else b"\x00absent",
         (created_at.isoformat() if created_at else "").encode(),
         "\n".join(sorted(confidential_types)).encode(),
         "\n".join(sorted(known_types)).encode(),

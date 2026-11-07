@@ -515,6 +515,15 @@ en [1] — la fiche ne portait que le titre saisi à l'étape 4, pas le **nom du
 l'accueil, par lequel l'utilisateur la désigne). La fiche envoyée porte désormais « Nom dans
 l'application : … » quand les deux diffèrent, et la carte citée l'affiche en sous-titre.
 
+**Complément (2026-11-07, « qui parle le plus de… », point relevé par les utilisateurs)** — la
+fiche porte désormais les **parts du temps de parole** des personnes nommées (`speaking_json`,
+`unnamed_speech_pct`, migration `e9a4c6d2b8f1`, projection v2 : fiches recalculées au démarrage),
+lues dans `speakers/speaker_stats.json` (`speaking_time_seconds`) et nommées par `mapped_name` ou
+par le mapping (`speaker_mapping.json`, valeur dict ou chaîne nue selon l'écrivain). Un locuteur
+jamais nommé compte dans « locuteurs non nommés : N % » — la LLM le dit plutôt que d'inventer un
+nom. La fiche envoyée porte « Temps de parole : Personne A 42 %, … » et le prompt l'annonce dans
+la liste des champs (six langues). La présélection ne pèse pas le temps de parole.
+
 ### Lot D — documentation (2026-11-06)
 
 Livré : `TECHNICAL.md` § 4.18 (briques, invariants) et § 4.11/4.13 ; `DATA_MODEL.md` (quatre

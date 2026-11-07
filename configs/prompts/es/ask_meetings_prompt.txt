@@ -33,7 +33,7 @@ precisión y concisión, ÚNICAMENTE a partir de las reuniones proporcionadas a 
 
 ## 1. Lo que recibes a continuación
 - La lista de reuniones consultables, cada una precedida de su número `[n]`, con: título, tipo,
-  fecha («fecha de importación» señala una fecha no indicada), participantes, tema, objetivo,
+  fecha («fecha de importación» señala una fecha no indicada), participantes, tiempo de palabra de cada uno (%), tema, objetivo,
   orden del día, resumen, decisiones, acciones, próximo plazo.
 - Según el nivel: la **síntesis** completa de algunas reuniones (sección «Síntesis [n]»), o la
   **transcripción** de una sola reunión (sección «Transcripción [n]», prefijos `SPEAKER_XX` o
