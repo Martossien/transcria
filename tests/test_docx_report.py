@@ -602,7 +602,8 @@ def test_roles_participants_harmonises_sur_le_lexique_valide(tmp_path):
     out = generate_docx_report(job_id, str(tmp_path), tmp_path / "out.docx")
     from docx import Document
     doc = Document(str(out))
-    # SEUL le tableau des participants est harmonisé ; la transcription reste verbatim.
+    # Tableau des participants harmonisé ; depuis le filet déterministe (2026-11-07), le verbatim
+    # rendu l'est aussi — le FICHIER SRT, lui, reste intact (vérifié plus bas sur participants.json).
     participants_table = next(t for t in doc.tables if "Fonction" in " ".join(c.text for c in t.rows[0].cells))
     rows = " ".join(c.text for r in participants_table.rows for c in r.cells)
     assert "Emmental" in rows and "émental " not in rows and "d'émental" not in rows
@@ -610,7 +611,8 @@ def test_roles_participants_harmonises_sur_le_lexique_valide(tmp_path):
     assert "émentalier" in rows             # mot entier seulement : jamais de remplacement partiel
     assert "responsable SIGLE_A" in rows
     transcript = " ".join(_table_texts(doc))
-    assert "d'émental s'il vous plaît" in transcript   # verbatim intact
+    assert "d'Emmental s'il vous plaît" in transcript   # verbatim rendu avec la forme validée (filet 2026-11-07)
+    assert "d'émental s'il vous plaît" in (base / "metadata" / "transcription_corrigee.srt").read_text(encoding="utf-8")
     stored = json.loads((base / "context" / "participants.json").read_text(encoding="utf-8"))
     assert "émental" in stored[0]["role"]    # l'artefact reste intact
 

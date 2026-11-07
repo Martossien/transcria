@@ -335,7 +335,7 @@ transcria/
       participants.py       # ParticipantsManager
       invite_parser.py      # sanitize_invite()/render_invite_markdown() — brief d'invitation collé (noms via e-mails, contexte), e-mails retirés
       document_extractor.py # extract_document_text() — texte des documents présentés joints (PDF/DOCX/PPTX/TXT, images ignorées), e-mails retirés
-      lexicon.py            # LexiconManager (20 catégories, variants, mentions = formes relevées JAMAIS remplacées, contexts) ; apply_validated_forms = variantes → forme (rendu)
+      lexicon.py            # LexiconManager (20 catégories, variants, mentions = formes relevées JAMAIS remplacées, contexts) ; FILET DÉTERMINISTE du lexique validé (2026-11-07) : substitution_entries (formes « A / B » exclues ; verbatim=True exclut aussi les expansions de sigles), apply_validated_forms (texte rédigé), harmonize_srt (texte des sous-titres seuls, préfixe locuteur intact), harmonize_context_fields/harmonize_structured (copies pour le RENDU), count_remaining_variants, load_session_lexicon
       central_lexicon_models.py # Modèles SQLAlchemy lexiques centralisés par groupe
       central_lexicon_store.py  # Permissions, CRUD, import et périmètre job→groupe
       central_lexicon_service.py# Fusion session/LLM/central + filtrage avant correction
@@ -811,6 +811,26 @@ Le parser (`llm_parsing.parse_participant_entry`, PUR, testé par `tests/test_pa
 - id en gras/code Markdown, crochets OU parenthèses, deux-points collé ou remplacé par un tiret, `speaker_xx` minuscule (canonisé ; un `PISTE_…` est repris tel quel)
 
 Retour utilisateurs 2026-10 : la LLM mettait « Prénom Nom — Fonction » entre les crochets, le champ Nom de l'étape 5 recevait les deux et la fonction restait vide. Désormais la fonction suit sa propre voie (`speaker_roles_llm[id].function` → `speaker_projection.apply_speaker_roles` → `participants.json["function"]` ; pré-remplissage `mapped_func` en étape 5) et `normalize_speaker_role_info` rattrape aussi un label « Nom — Fonction » déjà stocké par une version antérieure. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
+
+### Lexique validé = consigne : le filet déterministe (2026-11-07)
+
+Dix-sept commits de prompts (mai → novembre) n'ont jamais rendu CERTAINE l'application du lexique
+validé à l'étape 6 : la LLM de correction en laissait, le titre/l'objectif/la synthèse rédigés à
+l'étape 4 (AVANT le lexique) n'étaient jamais repassés, et une synthèse retouchée par l'humain
+bloquait l'harmonisation de la relecture finale. Mesuré sur un job réel : « Théo » et la forme
+validée mélangés dans le DOCX. Règle désormais en CODE, source unique `context/lexicon.py` :
+1. **Après chaque passe LLM sur le SRT** (correction, relecture finale) :
+   `phases/correction.apply_lexicon_safety_net` → `harmonize_srt` (texte des sous-titres seuls,
+   jamais index/timecodes/préfixe `SPEAKER_XX(Nom):`), nombre de remplacements journalisé.
+2. **Au rendu de tout livrable** : DOCX (`generate_docx_report` : titre, sujet, objectif, ordre du
+   jour, synthèses — y compris celle éditée à l'étape 4 —, données structurées, verbatim),
+   `summary.md` du paquet, fiche de réunion (`project_card(lexicon=…)`, CARD_VERSION 3, le lexique
+   entre dans l'empreinte), sources de « Discuter » (`ask_meetings/sources`). Les FICHIERS du job
+   ne sont jamais modifiés par le rendu.
+3. **Ce qui ne se remplace jamais** : formes validées « A / B » (ambiguës) ; en verbatim, les
+   expansions multi-mots d'un sigle ; les `mentions`. Mot entier, casse ignorée.
+4. **Vérifier sur le LIVRABLE** (DOCX, `count_remaining_variants`), jamais seulement sur le SRT —
+   c'est l'erreur de méthode qui a masqué le défaut pendant six mois.
 
 ### Lexiques centralisés (admin / admin groupe → section 6)
 Les lexiques centralisés sont gérés depuis `/admin/lexicons` par les admins globaux et les admins de groupe. Ils sont stockés en base (`group_lexicons`, `group_lexicon_entries`) et ne remplacent jamais le fichier de session validé par l'utilisateur.

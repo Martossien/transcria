@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -170,6 +171,161 @@ class LexiconManager:
         return LexiconManager.save(job, jobs_dir, terms)
 
 
+#: Une forme validée « A / B » (deux graphies proposées, jamais tranchées) ne pilote aucune
+#: substitution — mesuré avant d'écrire ceci : 12/30 entrées d'une réunion réelle, et des
+#: remplacements qui rendaient la phrase fausse (cf. workflow/phases/correction.py, 2026-08-22).
+_FORME_AMBIGUE = re.compile(r"\s/\s")
+
+
+def sans_formes_ambigues(lexicon: list) -> tuple[list, int]:
+    """Retire du lexique de SUBSTITUTION les entrées dont la forme validée est ambiguë (« A / B »).
+    L'entrée reste dans le lexique de session relu par l'humain ; elle perd seulement le pouvoir
+    de déclencher un remplacement — en code, pas en consigne (deux consignes de prompt n'ont pas tenu)."""
+    gardees = [t for t in lexicon
+               if not (isinstance(t, dict) and _FORME_AMBIGUE.search(str(t.get("term", ""))))]
+    return gardees, len(lexicon) - len(gardees)
+
+
+def sans_variantes_expansions(lexicon: list) -> tuple[list, int]:
+    """Retire les variantes MULTI-MOTS (≥ 3) des cibles de substitution d'un sigle : remplacer toute
+    une locution prononcée par le sigle efface des mots réels (constaté sur trois parcours réels,
+    2026-08-24). L'ENTRÉE reste, avec ses variantes courtes."""
+    epurees, retirees = [], 0
+    for entree in lexicon:
+        if not isinstance(entree, dict):
+            epurees.append(entree)
+            continue
+        term = str(entree.get("term", ""))
+        variants = entree.get("variants") or []
+        if len(term) <= 10 and term.isupper() and isinstance(variants, list):
+            gardees = [v for v in variants if len(str(v).split()) < 3]
+            if len(gardees) != len(variants):
+                retirees += len(variants) - len(gardees)
+                entree = {**entree, "variants": gardees}
+        epurees.append(entree)
+    return epurees, retirees
+
+
+def substitution_entries(entries: list | None, *, verbatim: bool = False) -> list[dict]:
+    """Les entrées qui ont le DROIT de remplacer : formes non ambiguës, avec au moins une variante
+    distincte de la forme validée. ``verbatim=True`` (transcription) retire aussi les expansions
+    multi-mots des sigles — remplacer une locution PRONONCÉE par le sigle effacerait des mots réels ;
+    dans un texte rédigé (titre, synthèse, rôle) la forme validée s'applique telle quelle. Règles
+    IDENTIQUES à celles du lexique transmis à la LLM de correction : une seule source de vérité."""
+    if not entries:
+        return []
+    kept, _ = sans_formes_ambigues([e for e in entries if isinstance(e, dict)])
+    if verbatim:
+        kept, _ = sans_variantes_expansions(kept)
+    out: list[dict] = []
+    for e in kept:
+        form = str(e.get("replace_by") or e.get("term") or "").strip()
+        variants = [str(v).strip() for v in (e.get("variants") or []) if str(v).strip()]
+        if form and any(v.lower() != form.lower() for v in variants):
+            out.append(e)
+    return out
+
+
+def load_session_lexicon(job_dir: str | Path) -> list[dict]:
+    """Lexique de session d'un job (``context/session_lexicon.json``), ``[]`` si absent/illisible —
+    jamais d'exception : un filet qui casserait un rendu ne protège rien."""
+    import json
+
+    try:
+        data = json.loads((Path(job_dir) / "context" / "session_lexicon.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
+
+
+def count_remaining_variants(text: str, entries: list | None, *, verbatim: bool = False) -> int:
+    """Occurrences (mot entier, casse ignorée) de variantes AUTORISÉES à la substitution encore
+    présentes dans ``text`` — la mesure que le livrable doit ramener à zéro."""
+    if not text:
+        return 0
+    total = 0
+    for e in substitution_entries(entries, verbatim=verbatim):
+        form = str(e.get("replace_by") or e.get("term") or "").strip()
+        for v in e.get("variants") or []:
+            v = str(v).strip()
+            if v and v.lower() != form.lower():
+                total += len(re.findall(r"(?<!\w)" + re.escape(v) + r"(?!\w)", text, flags=re.IGNORECASE))
+    return total
+
+
+_SRT_TIMECODE = re.compile(r"^\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}[,.]\d{3}")
+_SRT_SPEAKER_PREFIX = re.compile(r"^((?:SPEAKER|PISTE)_[A-Za-z0-9_]+(?:\([^)]*\))?\s*:\s*)")
+
+
+def harmonize_srt(srt_text: str, entries: list | None) -> tuple[str, int]:
+    """Filet DÉTERMINISTE sur un SRT : chaque variante validée fautive est remplacée par sa forme
+    validée dans le TEXTE des sous-titres seulement — jamais les index, les timecodes ni le préfixe
+    ``SPEAKER_XX(Nom):`` (mapping locuteurs intact). Rend (texte, nombre de remplacements).
+
+    Vécu 2026-11-07 (job 9b63a5c7) : la LLM de correction avait laissé 3 variantes sur 38 et la
+    relecture finale en a réintroduit ; dix-sept commits de prompts n'avaient jamais rendu cette
+    application certaine. Un lexique validé est une consigne : le code l'applique, la LLM juge le reste.
+    """
+    allowed = substitution_entries(entries, verbatim=True)
+    if not srt_text or not allowed:
+        return srt_text, 0
+    before = count_remaining_variants(srt_text, allowed, verbatim=True)
+    if before == 0:
+        return srt_text, 0
+    out_lines: list[str] = []
+    for line in srt_text.split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.isdigit() or _SRT_TIMECODE.match(stripped):
+            out_lines.append(line)
+            continue
+        m = _SRT_SPEAKER_PREFIX.match(line)
+        prefix, body = (m.group(1), line[m.end():]) if m else ("", line)
+        out_lines.append(prefix + apply_validated_forms(body, allowed))
+    out = "\n".join(out_lines)
+    return out, before - count_remaining_variants(out, allowed, verbatim=True)
+
+
+_CONTEXT_TEXT_FIELDS = ("title", "title_suggere", "topic", "sujet_suggere", "objective", "objectif_suggere",
+                        "notes", "notes_suggeres", "summary", "summary_machine", "summary_harmonized", "summary_llm")
+
+
+def harmonize_context_fields(meeting_ctx: dict | None, entries: list | None) -> dict:
+    """COPIE du contexte de réunion dont les champs TEXTE portent les formes validées (titre, sujet,
+    objectif, ordre du jour, synthèses) — pour le RENDU des livrables ; le fichier reste intact.
+    La synthèse éditée par l'humain est harmonisée aussi : le lexique est validé APRÈS l'étape 4,
+    et une variante qu'il déclare fautive l'est dans tout le document (vécu : « Théo »/« TéHOU »
+    mélangés dans le DOCX, titre compris)."""
+    if not isinstance(meeting_ctx, dict):
+        return {}
+    allowed = substitution_entries(entries)
+    if not allowed:
+        return dict(meeting_ctx)
+    out = dict(meeting_ctx)
+    for key in _CONTEXT_TEXT_FIELDS:
+        value = out.get(key)
+        if isinstance(value, str) and value:
+            out[key] = apply_validated_forms(value, allowed)
+    return out
+
+
+def harmonize_structured(value, entries: list | None):
+    """Même filet sur les données structurées (décisions, actions, votes… : chaînes dans des listes
+    et dictionnaires, récursif) — rend une COPIE ; les clés ne sont jamais touchées."""
+    allowed = substitution_entries(entries)
+    if not allowed:
+        return value
+
+    def walk(v):
+        if isinstance(v, str):
+            return apply_validated_forms(v, allowed)
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        if isinstance(v, dict):
+            return {k: walk(x) for k, x in v.items()}
+        return v
+    return walk(value)
+
+
 def apply_validated_forms(text: str, entries: list | None) -> str:
     """Remplace, dans un texte LIBRE, chaque variante d'un lexique VALIDÉ par sa forme de
     référence (``replace_by`` sinon ``term``) — mot entier, insensible à la casse.
@@ -184,9 +340,7 @@ def apply_validated_forms(text: str, entries: list | None) -> str:
     if not text or not entries:
         return text
     pairs: list[tuple[str, str]] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
+    for entry in substitution_entries(entries):
         form = str(entry.get("replace_by") or entry.get("term") or "").strip()
         if not form:
             continue

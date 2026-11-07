@@ -129,6 +129,13 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Le lexique validé s'applique partout, de façon déterministe.** Après la LLM de correction et la
+  relecture finale, un filet remplace dans la transcription toute variante déclarée fautive par sa
+  forme validée (texte des sous-titres seuls). Au rendu, le rapport Word (titre, objectif, ordre du
+  jour, synthèse même retouchée, décisions/actions, verbatim), le `summary.md` du paquet, la fiche
+  de réunion et les sources de « Discuter » portent les formes validées — fichiers du job intacts.
+  Formes « A / B » et, en verbatim, expansions de sigles exclues. Vécu : « Théo »/« TéHOU »
+  mélangés dans le DOCX malgré un lexique validé.
 - **Un job qui attend dit pourquoi** : l'ordonnanceur pose la raison du report (mémoire GPU locale
   avec le besoin en Mo, LLM d'arbitrage, nœud distant) dans l'état d'exécution, exposée par
   `GET /api/jobs/<id>/status` et affichée par le wizard ; journal une fois par raison (une heure

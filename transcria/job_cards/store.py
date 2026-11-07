@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 MEETING_CONTEXT_FILE = "context/meeting_context.json"
 PARTICIPANTS_FILE = "context/participants.json"
 SPEAKER_STATS_FILE = "speakers/speaker_stats.json"
+SESSION_LEXICON_FILE = "context/session_lexicon.json"
 SPEAKER_MAPPING_FILE = "speakers/speaker_mapping.json"
 #: Les fichiers dont la fiche est le reflet — toute écriture de l'un d'eux la recalcule. Les deux
 #: du contexte font exister la fiche ; les deux des locuteurs n'apportent que le temps de parole.
@@ -124,13 +125,14 @@ class JobCardStore:
             return SKIPPED
         stats_raw = _read_bytes(context_dir / SPEAKER_STATS_FILE)
         mapping_raw = _read_bytes(context_dir / SPEAKER_MAPPING_FILE)
+        lexicon_raw = _read_bytes(context_dir / SESSION_LEXICON_FILE)
 
         confidential = confidential_types()
         known = frozenset(meeting_type_names())
         fingerprint = source_fingerprint(
             meeting_raw, participants_raw, created_at=job.created_at,
             confidential_types=confidential, known_types=known,
-            speaker_stats_raw=stats_raw, speaker_mapping_raw=mapping_raw)
+            speaker_stats_raw=stats_raw, speaker_mapping_raw=mapping_raw, lexicon_raw=lexicon_raw)
         card = db.session.get(JobCard, job_id)
         if card is not None and card.source_sha256 == fingerprint:
             return UNCHANGED
@@ -145,7 +147,8 @@ class JobCardStore:
             meeting_ctx, participants, created_at=job.created_at, confidential_types=confidential,
             known_types=known,
             summary_headings=summary_headings(meeting_ctx.get("language") if isinstance(meeting_ctx, dict) else None),
-            speaker_stats=_load_json_or_none(stats_raw), speaker_mapping=_load_json_or_none(mapping_raw))
+            speaker_stats=_load_json_or_none(stats_raw), speaker_mapping=_load_json_or_none(mapping_raw),
+            lexicon=_load_json_or_none(lexicon_raw))
 
         outcome = UPDATED
         if card is None:

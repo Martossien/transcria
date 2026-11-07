@@ -23,6 +23,7 @@ from transcria.llm_tools.opencode_runner import (
 )
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.llm_readiness import ensure_llm_ready, llm_running_before_phase
+from transcria.workflow.phases.correction import apply_lexicon_safety_net
 from transcria.workflow.progress import progress_msg
 from transcria.workflow.refine_llm import chat_completion
 from transcria.workflow.type_field_extraction import (
@@ -263,6 +264,7 @@ def apply_final_review(host, fs, result: dict) -> dict:
         if integrity_error:
             logger.warning("Relecture finale : SRT relu écarté — %s", integrity_error)
         else:
+            reviewed_srt = apply_lexicon_safety_net(fs, reviewed_srt, "final_review")
             fs.save_text("metadata/transcription_corrigee.srt", reviewed_srt)
             applied["srt_updated"] = True
 

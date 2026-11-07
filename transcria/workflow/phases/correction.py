@@ -14,6 +14,12 @@ import yaml
 
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.context.lexicon import (
+    harmonize_srt,
+    load_session_lexicon,
+    sans_formes_ambigues,
+    sans_variantes_expansions,
+)
 from transcria.context.meeting_context import synthese_section
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import (
@@ -263,55 +269,23 @@ def _stage_context_sans_formes_ambigues(fs, workspace) -> Path:
 
 #: Une forme validée qui propose plusieurs graphies séparées par « / » n'est pas une
 #: consigne de remplacement : c'est une hésitation que seul le contexte tranche.
-_FORME_AMBIGUE = re.compile(r"\s/\s")
+def apply_lexicon_safety_net(fs, srt_text: str, phase: str) -> str:
+    """Filet DÉTERMINISTE après une passe LLM : les variantes validées fautives encore présentes
+    dans le SRT sont remplacées par leur forme validée (texte des sous-titres seulement). Le nombre
+    de remplacements est journalisé : zéro = la LLM avait tout appliqué, sinon c'est le code qui
+    tient la consigne de l'utilisateur."""
+    entries = load_session_lexicon(fs.job_dir)
+    if not entries:
+        return srt_text
+    harmonized, n = harmonize_srt(srt_text, entries)
+    if n:
+        logger.info("[%s] filet lexique : %d variante(s) encore présente(s) après la LLM remplacée(s) "
+                    "par la forme validée", phase, n)
+    return harmonized
 
 
-def sans_formes_ambigues(lexicon: list) -> tuple[list, int]:
-    """Retire du lexique de SUBSTITUTION les entrées dont la forme validée est ambiguë.
-
-    Mesuré avant d'écrire ceci : sur une réunion métier réelle, 12 des 30 entrées
-    proposaient plusieurs graphies (« A / B / C »), et trois rejeux de la correction ont
-    produit 18, 11 puis 23 remplacements visant ces formes — dont un qui a substitué le
-    nom d'un fournisseur par le nom de la fonction qu'il rend, rendant la phrase fausse.
-
-    Deux consignes de prompt avaient été essayées avant : aucune n'a tenu. Un refus en
-    CODE, lui, ne se discute pas — et il ne coûte rien à l'information, puisque l'entrée
-    reste dans le lexique de session que l'humain relit.
-    """
-    gardees = [t for t in lexicon
-               if not (isinstance(t, dict) and _FORME_AMBIGUE.search(str(t.get("term", ""))))]
-    return gardees, len(lexicon) - len(gardees)
-
-
-def sans_variantes_expansions(lexicon: list) -> tuple[list, int]:
-    """Retire les variantes MULTI-MOTS (≥ 3) des cibles de substitution d'un sigle.
-
-    Constaté sur trois parcours réels (2026-08-24) : la phase résumé liste parfois
-    l'expansion en toutes lettres d'un sigle comme « variante fautive » (« système
-    national de gestion du temps » pour un terme court en capitales). La correction,
-    obéissante, remplace alors des mots réellement prononcés par le sigle — violation
-    verbatim ORDONNÉE par les données. Une règle définitionnelle dans le prompt de
-    résumé n'a pas déplacé le taux (1, 0, 3 avec elle ; 3, 0, 1 sans).
-
-    Et même une déformation authentique multi-mots est destructrice comme CIBLE de
-    substitution : remplacer toute la locution par le sigle efface les mots voisins.
-    On retire donc ces variantes-là du pouvoir de substitution — l'ENTRÉE reste, avec
-    ses variantes courtes, et l'humain voit toujours tout dans le lexique de session.
-    """
-    epurees, retirees = [], 0
-    for entree in lexicon:
-        if not isinstance(entree, dict):
-            epurees.append(entree)
-            continue
-        term = str(entree.get("term", ""))
-        variants = entree.get("variants") or []
-        if len(term) <= 10 and term.isupper() and isinstance(variants, list):
-            gardees = [v for v in variants if len(str(v).split()) < 3]
-            if len(gardees) != len(variants):
-                retirees += len(variants) - len(gardees)
-                entree = {**entree, "variants": gardees}
-        epurees.append(entree)
-    return epurees, retirees
+# Les règles de substitution (formes ambiguës, expansions de sigles) vivent dans
+# transcria.context.lexicon — source unique partagée avec le filet déterministe du rendu.
 
 
 def _prefilter_lexicon(fs, job: Job):
@@ -426,6 +400,7 @@ def _persist_correction_result(runner, fs, result: dict, job: Job | None = None)
         if integrity_error:
             logger.error("[correction] %s", integrity_error)
             return {"success": False, "error": integrity_error}
+        result["corrected_srt"] = apply_lexicon_safety_net(fs, result["corrected_srt"], "correction")
         fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
         if result["report"]:
             language = resolve_output_language(job) if job is not None else "fr"

@@ -3,6 +3,7 @@ import re
 import zipfile
 from pathlib import Path
 
+from transcria.context.lexicon import apply_validated_forms, harmonize_context_fields, load_session_lexicon
 from transcria.context.meeting_context import MeetingContextManager
 from transcria.exports.docx_report import generate_docx_report
 from transcria.jobs.filesystem import JobFilesystem
@@ -62,8 +63,13 @@ class PackageBuilder:
                     raw_summary = fs.load_text("summary/summary.md")
                     if raw_summary is not None:
                         meeting_ctx_pkg = fs.load_json("context/meeting_context.json") or {}
+                        lexicon_pkg = load_session_lexicon(fs.job_dir)
+                        # Formes validées du lexique dans le summary.md livré (même filet que le DOCX).
                         zf.writestr("summary/summary.md",
-                                    MeetingContextManager.effective_summary_markdown(meeting_ctx_pkg, raw_summary))
+                                    apply_validated_forms(
+                                        MeetingContextManager.effective_summary_markdown(
+                                            harmonize_context_fields(meeting_ctx_pkg, lexicon_pkg), raw_summary),
+                                        lexicon_pkg))
                 # — Full uniquement : rapports qualité / correction / relecture —
                 if zip_level == "full":
                     self._add_if_exists(zf, fs, "quality/quality_report.md", "quality/quality_report.md")

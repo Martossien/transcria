@@ -13,12 +13,13 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from transcria.context.lexicon import harmonize_context_fields, harmonize_structured
 from transcria.context.meeting_context import synthese_section
 from transcria.context.participants import is_label
 
 #: Version de la projection. Entre dans l'empreinte : la relever force le recalcul de toutes les
 #: fiches au prochain rattrapage (règle modifiée ⇒ fiches périmées, même si les fichiers n'ont pas bougé).
-CARD_VERSION = 2
+CARD_VERSION = 3   # 3 : formes validées du lexique appliquées aux champs (2026-11-07)
 
 ABSTRACT_MAX_CHARS = 800
 MAX_LIST_ITEMS = 40
@@ -299,7 +300,7 @@ def speaking_shares(speaker_stats: object, speaker_mapping: object) -> tuple[lis
 def project_card(meeting_ctx: object, participants: object, *, created_at: datetime | None,
                  confidential_types: frozenset[str], known_types: frozenset[str],
                  summary_headings: list[str], speaker_stats: object = None,
-                 speaker_mapping: object = None) -> CardData:
+                 speaker_mapping: object = None, lexicon: object = None) -> CardData:
     """Fiche d'une réunion depuis son contexte et ses participants.
 
     Args:
@@ -313,6 +314,11 @@ def project_card(meeting_ctx: object, participants: object, *, created_at: datet
         summary_headings: marqueurs de la section synthèse (langue du job puis toutes les autres).
     """
     ctx = meeting_ctx if isinstance(meeting_ctx, dict) else {}
+    if isinstance(lexicon, list) and lexicon:
+        # Formes validées du lexique (étape 6) sur les champs lus : la fiche dit la forme validée
+        # même si le titre et la synthèse de l'étape 4 portaient encore la graphie fautive.
+        ctx = harmonize_context_fields(ctx, lexicon)
+        ctx["structured_data"] = harmonize_structured(ctx.get("structured_data"), lexicon)
     structured = ctx.get("structured_data")
     structured = structured if isinstance(structured, dict) else {}
 
@@ -346,7 +352,7 @@ def project_card(meeting_ctx: object, participants: object, *, created_at: datet
 def source_fingerprint(meeting_raw: bytes | None, participants_raw: bytes | None, *,
                        created_at: datetime | None, confidential_types: frozenset[str],
                        known_types: frozenset[str], speaker_stats_raw: bytes | None = None,
-                       speaker_mapping_raw: bytes | None = None) -> str:
+                       speaker_mapping_raw: bytes | None = None, lexicon_raw: bytes | None = None) -> str:
     """Empreinte de TOUT ce dont la fiche dépend : les quatre fichiers (octets), la date de création,
     le catalogue des types et la version de la projection. Même empreinte ⇒ même fiche ⇒ rien à écrire."""
     digest = hashlib.sha256()
@@ -356,6 +362,7 @@ def source_fingerprint(meeting_raw: bytes | None, participants_raw: bytes | None
         participants_raw if participants_raw is not None else b"\x00absent",
         speaker_stats_raw if speaker_stats_raw is not None else b"\x00absent",
         speaker_mapping_raw if speaker_mapping_raw is not None else b"\x00absent",
+        lexicon_raw if lexicon_raw is not None else b"\x00absent",
         (created_at.isoformat() if created_at else "").encode(),
         "\n".join(sorted(confidential_types)).encode(),
         "\n".join(sorted(known_types)).encode(),

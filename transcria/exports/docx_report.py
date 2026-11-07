@@ -1,6 +1,7 @@
 """Génère un rapport DOCX professionnel à partir des artefacts d'un job terminé."""
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,13 @@ from docx.document import Document as DocumentT  # type pour annotations (docx.D
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.shared import Cm, Pt, RGBColor
 
-from transcria.context.lexicon import apply_validated_forms
+from transcria.context.lexicon import (
+    apply_validated_forms,
+    count_remaining_variants,
+    harmonize_context_fields,
+    harmonize_srt,
+    harmonize_structured,
+)
 from transcria.context.meeting_type_catalog import (
     ORDERABLE_SECTIONS,
     confidential_types,
@@ -75,6 +82,8 @@ _RENDER_SECTIONS = ("participants", "transcript", "quality")
 # contexte (rendu historique, non-régression au pixel).
 _ORDERABLE_SECTIONS = ORDERABLE_SECTIONS
 _SECTION_ORDER_DEFAULT = ("contexte", "pv", "participants", "transcript", "quality")
+
+logger = logging.getLogger(__name__)
 
 
 def neutral_speaker_names(labels, template: str) -> dict[str, str]:
@@ -1189,6 +1198,19 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
         lexicon_entries = fs.load_json("context/session_lexicon.json") or []
     except Exception:  # JSON corrompu = rôles rendus tels quels, le rendu ne casse jamais
         lexicon_entries = []
+    # FILET LEXIQUE AU RENDU (2026-11-07) : titre, sujet, objectif, ordre du jour, synthèses,
+    # données structurées et verbatim portent les formes validées — y compris la synthèse
+    # éditée à l'étape 4, puisque le lexique est validé APRÈS elle. Les fichiers restent intacts.
+    if lexicon_entries:
+        ctx = harmonize_context_fields(ctx, lexicon_entries)
+        structured_data = harmonize_structured(structured_data, lexicon_entries)
+        srt_text, _ = harmonize_srt(srt_text, lexicon_entries)
+        remaining = count_remaining_variants(
+            " ".join(str(ctx.get(k) or "") for k in ("title", "objective", "topic", "notes", "summary")),
+            lexicon_entries) + count_remaining_variants(srt_text, lexicon_entries, verbatim=True)
+        if remaining:
+            logger.warning("Rapport Word : %d variante(s) de lexique encore présente(s) après le filet (job=%s)",
+                           remaining, job_id)
     # Mapping locuteurs validé → substitution des jetons SPEAKER_XX au rendu de la
     # synthèse (le ctx est le canal de données du rapport ; l'artefact reste intact).
     ctx["speaker_mapping"] = speaker_map
