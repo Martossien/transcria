@@ -12,6 +12,8 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 #### Activation graphique de la LLM d'arbitrage (écran « LLM d'arbitrage »)
 
+- **Piège documenté** (AGENTS.md) : opencode v1 1.18.x rejette les appels d'outil des modèles GLM
+  servis par Mistral (chunk `tool_calls` sans `id`) ; la ligne v2 ou un modèle natif Mistral passent.
 - **Modèles cloud proposés depuis le catalogue d'opencode** : la liste des modèles du fournisseur
   choisi se déroule sous le champ (identifiants, avec le nom affiché), et un identifiant inconnu du
   catalogue est refusé avant toute écriture, avec la bonne graphie proposée (« GLM-5.3 » saisi →

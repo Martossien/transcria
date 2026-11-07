@@ -899,6 +899,17 @@ non installables côte à côte, mises à jour automatiques. Règles (lu au sour
   un seul fichier sert les deux. Format des événements `--format json` (`text`/`tool_use` avec
   `part.text`/`part.tool`) vérifié identique en v2 sur un run réel.
 
+### opencode v1 (1.18.x) et les modèles GLM servis par Mistral — chunks `tool_calls` sans `id`
+Vécu 2026-11-07 (première qualification cloud réelle) : avec le binaire v1 `opencode-ai` 1.18.22 du
+service, `mistral/zai-glm-5-3` échoue à CHAQUE appel d'outil : `AI_TypeValidationError … choices[0]
+.delta.tool_calls[0].id : expected string, received undefined` — Mistral streame les deltas d'outil de
+GLM sans `id`, le `@ai-sdk/mistral` embarqué dans cette v1 les refuse. Les modèles natifs Mistral
+(`mistral-medium-latest`…) passent avec la même v1 ; la ligne **v2** (2.2.5, `--standalone`) passe
+avec GLM. Diagnostic en 3 appels payants minuscules (« écris OK dans test.txt », force un tool call).
+Parade sur cette machine : `workflow.arbitration_llm.opencode_bin` → le binaire v2. Le doctor
+`--llm-smoke` est le test à lancer après tout changement fournisseur/modèle — son PREMIER run avec un
+binaire v2 fraîchement pointé peut dépasser 120 s (initialisation), le second répond en 9 s.
+
 ### opencode — provider `local` requis dans `~/.config/opencode/opencode.json`
 `OpenCodeRunner` invoque opencode avec `--model <provider>/<model>` depuis `workflow.summary_llm.model_id` ou `workflow.arbitration_llm.model_id` (exemple : `local/arbitrage`). Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.config/opencode/opencode.json` pointant sur le serveur llama.cpp (port 8080 par défaut, ou `NODE_IP:8080` en topologie distribuée). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder.
 
