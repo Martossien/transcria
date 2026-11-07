@@ -1154,11 +1154,21 @@ def save_config(cfg: dict, config_path: str | None = None) -> str:
     os.makedirs(parent, exist_ok=True)
     # Le fichier temporaire naît dans le MÊME répertoire : `os.replace` n'est atomique que
     # sur un même système de fichiers.
+    # Propriétaire CONSERVÉ : le service tourne souvent en root alors que config.yaml appartient
+    # au compte d'administration — sans ça, une sauvegarde depuis l'interface rend le fichier
+    # illisible au doctor, aux tests et à l'installateur lancés par ce compte (vécu 2026-11-07).
+    owner: tuple[int, int] | None = None
+    with contextlib.suppress(OSError):
+        st = os.stat(path)
+        owner = (st.st_uid, st.st_gid)
     fd, provisoire = tempfile.mkstemp(prefix=".config-", suffix=".yaml", dir=parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             yaml.safe_dump(_normalize_config(cfg), fh, allow_unicode=True, sort_keys=False)
         os.chmod(provisoire, CONFIG_FILE_MODE)
+        if owner is not None and os.geteuid() == 0:
+            with contextlib.suppress(OSError):
+                os.chown(provisoire, owner[0], owner[1])
         os.replace(provisoire, path)
     except BaseException:
         # Ne JAMAIS laisser un fichier temporaire derrière : le répertoire de configuration

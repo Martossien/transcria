@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 16:40+0100\n"
+"POT-Creation-Date: 2026-11-07 17:09+0100\n"
 "PO-Revision-Date: 2026-10-22 10:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pt_BR\n"
@@ -3753,8 +3753,8 @@ msgid "Un changement de LLM est enregistré mais pas encore appliqué : le servi
 msgstr "Uma alteração da LLM está guardada mas ainda não aplicada: o serviço tem de reiniciar."
 
 #: transcria/web/templates/admin_llm_cloud.html:11
-msgid "Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris."
-msgstr "Reiniciar o serviço agora? Os processamentos em curso serão interrompidos e retomados."
+msgid "Redémarrer le service maintenant ? Un traitement en cours sera interrompu et marqué en échec (relançable)."
+msgstr "Reiniciar o serviço agora? Um processamento em curso será interrompido e marcado como falhado (pode ser relançado)."
 
 #: transcria/web/templates/admin_llm_cloud.html:12
 msgid "Redémarrer le service"
@@ -7336,4 +7336,7 @@ msgstr "Gerar o resumo"
 
 #~ msgid "Moteur de transcription par défaut (cohere recommandé). kroko = CPU uniquement (zéro VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIS audio.cpp/parakeet.cpp : refusés tant qu'aucune URL n'est posée dans inference.stt.backends.<nom> (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
 #~ msgstr "Motor de transcrição por defeito (cohere recomendado). kroko = apenas CPU (zero VRAM). qwen3asr/nemotron/voxtralrt = runtimes SERVIDOS audio.cpp/parakeet.cpp: recusados enquanto não houver um URL em inference.stt.backends.<nome> (ver docs/EXTERNAL_STT_RUNTIMES.md)."
+
+#~ msgid "Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris."
+#~ msgstr "Reiniciar o serviço agora? Os processamentos em curso serão interrompidos e retomados."
 

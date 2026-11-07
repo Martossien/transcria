@@ -8,7 +8,7 @@
 <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="status" data-llm-pending-restart>
   <span><i class="bi bi-arrow-repeat me-1"></i>{{ _('Un changement de LLM est enregistré mais pas encore appliqué : le service doit redémarrer.') }}</span>
   <form method="POST" action="{{ url_for('web.admin_llm_cloud_restart') }}" class="m-0"
-        data-confirm="{{ _('Redémarrer le service maintenant ? Les traitements en cours seront interrompus et repris.') }}">
+        data-confirm="{{ _('Redémarrer le service maintenant ? Un traitement en cours sera interrompu et marqué en échec (relançable).') }}">
     <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Redémarrer le service') }}</button>
   </form>
 </div>

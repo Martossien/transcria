@@ -190,7 +190,7 @@
   "transcria.services": 3,
   "transcria.services.audio_source": 1,
   "transcria.services.config_service": 3,
-  "transcria.services.job_executor": 21,
+  "transcria.services.job_executor": 22,
   "transcria.services.job_service": 10,
   "transcria.services.llm_cloud_guard": 10,
   "transcria.services.pipeline_admission": 5,

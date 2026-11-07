@@ -13,6 +13,7 @@ if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestra
     from flask import Flask
 
 from transcria.ask_meetings import worker as ask_worker
+from transcria.config import get_config
 from transcria.config.views import QueueView
 from transcria.database import db
 from transcria.jobs import artifact_store
@@ -87,7 +88,12 @@ def _notify(cfg: dict, job, event: str, error: str | None = None,
 class JobExecutorService:
     def __init__(self, app: Flask, config: dict, run_scheduler: bool = True):
         self.app = app
-        self.config = config
+        self._config = config
+        # Le formulaire Réglages REMPLACE le singleton (set_config) : un worker qui garderait
+        # l'objet reçu au démarrage traiterait les jobs suivants avec les anciens backends
+        # (vécu 2026-11-07 : STT passée à kroko, résumé lancé avec cohere). Quand on a reçu le
+        # singleton, on le suit ; une config injectée (tests, outils) reste figée.
+        self._follow_singleton = config is get_config()
         # run_scheduler=False (rôle 'web', C1) : on crée le scheduler pour POUVOIR
         # enfiler (submit_to_queue écrit en base), mais on ne démarre pas son thread —
         # c'est un process 'scheduler'/'all' qui draine la file.
@@ -113,6 +119,18 @@ class JobExecutorService:
             if self.run_scheduler:
                 self._scheduler.start()
 
+
+    @property
+    def config(self) -> dict:
+        """Configuration VIVANTE (singleton courant) — chaque job part avec les réglages du moment."""
+        if self._follow_singleton:
+            return get_config()
+        return self._config
+
+    @config.setter
+    def config(self, value: dict) -> None:
+        self._config = value
+        self._follow_singleton = False
     def submit_process(
         self,
         job_id: str,
