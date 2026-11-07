@@ -119,3 +119,47 @@ def test_ipv6_nue_entre_crochets_dans_la_racine(monkeypatch):
     cfg["services"]["arbitrage_llm_host"] = "fd00::1"
     cfg["services"]["arbitrage_llm_port"] = 8000
     assert ep.arbitrage_root_url(cfg) == "http://[fd00::1]:8000"
+
+
+def test_backend_http_declare_est_distant_meme_sur_loopback(monkeypatch):
+    """TranscrIA ne lance ni n'arrête jamais un « serveur de mon organisation », même local : la
+    déclaration prime sur l'adresse (vécu : vLLM de l'admin tué par le script d'arrêt, port 8080)."""
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    http_local = make_config({"services": {"backend": "http", "arbitrage_llm_host": "127.0.0.1", "arbitrage_llm_port": 8080}})
+    assert ep.is_remote_arbitrage(http_local) is True
+    script_local = make_config({"services": {"backend": "script", "arbitrage_llm_host": "127.0.0.1"}})
+    assert ep.is_remote_arbitrage(script_local) is False
+    ollama_local = make_config({"services": {"backend": "ollama", "arbitrage_llm_host": "127.0.0.1"}})
+    assert ep.is_remote_arbitrage(ollama_local) is False
+
+
+def test_vram_manager_ne_lance_ni_n_arrete_un_serveur_http_declare(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    cfg = make_config({"services": {"backend": "http", "arbitrage_llm_host": "127.0.0.1", "arbitrage_llm_port": 8080,
+                                    "arbitrage_script": "./scripts/launch_arbitrage.sh",
+                                    "stop_script": "./scripts/stop_arbitrage_llm.sh"}})
+
+    class _Down:
+        status_code = 503
+
+        @staticmethod
+        def json():
+            return {}
+
+    fake_requests = SimpleNamespace(get=lambda url, timeout=5, **kw: _Down(), post=lambda url, **kw: _Down())
+    monkeypatch.setitem(__import__("sys").modules, "requests", fake_requests)
+    launched: list = []
+    import subprocess
+
+    def forbidden(*a, **k):
+        cmd = a[0] if a else k.get("args")
+        if isinstance(cmd, list) and cmd and cmd[0] == "lsof":
+            return SimpleNamespace(returncode=1, stdout="", stderr="")       # sonde de port : lecture seule
+        launched.append(a)
+        raise AssertionError("lancement/arrêt interdit pour un serveur déclaré")
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    vm = vm_mod.VRAMManager(cfg)
+    assert vm.ensure_arbitrage_llm_ready(expected_model_id="arbitrage") is False   # indisponible : échec explicite
+    assert vm.stop_arbitrage_llm() is True                                          # no-op
+    assert launched == []

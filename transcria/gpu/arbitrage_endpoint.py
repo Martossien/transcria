@@ -212,5 +212,11 @@ def is_remote_arbitrage(config: dict) -> bool:
     if is_cloud_backend(config):
         # Fournisseur externe : rien ne tourne ici — ni lancement, ni arrêt, ni VRAM, ni verrou.
         return True
+    if configured_backend(config) == "http":
+        # « Serveur de mon organisation » DÉCLARÉ (backend http) : un serveur que l'admin gère,
+        # même sur 127.0.0.1. Vécu 2026-11-07 : vLLM de l'admin sur le port 8080, sonde locale
+        # en échec transitoire → CAS C → `stop_arbitrage_llm.sh` a TUÉ son vLLM par le port et
+        # lancé llama-server à sa place. La déclaration prime sur l'adresse.
+        return True
     host, _ = resolve_arbitrage_endpoint(config)
     return host not in _LOCAL_ARBITRAGE_HOSTS
