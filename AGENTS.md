@@ -88,6 +88,7 @@ python scripts/audit_imports.py --check-baseline quality_baseline.json
 python scripts/audit_front.py --check-baseline quality_baseline_front.json
 lint-imports
 venv/bin/python -m pytest tests/ -q --cov=transcria --cov=inference_service --cov-fail-under=80
+npm run lint      # job `frontend` de la CI : ESLint sur transcria/web/static/js (no-unused-vars : `catch {` sans variable inutile)
 ```
 
 1. **Jamais de pipe qui masque un code de sortie** sur un gate (`cmd | tail` → l'échec

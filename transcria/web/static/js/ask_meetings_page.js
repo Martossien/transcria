@@ -40,12 +40,12 @@
 
   var STORAGE_KEY = "transcria.ask.conversation";
   var conversationId = null;
-  try { conversationId = window.localStorage.getItem(STORAGE_KEY) || null; } catch (e) { conversationId = null; }
+  try { conversationId = window.localStorage.getItem(STORAGE_KEY) || null; } catch { conversationId = null; }
   var conversationsSelect = document.getElementById("ask-conversations");
 
   function rememberConversation(id) {
     conversationId = id;
-    try { if (id) window.localStorage.setItem(STORAGE_KEY, id); else window.localStorage.removeItem(STORAGE_KEY); } catch (e) { /* stockage indisponible : la conversation vit le temps de la page */ }
+    try { if (id) window.localStorage.setItem(STORAGE_KEY, id); else window.localStorage.removeItem(STORAGE_KEY); } catch { /* stockage indisponible : la conversation vit le temps de la page */ }
     if (conversationsSelect) conversationsSelect.value = id || "";
   }
 
