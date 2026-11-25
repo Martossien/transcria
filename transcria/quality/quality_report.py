@@ -50,6 +50,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "missing_lexicon": "Termes du lexique normalisés absents : {terms}",
         "lexicon_refused": ("Lexique : {n} substitution(s) non appliquée(s) automatiquement — {detail} ; "
                             "la ligne reste à relire à l'étape 6."),
+        "synthesis_annotations": ("Synthèse : {n} annotation(s) de doute de transcription laissée(s) en ligne — {detail} ; "
+                                  "à trancher ou retirer avant livraison (étape 4 ou affinage)."),
         "refused_phrase": "« {term} » (la forme validée ressemble à une phrase)",
         "refused_other_form": "« {variant} » → « {term} » (la variante est aussi la forme validée d'un autre terme)",
         "inconsistent_forms": ("Formes incohérentes hors glossaire : {n} — signalées sans "
@@ -103,6 +105,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
                          "increasing (check merging/diarization)."),
         "missing_lexicon": "Normalised glossary terms missing: {terms}",
         "lexicon_refused": "Glossary: {n} substitution(s) not applied automatically — {detail}; review the line at step 6.",
+        "synthesis_annotations": ("Summary: {n} transcription-doubt annotation(s) left inline — {detail}; "
+                                  "settle or remove before delivery (step 4 or refinement)."),
         "refused_phrase": "“{term}” (the validated form looks like a sentence)",
         "refused_other_form": "“{variant}” → “{term}” (the variant is also another term's validated form)",
         "inconsistent_forms": ("Inconsistent forms outside the glossary: {n} — flagged without "
@@ -166,6 +170,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         ),
         "missing_lexicon": "Fehlende normalisierte Lexikonbegriffe: {terms}",
         "lexicon_refused": "Lexikon: {n} Ersetzung(en) nicht automatisch angewendet — {detail}; Zeile in Schritt 6 prüfen.",
+        "synthesis_annotations": ("Zusammenfassung: {n} Transkriptions-Zweifelsvermerk(e) im Fließtext — {detail}; "
+                                  "vor der Lieferung entscheiden oder entfernen (Schritt 4 oder Verfeinerung)."),
         "refused_phrase": "„{term}“ (die validierte Form sieht wie ein Satz aus)",
         "refused_other_form": "„{variant}“ → „{term}“ (die Variante ist auch die validierte Form eines anderen Begriffs)",
         "inconsistent_forms": "Inkonsistente Formen außerhalb des Glossars: {n} — ohne automatische Korrektur gemeldet ({detail}).",
@@ -230,6 +236,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         ),
         "missing_lexicon": "Términos del léxico normalizados ausentes: {terms}",
         "lexicon_refused": "Léxico: {n} sustitución(es) no aplicada(s) automáticamente — {detail}; revisar la línea en el paso 6.",
+        "synthesis_annotations": ("Resumen: {n} anotación(es) de duda de transcripción en línea — {detail}; "
+                                  "zanjar o retirar antes de la entrega (paso 4 o afinado)."),
         "refused_phrase": "«{term}» (la forma validada parece una frase)",
         "refused_other_form": "«{variant}» → «{term}» (la variante es también la forma validada de otro término)",
         "inconsistent_forms": "Formas incoherentes fuera del léxico: {n} — señaladas sin corrección automática ({detail}).",
@@ -294,6 +302,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "out_of_order": "Segmenti fuori ordine temporale: {n} — l'ordine dei segmenti non è crescente (verificare unione/diarizzazione).",
         "missing_lexicon": "Termini del lessico normalizzati assenti: {terms}",
         "lexicon_refused": "Lessico: {n} sostituzione/i non applicata/e automaticamente — {detail}; rivedere la riga al passo 6.",
+        "synthesis_annotations": ("Sintesi: {n} annotazione/i di dubbio di trascrizione in linea — {detail}; "
+                                  "risolvere o togliere prima della consegna (passo 4 o affinamento)."),
         "refused_phrase": "«{term}» (la forma validata sembra una frase)",
         "refused_other_form": "«{variant}» → «{term}» (la variante è anche la forma validata di un altro termine)",
         "inconsistent_forms": "Forme incoerenti fuori dal lessico: {n} — segnalate senza correzione automatica ({detail}).",
@@ -359,6 +369,8 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "Segmentos fora de ordem: {n} — a ordem dos segmentos não está aumentando (verifique fusão/diarização).",
         "missing_lexicon": "Termos do léxico normalizados ausentes: {terms}",
         "lexicon_refused": "Léxico: {n} substituição(ões) não aplicada(s) automaticamente — {detail}; rever a linha no passo 6.",
+        "synthesis_annotations": ("Resumo: {n} anotação(ões) de dúvida de transcrição em linha — {detail}; "
+                                  "resolver ou retirar antes da entrega (passo 4 ou afinação)."),
         "refused_phrase": "«{term}» (a forma validada parece uma frase)",
         "refused_other_form": "«{variant}» → «{term}» (a variante é também a forma validada de outro termo)",
         "inconsistent_forms": "Formas inconsistentes fora do léxico: {n} — sinalizadas sem correção automática ({detail}).",
@@ -683,6 +695,22 @@ class QualityReporter:
             detail = " ; ".join(self._refusal_label(r) for r in refused[:5])
             review_points.append(self.S["lexicon_refused"].format(n=len(refused), detail=detail))
             warnings += len(refused)
+
+        # 7bis-b. Annotations de doute de transcription laissées EN LIGNE dans la synthèse
+        #    EFFECTIVE (éditée > harmonisée > LLM) : « (transcrit « X », probablement Y) »,
+        #    « (probablement Z, à valider) ». Le prompt les interdit (v2.10), la relecture finale les
+        #    retire (v1.1) ; ce qui reste est DIT (vécu : 25 parenthèses retirées à la main).
+        total_checks += 1
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+        synthesis = str(meeting_ctx.get("summary") or meeting_ctx.get("summary_harmonized")
+                        or meeting_ctx.get("summary_llm") or "")
+        annotations = self.find_doubt_annotations(synthesis)
+        if annotations:
+            checks.append({"type": "synthesis_inline_annotations", "count": len(annotations),
+                           "items": annotations[:10], "severity": "warning"})
+            review_points.append(self.S["synthesis_annotations"].format(
+                n=len(annotations), detail=" ; ".join(annotations[:3])))
+            warnings += len(annotations)
 
         # 7ter. Formes incohérentes HORS glossaire — SIGNALÉES sans correction
         # (périmètre tranché : la relecture finale ne corrige que le glossaire validé ;
@@ -1111,6 +1139,23 @@ class QualityReporter:
             if check.get("type") == check_type:
                 return check
         return None
+
+    _DOUBT_WORDS = re.compile(
+        r"\b(?:transcrit\w*|transcribed|transkribiert|transcrit[oa]s?|trascritt[oa]|"
+        r"probablement|probably|wahrscheinlich|probablemente|probabilmente|provavelmente)\b",
+        re.IGNORECASE,
+    )
+    _PARENTHESIS = re.compile(r"\(([^()]{1,200})\)")
+
+    @classmethod
+    def find_doubt_annotations(cls, text: str) -> list[str]:
+        """Parenthèses de doute de transcription laissées en ligne dans une synthèse (PUR, 6 langues).
+
+        Une parenthèse compte quand elle porte un mot de doute (« transcrit », « probablement »
+        et leurs équivalents) ; une parenthèse ordinaire (sigle, précision) ne compte jamais.
+        """
+        return [f"({m.group(1).strip()})" for m in cls._PARENTHESIS.finditer(text or "")
+                if cls._DOUBT_WORDS.search(m.group(1))]
 
     def _refusal_label(self, refus: dict) -> str:
         """Libellé (langue des livrables) d'un refus du filet lexique."""

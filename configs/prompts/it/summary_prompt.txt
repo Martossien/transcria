@@ -428,6 +428,11 @@ Se nessun termine sospetto è rilevato, scrivere sotto `## Termini dubbi da vali
   stato deciso, le cifre annunciate, le posizioni espresse, ciò che resta in sospeso.
   Sviluppare NON è riempire: nessun paragrafo si inventa, e un tema davvero sbrigato
   resta breve.
+- **Nessuna annotazione di dubbio DENTRO la sintesi**: la sintesi è il testo CONSEGNATO. Non
+  scriverci mai una parentesi come «(trascritto «X», probabilmente Y)» o «(probabilmente Z, da
+  verificare)»: scegli la forma più plausibile e scrivila così com'è; il dubbio va nella sezione dei
+  termini dubbi da convalidare (è il suo ruolo), mai in linea. Vissuto: 25 parentesi tolte a mano
+  dall'utente su una riunione di 17 minuti.
 - **Animatore convalidato (solo se il contesto lo riporta)**: il file di contesto può
   contrassegnare un partecipante con `is_animator: true`. È una scelta UMANA esplicita, non
   una deduzione: non contraddirla e non designarne un altro. Serve da **filo della

@@ -67,6 +67,10 @@ Apply on the summary the **participant names** and **terms** of the glossary, **
 context**, only when the entity matches (e.g. "AKRO"→"ACRO", "Jean Dupon"→"Jean DUPONT",
 "Marie"→"Marie DURAND"). Same content, same length, same structure; only the covered
 spellings change.
+Also remove the **transcription-doubt annotations** left inline in the summary — "(transcribed
+"X", probably Y)", "(probably Z, to be checked)": the validated glossary has settled them (write
+the validated form); without a validated form, keep the bare word, no parenthesis. This is the
+only deletion allowed.
 → Write `summary_harmonized.md`.
 
 ## 5. Tasks C + D — SRT consistency and variants

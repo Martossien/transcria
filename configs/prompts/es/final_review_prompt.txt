@@ -79,6 +79,10 @@ Aplique sobre la síntesis los **nombres de participantes** y **términos** del 
 **en contexto**, solo cuando la entidad corresponda (por ejemplo, «AKRO»→«ACRO»,
 «Jean Dupon»→«Jean DUPONT», «Marie»→«Marie DURAND»). Mismo contenido, misma
 extensión, misma estructura; solo cambian las grafías cubiertas.
+Retire también las **anotaciones de duda de transcripción** dejadas en línea en la síntesis —
+«(transcrito «X», probablemente Y)», «(probablemente Z, a validar)»: el léxico validado las ha
+zanjado (escriba la forma validada); sin forma validada, conserve la palabra desnuda, sin
+paréntesis. Es la única supresión autorizada.
 → Escriba `summary_harmonized.md`.
 
 ## 5. Tareas C + D — Coherencia y variantes del SRT

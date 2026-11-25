@@ -92,6 +92,9 @@ class ReviewPoints:
                                       "(variante = forme validée d'un autre terme)")
                 points.append(f"Lexique : {count} substitution(s) non appliquée(s) automatiquement — "
                               f"{' ; '.join(labels)}.")
+            elif ctype == "synthesis_inline_annotations":
+                points.append(f"Synthèse : {count} annotation(s) de doute de transcription laissée(s) en ligne — "
+                              f"{' ; '.join(check.get('items', [])[:3])} ; à trancher ou retirer avant livraison.")
             elif ctype == "unresolved_lexicon_variants":
                 detail_items: list[str] = []
                 for item in check.get("exact_variants", [])[:5]:

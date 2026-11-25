@@ -432,6 +432,11 @@ Si no se detecta ningún término sospechoso, escriba bajo `## Términos dudosos
   las cifras anunciadas, las posiciones expresadas, lo que queda pendiente. Desarrollar NO
   es rellenar: ningún párrafo se inventa, y un tema realmente despachado sigue siendo
   corto.
+- **Ninguna anotación de duda DENTRO del resumen**: el resumen es el texto ENTREGADO. No escribas
+  nunca en él un paréntesis como «(transcrito «X», probablemente Y)» o «(probablemente Z, a
+  validar)»: elige la forma más plausible y escríbela tal cual; la duda va en la sección de términos
+  dudosos a validar (ese es su papel), nunca en línea. Vivido: 25 paréntesis retirados a mano por
+  el usuario en una reunión de 17 minutos.
 - **Animador validado (solo si el contexto lo indica)**: el archivo de contexto puede marcar
   a un participante con `is_animator: true`. Es una elección HUMANA explícita, no una
   deducción: no la contradigas ni designes a otro. Sirve de **hilo de estructura** — orden

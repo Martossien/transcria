@@ -32,7 +32,8 @@
         <summary class="text-muted fw-bold">{{ _("📋 Résumé de la réunion — modifiez-le avant d'enregistrer") }}</summary>
         <textarea name="summary" class="form-control form-control-sm mt-2" rows="12"
                   style="font-size: 0.85rem;">{{ synthese_prefill }}</textarea>
-        <div class="form-text small">{{ _("Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.") }}</div>
+        <div class="form-text small">{{ _("Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.") }}
+          {{ _("Inutile de remplacer les SPEAKER_XX : le rapport y met les noms validés à l'étape 5. Les parenthèses de doute « (transcrit …) » n'ont pas leur place dans le texte livré : tranchez-les ou retirez-les.") }}</div>
       </details>
       {% endif %}
 

@@ -459,6 +459,11 @@ Wird kein verdächtiger Begriff erkannt, schreibe unter
   Ausführung: was entschieden wurde, die genannten Zahlen, die geäußerten Positionen, was
   offen bleibt. Ausführen ist NICHT ausschmücken: kein Absatz wird erfunden, und ein in
   der Sitzung wirklich kurz abgehandeltes Thema bleibt kurz.
+- **Keine Zweifelsvermerke IN der Zusammenfassung**: die Zusammenfassung ist der GELIEFERTE Text.
+  Schreibe darin nie eine Klammer wie „(transkribiert „X“, wahrscheinlich Y)“ oder „(wahrscheinlich
+  Z, zu prüfen)“: wähle die plausibelste Form und schreibe sie so hin; der Zweifel gehört in den
+  Abschnitt der zu prüfenden zweifelhaften Begriffe (das ist seine Rolle), nie in den Fließtext.
+  Erlebt: 25 Klammern vom Nutzer von Hand entfernt bei einer 17-minütigen Sitzung.
 - **Bestätigte Moderation (nur wenn der Kontext sie enthält)**: Die Kontextdatei kann eine
   teilnehmende Person mit `is_animator: true` markieren. Das ist eine ausdrückliche
   MENSCHLICHE Entscheidung, keine Ableitung: ihr nicht widersprechen und niemanden anderen

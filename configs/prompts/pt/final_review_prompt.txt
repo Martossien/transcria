@@ -74,6 +74,10 @@ Aplique ao resumo os **nomes dos participantes** e **termos** do léxico,
 **no contexto**, somente quando a entidade corresponder (por exemplo, “AKRO»→«ACRO”,
 “Jean Dupon»→«Jean DUPONT”, “Marie»→«Marie DURAND”). Mesmo conteúdo, mesmo
 comprimento, mesma estrutura; apenas as grafias abrangidas mudam.
+Retire também as **anotações de dúvida de transcrição** deixadas em linha no resumo —
+«(transcrito «X», provavelmente Y)», «(provavelmente Z, a validar)»: o léxico validado
+resolveu-as (escreva a forma validada); sem forma validada, mantenha a palavra nua, sem
+parêntese. É a única supressão autorizada.
 → Escreva `summary_harmonized.md`.
 
 ## 5. Tarefas C + D — Consistência e variações do SRT

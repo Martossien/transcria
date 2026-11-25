@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-25 22:53+0100\n"
+"POT-Creation-Date: 2026-11-25 23:17+0100\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -3251,7 +3251,7 @@ msgstr "Quality checked"
 msgid "Export prêt"
 msgstr "Export ready"
 
-#: transcria/web/templates/wizard/_step_context.html:129
+#: transcria/web/templates/wizard/_step_context.html:130
 #: transcria/web/ui_labels.py:36
 msgid "Échec"
 msgstr "Failed"
@@ -5948,7 +5948,7 @@ msgid "responsable"
 msgstr "owner"
 
 #: transcria/web/templates/meetings_actions.html:19
-#: transcria/web/templates/wizard/_step_context.html:63
+#: transcria/web/templates/wizard/_step_context.html:64
 msgid "Type de réunion"
 msgstr "Meeting type"
 
@@ -6852,7 +6852,7 @@ msgid "Analyser le fichier"
 msgstr "Analyze the file"
 
 #: transcria/web/templates/wizard/_step_analysis.html:131
-#: transcria/web/templates/wizard/_step_context.html:191
+#: transcria/web/templates/wizard/_step_context.html:192
 #: transcria/web/templates/wizard/_step_participants.html:216
 #: transcria/web/templates/wizard/_step_summary.html:118
 msgid "Étapes optionnelles pour ce profil"
@@ -6867,7 +6867,7 @@ msgid "Type"
 msgstr "Type"
 
 #: transcria/web/templates/wizard/_step_context.html:19
-#: transcria/web/templates/wizard/_step_context.html:90
+#: transcria/web/templates/wizard/_step_context.html:91
 msgid "Sujet"
 msgstr "Topic"
 
@@ -6883,96 +6883,100 @@ msgstr "📋 Meeting summary — edit it before saving"
 msgid "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
 msgstr "This text is the AI-generated summary. You can correct or complete it before saving."
 
-#: transcria/web/templates/wizard/_step_context.html:41
+#: transcria/web/templates/wizard/_step_context.html:36
+msgid "Inutile de remplacer les SPEAKER_XX : le rapport y met les noms validés à l'étape 5. Les parenthèses de doute « (transcrit …) » n'ont pas leur place dans le texte livré : tranchez-les ou retirez-les."
+msgstr "No need to replace the SPEAKER_XX: the report puts the names validated at step 5 there. Doubt parentheses such as \"(transcribed …)\" do not belong in the delivered text: settle or remove them."
+
+#: transcria/web/templates/wizard/_step_context.html:42
 msgid "Titre de la réunion"
 msgstr "Meeting title"
 
-#: transcria/web/templates/wizard/_step_context.html:45
+#: transcria/web/templates/wizard/_step_context.html:46
 msgid "Date"
 msgstr "Date"
 
-#: transcria/web/templates/wizard/_step_context.html:49
+#: transcria/web/templates/wizard/_step_context.html:50
 msgid "Langue"
 msgstr "Language"
 
-#: transcria/web/templates/wizard/_step_context.html:58
+#: transcria/web/templates/wizard/_step_context.html:59
 msgid "Langue de la réunion ET des livrables générés (compte-rendu, corrections). Anglais = bêta."
 msgstr "Language of the meeting AND the generated deliverables (report, corrections). English = beta."
 
-#: transcria/web/templates/wizard/_step_context.html:67
+#: transcria/web/templates/wizard/_step_context.html:68
 msgid "Types intégrés"
 msgstr "Built-in types"
 
-#: transcria/web/templates/wizard/_step_context.html:72
+#: transcria/web/templates/wizard/_step_context.html:73
 msgid "Mes types & partagés"
 msgstr "My types & shared"
 
-#: transcria/web/templates/wizard/_step_context.html:85
+#: transcria/web/templates/wizard/_step_context.html:86
 msgid "Service / Domaine"
 msgstr "Department / Domain"
 
-#: transcria/web/templates/wizard/_step_context.html:94
+#: transcria/web/templates/wizard/_step_context.html:95
 msgid "Objectif"
 msgstr "Objective"
 
-#: transcria/web/templates/wizard/_step_context.html:98
+#: transcria/web/templates/wizard/_step_context.html:99
 msgid "Notes / Ordre du jour"
 msgstr "Notes / Agenda"
 
-#: transcria/web/templates/wizard/_step_context.html:107
+#: transcria/web/templates/wizard/_step_context.html:108
 msgid "Informations complémentaires"
 msgstr "Additional information"
 
-#: transcria/web/templates/wizard/_step_context.html:113
+#: transcria/web/templates/wizard/_step_context.html:114
 msgid "Enregistrer le contexte"
 msgstr "Save context"
 
-#: transcria/web/templates/wizard/_step_context.html:114
+#: transcria/web/templates/wizard/_step_context.html:115
 #: transcria/web/templates/wizard/_step_lexicon.html:172
 msgid "Enregistré"
 msgstr "Saved"
 
-#: transcria/web/templates/wizard/_step_context.html:123
+#: transcria/web/templates/wizard/_step_context.html:124
 msgid "Données enrichies extraites par l'IA"
 msgstr "Enriched data extracted by the AI"
 
-#: transcria/web/templates/wizard/_step_context.html:127
+#: transcria/web/templates/wizard/_step_context.html:128
 msgid "Partiel"
 msgstr "Partial"
 
-#: transcria/web/templates/wizard/_step_context.html:131
+#: transcria/web/templates/wizard/_step_context.html:132
 msgid "— apparaîtront dans le rapport Word selon le type de réunion"
 msgstr "— will appear in the Word report depending on the meeting type"
 
-#: transcria/web/templates/wizard/_step_context.html:136
+#: transcria/web/templates/wizard/_step_context.html:137
 msgid "Ordre du jour"
 msgstr "Agenda"
 
-#: transcria/web/templates/wizard/_step_context.html:142
+#: transcria/web/templates/wizard/_step_context.html:143
 msgid "Décisions prises"
 msgstr "Decisions made"
 
-#: transcria/web/templates/wizard/_step_context.html:148
+#: transcria/web/templates/wizard/_step_context.html:149
 msgid "Actions à réaliser"
 msgstr "Actions to carry out"
 
-#: transcria/web/templates/wizard/_step_context.html:154
+#: transcria/web/templates/wizard/_step_context.html:155
 msgid "Points bloquants"
 msgstr "Blocking points"
 
-#: transcria/web/templates/wizard/_step_context.html:160
+#: transcria/web/templates/wizard/_step_context.html:161
 msgid "Points reportés"
 msgstr "Deferred points"
 
-#: transcria/web/templates/wizard/_step_context.html:166
+#: transcria/web/templates/wizard/_step_context.html:167
 msgid "Votes"
 msgstr "Votes"
 
-#: transcria/web/templates/wizard/_step_context.html:172
+#: transcria/web/templates/wizard/_step_context.html:173
 msgid "Résolutions adoptées"
 msgstr "Adopted resolutions"
 
-#: transcria/web/templates/wizard/_step_context.html:177
+#: transcria/web/templates/wizard/_step_context.html:178
 msgid "Prochaine réunion :"
 msgstr "Next meeting:"
 

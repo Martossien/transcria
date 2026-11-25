@@ -74,6 +74,10 @@ Wende auf die Zusammenfassung die **Teilnehmernamen** und **Begriffe** des Gloss
 Kontext**, nur wenn die Entität übereinstimmt (z. B. „AKRO"→„ACRO", „Jean Dupon"→„Jean
 DUPONT", „Marie"→„Marie DURAND"). Gleicher Inhalt, gleiche Länge, gleiche Struktur; nur die
 erfassten Schreibweisen ändern sich.
+Entferne außerdem die **Transkriptions-Zweifelsvermerke**, die im Fließtext der Zusammenfassung
+stehen — „(transkribiert „X“, wahrscheinlich Y)“, „(wahrscheinlich Z, zu prüfen)“: das bestätigte
+Glossar hat sie entschieden (schreibe die bestätigte Form); ohne bestätigte Form bleibt das nackte
+Wort, ohne Klammer. Das ist die einzige erlaubte Löschung.
 → Schreibe `summary_harmonized.md`.
 
 ## 5. Aufgaben C + D — Kohärenz und Varianten des SRT

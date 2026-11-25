@@ -64,6 +64,10 @@ Applique sur la synthèse les **noms de participants** et **termes** du glossair
 **en contexte**, uniquement quand l'entité correspond (ex. « AKRO »→« ACRO »,
 « Jean Dupon »→« Jean DUPONT », « Marie »→« Marie DURAND »). Même contenu,
 même longueur, même structure ; seules les graphies couvertes changent.
+Retire aussi les **annotations de doute de transcription** laissées en ligne dans la synthèse —
+« (transcrit « X », probablement Y) », « (probablement Z, à valider) » : le glossaire validé les a
+tranchées (écris la forme validée) ; sans forme validée, garde le mot nu, sans parenthèse. C'est
+la seule suppression autorisée.
 → Écris `summary_harmonized.md`.
 
 ## 5. Tâches C + D — Cohérence et variantes du SRT

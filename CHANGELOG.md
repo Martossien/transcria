@@ -164,6 +164,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Plus d'annotations de doute dans la synthèse livrée.** Vécu sur un job réel (LLM cloud) : la
+  synthèse portait 25 parenthèses « (transcrit « X », probablement Y) » / « (probablement Z, à
+  valider) », toutes retirées à la main. Trois défenses : le prompt de résumé l'interdit (v2.10, six
+  langues — le doute va dans les termes douteux, jamais en ligne), la relecture finale les retire
+  (v1.1, seule suppression autorisée), et le rapport qualité compte celles qui restent dans la
+  synthèse EFFECTIVE (`synthesis_inline_annotations`, point de relecture en six langues). L'étape 4
+  dit aussi qu'il est inutile de remplacer les SPEAKER_XX à la main : le rapport y met les noms
+  validés à l'étape 5.
+
 - **Le résumé de contrôle ne meurt plus avec la connexion.** La phase (STT rapide, locuteurs, LLM :
   1 à 10 min, davantage en cloud) tournait DANS la requête HTTP du bouton « Générer le résumé » ; un
   redémarrage du service, un proxy ou un onglet fermé la coupait net — vécu : « Erreur réseau » à

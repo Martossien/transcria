@@ -435,6 +435,11 @@ Se nenhum termo suspeito for detectado, escreva em `## Termos suspeitos para val
   Em uma reunião longa, cada tema principal merece seu desenvolvimento: o que foi decidido,
   os números anunciados, as posições expressas, o que permanece pendente. Desenvolver NÃO é
   encher linguiça: nenhum parágrafo é inventado e um tema realmente abordado permanece conciso.
+- **Nenhuma anotação de dúvida DENTRO do resumo**: o resumo é o texto ENTREGUE. Nunca escreva nele
+  um parêntese como «(transcrito «X», provavelmente Y)» ou «(provavelmente Z, a validar)»: escolha a
+  forma mais plausível e escreva-a tal como é; a dúvida vai para a secção dos termos duvidosos a
+  validar (é o seu papel), nunca em linha. Vivido: 25 parênteses retirados à mão pelo utilizador
+  numa reunião de 17 minutos.
 - **Animador validado (somente se o contexto indicar)**: o arquivo de contexto pode marcar
   um participante com `is_animator: true`. Esta é uma escolha HUMANA explícita, não uma
   dedução: não a contradiga nem atribua a outra pessoa. Serve como um **fio condutor

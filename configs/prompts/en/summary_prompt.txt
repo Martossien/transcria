@@ -400,6 +400,11 @@ If no suspect term is detected, write under `## Doubtful terms to validate`:
   long meeting each major theme deserves its development: what was decided, the figures
   announced, the positions expressed, what is left pending. Developing is NOT padding: no
   paragraph is invented, and a theme genuinely rushed through stays short.
+- **No doubt annotations INSIDE the summary**: the summary is the DELIVERED text. Never write a
+  parenthesis such as "(transcribed "X", probably Y)" or "(probably Z, to be checked)" in it:
+  pick the most plausible form and write it plainly; doubt belongs in the doubtful-terms section
+  (that is its role), never inline. Seen in practice: 25 parentheses removed by hand by the user
+  on a 17-minute meeting.
 - **Validated facilitator (only when the context carries one)**: the context file may mark
   a participant with `is_animator: true`. This is an explicit HUMAN choice, not an
   inference: do not contradict it and do not designate someone else. It serves as a

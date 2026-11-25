@@ -71,6 +71,10 @@ Applica alla sintesi i **nomi dei partecipanti** e i **termini** del glossario, 
 contesto**, solo quando l'entità corrisponde (es. «AKRO»→«ACRO», «Gianni Rossi»→«Gianni
 ROSSI», «Maria»→«Maria BIANCHI»). Stesso contenuto, stessa lunghezza, stessa struttura;
 cambiano solo le grafie coperte.
+Togli anche le **annotazioni di dubbio di trascrizione** lasciate in linea nella sintesi —
+«(trascritto «X», probabilmente Y)», «(probabilmente Z, da verificare)»: il glossario convalidato
+le ha risolte (scrivi la forma convalidata); senza forma convalidata, tieni la parola nuda, senza
+parentesi. È l'unica cancellazione consentita.
 → Scrivi `summary_harmonized.md`.
 
 ## 5. Compiti C + D — Coerenza e varianti dell'SRT
