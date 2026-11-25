@@ -126,33 +126,29 @@ def test_send_admin_vram_alert_disabled_or_no_recipient_does_nothing():
 
 
 # ---------------------------------------------------------------------------
-# api_summary : vram_wait → attente, pas FAILED, alerte admin une fois
+# api_summary : TOUJOURS en file (2026-11-25) — plus jamais run_summary dans la requête
 # ---------------------------------------------------------------------------
 
-def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
+def test_api_summary_enfile_toujours_meme_en_all_in_one(app, monkeypatch):
+    """Le résumé n'est plus exécuté dans le thread HTTP : la route enfile (mode `summary`,
+    profil VRAM `summary_stt`) et répond `queued` aussitôt. L'attente de VRAM, la provenance
+    cloud et le drapeau d'échec LLM sont l'affaire du worker (`_run_process`)."""
     from transcria.jobs.filesystem import JobFilesystem
 
-    alerts = []
     submits = []
 
-    # WorkflowRunner est importé localement dans api_summary → patcher le module runner.
-    monkeypatch.setattr(
-        "transcria.workflow.runner.WorkflowRunner.run_summary",
-        lambda self, job, audio_path, cfg: {"vram_wait": True, "required_mb": 6000, "phase": "summary_stt"},
-    )
-    monkeypatch.setattr(
-        "transcria.notifications.admin_alerts.alert_admin_vram_wait",
-        lambda cfg, job, *, required_mb, phase: alerts.append((required_mb, phase)),
-    )
+    def _never_sync(self, job, audio_path, cfg):
+        raise AssertionError("run_summary ne doit plus tourner dans la requête HTTP")
 
-    # Stub de l'exécuteur : on vérifie que la reprise serveur est enfilée (mode summary)
-    # sans déclencher d'exécution réelle en arrière-plan (test déterministe).
+    monkeypatch.setattr("transcria.workflow.runner.WorkflowRunner.run_summary", _never_sync)
+
     class _StubExecutor:
         def submit_process(self, job_id, audio_path, mode, **kwargs):
             submits.append({"mode": mode, "vram_profile": kwargs.get("vram_profile")})
-            return {"accepted": True}
+            return {"accepted": True, "status": "queued", "mode": mode, "position": 1}
 
     monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
+    monkeypatch.setitem(app.config, "TRANSCRIA_ROLE", "all")
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
@@ -161,10 +157,9 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
         from transcria.auth.store import UserStore
         from transcria.config import get_config
         admin = UserStore.get_by_username("admin")
-        job = JobStore.create_job(admin.id, "Résumé VRAM")
+        job = JobStore.create_job(admin.id, "Résumé en file")
         JobStore.update_state(job.id, JobState.ANALYZED)
         job_id = job.id
-        # Un fichier audio doit exister dans input/ pour passer la garde de la route.
         fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
         (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
         (fs.job_dir / "input" / "original.wav").write_text("fake")
@@ -172,20 +167,66 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
     resp = client.post(f"/api/jobs/{job_id}/summary")
     assert resp.status_code == 200
     payload = resp.get_json()
-    assert payload["vram_wait"] is True
-    assert payload["required_mb"] == 6000
-    assert "administrateur" in payload["message"].lower()
+    assert payload["queued"] is True
+    assert payload["queue_position"] == 1
+    assert "arrière-plan" in payload["message"]
 
     with app.app_context():
-        job2 = JobStore.get_by_id(job_id)
-        assert job2.state != JobState.FAILED.value
-        assert job2.get_extra_data()["execution"]["status"] == "waiting_vram"
+        assert JobStore.get_by_id(job_id).state == JobState.ANALYZED.value   # le worker posera RUNNING
 
-    assert alerts == [(6000, "summary_stt")]
-    # Reprise serveur enfilée en mode `summary` avec un profil VRAM dédié.
     assert len(submits) == 1
     assert submits[0]["mode"] == "summary"
     assert submits[0]["vram_profile"]["phases"]["summary_stt"]
+
+
+def test_api_summary_dit_quand_une_autre_entree_occupe_la_file(app, monkeypatch):
+    """Un traitement déjà en file pour ce job (autre mode) : 409 explicite, jamais silencieux."""
+    from transcria.jobs.filesystem import JobFilesystem
+
+    class _BusyExecutor:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            return {"accepted": False, "reason": "already_active"}
+
+    monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _BusyExecutor())
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        from transcria.config import get_config
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "File occupée")
+        JobStore.update_state(job.id, JobState.ANALYZED)
+        job_id = job.id
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        (fs.job_dir / "input" / "original.wav").write_text("fake")
+
+    resp = client.post(f"/api/jobs/{job_id}/summary")
+    assert resp.status_code == 409
+    body = resp.get_json()
+    assert body["reason"] == "already_active"
+    assert "déjà en file" in body["error"]
+
+
+def test_api_summary_503_sans_worker(app, monkeypatch):
+    from transcria.jobs.filesystem import JobFilesystem
+
+    monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: None)
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        from transcria.config import get_config
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "Sans worker")
+        JobStore.update_state(job.id, JobState.ANALYZED)
+        job_id = job.id
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        (fs.job_dir / "input" / "original.wav").write_text("fake")
+
+    resp = client.post(f"/api/jobs/{job_id}/summary")
+    assert resp.status_code == 503
 
 
 def test_api_summary_routes_to_worker_when_role_web(app, monkeypatch):
@@ -409,3 +450,30 @@ def test_check_vram_wait_bound_inactif_par_defaut(app, owner_id, monkeypatch):
         executor._check_vram_wait_bound(job, job.id, 6000, "stt", _BoundSl())
 
         assert "vram_wait_exceeded" not in job_extra(job.id)
+
+
+def test_status_expose_l_etape_qui_attend(app):
+    """GET /status nomme l'étape en file (`execution_mode`) : le bandeau du wizard dit
+    « Résumé de contrôle en attente » au lieu de l'état brut du job (« analyzed »)."""
+    from transcria.workflow.transitions import mark_execution_completed, mark_execution_queued
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "mdp-admin-de-test"}, follow_redirects=True)
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "Statut en file")
+        JobStore.update_state(job.id, JobState.ANALYZED)
+        mark_execution_queued(job.id, "summary")
+        job_id = job.id
+
+    body = client.get(f"/api/jobs/{job_id}/status").get_json()
+    assert body["execution_status"] == "queued"
+    assert body["execution_mode"] == "summary"
+    assert body["state"] == "analyzed"
+
+    with app.app_context():
+        mark_execution_completed(job_id)
+    body = client.get(f"/api/jobs/{job_id}/status").get_json()
+    assert body["execution_status"] == "idle"
+    assert "execution_mode" not in body

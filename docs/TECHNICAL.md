@@ -1401,7 +1401,7 @@ Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route D
 
 | Événement | Déclencheur | Contenu (`job_facts.py`) | Lien |
 |---|---|---|---|
-| `summary_ready` | `run_summary` succès (point UNIQUE : couvre le résumé synchrone via la route ET le worker) | type détecté, locuteurs, durée, **temps de traitement estimé** (calibré) | `/jobs/<id>/wizard` (à valider) |
+| `summary_ready` | `run_summary` succès (point UNIQUE : le résumé est toujours exécuté par le worker, depuis la file) | type détecté, locuteurs, durée, **temps de traitement estimé** (calibré) | `/jobs/<id>/wizard` (à valider) |
 | `completed` | pipeline terminé (`job_executor`) | **temps réel** de traitement, score qualité, points à vérifier | `/jobs/<id>/result` |
 | `failed` | échec pipeline | message d'erreur | `/jobs/<id>/wizard` |
 

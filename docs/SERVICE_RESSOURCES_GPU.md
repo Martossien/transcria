@@ -314,7 +314,7 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   que la correction exige la **VRAM LLM**, pas le STT. C'est ce qui résout « par construction » le cas
   d'un STT bloqué qui boucle, et permet à `run_correction` de renvoyer simplement `vram_wait`.
 - **Frontal `role=web` sans GPU (split)** : **aucune** phase GPU n'est exécutée sur le frontal. Les
-  **étapes GPU synchrones** du wizard — **résumé** (`api_summary`) **et détection de locuteurs**
+  **étapes GPU** du wizard — **résumé** (`api_summary`, en file quel que soit le rôle) **et détection de locuteurs**
   (`api_speakers_detect`) — sont **enfilées sur le worker GPU** (modes de file `summary`/`speakers`,
   `JobExecutorService.STEP_MODES`) ; le client poll `GET /status` et la page se rafraîchit. Le frontal
   ne fait qu'orchestrer ; **toute** la charge GPU (STT, diarisation, détection, **LLM** comprise) est
@@ -331,15 +331,16 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   de fichier utilisateur (audio reçu par upload HTTP en fichier temporaire, supprimé à la fin de la
   requête). Détails : `docs/STOCKAGE_PARTAGE_JOBS.md` ; garde-fou : check « Stockage des fichiers de
   jobs (split) » du `doctor`.
-- **Résumé synchrone** (`api_summary`, `role=all`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
-  `vram_wait`, l'état pré-résumé est restauré, le job passe `waiting_vram`, et une **reprise serveur**
-  est **enfilée** (`submit_process(mode="summary")`, profil VRAM `summary_stt`). Le scheduler relance
-  alors `run_summary` via `_run_process` dès que l'admission VRAM le permet — **même sans page
+- **Résumé toujours en file** (`api_summary`, tous rôles — depuis 2026-11-25 ; avant, la 1ʳᵉ tentative
+  en `role=all` tournait dans la requête HTTP et mourait avec la connexion) : la route **enfile**
+  (`submit_process(mode="summary")`, profil VRAM `summary_stt`) et répond `queued`. Le worker exécute
+  `run_summary` via `_run_process` dès que l'admission VRAM le permet ; sur `vram_wait`, l'état
+  pré-résumé est restauré, le job passe `waiting_vram` et l'entrée est re-queue — **même sans page
   ouverte**. `_run_process` traite ce mode à part : `run_summary` gère l'état (`SUMMARY_DONE`/`FAILED`),
   l'exécuteur libère seulement la file (pas de `COMPLETED` ni d'e-mail propriétaire). Le wizard
   (`wizard.js`) ne relance plus `/summary` ; il **poll `GET /status`** et recharge à `summary_done`
-  (zéro double-exécution : `api_summary` refuse une relance synchrone tant qu'une entrée `summary` est
-  active).
+  (zéro double-exécution : `api_summary` répond `queued` sans ré-enfiler tant qu'une entrée `summary` est
+  active, `409` si une autre entrée occupe la file du job).
 - **Alerte admin (une fois par épisode)** : `transcria/notifications/admin_alerts.alert_admin_vram_wait`
   → e-mail aux comptes ADMIN actifs (`send_admin_vram_alert_async`) + log `WARNING` structuré.
   L'anti-spam repose sur un drapeau persistant `extra_data.vram_alert_sent`, réarmé uniquement aux

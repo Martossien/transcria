@@ -207,7 +207,7 @@
 | `/api/jobs/<job_id>/speakers/map` | POST | connexion requise | _(docstring manquante)_ | `transcria.web.wizard_api` |
 | `/api/jobs/<job_id>/speakers/voice-match` | POST | connexion requise | _(docstring manquante)_ | `transcria.web.wizard_api` |
 | ⭐ `/api/jobs/<job_id>/status` | GET | connexion requise | Endpoint léger de polling — état courant du job pendant le traitement (contrat scriptable). | `transcria.web.processing_api` |
-| `/api/jobs/<job_id>/summary` | POST | connexion requise | _(docstring manquante)_ | `transcria.web.wizard_api` |
+| `/api/jobs/<job_id>/summary` | POST | connexion requise | Met le résumé de contrôle EN FILE (jamais dans la requête HTTP) et répond aussitôt. | `transcria.web.wizard_api` |
 | ⭐ `/api/jobs/<job_id>/upload` | POST | connexion requise | Dépose le fichier audio d'un job fraîchement créé (contrat scriptable). | `transcria.web.wizard_api` |
 | `/api/meetings` | POST | connexion requise | Planifie une réunion : crée le JOB (provenance posée) + la session (référence chiffrée), | `transcria.web.meetings_api` |
 | `/api/meetings/<session_id>/cancel` | POST | connexion requise | Annule une session (états annulables seulement) — visibilité = celle du job porteur. | `transcria.web.meetings_api` |
@@ -240,7 +240,7 @@
 | `/v1/meetings/meet/watched-users` | GET | — | Utilisateurs dont le service Meet doit surveiller les réunions. | `transcria.web.meetings_api` |
 | `/v1/runners/heartbeat` | POST | — | Annonce d'un exécutant (capacité, plateformes couvertes, images) — alimente | `transcria.web.meetings_api` |
 
-_Portail TranscrIA (app principale) : 174 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 174 routes, 91 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

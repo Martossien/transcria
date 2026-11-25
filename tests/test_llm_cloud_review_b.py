@@ -1,6 +1,6 @@
 """LLM cloud — correctifs de la relecture du lot B côté WEB/connecteur.
 
-I1 provenance du résumé synchrone ; I6 message « refus cloud » (API + wizard) ; I7 garde à la
+I1 provenance du résumé (tracée par le worker, la route enfile) ; I6 message « refus cloud » (API + wizard) ; I7 garde à la
 planification de réunion + bot qui journalise un refus du portail ; M3 pied DOCX localisé ;
 M4/M5 grisage par propriétaire (``?job_id=``) et 409 qui porte ses raisons ; M7 provenance
 de réunion posée AVANT la soumission. Base PARTAGÉE : objets à noms uniques.
@@ -60,66 +60,52 @@ def owner(app):
     return types.SimpleNamespace(id=user_id, client=client)
 
 
-class _FakeRunner:
-    result: dict = {}
-
-    def __init__(self, *args, **kwargs) -> None:
-        pass
-
-    def run_summary(self, job, audio_path, cfg):
-        return dict(type(self).result)
-
-
-def _sync_summary(app, monkeypatch, result: dict):
+def _queued_summary(app, monkeypatch):
+    """La route n'exécute plus rien : elle enfile. On vérifie qu'elle ne trace PAS la provenance
+    elle-même (c'est l'exécuteur, après le run) et qu'aucun run_summary ne tourne en requête."""
     monkeypatch.setitem(app.config, "TRANSCRIA_ROLE", "all")
-    runner = type("R", (_FakeRunner,), {"result": result})
-    monkeypatch.setattr(wizard_api, "WorkflowRunner", runner)
+
+    def _never(self, job, audio_path, cfg):
+        raise AssertionError("run_summary ne doit plus tourner dans la requête HTTP")
+
+    monkeypatch.setattr(wizard_api.WorkflowRunner, "run_summary", _never)
     calls: list[tuple] = []
-    monkeypatch.setattr(wizard_api, "record_cloud_provenance",
+    monkeypatch.setattr("transcria.services.llm_cloud_guard.record_cloud_provenance",
                         lambda cfg, job_id, mode, *, succeeded=True: calls.append((job_id, mode, succeeded)))
-    return calls
+    submitted: list[tuple] = []
+
+    class _Exec:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            submitted.append((job_id, mode))
+            return {"accepted": True, "status": "queued", "mode": mode, "position": 1}
+
+    monkeypatch.setattr(wizard_api, "get_job_executor", lambda: _Exec())
+    return calls, submitted
 
 
 # --------------------------------------------------------------------------- #
-#  I1 + I6 — résumé synchrone : provenance et message de refus cloud
+#  I1 + I6 — résumé EN FILE : la provenance est l'affaire du worker ; refus cloud dit au wizard
 # --------------------------------------------------------------------------- #
-class TestSyncSummary:
-    def test_succes_trace_la_provenance(self, app, owner, cloud, monkeypatch):
+class TestQueuedSummary:
+    def test_la_route_enfile_et_ne_trace_pas_la_provenance(self, app, owner, cloud, monkeypatch):
         _acknowledge(app, cloud)
-        calls = _sync_summary(app, monkeypatch, {"ok": True})
+        calls, submitted = _queued_summary(app, monkeypatch)
         job_id = _new_job(app, owner, JobState.ANALYZED)
         r = owner.client.post(f"/api/jobs/{job_id}/summary", json={})
         assert r.status_code == 200, r.get_json()
-        assert calls == [(job_id, "summary", True)]
+        assert r.get_json()["queued"] is True
+        assert submitted == [(job_id, "summary")]
+        assert calls == []                  # tracée par _run_process, après l'exécution réelle
 
-    def test_echec_llm_trace_avec_succeeded_false(self, app, owner, cloud, monkeypatch):
+    def test_refus_cloud_avant_enfilage(self, app, owner, cloud, monkeypatch):
+        """Groupe interdit : 403 dit tout de suite, rien n'est enfilé ni envoyé au fournisseur."""
         _acknowledge(app, cloud)
-        calls = _sync_summary(app, monkeypatch, {"summary_llm_failed": True,
-                                                 "summary_llm_error_kind": "empty_output"})
+        _forbid(app, owner.id)
+        calls, submitted = _queued_summary(app, monkeypatch)
         job_id = _new_job(app, owner, JobState.ANALYZED)
         r = owner.client.post(f"/api/jobs/{job_id}/summary", json={})
-        assert r.get_json()["summary_llm_failed"] is True
-        assert calls == [(job_id, "summary", False)]
-
-    def test_vram_wait_ne_trace_rien(self, app, owner, cloud, monkeypatch):
-        _acknowledge(app, cloud)
-        calls = _sync_summary(app, monkeypatch, {"vram_wait": True, "required_mb": 1})
-        monkeypatch.setattr(wizard_api, "get_job_executor", lambda: None)
-        job_id = _new_job(app, owner, JobState.ANALYZED)
-        r = owner.client.post(f"/api/jobs/{job_id}/summary", json={})
-        assert r.get_json()["vram_wait"] is True
-        assert calls == []
-
-    def test_refus_cloud_message_dedie(self, app, owner, cloud, monkeypatch):
-        _acknowledge(app, cloud)
-        calls = _sync_summary(app, monkeypatch, {"summary_llm_failed": True,
-                                                 "summary_llm_error_kind": "cloud_refused"})
-        job_id = _new_job(app, owner, JobState.ANALYZED)
-        body = owner.client.post(f"/api/jobs/{job_id}/summary", json={}).get_json()
-        assert body["error_kind"] == "cloud_refused"
-        assert body["message"] == wizard_api._SUMMARY_LLM_CLOUD_REFUSED_MESSAGE
-        assert "3 tentatives" not in body["message"]
-        assert calls == []                  # rien n'est parti chez le fournisseur
+        assert r.status_code == 403
+        assert submitted == [] and calls == []
 
     def test_wizard_affiche_le_refus_cloud(self, app, owner, cloud):
         job_id = _new_job(app, owner, JobState.ANALYZED)

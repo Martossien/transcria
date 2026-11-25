@@ -37,6 +37,7 @@ relevé des corrections humaines et du devenir des termes douteux (COMPTAGES seu
 terme ni un nom) : `lexicon_edits_survey.py` — à rejouer sur une instance d'usage réel ;
 banc Playwright de « Discuter avec mes réunions » (instance jetable + LLM factice, gestes réels,
 captures à relire) : `ask_meetings_walkthrough.py` (`seed` / `fake-llm` / `walk`).
+- `bench/summary_queue_walkthrough.py` — banc Playwright du bouton « Générer le résumé » (réponse immédiate, bandeau « en file », second clic sans ré-enfilage, page rechargée qui nomme l'étape en attente) sur instance jetable, file en pause par fenêtre calendaire (seed / walk)
 - `bench/lexicon_step_walkthrough.py` — banc Playwright de l'étape 6 « Lexique de session » (aperçu du sens avec compteurs, avertissements du filet, bouton d'échange terme/variante, sauvegarde et relecture) sur instance jetable (seed / walk)
 - `bench/llm_mode_walkthrough.py` — banc Playwright de l'écran « LLM d'arbitrage » (trois modes déclarés, clé jamais réaffichée, repli du bouton de redémarrage) sur instance jetable (seed / walk)
 Mode d'emploi : `docs/BENCHMARKING.md`.

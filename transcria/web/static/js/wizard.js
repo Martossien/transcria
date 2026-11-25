@@ -93,34 +93,31 @@ var TranscrIA = window.TranscrIA || {};
             return W.api('/api/jobs/' + JOB_ID + '/summary');
         }).then(function (r) {
             W.hideSpinner('summary-spinner');
-            if (r.data.vram_wait || r.data.queued) {
-                // Résumé pris en charge côté SERVEUR (nœud GPU) : soit en attente de VRAM
-                // (reprise auto), soit enfilé parce que le frontal n'a pas de GPU (split).
-                // Dans les deux cas le client se contente de POLLER l'état — il NE relance
-                // PAS /summary (sinon course avec le worker).
+            if (r.data.queued || r.data.vram_wait) {
+                // Le résumé est TOUJOURS pris en charge côté serveur (file : all-in-one,
+                // reprise après attente de VRAM, frontal sans GPU). Le client POLLE l'état
+                // et recharge la page à la fin — il NE relance PAS /summary (course avec
+                // le worker). Plus aucune requête longue : une coupure réseau ne tue
+                // plus le résumé (vécu 2026-11-24, « erreur réseau » et job figé).
                 var msg = r.data.message ||
-                    t('VRAM insuffisante : l\'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.');
+                    t('Résumé mis en file : il s\'exécute en arrière-plan et la page se rafraîchira dès qu\'il sera prêt.');
                 W.showVramWaitBanner(msg);
+                var genBtn = document.querySelector('[data-action="TranscrIA.generateSummary"]');
+                if (genBtn) genBtn.disabled = true;   // ce qui attend déjà ne se relance pas
                 W.pollSummaryResume();
-                return;
-            }
-            if (r.data.summary_llm_failed) {
-                // La LLM n'a rien produit après 3 tentatives : transcript conservé, job
-                // non validé mais relançable (la relance réutilise le STT en cache).
-                var failMsg = r.data.message ||
-                    t('Le résumé n\'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer.');
-                document.getElementById('summary-result').innerHTML =
-                    '<div class="alert alert-warning">' + W.escapeHtml(failMsg) +
-                    '<div class="mt-2"><button class="btn btn-sm btn-primary" data-action="TranscrIA.generateSummary">' +
-                    t('Relancer le résumé') + '</button></div></div>';
                 return;
             }
             if (r.data.error) {
                 document.getElementById('summary-result').innerHTML =
-                    '<div class="alert alert-danger">' + r.data.error + '</div>';
+                    '<div class="alert alert-danger">' + W.escapeHtml(r.data.error) + '</div>';
             } else {
                 location.reload();
             }
+        }).catch(function (err) {
+            W.hideSpinner('summary-spinner');
+            console.error('[TranscrIA] generateSummary error:', err);
+            document.getElementById('summary-result').innerHTML =
+                '<div class="alert alert-danger">' + t('Erreur réseau : %(msg)s', { msg: err.message }) + '</div>';
         });
     };
 
@@ -138,9 +135,11 @@ var TranscrIA = window.TranscrIA || {};
     // Recharge la page dès que l'exécution n'est plus active (terminée — succès OU échec ;
     // le rechargement affiche l'état réel). Aucun POST de relance ici (pas de course).
     W.pollServerStep = function () {
-        W.api('/api/jobs/' + JOB_ID + '/status').then(function (r) {
-            var es = (r.data && r.data.execution_status) || 'idle';
-            if (es === 'idle') { location.reload(); return; }   // terminé → recharger
+        // GET explicite : W.api poste par défaut, et /status ne répond qu'en GET (405) — le
+        // 405 passait pour « terminé » et rechargeait la page à l'instant (banc 2026-11-25).
+        W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
+            if (!r || !r.data || r.data.error) { setTimeout(W.pollServerStep, 20000); return; }
+            if ((r.data.execution_status || 'idle') === 'idle') { location.reload(); return; }   // terminé → recharger
             setTimeout(W.pollServerStep, 20000);
         });
     };
@@ -959,6 +958,13 @@ var TranscrIA = window.TranscrIA || {};
         'failed':           'Échec du traitement.',
         'cancelled':        'Traitement annulé.',
     };
+    // Étape EN FILE (exécution active mais état du job encore « avant ») : nommer l'étape,
+    // jamais l'état brut du job (règle ui_labels — vécu au banc : « analyzed analyzed »).
+    var _QUEUED_MODE_LABELS = {
+        'summary':  "Résumé de contrôle en attente d'exécution…",
+        'speakers': "Détection des locuteurs en attente d'exécution…",
+        'refine':   "Affinage en attente d'exécution…",
+    };
     var _TERMINAL_STATES = ['completed', 'export_ready', 'failed', 'cancelled'];
     var _REPROCESSABLE_STATES = ['completed', 'quality_checked', 'export_ready', 'failed', 'cancelled'];
     var _LIVE_STATUS_STATES = [
@@ -1095,7 +1101,7 @@ var TranscrIA = window.TranscrIA || {};
         return '';
     }
 
-    function _renderWorkflowStatusBanner(banner, state, progress, queueInfo, executionStatus) {
+    function _renderWorkflowStatusBanner(banner, state, progress, queueInfo, executionStatus, executionMode) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
         var isTerminal = _TERMINAL_STATES.indexOf(state) !== -1;
         // Un état terminal n'anime jamais rien, même si une progression résiduelle traîne
@@ -1107,8 +1113,15 @@ var TranscrIA = window.TranscrIA || {};
             return;
         }
 
-        var label = _STATE_LABELS[state] ? t(_STATE_LABELS[state]) : (state || t('Traitement en cours'));
-        var message = progress && progress.message ? progress.message : label;
+        var label;
+        if (_STATE_LABELS[state]) {
+            label = t(_STATE_LABELS[state]);
+        } else if (executionStatus && executionStatus !== 'idle') {
+            label = t(_QUEUED_MODE_LABELS[executionMode] || "Traitement en attente d'exécution…");
+        } else {
+            label = t('Traitement en cours');
+        }
+        var message = progress && progress.message ? progress.message : '';
         if (executionStatus === 'waiting_vram') {
             message = t("En attente de mémoire GPU — le traitement reprendra tout seul dès qu'elle se libère.");
         } else if (executionStatus === 'queued' && !(queueInfo && queueInfo.position)) {
@@ -1179,7 +1192,7 @@ var TranscrIA = window.TranscrIA || {};
                     queueInfo = queueInfo || {};
                     queueInfo.vramWaitExceeded = true;
                 }
-                _renderWorkflowStatusBanner(banner, state, progress, queueInfo, r.data.execution_status);
+                _renderWorkflowStatusBanner(banner, state, progress, queueInfo, r.data.execution_status, r.data.execution_mode);
                 var initialState = banner.dataset ? banner.dataset.initialState : null;
                 if (_TERMINAL_STATES.indexOf(state) !== -1 && initialState
                         && _LIVE_STATUS_STATES.indexOf(initialState) !== -1) {
@@ -1197,7 +1210,10 @@ var TranscrIA = window.TranscrIA || {};
                     return;
                 }
                 var genBtn = document.querySelector('[data-action="TranscrIA.generateSummary"]');
-                if (genBtn) { genBtn.disabled = (state === 'summary_running'); }
+                // Résumé en cours OU déjà en file (exécution active côté serveur) : le bouton
+                // ne doit pas inviter à relancer ce qui attend déjà.
+                var execActive = r.data.execution_status && r.data.execution_status !== 'idle';
+                if (genBtn) { genBtn.disabled = (state === 'summary_running' || !!execActive); }
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
                     // Phase active (résumé, traitement…) : rafraîchissement rapide.
                     setTimeout(poll, 4000);

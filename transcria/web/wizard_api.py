@@ -30,14 +30,10 @@ from transcria.i18n import select_locale
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
-
-# Accès PAR MODULE : les tests substituent alert_admin_vram_wait à la source.
-from transcria.notifications import admin_alerts
 from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
 from transcria.services.audio_source import MIC
 from transcria.services.job_executor import SPEAKER_MODE, SUMMARY_MODE, get_job_executor
 from transcria.services.job_service import JobService
-from transcria.services.llm_cloud_guard import record_cloud_provenance
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backend
 from transcria.voice.matching import VoiceMatchingService
@@ -50,78 +46,23 @@ from transcria.workflow.profile_availability import CLOUD_FORBIDDEN_REASON, comp
 from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
-    mark_execution_waiting_vram,
     set_processing_profile,
 )
 
 logger = logging.getLogger(__name__)
 
 
-_VRAM_WAIT_MESSAGE = (
-    "VRAM insuffisante : l'administrateur a été prévenu. "
-    "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
+_SUMMARY_QUEUED_MESSAGE = (
+    "Résumé mis en file — il s'exécute en arrière-plan (transcription rapide, locuteurs, LLM) "
+    "et la page se rafraîchira dès qu'il sera prêt. Vous pouvez quitter cette page."
 )
 
-_SUMMARY_QUEUED_MESSAGE = (
-    "Résumé mis en file sur le nœud GPU — il s'exécutera automatiquement "
-    "et la page se rafraîchira dès qu'il sera prêt."
-)
+_SUMMARY_ALREADY_ACTIVE_MESSAGE = "Un traitement est déjà en file ou en cours pour ce job."
 
 _SPEAKER_QUEUED_MESSAGE = (
     "Détection des locuteurs lancée sur le nœud GPU — elle s'exécutera automatiquement "
     "et la page se rafraîchira dès qu'elle sera prête."
 )
-
-# Production vide : opencode a tourné (exit 0) mais n'a émis aucun texte → piste
-# transcript/modèle/prompt.
-_SUMMARY_LLM_FAILED_MESSAGE = (
-    "Le résumé n'a pas pu être généré : la LLM d'arbitrage a répondu mais n'a produit "
-    "aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). "
-    "La transcription rapide est conservée — vous pouvez relancer le résumé "
-    "(diagnostic : transcria doctor --llm-smoke)."
-)
-
-# Erreur opencode : la LLM n'a pas pu être appelée correctement (modèle non résolu côté
-# opencode, serveur en erreur, binaire absent…) → PAS un problème de transcript ; le
-# diagnostic statique « transcria doctor » pointe la vraie cause (résolution du modèle).
-_SUMMARY_LLM_UNREACHABLE_MESSAGE = (
-    "Le résumé n'a pas pu être généré : la LLM d'arbitrage n'a pas pu être appelée "
-    "correctement (modèle non résolu côté opencode, ou serveur en erreur) — ce n'est pas "
-    "un problème de transcript. La transcription rapide est conservée. "
-    "Diagnostic : transcria doctor (vérifie la résolution du modèle opencode et le serveur ; "
-    "réaligner avec scripts/setup_opencode.py si besoin)."
-)
-
-# Refus du dernier rempart LLM cloud (worker ou runner) : rien n'est parti chez le
-# fournisseur — la cause est une décision d'administration, pas une panne technique.
-_SUMMARY_LLM_CLOUD_REFUSED_MESSAGE = (
-    "Le résumé a été refusé : cette instance confie les transcriptions à une LLM externe "
-    "et ce traitement n'est pas autorisé (validation administrateur absente ou caduque, "
-    "groupe interdit, ou réunion issue d'un connecteur). Rapprochez-vous de votre administrateur."
-)
-
-
-# Panne RECONNUE (opencode_remediation.SDK_TOOL_CALL_INCOMPAT) : le binaire opencode v1 ne lit
-# pas le flux d'appels d'outil de ce modèle chez ce fournisseur. Remède connu, nommé ici.
-_SUMMARY_LLM_SDK_INCOMPAT_MESSAGE = (
-    "Le résumé n'a pas pu être généré : le binaire opencode utilisé par le service (ligne v1) "
-    "ne sait pas lire les appels d'outil de ce modèle chez ce fournisseur — ce n'est ni la clé, "
-    "ni le réseau, ni le transcript. La transcription rapide est conservée. Remède (administrateur) : "
-    "écran « LLM d'arbitrage » → « Installer opencode v2 » (ou choisir un modèle natif du fournisseur), "
-    "puis relancer le résumé."
-)
-
-
-def _summary_failure_message(error_kind: str) -> str:
-    """Message FR du bandeau selon la CLASSE de panne du résumé LLM."""
-    if error_kind == "cloud_refused":
-        return _SUMMARY_LLM_CLOUD_REFUSED_MESSAGE
-    if error_kind == "sdk_tool_call_incompat":
-        return _SUMMARY_LLM_SDK_INCOMPAT_MESSAGE
-    if error_kind == "opencode_error":
-        return _SUMMARY_LLM_UNREACHABLE_MESSAGE
-    return _SUMMARY_LLM_FAILED_MESSAGE
-
 
 def _queue_audio_seconds(cfg: dict, job_id: str) -> float:
     """Durée audio portée par l'entrée de file (DB) — sans elle, l'estimation
@@ -289,20 +230,29 @@ def api_analyze(job_id: str):
 @web_bp.route("/api/jobs/<job_id>/summary", methods=["POST"])
 @login_required
 def api_summary(job_id: str):
+    """Met le résumé de contrôle EN FILE (jamais dans la requête HTTP) et répond aussitôt.
+
+    La phase (STT rapide → diarisation → LLM) dure de 1 à 10 minutes : tenue dans la requête,
+    elle mourait avec la connexion (redémarrage du service, proxy, onglet fermé — vécu
+    2026-11-24, « erreur réseau » et job figé en SUMMARY_RUNNING). Elle passe désormais par
+    le même véhicule que l'autostart, la reprise VRAM et le frontal split : ``submit_process``
+    (mode ``summary``, profil VRAM ``summary_stt``). Le worker (``_run_process``) gère l'état
+    du job, l'attente de VRAM, la provenance cloud et le drapeau ``summary_llm_failed`` ; le
+    wizard poll ``GET /status`` et recharge la page à la fin. ``{"force": true}`` régénère un
+    résumé déjà validé.
+    """
     cfg = get_config()
     job, error_response = get_job_for_edit(job_id)
     if error_response:
         return error_response
 
-    # run_summary est synchrone dans la requête HTTP et reste SUMMARY_RUNNING pendant
-    # toute sa durée (STT rapide → scène → pyannote → LLM). Refuser un second appel
-    # concurrent évite deux pipelines GPU simultanés et la corruption de meeting_context.json.
+    # Le worker reste SUMMARY_RUNNING pendant toute la phase : refuser un second lancement
+    # évite deux pipelines GPU simultanés et la corruption de meeting_context.json.
     if job.state == JobState.SUMMARY_RUNNING.value:
         return jsonify({"error": "Un résumé est déjà en cours pour ce job."}), 409
 
-    # Une reprise serveur du résumé peut déjà être en file (après une attente de VRAM) :
-    # ne PAS relancer en synchrone (sinon deux run_summary concurrents). Le client doit
-    # poller GET /status — le scheduler reprend dès que la VRAM se libère.
+    # Déjà en file (autostart, reprise après attente de VRAM, double clic) : ne pas
+    # ré-enfiler, le client poll GET /status.
     pending = QueueStore.get_entry(job.id)
     if (
         pending is not None
@@ -327,6 +277,7 @@ def api_summary(job_id: str):
             "segment_count": len(existing_summary.get("segments") or []),
         })
 
+    # Refus cloud dit TOUT DE SUITE à qui clique (le worker garde son propre rempart).
     refusal = job_cloud_refusal(cfg, job, needs_llm=summary_needs_llm(cfg), entry="Résumé")
     if refusal is not None:
         return refusal
@@ -335,80 +286,20 @@ def api_summary(job_id: str):
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
 
-    # Topologie split : le frontal (`role=web`) n'a pas (forcément) de GPU et ne doit
-    # JAMAIS exécuter de phase GPU. On enfile le résumé sur le worker GPU (nœud de
-    # ressources), qui exécute STT/diarisation/LLM ; le client poll GET /status. La
-    # décision se fait sur le RÔLE, pas sur une détection matérielle (un éventuel petit
-    # GPU frontal est volontairement ignoré). En `all-in-one`, exécution synchrone.
-    if current_app.config.get("TRANSCRIA_ROLE", "all") == "web":
-        executor = get_job_executor()
-        if executor is None:
-            return jsonify({"error": "Worker de traitement indisponible"}), 503
-        executor.submit_process(
-            job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg, job.id)
-        )
-        return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
-
-    runner = WorkflowRunner(JobStore, cfg)
-    result = runner.run_summary(job, str(audio_path), cfg)
-
-    if result.get("vram_wait"):
-        # VRAM momentanément insuffisante : le job N'A PAS échoué (run_summary a déjà
-        # restauré son état pré-résumé). On le marque « en attente de VRAM », on alerte
-        # l'admin une seule fois, puis on enfile une reprise SERVEUR (mode `summary`) :
-        # le scheduler relancera run_summary dès que la VRAM le permet, même sans page
-        # ouverte. Le client n'a plus qu'à poller GET /status.
-        required_mb = int(result.get("required_mb") or 0)
-        phase = result.get("phase") or "summary_stt"
-
-        # Enfiler la reprise serveur d'abord (submit_process pose le statut « queued »),
-        # PUIS marquer « waiting_vram » : le statut final reflète l'attente de VRAM (et
-        # alimente le bandeau admin), tandis que l'entrée de file pilote la reprise.
-        executor = get_job_executor()
-        if executor is not None:
-            executor.submit_process(
-                job.id,
-                str(audio_path),
-                SUMMARY_MODE,
-                vram_profile=_summary_vram_profile(cfg, job.id),
-            )
-        else:
-            logger.warning("Reprise serveur du résumé indisponible (worker absent) — job=%s", job.id)
-
-        first_wait = mark_execution_waiting_vram(job.id, required_mb=required_mb, phase=phase)
-        if first_wait:
-            admin_alerts.alert_admin_vram_wait(cfg, job, required_mb=required_mb, phase=phase)
-        return jsonify({
-            "vram_wait": True,
-            "queued": executor is not None,
-            "required_mb": required_mb,
-            "phase": phase,
-            "message": _VRAM_WAIT_MESSAGE,
-        })
-
-    # Topologie `all` : la phase LLM a tourné DANS la requête — personne d'autre ne tracera
-    # la provenance cloud (court-circuit hors cloud dans le helper). Un refus du rempart
-    # cloud n'a rien envoyé au fournisseur : pas de trace.
-    llm_failed = bool(result.get("summary_llm_failed"))
-    if result.get("summary_llm_error_kind") != "cloud_refused":
-        record_cloud_provenance(cfg, job.id, SUMMARY_MODE, succeeded=not llm_failed)
-
-    if llm_failed:
-        # La LLM d'arbitrage n'a rien produit après 3 tentatives : le résumé n'est PAS
-        # validé (meeting_context non corrompu, job non SUMMARY_DONE), mais relançable.
-        # Le message dépend de la CLASSE de panne (corrections opposées) : erreur opencode
-        # (modèle non résolu / serveur) → doctor ; production vide → transcript/prompt ;
-        # refus cloud → administrateur.
-        error_kind = result.get("summary_llm_error_kind", "empty_output")
-        message = _summary_failure_message(error_kind)
-        return jsonify({
-            "summary_llm_failed": True,
-            "error_kind": error_kind,
-            "attempts": 3,
-            "message": message,
-        })
-
-    return jsonify(result)
+    executor = get_job_executor()
+    if executor is None:
+        return jsonify({"error": "Worker de traitement indisponible"}), 503
+    submitted = executor.submit_process(
+        job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg, job.id)
+    )
+    if not submitted.get("accepted", True):
+        # Une AUTRE entrée (traitement complet, détection de locuteurs) occupe la file de ce
+        # job : la relance du résumé attendra sa fin — dit clairement, jamais en silence.
+        return jsonify({"error": _SUMMARY_ALREADY_ACTIVE_MESSAGE,
+                        "reason": submitted.get("reason")}), 409
+    logger.info("[summary] Résumé enfilé (job=%s, position=%s)", job.id, submitted.get("position"))
+    return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE,
+                    "queue_position": submitted.get("position")})
 
 
 def _normalize_speaker_hint(data: dict) -> dict:

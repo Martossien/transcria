@@ -164,6 +164,19 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Le résumé de contrôle ne meurt plus avec la connexion.** La phase (STT rapide, locuteurs, LLM :
+  1 à 10 min, davantage en cloud) tournait DANS la requête HTTP du bouton « Générer le résumé » ; un
+  redémarrage du service, un proxy ou un onglet fermé la coupait net — vécu : « Erreur réseau » à
+  l'écran, job figé « résumé en cours ». `POST /api/jobs/<id>/summary` met désormais TOUJOURS le résumé
+  en file (le véhicule déjà utilisé par l'autostart, l'attente de VRAM et le frontal split) et répond
+  aussitôt ; le worker exécute, le wizard suit l'état et recharge la page à la fin. Vous pouvez quitter
+  la page. Une file déjà occupée par un autre traitement du job est dite (409), un worker absent aussi
+  (503). Le bandeau d'échec du résumé distingue maintenant la LLM injoignable (diagnostic `transcria
+  doctor`) de la production vide. Attrapé au banc Playwright en passant : le suivi d'une étape serveur
+  appelait `/status` en POST (405) et rechargeait la page à l'instant ; et le bandeau d'attente affichait
+  l'état brut du job (« analyzed ») — il nomme désormais l'étape en file (`execution_mode`, champ additif
+  de `GET /api/jobs/<id>/status`). Banc : `scripts/bench/summary_queue_walkthrough.py`.
+
 - **Filet déterministe du lexique : plus de substitution faussée par une saisie humaine.** Vécu sur
   un job réel (LLM cloud, 2026-11-08) : une fiche de l'étape 6 portait « Cloud » comme variante d'un
   bout de phrase ; le filet enchaînait « Cloudé » → « cloud » → ce bout de phrase, 5 fois dans le SRT

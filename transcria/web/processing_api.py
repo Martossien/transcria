@@ -296,12 +296,18 @@ def api_job_status(job_id: str):
     if error_response:
         return error_response
     progress = effective_workflow_progress(job)
+    active = is_execution_active(job)
     payload = {
         "state": job.state,
-        "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
+        "execution_status": get_execution_status(job) if active else "idle",
         "progress": progress,
         "eta": _live_eta(job, progress),
     }
+    if active:
+        # Additif (2026-11-25) : QUELLE étape attend ou tourne (summary / speakers / refine /
+        # profil de traitement) — le bandeau du wizard nomme l'étape au lieu d'afficher l'état
+        # brut du job (« analyzed ») quand un résumé est en file.
+        payload["execution_mode"] = ((job.get_extra_data() or {}).get("execution") or {}).get("mode")
     # Champs ADDITIFS du contrat ⭐ (0.3.8) : présents seulement quand le job attend
     # son tour en file — position 1-based et estimation calibrée machine (mêmes
     # calculs que /admin/queue, agrégat sans détail des jobs des autres).
