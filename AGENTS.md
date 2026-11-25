@@ -830,7 +830,15 @@ validée mélangés dans le DOCX. Règle désormais en CODE, source unique `cont
    entre dans l'empreinte), sources de « Discuter » (`ask_meetings/sources`). Les FICHIERS du job
    ne sont jamais modifiés par le rendu.
 3. **Ce qui ne se remplace jamais** : formes validées « A / B » (ambiguës) ; en verbatim, les
-   expansions multi-mots d'un sigle ; les `mentions`. Mot entier, casse ignorée.
+   expansions multi-mots d'un sigle ; les `mentions` ; une forme validée qui porte une
+   ponctuation de phrase (« , ; : ! ? » : un bout de phrase, pas un terme) ; une variante qui
+   est la forme validée d'un AUTRE terme (`sans_variantes_douteuses`, vécu 2026-11-08 job
+   fd68c18b : « Cloud » saisi en variante → « Cloudé » → « cloud » → bout de phrase, 5 fois
+   dans le SRT livré là où la LLM avait refusé). Les refus sont DITS dans le rapport qualité
+   (`lexicon_substitution_refused`), jamais appliqués ni tus. Mot entier, casse ignorée, **une
+   seule passe** (`apply_validated_forms` : la sortie d'un remplacement n'est jamais l'entrée
+   d'un autre). Ces règles valent pour une saisie HUMAINE : une variante n'est « fautive par
+   définition » que quand la LLM l'a observée.
 4. **Vérifier sur le LIVRABLE** (DOCX, `count_remaining_variants`), jamais seulement sur le SRT —
    c'est l'erreur de méthode qui a masqué le défaut pendant six mois.
 

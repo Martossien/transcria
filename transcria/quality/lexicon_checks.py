@@ -1,6 +1,10 @@
 import re
 import unicodedata
 
+from transcria.context.lexicon import REFUS_FORME_PHRASE, refused_substitutions
+
+__all__ = ["LexiconChecker", "REFUS_FORME_PHRASE", "refused_substitutions"]
+
 
 class LexiconChecker:
     @staticmethod

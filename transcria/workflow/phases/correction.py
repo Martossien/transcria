@@ -18,6 +18,7 @@ from transcria.context.lexicon import (
     harmonize_srt,
     load_session_lexicon,
     sans_formes_ambigues,
+    sans_variantes_douteuses,
     sans_variantes_expansions,
 )
 from transcria.context.meeting_context import synthese_section
@@ -257,10 +258,13 @@ def _stage_context_sans_formes_ambigues(fs, workspace) -> Path:
     if not isinstance(lexique, list) or not lexique:
         return workspace.stage("context/job_context.yaml")
     gardees, ecartees = sans_formes_ambigues(lexique)
+    gardees, refus = sans_variantes_douteuses(gardees)
     gardees, expansions = sans_variantes_expansions(gardees)
-    if not ecartees and not expansions:
+    if not ecartees and not expansions and not refus:
         return workspace.stage("context/job_context.yaml")
-    logger.info("Contexte de correction : %d entrée(s) ambiguë(s) et %d variante(s) multi-mots retirées", ecartees, expansions)
+    logger.info("Contexte de correction : %d entrée(s) ambiguë(s), %d refus de substitution (forme-phrase "
+                "ou variante = forme validée d'un autre terme) et %d variante(s) multi-mots retirées",
+                ecartees, len(refus), expansions)
     return workspace.write_input(
         "job_context.yaml",
         yaml.dump({**contexte, "lexicon": gardees}, allow_unicode=True, default_flow_style=False),
@@ -304,7 +308,14 @@ def _prefilter_lexicon(fs, job: Job):
         if isinstance(lexicon, list):
             filtered_lexicon, filter_stats = filter_lexicon_by_srt_presence(lexicon, srt_text)
             filtered_lexicon, ecartees = sans_formes_ambigues(filtered_lexicon)
+            filtered_lexicon, refus = sans_variantes_douteuses(filtered_lexicon)
             filtered_lexicon, expansions = sans_variantes_expansions(filtered_lexicon)
+            if refus:
+                # Même règle que le filet déterministe (source unique) : la LLM ne reçoit pas une
+                # consigne que le code refusera d'appliquer ; les refus sont dits dans le rapport
+                # qualité (jamais les termes dans les journaux).
+                logger.info("Préfiltrage lexique : %d substitution(s) refusée(s) (forme-phrase ou variante "
+                            "= forme validée d'un autre terme, job=%s)", len(refus), job.id)
             if expansions:
                 logger.info("Préfiltrage lexique : %d variante(s) multi-mots retirée(s) de la "
                             "substitution (expansion de sigle, job=%s)", expansions, job.id)

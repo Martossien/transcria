@@ -150,6 +150,17 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ### Corrigé
 
+- **Filet déterministe du lexique : plus de substitution faussée par une saisie humaine.** Vécu sur
+  un job réel (LLM cloud, 2026-11-08) : une fiche de l'étape 6 portait « Cloud » comme variante d'un
+  bout de phrase ; le filet enchaînait « Cloudé » → « cloud » → ce bout de phrase, 5 fois dans le SRT
+  livré et dans la synthèse du DOCX, là où la LLM de correction avait justement refusé l'entrée.
+  Désormais (`context/lexicon.sans_variantes_douteuses`, source unique partagée avec le lexique
+  transmis à la LLM) : une forme validée qui porte une ponctuation de phrase ne remplace rien ; une
+  variante qui est la forme validée d'un autre terme est écartée ; les remplacements se font en UNE
+  passe (jamais d'enchaînement). Les refus sont dits dans le rapport qualité et les points à vérifier
+  (« Lexique : N substitution(s) non appliquée(s) automatiquement — … »), dans la langue des
+  livrables. Les variantes légitimes restent remplacées : le filet reste entier pour les LLM locales.
+
 - **Le lexique validé s'applique partout, de façon déterministe.** Après la LLM de correction et la
   relecture finale, un filet remplace dans la transcription toute variante déclarée fautive par sa
   forme validée (texte des sous-titres seuls). Au rendu, le rapport Word (titre, objectif, ordre du

@@ -188,3 +188,81 @@ def test_sources_discuter_harmonisees(tmp_path):
     cfg = {"storage": {"jobs_dir": str(tmp_path / "jobs"), "shared_backend": "fs"}}
     assert sources.effective_summary(cfg, "job-ask") == "Le projet ALPHA est validé."
     assert "projet ALPHA" in sources.effective_srt(cfg, "job-ask") and "projet Alfa" not in sources.effective_srt(cfg, "job-ask")
+
+
+# ── Refus du filet : faux par construction, quelle que soit la LLM (job fd68c18b, 2026-11-08) ──
+# Une fiche saisie à la main portait « Cloud » (mot courant, et forme validée d'une entrée voisine)
+# comme variante d'un bout de phrase : « Cloudé » → « cloud » → ce bout de phrase, 5 fois dans le SRT
+# livré, là où la LLM de correction avait refusé. Le filet doit rester ENTIER pour les variantes
+# légitimes (les LLM locales en laissent) et refuser seulement ce qui ne peut pas être une graphie.
+
+LEX_REEL = [
+    {"term": "cloud", "category": "technique", "priority": "normale", "variants": ["Clood", "Cloudé"], "replace_by": ""},
+    {"term": "comme on peut voir, Klaud", "category": "mot suspect", "priority": "normale",
+     "variants": ["comme Power", "Cloud"], "replace_by": ""},
+    {"term": "Klaud", "category": "application", "priority": "normale", "variants": ["Cloud", "Klod"], "replace_by": ""},
+    {"term": "Annuaire Central", "category": "technique", "priority": "importante",
+     "variants": ["actif de la sterie"], "replace_by": ""},
+    {"term": "ça reste  tel quel", "category": "expression", "priority": "normale",
+     "variants": ["ça reste lequel"], "replace_by": ""},
+]
+
+
+def test_une_forme_validee_qui_est_une_phrase_ne_remplace_rien():
+    _, refus = L.sans_variantes_douteuses(LEX_REEL)
+    assert {"term": "comme on peut voir, Klaud", "variant": "", "reason": L.REFUS_FORME_PHRASE} in refus
+    assert all(e["term"] != "comme on peut voir, Klaud" for e in L.substitution_entries(LEX_REEL))
+
+
+def test_une_variante_qui_est_la_forme_validee_d_un_autre_terme_est_refusee():
+    _, refus = L.sans_variantes_douteuses(LEX_REEL)
+    assert {"term": "Klaud", "variant": "Cloud", "reason": L.REFUS_VARIANTE_FORME_VALIDEE} in refus
+    klaud = next(e for e in L.substitution_entries(LEX_REEL) if e["term"] == "Klaud")
+    assert klaud["variants"] == ["Klod"]          # l'entrée garde ses autres variantes
+    assert L.refused_substitutions(LEX_REEL) == refus
+
+
+def test_pas_de_substitution_en_chaine_ni_de_mot_courant_ecrase():
+    texte = ("le développement avec LM Cloudé et l'IA Clood, puis le Cloud privé, "
+             "un groupe actif de la sterie, ça reste lequel")
+    out = L.apply_validated_forms(texte, LEX_REEL)
+    assert out == ("le développement avec LM cloud et l'IA cloud, puis le Cloud privé, "
+                   "un groupe Annuaire Central, ça reste  tel quel")
+    assert "comme on peut voir" not in out
+    assert L.count_remaining_variants(out, LEX_REEL) == 0
+
+
+def test_les_variantes_legitimes_restent_remplacees_en_une_passe():
+    # Le refus ne doit rien enlever au filet : chaîne « longue avant courte » et casse ignorée.
+    lex = [{"term": "SIGLE_A B", "variants": ["sigle a b"], "replace_by": ""},
+           {"term": "SIGLE_A", "variants": ["sigle a"], "replace_by": ""}]
+    assert L.apply_validated_forms("Le sigle a b puis le Sigle A.", lex) == "Le SIGLE_A B puis le SIGLE_A."
+    assert L.sans_variantes_douteuses(lex)[1] == []
+
+
+def test_le_rapport_qualite_dit_les_refus(tmp_path):
+    from transcria.jobs.filesystem import JobFilesystem
+    from transcria.jobs.models import Job, JobState
+    from transcria.quality.quality_report import QualityReporter
+
+    srt = ("1\n00:00:00,000 --> 00:00:04,000\nSPEAKER_00(Alice): le Cloud privé et l'IA Clood.\n\n"
+           "2\n00:00:04,000 --> 00:00:08,000\nSPEAKER_01(Bob): un groupe actif de la sterie.\n")
+    fs = JobFilesystem(str(tmp_path), "job-r")
+    fs.save_text("metadata/transcription.srt", srt)
+    fs.save_text("metadata/transcription_corrigee.srt", srt.replace("Clood", "cloud"))
+    fs.save_json("metadata/transcription_segments.json", [
+        {"start": 0.0, "end": 4.0, "speaker": "Alice", "text": "le Cloud privé et l'IA cloud."},
+        {"start": 4.0, "end": 8.0, "speaker": "Bob", "text": "un groupe actif de la sterie."},
+    ])
+    fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 8, "format": "wav", "codec": "pcm",
+                                                   "channels": 1, "sample_rate_hz": 16000})
+    fs.save_json("context/session_lexicon.json", LEX_REEL)
+    report = QualityReporter({"storage": {"jobs_dir": str(tmp_path)}}).run_all_checks(
+        Job(id="job-r", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value))
+    refused = [c for c in report["checks"] if c["type"] == "lexicon_substitution_refused"]
+    assert refused and refused[0]["count"] == 2
+    assert [r["reason"] for r in refused[0]["items"]] == [L.REFUS_FORME_PHRASE, L.REFUS_VARIANTE_FORME_VALIDEE]
+    point = next(p for p in report["review_points"] if p.startswith("Lexique : 2 substitution(s)"))
+    assert "comme on peut voir, Klaud" in point and "« Cloud » → « Klaud »" in point
+    from transcria.quality.review_points import ReviewPoints
+    assert any("forme-phrase" in p for p in ReviewPoints.generate(report))

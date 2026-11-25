@@ -82,6 +82,16 @@ class ReviewPoints:
             elif ctype == "missing_lexicon_terms":
                 terms_list = check.get("terms", [])
                 points.append(f"Termes lexique absents : {', '.join(terms_list[:10])}")
+            elif ctype == "lexicon_substitution_refused":
+                labels = []
+                for item in check.get("items", [])[:5]:
+                    if item.get("reason") == "forme_phrase":
+                        labels.append(f"« {item.get('term')} » (forme-phrase)")
+                    else:
+                        labels.append(f"« {item.get('variant')} » → « {item.get('term')} » "
+                                      "(variante = forme validée d'un autre terme)")
+                points.append(f"Lexique : {count} substitution(s) non appliquée(s) automatiquement — "
+                              f"{' ; '.join(labels)}.")
             elif ctype == "unresolved_lexicon_variants":
                 detail_items: list[str] = []
                 for item in check.get("exact_variants", [])[:5]:

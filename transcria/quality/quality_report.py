@@ -5,7 +5,7 @@ from typing import Any
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.llm_tools.opencode_runner import resolve_output_language
-from transcria.quality.lexicon_checks import LexiconChecker
+from transcria.quality.lexicon_checks import REFUS_FORME_PHRASE, LexiconChecker, refused_substitutions
 from transcria.quality.review_points import ReviewPoints as _RP
 from transcria.quality.srt_checks import SRTChecker
 
@@ -48,6 +48,10 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "out_of_order": ("Segments hors ordre temporel : {n} — l'ordre des segments "
                          "n'est pas croissant (vérifier la fusion/diarisation)."),
         "missing_lexicon": "Termes du lexique normalisés absents : {terms}",
+        "lexicon_refused": ("Lexique : {n} substitution(s) non appliquée(s) automatiquement — {detail} ; "
+                            "la ligne reste à relire à l'étape 6."),
+        "refused_phrase": "« {term} » (la forme validée ressemble à une phrase)",
+        "refused_other_form": "« {variant} » → « {term} » (la variante est aussi la forme validée d'un autre terme)",
         "inconsistent_forms": ("Formes incohérentes hors glossaire : {n} — signalées sans "
                                "correction automatique ({detail})."),
         "close_to": "proche de",
@@ -98,6 +102,9 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "out_of_order": ("Out-of-order segments: {n} — segment order is not "
                          "increasing (check merging/diarization)."),
         "missing_lexicon": "Normalised glossary terms missing: {terms}",
+        "lexicon_refused": "Glossary: {n} substitution(s) not applied automatically — {detail}; review the line at step 6.",
+        "refused_phrase": "“{term}” (the validated form looks like a sentence)",
+        "refused_other_form": "“{variant}” → “{term}” (the variant is also another term's validated form)",
         "inconsistent_forms": ("Inconsistent forms outside the glossary: {n} — flagged without "
                                "automatic correction ({detail})."),
         "close_to": "close to",
@@ -158,6 +165,9 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "(Zusammenführung/Diarisierung prüfen)."
         ),
         "missing_lexicon": "Fehlende normalisierte Lexikonbegriffe: {terms}",
+        "lexicon_refused": "Lexikon: {n} Ersetzung(en) nicht automatisch angewendet — {detail}; Zeile in Schritt 6 prüfen.",
+        "refused_phrase": "„{term}“ (die validierte Form sieht wie ein Satz aus)",
+        "refused_other_form": "„{variant}“ → „{term}“ (die Variante ist auch die validierte Form eines anderen Begriffs)",
         "inconsistent_forms": "Inkonsistente Formen außerhalb des Glossars: {n} — ohne automatische Korrektur gemeldet ({detail}).",
         "close_to": "nahe bei",
         "unresolved_variants": "Nach der Korrektur nicht aufgelöste Lexikonvarianten: {detail}",
@@ -219,6 +229,9 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
             "fusión/diarización)."
         ),
         "missing_lexicon": "Términos del léxico normalizados ausentes: {terms}",
+        "lexicon_refused": "Léxico: {n} sustitución(es) no aplicada(s) automáticamente — {detail}; revisar la línea en el paso 6.",
+        "refused_phrase": "«{term}» (la forma validada parece una frase)",
+        "refused_other_form": "«{variant}» → «{term}» (la variante es también la forma validada de otro término)",
         "inconsistent_forms": "Formas incoherentes fuera del léxico: {n} — señaladas sin corrección automática ({detail}).",
         "close_to": "cercano a",
         "unresolved_variants": "Variantes de léxico no resueltas tras la corrección: {detail}",
@@ -280,6 +293,9 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "overlaps": "Sovrapposizioni: {n} di cui {sig} ≥ {thr}s — verificare i timestamp.",
         "out_of_order": "Segmenti fuori ordine temporale: {n} — l'ordine dei segmenti non è crescente (verificare unione/diarizzazione).",
         "missing_lexicon": "Termini del lessico normalizzati assenti: {terms}",
+        "lexicon_refused": "Lessico: {n} sostituzione/i non applicata/e automaticamente — {detail}; rivedere la riga al passo 6.",
+        "refused_phrase": "«{term}» (la forma validata sembra una frase)",
+        "refused_other_form": "«{variant}» → «{term}» (la variante è anche la forma validata di un altro termine)",
         "inconsistent_forms": "Forme incoerenti fuori dal lessico: {n} — segnalate senza correzione automatica ({detail}).",
         "close_to": "vicino a",
         "unresolved_variants": "Varianti del lessico non risolte dopo la correzione: {detail}",
@@ -342,6 +358,9 @@ _QR_STRINGS: dict[str, dict[str, str]] = {
         "out_of_order":
             "Segmentos fora de ordem: {n} — a ordem dos segmentos não está aumentando (verifique fusão/diarização).",
         "missing_lexicon": "Termos do léxico normalizados ausentes: {terms}",
+        "lexicon_refused": "Léxico: {n} substituição(ões) não aplicada(s) automaticamente — {detail}; rever a linha no passo 6.",
+        "refused_phrase": "«{term}» (a forma validada parece uma frase)",
+        "refused_other_form": "«{variant}» → «{term}» (a variante é também a forma validada de outro termo)",
         "inconsistent_forms": "Formas inconsistentes fora do léxico: {n} — sinalizadas sem correção automática ({detail}).",
         "close_to": "próximo de",
         "unresolved_variants": "Variantes do léxico não resolvidas após a correção: {detail}",
@@ -651,6 +670,19 @@ class QualityReporter:
                            "severity": "warning"})
             review_points.append(self.S["missing_lexicon"].format(terms=", ".join(missing_corrected[:10])))
             warnings += len(missing_corrected)
+
+        # 7bis-a. Substitutions REFUSÉES par le filet déterministe (forme validée qui est une
+        #    phrase, variante qui est la forme validée d'un autre terme — `sans_variantes_douteuses`) :
+        #    la consigne de l'utilisateur n'est pas appliquée, on le lui DIT (vécu 2026-11-08,
+        #    job fd68c18b : une saisie à la main appliquée 5 fois là où la LLM avait refusé).
+        total_checks += 1
+        refused = refused_substitutions(lexicon)
+        if refused:
+            checks.append({"type": "lexicon_substitution_refused", "count": len(refused),
+                           "items": refused, "severity": "warning"})
+            detail = " ; ".join(self._refusal_label(r) for r in refused[:5])
+            review_points.append(self.S["lexicon_refused"].format(n=len(refused), detail=detail))
+            warnings += len(refused)
 
         # 7ter. Formes incohérentes HORS glossaire — SIGNALÉES sans correction
         # (périmètre tranché : la relecture finale ne corrige que le glossaire validé ;
@@ -1079,6 +1111,12 @@ class QualityReporter:
             if check.get("type") == check_type:
                 return check
         return None
+
+    def _refusal_label(self, refus: dict) -> str:
+        """Libellé (langue des livrables) d'un refus du filet lexique."""
+        if refus.get("reason") == REFUS_FORME_PHRASE:
+            return self.S["refused_phrase"].format(term=refus.get("term", ""))
+        return self.S["refused_other_form"].format(variant=refus.get("variant", ""), term=refus.get("term", ""))
 
     @staticmethod
     def _find_inconsistent_word_forms(srt_text: str, lexicon: list) -> list[dict]:

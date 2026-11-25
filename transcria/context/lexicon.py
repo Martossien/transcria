@@ -206,15 +206,78 @@ def sans_variantes_expansions(lexicon: list) -> tuple[list, int]:
     return epurees, retirees
 
 
-def substitution_entries(entries: list | None, *, verbatim: bool = False) -> list[dict]:
-    """Les entrées qui ont le DROIT de remplacer : formes non ambiguës, avec au moins une variante
-    distincte de la forme validée. ``verbatim=True`` (transcription) retire aussi les expansions
-    multi-mots des sigles — remplacer une locution PRONONCÉE par le sigle effacerait des mots réels ;
-    dans un texte rédigé (titre, synthèse, rôle) la forme validée s'applique telle quelle. Règles
-    IDENTIQUES à celles du lexique transmis à la LLM de correction : une seule source de vérité."""
+_PONCTUATION_DE_PHRASE = re.compile(r"[,;:!?]")
+
+#: Motifs de refus d'une substitution automatique — clés STABLES, rendues par le rapport qualité.
+REFUS_FORME_PHRASE = "forme_phrase"
+REFUS_VARIANTE_FORME_VALIDEE = "variante_forme_validee"
+
+
+def sans_variantes_douteuses(lexicon: list) -> tuple[list, list[dict]]:
+    """Retire du lexique de SUBSTITUTION ce qui est faux par construction, quelle que soit la LLM :
+
+    1. une forme validée qui porte une ponctuation de phrase (« , ; : ! ? ») n'est pas un terme
+       mais un bout de phrase — l'entrée reste sous les yeux de l'humain, elle ne remplace rien ;
+    2. une variante qui est aussi la FORME VALIDÉE d'une autre entrée n'est pas une graphie
+       fautive : la remplacer défait l'autre entrée et enchaîne les substitutions.
+
+    Vécu 2026-11-08 (job fd68c18b) : une fiche saisie à la main portait « Cloud » en variante d'un
+    bout de phrase ; « Cloudé » → « cloud » (entrée voisine) → ce bout de phrase, 5 fois dans le
+    SRT livré et dans la synthèse du DOCX — là où la LLM de correction avait justement REFUSÉ
+    l'entrée. Les règles d'une variante « par définition fautive » valent pour une variante
+    proposée par la LLM, pas pour une saisie humaine. Rend (entrées épurées, refus
+    ``[{"term", "variant", "reason"}]``) — les refus sont MONTRÉS dans les points à vérifier,
+    jamais appliqués ni tus."""
+    refus: list[dict] = []
+    formes = {str(e.get("replace_by") or e.get("term") or "").strip().lower()
+              for e in lexicon if isinstance(e, dict)}
+    formes.discard("")
+    epurees: list = []
+    for entree in lexicon:
+        if not isinstance(entree, dict):
+            epurees.append(entree)
+            continue
+        term = str(entree.get("term", ""))
+        forme = str(entree.get("replace_by") or term or "").strip()
+        if _PONCTUATION_DE_PHRASE.search(forme):
+            refus.append({"term": term, "variant": "", "reason": REFUS_FORME_PHRASE})
+            continue
+        variants = entree.get("variants") or []
+        if not isinstance(variants, list):
+            epurees.append(entree)
+            continue
+        gardees = []
+        for v in variants:
+            vl = str(v).strip().lower()
+            if vl and vl != forme.lower() and vl in formes:
+                refus.append({"term": term, "variant": str(v), "reason": REFUS_VARIANTE_FORME_VALIDEE})
+            else:
+                gardees.append(v)
+        epurees.append(entree if len(gardees) == len(variants) else {**entree, "variants": gardees})
+    return epurees, refus
+
+
+def refused_substitutions(entries: list | None) -> list[dict]:
+    """Les refus du filet sur un lexique validé (motifs stables) — pour le rapport qualité, qui les
+    dit à l'utilisateur : une consigne non appliquée en silence n'est pas une consigne."""
     if not entries:
         return []
     kept, _ = sans_formes_ambigues([e for e in entries if isinstance(e, dict)])
+    return sans_variantes_douteuses(kept)[1]
+
+
+def substitution_entries(entries: list | None, *, verbatim: bool = False) -> list[dict]:
+    """Les entrées qui ont le DROIT de remplacer : formes non ambiguës, ni forme-phrase ni variante
+    qui soit la forme validée d'un autre terme (``sans_variantes_douteuses``), avec au moins une
+    variante distincte de la forme validée. ``verbatim=True`` (transcription) retire aussi les
+    expansions multi-mots des sigles — remplacer une locution PRONONCÉE par le sigle effacerait des
+    mots réels ; dans un texte rédigé (titre, synthèse, rôle) la forme validée s'applique telle
+    quelle. Règles IDENTIQUES à celles du lexique transmis à la LLM de correction : une seule source
+    de vérité."""
+    if not entries:
+        return []
+    kept, _ = sans_formes_ambigues([e for e in entries if isinstance(e, dict)])
+    kept, _ = sans_variantes_douteuses(kept)
     if verbatim:
         kept, _ = sans_variantes_expansions(kept)
     out: list[dict] = []
@@ -333,13 +396,16 @@ def apply_validated_forms(text: str, entries: list | None) -> str:
     Mesuré 2026-11-02 sur 65 jobs réels : 29 jobs portaient dans un rôle de participant une
     variante que l'utilisateur avait lui-même déclarée fautive au lexique (109 champs, 98 fois
     le texte de la LLM de résumé jamais retouché) — le tableau du rapport Word l'imprimait
-    telle quelle. Les variantes sont par définition des graphies fautives validées comme
-    telles : aucun homographe légitime à préserver. Les variantes les plus longues passent en
-    premier (« SIGLE_A B » avant « SIGLE_A »). Jamais appliqué à un artefact stocké : rendu seul.
+    telle quelle. Les variantes sont des graphies fautives validées comme telles (ce qui n'en
+    est pas une — forme-phrase, forme validée d'un autre terme — est écarté en amont par
+    ``substitution_entries``). UNE SEULE PASSE : la sortie d'un remplacement n'est jamais l'entrée
+    d'un autre (pas d'enchaînement « Cloudé » → « cloud » → autre chose) ; à une même position la
+    variante la plus longue l'emporte (« SIGLE_A B » avant « SIGLE_A »). Jamais appliqué à un
+    artefact stocké : rendu seul.
     """
     if not text or not entries:
         return text
-    pairs: list[tuple[str, str]] = []
+    mapping: dict[str, str] = {}
     for entry in substitution_entries(entries):
         form = str(entry.get("replace_by") or entry.get("term") or "").strip()
         if not form:
@@ -347,10 +413,9 @@ def apply_validated_forms(text: str, entries: list | None) -> str:
         for variant in entry.get("variants") or []:
             v = str(variant).strip()
             if v and v.lower() != form.lower():
-                pairs.append((v, form))
-    if not pairs:
+                mapping.setdefault(v.lower(), form)
+    if not mapping:
         return text
-    out = text
-    for variant, form in sorted(pairs, key=lambda vf: -len(vf[0])):
-        out = re.sub(r"(?<!\w)" + re.escape(variant) + r"(?!\w)", form, out, flags=re.IGNORECASE)
-    return out
+    alternatives = "|".join(re.escape(v) for v in sorted(mapping, key=len, reverse=True))
+    pattern = re.compile(r"(?<!\w)(?:" + alternatives + r")(?!\w)", re.IGNORECASE)
+    return pattern.sub(lambda m: mapping.get(m.group(0).lower(), m.group(0)), text)
