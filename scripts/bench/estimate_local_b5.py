@@ -13,10 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from transcria.benchmarks.stt_concurrency_estimator import collect_measurements
-from transcria.benchmarks.stt_concurrency_estimator import estimate_local_concurrency
-from transcria.benchmarks.stt_concurrency_estimator import write_estimates
-
+from transcria.benchmarks.stt_concurrency_estimator import collect_measurements, estimate_local_concurrency, write_estimates
 
 BENCH_RESULTS_DIR = REPO_ROOT / "bench_results"
 

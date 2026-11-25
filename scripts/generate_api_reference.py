@@ -67,9 +67,7 @@ def _view_metadata(view_func) -> tuple[str, str, str, bool]:
     perms = [m.group("perm").strip() for d in decorators for m in [_REQUIRES_RE.search(d)] if m]
     if perms:
         auth = "connexion + " + ", ".join(perms)
-    elif any(d.startswith("@login_required") for d in decorators):
-        auth = "connexion requise"
-    elif any("login_required" in d for d in decorators):
+    elif any(d.startswith("@login_required") for d in decorators) or any("login_required" in d for d in decorators):
         auth = "connexion requise"
     return module, auth, first_line, stable
 
