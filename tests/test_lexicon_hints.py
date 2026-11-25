@@ -73,3 +73,24 @@ def test_rapport_qualite_signale_la_cible_absente_apres_une_variante_vue(tmp_pat
         Job(id="job-q", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value))
     missing = [c for c in report["checks"] if c["type"] == "missing_lexicon_terms"]
     assert missing and missing[0]["terms"] == ["Kubernetes (K8s)"]
+
+
+def test_etape_lexique_porte_le_bouton_d_echange_et_la_reference_des_apercus(app, admin_client):
+    """Étape 6 (2026-11-12) : chaque fiche a un bouton « C'est une faute… », des champs vivants
+    (data-on=input) et la page embarque la transcription RAPIDE comme référence des compteurs."""
+    with app.app_context():
+        job = make_job(UserStore.get_by_username("admin").id, state=JobState.PARTICIPANTS_DONE)
+        jobs_dir = __import__("transcria.config", fromlist=["get_config"]).get_config()["storage"]["jobs_dir"]
+        fs = JobFilesystem(jobs_dir, job.id)
+        fs.save_text("summary/quick_transcript.txt", "Le projet Alfa avance avec l'Outil Bé.\n</script>alert(1)")
+        fs.save_json("context/session_lexicon.json", [
+            {"id": "t1", "term": "Terme opaque", "category": "mot suspect", "priority": "normale",
+             "variants": [], "replace_by": "", "comment": "", "contexts": []},
+        ])
+        job_id = job.id
+    html = admin_client.get(f"/jobs/{job_id}").get_data(as_text=True)
+    assert 'data-action="TranscrIA.swapLexiconRow"' in html and "C'est une faute : la bonne forme est…" in html
+    assert 'class="lex-hints small mt-1" data-lex-hints' in html
+    assert html.count('data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input"') >= 3
+    assert 'window.__WIZARD_LEX_REFERENCE__ = "Le projet Alfa avance avec l' in html
+    assert "</script>alert(1)" not in html      # tojson échappe la fermeture de script

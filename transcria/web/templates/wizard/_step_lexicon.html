@@ -66,8 +66,8 @@
           <label class="form-label small mb-1">{{ _('Formes suspectes observées') }}</label>
           <label class="form-label small mb-1">{{ _('Catégorie') }}</label>
           <label class="form-label small mb-1">{{ _('Priorité') }}</label>
-          <input type="text" class="form-control form-control-sm lex-term" placeholder="{{ _('Ex: Forme validée') }}" value="{{ t.term }}">
-          <input type="text" class="form-control form-control-sm lex-variants" placeholder="{{ _('Ex: Forme douteuse A, forme douteuse B') }}" value="{{ (t.variants or [])|join(', ') }}">
+          <input type="text" class="form-control form-control-sm lex-term" placeholder="{{ _('Ex: Forme validée') }}" value="{{ t.term }}" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">
+          <input type="text" class="form-control form-control-sm lex-variants" placeholder="{{ _('Ex: Forme douteuse A, forme douteuse B') }}" value="{{ (t.variants or [])|join(', ') }}" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">
           <input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="{{ _('Catégorie libre') }}" value="{{ t.category }}">
           <select class="form-select form-select-sm lex-prio">
             {% for prio in lexicon_priorities %}
@@ -75,9 +75,13 @@
             {% endfor %}
           </select>
         </div>
+        <div class="lex-hints small mt-1" data-lex-hints></div>
+        <button type="button" class="btn btn-sm btn-outline-secondary lex-swap mt-1"
+                title="{{ _('Déplace cette forme dans les formes suspectes et vous laisse écrire la bonne graphie') }}"
+                data-action="TranscrIA.swapLexiconRow" data-action-el><i class="bi bi-arrow-left-right"></i> {{ _("C'est une faute : la bonne forme est…") }}</button>
         <div class="mt-2">
           <label class="form-label small mb-1">{{ _("Forme à écrire dans la transcription (si différente de la forme validée)") }}</label>
-          <input type="text" class="form-control form-control-sm lex-replace" placeholder="{{ _("Ex. sigle développé, orthographe officielle") }}" value="{{ t.replace_by or '' }}">
+          <input type="text" class="form-control form-control-sm lex-replace" placeholder="{{ _("Ex. sigle développé, orthographe officielle") }}" value="{{ t.replace_by or '' }}" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">
         </div>
         {% if t.mentions %}
         <div class="mt-1 small text-body-secondary lex-mentions">{{ _('Mentions relevées, jamais remplacées :') }} {{ t.mentions|join(', ') }}</div>

@@ -74,6 +74,13 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
 .lexicon-card { position: relative; display: block; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .lexicon-grid { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.8fr) minmax(160px, 1fr) 120px; gap: 6px 10px; align-items: end; padding-right: 34px; }
 .lexicon-card .lex-remove { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+/* Étape 6 : aperçu du sens de chaque remplacement + avertissements (jamais bloquants). */
+.lex-hints:empty { display: none; }
+.lex-hints .lex-hint { display: block; color: var(--text-muted); }
+.lex-hints .lex-hint-warn { color: #92400e; }
+.lex-hints .lex-hint-warn::before { content: "⚠ "; }
+.lexicon-card.lex-row-warn { border-color: #f59e0b; }
+.lexicon-card.lex-row-swap-first .lex-swap { border-color: #f59e0b; color: #92400e; }
 @media (max-width: 760px) {
   .lexicon-grid { grid-template-columns: 1fr; padding-right: 0; }
   .lexicon-card .lex-remove { position: static; margin-top: 8px; }

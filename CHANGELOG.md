@@ -134,6 +134,20 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   dans `/admin/config`. Six langues. Banc Playwright `scripts/bench/ask_meetings_walkthrough.py`
   (`docs/DISCUTER_REUNIONS.md`).
 
+#### Étape 6 « Lexique de session » : voir le sens de chaque remplacement avant de valider
+
+- **Aperçu du sens, par fiche** : « “variante” → “forme validée” : N occurrence(s) dans la
+  transcription rapide », recalculé à la frappe (même règle mot entier / casse ignorée que le filet).
+  Une variante absente du texte alors que la forme validée y est pose la question « la ligne
+  est-elle à l'envers ? » — vécu : une fiche retournée de travers (variante = la bonne forme).
+- **Bouton « C'est une faute : la bonne forme est… »** : déplace la forme dans les variantes et
+  laisse écrire la bonne graphie — plus de couper-coller pour les fiches « mot suspect » que la LLM
+  livre à l'envers (11 sur 40 sur un job réel) ; mis en avant sur ces fiches.
+- **Avertissements, jamais bloquants**, alignés sur le filet déterministe : forme validée qui
+  ressemble à une phrase (ne remplacera rien), variante qui est la forme validée d'une autre ligne
+  (ne sera pas appliquée), variante fréquente dans le texte (mot courant ?). L'écran dit ce que le
+  code fera. JS dans `static/js/lexicon_hints.js` ; banc Playwright `scripts/bench/lexicon_step_walkthrough.py`.
+
 #### Retours utilisateurs
 
 - **Notifications** : bilan d'accueil admin (SMTP désactivé, hôte manquant, comptes sans

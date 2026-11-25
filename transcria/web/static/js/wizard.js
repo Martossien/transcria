@@ -721,16 +721,18 @@ var TranscrIA = window.TranscrIA || {};
             '<label class="form-label small mb-1">' + t('Formes suspectes observées') + '</label>' +
             '<label class="form-label small mb-1">' + t('Catégorie') + '</label>' +
             '<label class="form-label small mb-1">' + t('Priorité') + '</label>' +
-            '<input type="text" class="form-control form-control-sm lex-term" placeholder="' + t('Ex: Forme validée') + '" value="" data-field="term">' +
-            '<input type="text" class="form-control form-control-sm lex-variants" placeholder="' + t('Ex: Forme douteuse A, forme douteuse B') + '" value="" data-field="variants">' +
+            '<input type="text" class="form-control form-control-sm lex-term" placeholder="' + t('Ex: Forme validée') + '" value="" data-field="term" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">' +
+            '<input type="text" class="form-control form-control-sm lex-variants" placeholder="' + t('Ex: Forme douteuse A, forme douteuse B') + '" value="" data-field="variants" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">' +
             '<input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="' + t('Catégorie libre') + '" value="" data-field="category">' +
             '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">' +
             (document.getElementById('lexicon-prio-tpl') ? document.getElementById('lexicon-prio-tpl').innerHTML : '') +
             '</select>' +
             '</div>' +
+            '<div class="lex-hints small mt-1" data-lex-hints></div>' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary lex-swap mt-1" title="' + t('Déplace cette forme dans les formes suspectes et vous laisse écrire la bonne graphie') + '" data-action="TranscrIA.swapLexiconRow" data-action-el><i class="bi bi-arrow-left-right"></i> ' + t("C'est une faute : la bonne forme est…") + '</button>' +
             '<div class="mt-2">' +
             '<label class="form-label small mb-1">' + t('Forme à écrire dans la transcription (si différente de la forme validée)') + '</label>' +
-            '<input type="text" class="form-control form-control-sm lex-replace" placeholder="' + t('Ex. sigle développé, orthographe officielle') + '" value="">' +
+            '<input type="text" class="form-control form-control-sm lex-replace" placeholder="' + t('Ex. sigle développé, orthographe officielle') + '" value="" data-action="TranscrIA.refreshLexiconHintsFrom" data-action-el data-on="input">' +
             '</div>' +
             '<input type="hidden" class="lex-source" value="">' +
             '<input type="hidden" class="lex-central-entry-id" value="">' +
@@ -779,6 +781,7 @@ var TranscrIA = window.TranscrIA || {};
         row.querySelector('.lex-comment').value = td.comment || '';
         row.querySelector('.lex-contexts-json').textContent = JSON.stringify(td.contexts || []);
         W.fillLexiconContexts(row, td.contexts || []);
+        if (W.refreshLexiconRowHints) W.refreshLexiconRowHints(row);   // lexicon_hints.js
         return row;
     };
 

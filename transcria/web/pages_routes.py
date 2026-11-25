@@ -268,6 +268,10 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
     return recovered
 
 
+#: Taille maximale de la transcription rapide embarquée dans la page de l'étape 6 (aperçus).
+LEXICON_REFERENCE_MAX_CHARS = 400_000
+
+
 def _selected_lexicon_ids(fs: JobFilesystem, central_lexicons: list) -> set[str]:
     stored = fs.load_json("context/selected_lexicons.json") or {}
     available_ids = {lexicon.id for lexicon in central_lexicons}
@@ -629,6 +633,10 @@ def job_wizard(job_id: str):
     central_lexicons, initial_lexicon, central_lexicon_display = _central_lexicon_context(job, fs, session_lexicon, meeting)
     summary_segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
     lexicon = enrich_lexicon_context_audio(initial_lexicon, summary_segments)
+    # Référence des aperçus de l'étape 6 (« “variante” → “forme” : N occurrences ») : la
+    # transcription RAPIDE, celle que la LLM a lue pour proposer les termes. Plafonnée — une
+    # réunion de trois heures ne doit pas alourdir la page de plusieurs Mo.
+    lexicon_reference_text = (fs.load_text("summary/quick_transcript.txt") or "")[:LEXICON_REFERENCE_MAX_CHARS]
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     voice_matches = fs.load_json("speakers/voice_matches.json") or {}
     audio_scene = fs.load_json("metadata/audio_scene.json") or {}
@@ -725,6 +733,7 @@ def job_wizard(job_id: str):
         platform_names=[p["name"] for p in participants
                         if p.get("source") == PLATFORM_SOURCE and p.get("name")],
         lexicon=lexicon,
+        lexicon_reference_text=lexicon_reference_text,
         central_lexicons=central_lexicons,
         central_lexicon_display=central_lexicon_display,
         central_lexicon_prefill_count=central_lexicon_display.get("displayed_central_entries", 0),

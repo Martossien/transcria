@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 22:26+0100\n"
+"POT-Creation-Date: 2026-11-12 19:25+0100\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -308,7 +308,7 @@ msgid "(créé)"
 msgstr "(created)"
 
 #: transcria/i18n/js_catalog.py:44
-#: transcria/web/templates/wizard/_step_lexicon.html:155
+#: transcria/web/templates/wizard/_step_lexicon.html:159
 msgid "Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
 msgstr "Add this validated form to a central glossary, shared and reused on future jobs"
 
@@ -339,7 +339,7 @@ msgid "Annuler le traitement"
 msgstr "Cancel processing"
 
 #: transcria/i18n/js_catalog.py:49
-#: transcria/web/templates/wizard/_step_lexicon.html:156
+#: transcria/web/templates/wizard/_step_lexicon.html:160
 msgid "Au lexique central"
 msgstr "To central glossary"
 
@@ -364,7 +364,7 @@ msgid "Contexte projet"
 msgstr "Project context"
 
 #: transcria/i18n/js_catalog.py:54
-#: transcria/web/templates/wizard/_step_lexicon.html:116
+#: transcria/web/templates/wizard/_step_lexicon.html:120
 #, python-format
 msgid "Contexte proposé (%(n)s)"
 msgstr "Suggested context (%(n)s)"
@@ -460,7 +460,7 @@ msgid "Forme validée"
 msgstr "Validated form"
 
 #: transcria/i18n/js_catalog.py:75
-#: transcria/web/templates/wizard/_step_lexicon.html:83
+#: transcria/web/templates/wizard/_step_lexicon.html:87
 msgid "Mentions relevées, jamais remplacées :"
 msgstr "Mentions noted, never replaced:"
 
@@ -469,57 +469,91 @@ msgstr "Mentions noted, never replaced:"
 msgid "Formes suspectes observées"
 msgstr "Observed doubtful forms"
 
-#: transcria/i18n/js_catalog.py:77 transcria/web/ui_labels.py:30
+#: transcria/i18n/js_catalog.py:78
+#: transcria/web/templates/wizard/_step_lexicon.html:81
+msgid "C'est une faute : la bonne forme est…"
+msgstr "This is a mistake: the right form is…"
+
+#: transcria/i18n/js_catalog.py:79
+#: transcria/web/templates/wizard/_step_lexicon.html:80
+msgid "Déplace cette forme dans les formes suspectes et vous laisse écrire la bonne graphie"
+msgstr "Moves this form to the doubtful forms and lets you type the right spelling"
+
+#: transcria/i18n/js_catalog.py:80
+msgid "La forme validée ressemble à une phrase : elle ne remplacera rien."
+msgstr "The validated form looks like a sentence: it will replace nothing."
+
+#: transcria/i18n/js_catalog.py:81
+#, python-format
+msgid "« %(v)s » est la forme validée d'une autre ligne : cette variante ne sera pas appliquée."
+msgstr "“%(v)s” is another line's validated form: this variant will not be applied."
+
+#: transcria/i18n/js_catalog.py:82
+#, python-format
+msgid "« %(v)s » → « %(f)s » : %(n)s occurrence(s) dans la transcription rapide"
+msgstr "“%(v)s” → “%(f)s”: %(n)s occurrence(s) in the quick transcript"
+
+#: transcria/i18n/js_catalog.py:83
+#, python-format
+msgid "aucune occurrence de cette variante, mais %(n)s de la forme validée — la ligne est-elle à l'envers ?"
+msgstr "no occurrence of this variant, but %(n)s of the validated form — is the line reversed?"
+
+#: transcria/i18n/js_catalog.py:84
+#, python-format
+msgid "« %(v)s » apparaît %(n)s fois : vérifiez qu'il s'agit bien d'une faute et non d'un mot courant."
+msgstr "“%(v)s” appears %(n)s times: check that it really is a mistake and not a common word."
+
+#: transcria/i18n/js_catalog.py:85 transcria/web/ui_labels.py:30
 msgid "Identification des locuteurs…"
 msgstr "Identifying speakers…"
 
-#: transcria/i18n/js_catalog.py:78
+#: transcria/i18n/js_catalog.py:86
 msgid "Informations client"
 msgstr "Client information"
 
-#: transcria/i18n/js_catalog.py:79
+#: transcria/i18n/js_catalog.py:87
 msgid "Informations entretien"
 msgstr "Interview information"
 
-#: transcria/i18n/js_catalog.py:80
+#: transcria/i18n/js_catalog.py:88
 msgid "Informations formation"
 msgstr "Training information"
 
-#: transcria/i18n/js_catalog.py:81
+#: transcria/i18n/js_catalog.py:89
 msgid "Informations incident"
 msgstr "Incident information"
 
-#: transcria/i18n/js_catalog.py:82
+#: transcria/i18n/js_catalog.py:90
 msgid "Informations légales PV"
 msgstr "Legal minutes information"
 
-#: transcria/i18n/js_catalog.py:83
+#: transcria/i18n/js_catalog.py:91
 msgid "Informations légales PV — Séance extraordinaire"
 msgstr "Legal minutes information — Extraordinary session"
 
-#: transcria/i18n/js_catalog.py:84
+#: transcria/i18n/js_catalog.py:92
 msgid "Informations négociation"
 msgstr "Negotiation information"
 
-#: transcria/i18n/js_catalog.py:85
+#: transcria/i18n/js_catalog.py:93
 msgid "Informations séminaire"
 msgstr "Seminar information"
 
-#: transcria/i18n/js_catalog.py:86
+#: transcria/i18n/js_catalog.py:94
 msgid "La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service."
 msgstr "The LLM may be looping. If the correction files are already produced, you can cancel — the job will be recovered automatically when the service restarts."
 
-#: transcria/i18n/js_catalog.py:87
+#: transcria/i18n/js_catalog.py:95
 msgid "Le résumé n'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer."
 msgstr "The summary could not be generated (LLM produced nothing after 3 attempts). The transcription is kept — you can restart."
 
-#: transcria/i18n/js_catalog.py:88
-#: transcria/web/templates/wizard/_step_lexicon.html:97
+#: transcria/i18n/js_catalog.py:96
+#: transcria/web/templates/wizard/_step_lexicon.html:101
 #, python-format
 msgid "Lexique central : %(name)s"
 msgstr "Central glossary: %(name)s"
 
-#: transcria/i18n/js_catalog.py:89
+#: transcria/i18n/js_catalog.py:97
 #: transcria/web/templates/admin_connectors.html:37
 #: transcria/web/templates/central_lexicon_detail.html:18
 #: transcria/web/templates/central_lexicons.html:18
@@ -531,20 +565,20 @@ msgstr "Central glossary: %(name)s"
 msgid "Nom"
 msgstr "Name"
 
-#: transcria/i18n/js_catalog.py:90
+#: transcria/i18n/js_catalog.py:98
 msgid "Ordre du jour & indicateurs"
 msgstr "Agenda & indicators"
 
-#: transcria/i18n/js_catalog.py:91
+#: transcria/i18n/js_catalog.py:99
 msgid "Oui, relancer"
 msgstr "Yes, restart"
 
-#: transcria/i18n/js_catalog.py:92
-#: transcria/web/templates/wizard/_step_lexicon.html:112
+#: transcria/i18n/js_catalog.py:100
+#: transcria/web/templates/wizard/_step_lexicon.html:116
 msgid "Pourquoi cette forme doit être validée"
 msgstr "Why this form must be validated"
 
-#: transcria/i18n/js_catalog.py:93
+#: transcria/i18n/js_catalog.py:101
 #: transcria/web/templates/_central_lexicon_entry_fields.html:15
 #: transcria/web/templates/central_lexicon_detail.html:197
 #: transcria/web/templates/queue.html:93
@@ -552,941 +586,941 @@ msgstr "Why this form must be validated"
 msgid "Priorité"
 msgstr "Priority"
 
-#: transcria/i18n/js_catalog.py:94
+#: transcria/i18n/js_catalog.py:102
 msgid "Produit"
 msgstr "Product"
 
-#: transcria/i18n/js_catalog.py:95
-#: transcria/web/templates/wizard/_step_lexicon.html:109
+#: transcria/i18n/js_catalog.py:103
+#: transcria/web/templates/wizard/_step_lexicon.html:113
 msgid "Proposé à partir d'un document que vous avez joint à la réunion"
 msgstr "Suggested from a document you attached to the meeting"
 
-#: transcria/i18n/js_catalog.py:96
+#: transcria/i18n/js_catalog.py:104
 msgid "Rapport qualité…"
 msgstr "Quality report…"
 
-#: transcria/i18n/js_catalog.py:97
+#: transcria/i18n/js_catalog.py:105
 msgid "Relancement du traitement…"
 msgstr "Restarting processing…"
 
-#: transcria/i18n/js_catalog.py:98
+#: transcria/i18n/js_catalog.py:106
 msgid "Relancer le résumé"
 msgstr "Regenerate the summary"
 
-#: transcria/i18n/js_catalog.py:99
+#: transcria/i18n/js_catalog.py:107
 msgid "Renseignez d'abord la forme validée."
 msgstr "Enter the validated form first."
 
-#: transcria/i18n/js_catalog.py:100 transcria/i18n/js_catalog.py:204
+#: transcria/i18n/js_catalog.py:108 transcria/i18n/js_catalog.py:212
 #: transcria/web/templates/group_form.html:61
 #: transcria/web/templates/meeting_types.html:96
 #: transcria/web/templates/wizard/_step_summary.html:89
 msgid "Retirer"
 msgstr "Remove"
 
-#: transcria/i18n/js_catalog.py:101
+#: transcria/i18n/js_catalog.py:109
 #, python-format
 msgid "Réponse serveur inattendue (HTTP %(status)s)."
 msgstr "Unexpected server response (HTTP %(status)s)."
 
-#: transcria/i18n/js_catalog.py:102
+#: transcria/i18n/js_catalog.py:110
 msgid "Réponse serveur invalide."
 msgstr "Invalid server response."
 
-#: transcria/i18n/js_catalog.py:103
+#: transcria/i18n/js_catalog.py:111
 #: transcria/web/templates/wizard/_step_participants.html:130
 msgid "Rôle dans la réunion"
 msgstr "Role in the meeting"
 
-#: transcria/i18n/js_catalog.py:104
+#: transcria/i18n/js_catalog.py:112
 msgid "Session expirée — redirection vers la connexion…"
 msgstr "Session expired — redirecting to sign-in…"
 
-#: transcria/i18n/js_catalog.py:105
+#: transcria/i18n/js_catalog.py:113
 msgid "Terminé."
 msgstr "Done."
 
-#: transcria/i18n/js_catalog.py:106
+#: transcria/i18n/js_catalog.py:114
 #, python-format
 msgid "Traitement annulé après %(elapsed)s."
 msgstr "Processing cancelled after %(elapsed)s."
 
-#: transcria/i18n/js_catalog.py:107
+#: transcria/i18n/js_catalog.py:115
 msgid "Traitement annulé."
 msgstr "Processing cancelled."
 
-#: transcria/i18n/js_catalog.py:108
+#: transcria/i18n/js_catalog.py:116
 msgid "Traitement en cours"
 msgstr "Processing"
 
-#: transcria/i18n/js_catalog.py:109
+#: transcria/i18n/js_catalog.py:117
 msgid "Traitement démarré. Transcription ASR en cours… (0s écoulées)"
 msgstr "Processing started. ASR transcription in progress… (0s elapsed)"
 
-#: transcria/i18n/js_catalog.py:110
+#: transcria/i18n/js_catalog.py:118
 msgid "Traitement relancé. Transcription ASR en cours… (0s écoulées)"
 msgstr "Processing restarted. ASR transcription in progress… (0s elapsed)"
 
-#: transcria/i18n/js_catalog.py:111
+#: transcria/i18n/js_catalog.py:119
 #, python-format
 msgid "Traitement terminé en %(elapsed)s. Chargement…"
 msgstr "Processing completed in %(elapsed)s. Loading…"
 
-#: transcria/i18n/js_catalog.py:112
+#: transcria/i18n/js_catalog.py:120
 msgid "Transcription ASR en cours…"
 msgstr "ASR transcription in progress…"
 
-#: transcria/i18n/js_catalog.py:113
+#: transcria/i18n/js_catalog.py:121
 msgid "Résumé de contrôle en cours de génération (lancé automatiquement)…"
 msgstr "Control summary being generated (started automatically)…"
 
-#: transcria/i18n/js_catalog.py:114
+#: transcria/i18n/js_catalog.py:122
 msgid "VRAM insuffisante : l'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
 msgstr "Insufficient VRAM: the administrator has been notified. The summary will resume automatically as soon as GPU memory is freed."
 
-#: transcria/i18n/js_catalog.py:115
+#: transcria/i18n/js_catalog.py:123
 msgid "Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)"
 msgstr "Do you want to restart processing? (the current glossary and corrections will be applied)"
 
-#: transcria/i18n/js_catalog.py:116
-#: transcria/web/templates/wizard/_step_lexicon.html:109
+#: transcria/i18n/js_catalog.py:124
+#: transcria/web/templates/wizard/_step_lexicon.html:113
 msgid "issu des documents fournis"
 msgstr "from the provided documents"
 
-#: transcria/i18n/js_catalog.py:117
+#: transcria/i18n/js_catalog.py:125
 #, python-format
 msgid "mis à jour il y a %(n)sh"
 msgstr "updated %(n)sh ago"
 
-#: transcria/i18n/js_catalog.py:118
+#: transcria/i18n/js_catalog.py:126
 #, python-format
 msgid "mis à jour il y a %(n)smin"
 msgstr "updated %(n)smin ago"
 
-#: transcria/i18n/js_catalog.py:119
+#: transcria/i18n/js_catalog.py:127
 #, python-format
 msgid "mis à jour il y a %(n)ss"
 msgstr "updated %(n)ss ago"
 
-#: transcria/i18n/js_catalog.py:120
+#: transcria/i18n/js_catalog.py:128
 #, python-format
 msgid "Position %(n)s dans la file"
 msgstr "Position %(n)s in the queue"
 
-#: transcria/i18n/js_catalog.py:121
+#: transcria/i18n/js_catalog.py:129
 #, python-format
 msgid "démarrage estimé dans ~%(d)s"
 msgstr "estimated start in ~%(d)s"
 
-#: transcria/i18n/js_catalog.py:122
+#: transcria/i18n/js_catalog.py:130
 msgid "démarrage imminent"
 msgstr "starting imminently"
 
-#: transcria/i18n/js_catalog.py:123
+#: transcria/i18n/js_catalog.py:131
 msgid "moins d’une minute"
 msgstr "less than a minute"
 
-#: transcria/i18n/js_catalog.py:124
+#: transcria/i18n/js_catalog.py:132
 #, python-format
 msgid "%(n)s min"
 msgstr "%(n)s min"
 
-#: transcria/i18n/js_catalog.py:125
+#: transcria/i18n/js_catalog.py:133
 #, python-format
 msgid "%(h)s h %(m)s min"
 msgstr "%(h)s h %(m)s min"
 
-#: transcria/i18n/js_catalog.py:126
+#: transcria/i18n/js_catalog.py:134
 #, python-format
 msgid "%(h)s h"
 msgstr "%(h)s h"
 
-#: transcria/i18n/js_catalog.py:127
+#: transcria/i18n/js_catalog.py:135
 msgid "⚠ L'attente GPU dépasse la limite configurée — vous pouvez patienter ou soumettre en profil express (moins de ressources)"
 msgstr "⚠ GPU wait has exceeded the configured limit — you can keep waiting or submit with an express profile (fewer resources)"
 
-#: transcria/i18n/js_catalog.py:128
+#: transcria/i18n/js_catalog.py:136
 msgid "nouveau"
 msgstr "new"
 
-#: transcria/i18n/js_catalog.py:129
+#: transcria/i18n/js_catalog.py:137
 msgid "requête impossible"
 msgstr "request failed"
 
-#: transcria/i18n/js_catalog.py:130
-#: transcria/web/templates/wizard/_step_lexicon.html:124
+#: transcria/i18n/js_catalog.py:138
+#: transcria/web/templates/wizard/_step_lexicon.html:128
 msgid "sans timecode"
 msgstr "no timecode"
 
-#: transcria/i18n/js_catalog.py:131
+#: transcria/i18n/js_catalog.py:139
 #: transcria/web/templates/wizard/_step_summary.html:87
 msgid "tronqué"
 msgstr "truncated"
 
-#: transcria/i18n/js_catalog.py:132
-#: transcria/web/templates/wizard/_step_lexicon.html:118
+#: transcria/i18n/js_catalog.py:140
+#: transcria/web/templates/wizard/_step_lexicon.html:122
 #, python-format
 msgid "· %(listened)s/%(total)s écoutés"
 msgstr "· %(listened)s/%(total)s listened"
 
-#: transcria/i18n/js_catalog.py:133
+#: transcria/i18n/js_catalog.py:141
 msgid "Échec de l'ajout du document."
 msgstr "Failed to add the document."
 
-#: transcria/i18n/js_catalog.py:134
+#: transcria/i18n/js_catalog.py:142
 #, python-format
 msgid "Échec du traitement après %(elapsed)s."
 msgstr "Processing failed after %(elapsed)s."
 
-#: transcria/i18n/js_catalog.py:135
+#: transcria/i18n/js_catalog.py:143
 msgid "Échec du traitement."
 msgstr "Processing failed."
 
-#: transcria/i18n/js_catalog.py:136
-#: transcria/web/templates/wizard/_step_lexicon.html:130
+#: transcria/i18n/js_catalog.py:144
+#: transcria/web/templates/wizard/_step_lexicon.html:134
 msgid "Écouter 5 secondes avant et après"
 msgstr "Listen 5 seconds before and after"
 
-#: transcria/i18n/js_catalog.py:137
-#: transcria/web/templates/wizard/_step_lexicon.html:143
+#: transcria/i18n/js_catalog.py:145
+#: transcria/web/templates/wizard/_step_lexicon.html:147
 msgid "Écouté"
 msgstr "Listened"
 
-#: transcria/i18n/js_catalog.py:138
+#: transcria/i18n/js_catalog.py:146
 #, python-format
 msgid "⚠ Le traitement LLM prend plus de temps que prévu (%(elapsed)s)."
 msgstr "⚠ LLM processing is taking longer than expected (%(elapsed)s)."
 
-#: transcria/i18n/js_catalog.py:141
+#: transcria/i18n/js_catalog.py:149
 #, python-format
 msgid "%(n)s type(s) visible(s) — quota : %(max)s créés/personne"
 msgstr "%(n)s type(s) visible — quota: %(max)s created/person"
 
-#: transcria/i18n/js_catalog.py:142
+#: transcria/i18n/js_catalog.py:150
 #, python-format
 msgid "%(seg)s segments · %(spk)s locuteurs"
 msgstr "%(seg)s segments · %(spk)s speakers"
 
-#: transcria/i18n/js_catalog.py:143
+#: transcria/i18n/js_catalog.py:151
 msgid "Ajuster début/fin"
 msgstr "Adjust start/end"
 
-#: transcria/i18n/js_catalog.py:144
+#: transcria/i18n/js_catalog.py:152
 msgid "Aller au repère"
 msgstr "Go to marker"
 
-#: transcria/i18n/js_catalog.py:145
+#: transcria/i18n/js_catalog.py:153
 msgid "Aller à cet instant"
 msgstr "Go to this moment"
 
-#: transcria/i18n/js_catalog.py:146
+#: transcria/i18n/js_catalog.py:154
 msgid "Aperçu impossible."
 msgstr "Preview failed."
 
-#: transcria/i18n/js_catalog.py:147
+#: transcria/i18n/js_catalog.py:155
 msgid "Appliquer cette palette"
 msgstr "Apply this palette"
 
-#: transcria/i18n/js_catalog.py:148
+#: transcria/i18n/js_catalog.py:156
 msgid "Audio non disponible sur cette installation — l'écoute et la forme d'onde sont désactivées, toutes les éditions restent possibles."
 msgstr "Audio unavailable on this installation — playback and waveform are disabled, all edits remain possible."
 
-#: transcria/i18n/js_catalog.py:149
+#: transcria/i18n/js_catalog.py:157
 msgid "Avancer ce segment ET tous les suivants de 500 ms"
 msgstr "Move this segment AND all following ones forward by 500 ms"
 
-#: transcria/i18n/js_catalog.py:150
+#: transcria/i18n/js_catalog.py:158
 #, python-format
 msgid "Avertissements (non bloquants) : %(w)s"
 msgstr "Warnings (non-blocking): %(w)s"
 
-#: transcria/i18n/js_catalog.py:151
+#: transcria/i18n/js_catalog.py:159
 msgid "Bande du bas : molette = zoom · glisser les bords bleus = retimer le segment actif"
 msgstr "Bottom band: wheel = zoom · drag the blue edges = re-time the active segment"
 
-#: transcria/i18n/js_catalog.py:152
+#: transcria/i18n/js_catalog.py:160
 #: transcria/web/templates/meeting_types.html:151
 msgid "COMPTE-RENDU DE TRANSCRIPTION"
 msgstr "TRANSCRIPTION MINUTES"
 
-#: transcria/i18n/js_catalog.py:153
+#: transcria/i18n/js_catalog.py:161
 msgid "Ce dossier est édité dans un autre onglet ou par une autre personne — brouillon suspendu ici pour ne rien écraser."
 msgstr "This job is being edited in another tab or by another person — draft suspended here to avoid overwriting anything."
 
-#: transcria/i18n/js_catalog.py:154
+#: transcria/i18n/js_catalog.py:162
 msgid "Changer le locuteur"
 msgstr "Change speaker"
 
-#: transcria/i18n/js_catalog.py:155
+#: transcria/i18n/js_catalog.py:163
 msgid "Commence avant la fin du segment précédent"
 msgstr "Starts before the end of the previous segment"
 
-#: transcria/i18n/js_catalog.py:156
+#: transcria/i18n/js_catalog.py:164
 msgid "Contenu extrait (ordre du jour, décisions, votes…)"
 msgstr "Extracted content (agenda, decisions, votes…)"
 
-#: transcria/i18n/js_catalog.py:157
+#: transcria/i18n/js_catalog.py:165
 #: transcria/web/templates/wizard/_step_context.html:7
 msgid "Contexte de la réunion"
 msgstr "Meeting context"
 
-#: transcria/i18n/js_catalog.py:158
+#: transcria/i18n/js_catalog.py:166
 msgid "Couper au curseur (C)"
 msgstr "Cut at cursor (C)"
 
-#: transcria/i18n/js_catalog.py:159
+#: transcria/i18n/js_catalog.py:167
 msgid "Créer le mien"
 msgstr "Create mine"
 
-#: transcria/i18n/js_catalog.py:160
+#: transcria/i18n/js_catalog.py:168
 #, python-format
 msgid "Créer mon type (à partir de « %(name)s »)"
 msgstr "Create my type (based on \"%(name)s\")"
 
-#: transcria/i18n/js_catalog.py:161
+#: transcria/i18n/js_catalog.py:169
 msgid "Ctrl+S — enregistrer une version"
 msgstr "Ctrl+S — save a version"
 
-#: transcria/i18n/js_catalog.py:162
+#: transcria/i18n/js_catalog.py:170
 msgid "Ctrl+Z / Ctrl+Y — annuler / rétablir"
 msgstr "Ctrl+Z / Ctrl+Y — undo / redo"
 
-#: transcria/i18n/js_catalog.py:163 transcria/web/templates/queue.html:161
+#: transcria/i18n/js_catalog.py:171 transcria/web/templates/queue.html:161
 msgid "Descendre"
 msgstr "Move down"
 
-#: transcria/i18n/js_catalog.py:164
+#: transcria/i18n/js_catalog.py:172
 msgid "Donnez d'abord un nom au type."
 msgstr "Give the type a name first."
 
-#: transcria/i18n/js_catalog.py:165 transcria/web/templates/schedule.html:143
+#: transcria/i18n/js_catalog.py:173 transcria/web/templates/schedule.html:143
 msgid "Début"
 msgstr "Start"
 
-#: transcria/i18n/js_catalog.py:166
+#: transcria/i18n/js_catalog.py:174
 msgid "Enregistrement impossible."
 msgstr "Save failed."
 
-#: transcria/i18n/js_catalog.py:167
+#: transcria/i18n/js_catalog.py:175
 msgid "Entrée — valider le texte et reprendre l'écoute"
 msgstr "Enter — validate the text and resume playback"
 
-#: transcria/i18n/js_catalog.py:168
+#: transcria/i18n/js_catalog.py:176
 msgid "Espace — lecture/pause"
 msgstr "Space — play/pause"
 
-#: transcria/i18n/js_catalog.py:169
+#: transcria/i18n/js_catalog.py:177
 msgid "Exporter (partage entre installations / communauté)"
 msgstr "Export (sharing between installations / community)"
 
-#: transcria/i18n/js_catalog.py:170 transcria/web/templates/schedule.html:147
+#: transcria/i18n/js_catalog.py:178 transcria/web/templates/schedule.html:147
 msgid "Fin"
 msgstr "End"
 
-#: transcria/i18n/js_catalog.py:171
+#: transcria/i18n/js_catalog.py:179
 msgid "Fusion possible sur une plage contiguë seulement"
 msgstr "Merge possible on a contiguous range only"
 
-#: transcria/i18n/js_catalog.py:172
+#: transcria/i18n/js_catalog.py:180
 msgid "Fusionner avec le précédent"
 msgstr "Merge with the previous one"
 
-#: transcria/i18n/js_catalog.py:173
+#: transcria/i18n/js_catalog.py:181
 msgid "Fusionner la sélection"
 msgstr "Merge the selection"
 
-#: transcria/i18n/js_catalog.py:174
+#: transcria/i18n/js_catalog.py:182
 #, python-format
 msgid "Groupe %(g)s"
 msgstr "Group %(g)s"
 
-#: transcria/i18n/js_catalog.py:175
+#: transcria/i18n/js_catalog.py:183
 msgid "Import impossible."
 msgstr "Import failed."
 
-#: transcria/i18n/js_catalog.py:176
+#: transcria/i18n/js_catalog.py:184
 msgid "Importé — à relire"
 msgstr "Imported — to review"
 
-#: transcria/i18n/js_catalog.py:177
+#: transcria/i18n/js_catalog.py:185
 msgid "Impossible de charger la transcription."
 msgstr "Could not load the transcription."
 
-#: transcria/i18n/js_catalog.py:178
+#: transcria/i18n/js_catalog.py:186
 msgid "Informations spécifiques (champs du type)"
 msgstr "Specific information (type fields)"
 
-#: transcria/i18n/js_catalog.py:179
+#: transcria/i18n/js_catalog.py:187
 msgid "Intégré"
 msgstr "Built-in"
 
-#: transcria/i18n/js_catalog.py:180
+#: transcria/i18n/js_catalog.py:188
 msgid "La transcription a changé depuis (correction ou affinage) : reprendre le brouillon écrasera ces changements à l'enregistrement."
 msgstr "The transcription has changed since (correction or refinement): resuming the draft will overwrite those changes on save."
 
-#: transcria/i18n/js_catalog.py:181
+#: transcria/i18n/js_catalog.py:189
 msgid "Libellé (ex. Budgets évoqués)"
 msgstr "Label"
 
-#: transcria/i18n/js_catalog.py:182
+#: transcria/i18n/js_catalog.py:190
 msgid "Libellé (ex. Filiale concernée)"
 msgstr "Label"
 
-#: transcria/i18n/js_catalog.py:183
+#: transcria/i18n/js_catalog.py:191
 msgid "Libellé court (Word)"
 msgstr "Label"
 
-#: transcria/i18n/js_catalog.py:184
+#: transcria/i18n/js_catalog.py:192
 msgid "Logo refusé."
 msgstr "Logo rejected."
 
-#: transcria/i18n/js_catalog.py:185
+#: transcria/i18n/js_catalog.py:193
 msgid "M — poser un repère · G — aller au temps"
 msgstr "M — drop a marker · G — go to time"
 
-#: transcria/i18n/js_catalog.py:186
+#: transcria/i18n/js_catalog.py:194
 msgid "Marquer comme traité"
 msgstr "Mark as done"
 
-#: transcria/i18n/js_catalog.py:187
+#: transcria/i18n/js_catalog.py:195
 msgid "Micro inaccessible : autorisez le microphone puis réessayez."
 msgstr "Microphone unavailable: allow microphone access and try again."
 
-#: transcria/i18n/js_catalog.py:188
+#: transcria/i18n/js_catalog.py:196
 #, python-format
 msgid "Modifier « %(name)s »"
 msgstr "Edit \"%(name)s\""
 
-#: transcria/i18n/js_catalog.py:189
+#: transcria/i18n/js_catalog.py:197
 msgid "Modifié depuis la dernière version"
 msgstr "Modified since the last version"
 
-#: transcria/i18n/js_catalog.py:190 transcria/web/templates/queue.html:158
+#: transcria/i18n/js_catalog.py:198 transcria/web/templates/queue.html:158
 msgid "Monter"
 msgstr "Move up"
 
-#: transcria/i18n/js_catalog.py:191
+#: transcria/i18n/js_catalog.py:199
 msgid "Nombre"
 msgstr "Number"
 
-#: transcria/i18n/js_catalog.py:192
+#: transcria/i18n/js_catalog.py:200
 msgid "Nouveau locuteur…"
 msgstr "New speaker…"
 
-#: transcria/i18n/js_catalog.py:193
+#: transcria/i18n/js_catalog.py:201
 msgid "Partage impossible."
 msgstr "Sharing failed."
 
-#: transcria/i18n/js_catalog.py:194
+#: transcria/i18n/js_catalog.py:202
 #, python-format
 msgid "Partager au groupe %(g)s"
 msgstr "Share with group %(g)s"
 
-#: transcria/i18n/js_catalog.py:195
+#: transcria/i18n/js_catalog.py:203
 msgid "Partager à tous"
 msgstr "Share with everyone"
 
-#: transcria/i18n/js_catalog.py:196
+#: transcria/i18n/js_catalog.py:204
 msgid "Partagé à tous"
 msgstr "Shared with everyone"
 
-#: transcria/i18n/js_catalog.py:197
+#: transcria/i18n/js_catalog.py:205
 msgid "Participants & locuteurs"
 msgstr "Participants & speakers"
 
-#: transcria/i18n/js_catalog.py:198 transcria/notifications/job_facts.py:76
+#: transcria/i18n/js_catalog.py:206 transcria/notifications/job_facts.py:76
 #: transcria/web/templates/job_result.html:21
 #: transcria/web/templates/job_result.html:38
 #: transcria/web/templates/job_result.html:159
 msgid "Points à vérifier"
 msgstr "Points to review"
 
-#: transcria/i18n/js_catalog.py:199
+#: transcria/i18n/js_catalog.py:207
 msgid "Privé"
 msgstr "Private"
 
-#: transcria/i18n/js_catalog.py:200
+#: transcria/i18n/js_catalog.py:208
 msgid "Raccourcis :"
 msgstr "Shortcuts:"
 
-#: transcria/i18n/js_catalog.py:201
+#: transcria/i18n/js_catalog.py:209
 msgid "Reculer ce segment ET tous les suivants de 500 ms"
 msgstr "Move this segment AND all following ones back by 500 ms"
 
-#: transcria/i18n/js_catalog.py:202
+#: transcria/i18n/js_catalog.py:210
 msgid "Rendre privé"
 msgstr "Make private"
 
-#: transcria/i18n/js_catalog.py:203
+#: transcria/i18n/js_catalog.py:211
 #, python-format
 msgid "Repère %(n)s — %(t)s"
 msgstr "Marker %(n)s — %(t)s"
 
-#: transcria/i18n/js_catalog.py:205
+#: transcria/i18n/js_catalog.py:213
 msgid "S / E — caler le début / la fin sur la lecture"
 msgstr "S / E — snap the start / end to playback"
 
-#: transcria/i18n/js_catalog.py:206
+#: transcria/i18n/js_catalog.py:214
 msgid "S/E : caler début/fin sur la lecture"
 msgstr "S/E: snap start/end to playback"
 
-#: transcria/i18n/js_catalog.py:207
+#: transcria/i18n/js_catalog.py:215
 #, python-format
 msgid "Supprimer %(n)s segments ?"
 msgstr "Delete %(n)s segments?"
 
-#: transcria/i18n/js_catalog.py:208
+#: transcria/i18n/js_catalog.py:216
 msgid "Supprimer ce segment"
 msgstr "Delete this segment"
 
-#: transcria/i18n/js_catalog.py:209
+#: transcria/i18n/js_catalog.py:217
 #, python-format
 msgid "Supprimer le segment #%(n)s et son texte ?"
 msgstr "Delete segment #%(n)s and its text?"
 
-#: transcria/i18n/js_catalog.py:210
+#: transcria/i18n/js_catalog.py:218
 #, python-format
 msgid "Supprimer le type « %(name)s » ? Les traitements passés le conservent."
 msgstr "Delete type \"%(name)s\"? Past jobs keep it."
 
-#: transcria/i18n/js_catalog.py:211
+#: transcria/i18n/js_catalog.py:219
 msgid "Synthèse (en section autonome)"
 msgstr "Summary (as a standalone section)"
 
-#: transcria/i18n/js_catalog.py:212
+#: transcria/i18n/js_catalog.py:220
 msgid "Tab / Maj+Tab — segment suivant / précédent"
 msgstr "Tab / Shift+Tab — next / previous segment"
 
-#: transcria/i18n/js_catalog.py:213
+#: transcria/i18n/js_catalog.py:221
 msgid "Texte"
 msgstr "Text"
 
-#: transcria/i18n/js_catalog.py:214
+#: transcria/i18n/js_catalog.py:222
 msgid "Texte long"
 msgstr "Long text"
 
-#: transcria/i18n/js_catalog.py:215
+#: transcria/i18n/js_catalog.py:223
 msgid "Toujours présent"
 msgstr "Always present"
 
-#: transcria/i18n/js_catalog.py:216
+#: transcria/i18n/js_catalog.py:224
 #: transcria/web/templates/meeting_types.html:163
 msgid "TranscrIA · Réunion d'exemple · Page 1/4"
 msgstr "TranscrIA · Sample meeting · Page 1/4"
 
-#: transcria/i18n/js_catalog.py:217 transcria/web/templates/job_result.html:155
+#: transcria/i18n/js_catalog.py:225 transcria/web/templates/job_result.html:155
 msgid "Transcription"
 msgstr "Transcript"
 
-#: transcria/i18n/js_catalog.py:218
+#: transcria/i18n/js_catalog.py:226
 #, python-format
 msgid "Type « %(name)s » importé (privé, à relire) : ouvrez-le, vérifiez, enregistrez pour l'activer."
 msgstr "Type \"%(name)s\" imported (private, to review): open it, check it, save to activate it."
 
-#: transcria/i18n/js_catalog.py:219
+#: transcria/i18n/js_catalog.py:227
 msgid "Télécharger un exemple Word"
 msgstr "Download a Word sample"
 
-#: transcria/i18n/js_catalog.py:220
+#: transcria/i18n/js_catalog.py:228
 #, python-format
 msgid "Un brouillon du <strong>%(when)s</strong> (%(n)s segments) a été trouvé."
 msgstr "A draft from <strong>%(when)s</strong> (%(n)s segments) was found."
 
-#: transcria/i18n/js_catalog.py:221
+#: transcria/i18n/js_catalog.py:229
 msgid "Un traitement est en cours sur ce dossier — l'éditeur est en lecture seule et rouvrira en écriture à la fin."
 msgstr "A job is running on this file — the editor is read-only and will reopen in write mode at the end."
 
-#: transcria/i18n/js_catalog.py:222
+#: transcria/i18n/js_catalog.py:230
 msgid "Voix retenue"
 msgstr "Voice selected"
 
-#: transcria/i18n/js_catalog.py:224
+#: transcria/i18n/js_catalog.py:232
 msgid "segment très court"
 msgstr "very short segment"
 
-#: transcria/i18n/js_catalog.py:225
+#: transcria/i18n/js_catalog.py:233
 msgid "segment court et pauvre en mots"
 msgstr "short, word-poor segment"
 
-#: transcria/i18n/js_catalog.py:226
+#: transcria/i18n/js_catalog.py:234
 msgid "débit de parole anormal"
 msgstr "abnormal speech rate"
 
-#: transcria/i18n/js_catalog.py:227
+#: transcria/i18n/js_catalog.py:235
 msgid "probabilité de non-parole élevée"
 msgstr "high no-speech probability"
 
-#: transcria/i18n/js_catalog.py:228
+#: transcria/i18n/js_catalog.py:236
 msgid "mots à faible confiance"
 msgstr "low-confidence words"
 
-#: transcria/i18n/js_catalog.py:229
+#: transcria/i18n/js_catalog.py:237
 msgid "texte non latin"
 msgstr "non-Latin text"
 
-#: transcria/i18n/js_catalog.py:230
+#: transcria/i18n/js_catalog.py:238
 msgid "motif d'hallucination générique"
 msgstr "generic hallucination pattern"
 
-#: transcria/i18n/js_catalog.py:231
+#: transcria/i18n/js_catalog.py:239
 msgid "signature d'hallucination connue de ce moteur"
 msgstr "hallucination signature known for this engine"
 
-#: transcria/i18n/js_catalog.py:232
+#: transcria/i18n/js_catalog.py:240
 msgid "zone audio dégradée (diagnostic)"
 msgstr "degraded audio zone (diagnostics)"
 
-#: transcria/i18n/js_catalog.py:233
+#: transcria/i18n/js_catalog.py:241
 msgid "marqué [INCERTAIN] par la correction"
 msgstr "marked [INCERTAIN] by the correction"
 
-#: transcria/i18n/js_catalog.py:234
+#: transcria/i18n/js_catalog.py:242
 msgid "fortement réécrit par la correction"
 msgstr "heavily rewritten by the correction"
 
-#: transcria/i18n/js_catalog.py:235
+#: transcria/i18n/js_catalog.py:243
 msgid "douteux"
 msgstr "doubtful"
 
-#: transcria/i18n/js_catalog.py:236
+#: transcria/i18n/js_catalog.py:244
 msgid "à vérifier"
 msgstr "to check"
 
-#: transcria/i18n/js_catalog.py:237
+#: transcria/i18n/js_catalog.py:245
 #, python-format
 msgid "%(n)s à vérifier"
 msgstr "%(n)s to check"
 
-#: transcria/i18n/js_catalog.py:238
+#: transcria/i18n/js_catalog.py:246
 msgid "restauré"
 msgstr "restored"
 
-#: transcria/i18n/js_catalog.py:239
+#: transcria/i18n/js_catalog.py:247
 msgid "restaurer"
 msgstr "restore"
 
-#: transcria/i18n/js_catalog.py:240
+#: transcria/i18n/js_catalog.py:248
 #, python-format
 msgid "%(n)s segment(s) retirés comme hallucinations confirmées — vérifier / restaurer"
 msgstr "%(n)s segment(s) removed as confirmed hallucinations — check / restore"
 
-#: transcria/i18n/js_catalog.py:241
+#: transcria/i18n/js_catalog.py:249
 msgid "Retirés sur double preuve (signature du moteur + zone sans parole). La restauration réinsère le texte à sa place — enregistrez ensuite une version."
 msgstr "Removed on double proof (engine signature + speech-free zone). Restoring re-inserts the text in place — then save a version."
 
-#: transcria/i18n/js_catalog.py:243
+#: transcria/i18n/js_catalog.py:251
 msgid "aucune modification"
 msgstr "no changes"
 
-#: transcria/i18n/js_catalog.py:244
+#: transcria/i18n/js_catalog.py:252
 #, python-format
 msgid "brouillon enregistré à %(t)s"
 msgstr "draft saved at %(t)s"
 
-#: transcria/i18n/js_catalog.py:245
+#: transcria/i18n/js_catalog.py:253
 msgid "brouillon non enregistré — nouvelle tentative"
 msgstr "draft not saved — retrying"
 
-#: transcria/i18n/js_catalog.py:246
+#: transcria/i18n/js_catalog.py:254
 msgid "brouillon repris — pensez à enregistrer une version"
 msgstr "draft resumed — remember to save a version"
 
-#: transcria/i18n/js_catalog.py:247
+#: transcria/i18n/js_catalog.py:255
 msgid "brouillon suspendu (édition ailleurs)"
 msgstr "draft suspended (edited elsewhere)"
 
-#: transcria/i18n/js_catalog.py:248
+#: transcria/i18n/js_catalog.py:256
 msgid "chevauche"
 msgstr "overlaps"
 
-#: transcria/i18n/js_catalog.py:249
+#: transcria/i18n/js_catalog.py:257
 msgid "enregistrement de la version…"
 msgstr "saving version…"
 
-#: transcria/i18n/js_catalog.py:250
+#: transcria/i18n/js_catalog.py:258
 msgid "enregistrement impossible"
 msgstr "save failed"
 
-#: transcria/i18n/js_catalog.py:251
+#: transcria/i18n/js_catalog.py:259
 #, python-format
 msgid "ex. %(name)s — mon équipe"
 msgstr "e.g. %(name)s — my team"
 
-#: transcria/i18n/js_catalog.py:252
+#: transcria/i18n/js_catalog.py:260
 msgid "modifications non enregistrées"
 msgstr "unsaved changes"
 
-#: transcria/i18n/js_catalog.py:253
+#: transcria/i18n/js_catalog.py:261
 msgid "préparation de la forme d'onde…"
 msgstr "preparing the waveform…"
 
-#: transcria/i18n/js_catalog.py:254
+#: transcria/i18n/js_catalog.py:262
 #, python-format
 msgid "relu : %(pct)s %%"
 msgstr "reviewed: %(pct)s %%"
 
-#: transcria/i18n/js_catalog.py:255
+#: transcria/i18n/js_catalog.py:263
 msgid "suivants +500 ms ⇥"
 msgstr "following +500 ms ⇥"
 
-#: transcria/i18n/js_catalog.py:256
+#: transcria/i18n/js_catalog.py:264
 #, python-format
 msgid "version v%(v)s enregistrée — documents à jour au téléchargement"
 msgstr "version v%(v)s saved — documents up to date on download"
 
-#: transcria/i18n/js_catalog.py:258
+#: transcria/i18n/js_catalog.py:266
 msgid "Vos corrections sont dans le verbatim. La synthèse (résumé, décisions) n'est pas encore à jour :"
 msgstr "Your corrections are in the transcript. The synthesis (summary, decisions) is not updated yet:"
 
-#: transcria/i18n/js_catalog.py:259
+#: transcria/i18n/js_catalog.py:267
 msgid "DOCX rapide (synthèse inchangée)"
 msgstr "Quick DOCX (synthesis unchanged)"
 
-#: transcria/i18n/js_catalog.py:260
+#: transcria/i18n/js_catalog.py:268
 msgid "Mettre à jour la synthèse (LLM, quelques minutes)"
 msgstr "Update the synthesis (LLM, a few minutes)"
 
-#: transcria/i18n/js_catalog.py:261
+#: transcria/i18n/js_catalog.py:269
 msgid "Mise à jour en cours…"
 msgstr "Updating…"
 
-#: transcria/i18n/js_catalog.py:262
+#: transcria/i18n/js_catalog.py:270
 msgid "Mise à jour de la synthèse impossible"
 msgstr "Synthesis update failed"
 
-#: transcria/i18n/js_catalog.py:263
+#: transcria/i18n/js_catalog.py:271
 msgid "Mise à niveau demandée…"
 msgstr "Upgrade requested…"
 
-#: transcria/i18n/js_catalog.py:264
+#: transcria/i18n/js_catalog.py:272
 msgid "Mise à niveau terminée — rechargement…"
 msgstr "Upgrade finished — reloading…"
 
-#: transcria/i18n/js_catalog.py:265
+#: transcria/i18n/js_catalog.py:273
 #, python-format
 msgid "Échec de la mise à niveau : %(e)s"
 msgstr "Upgrade failed: %(e)s"
 
-#: transcria/i18n/js_catalog.py:266
+#: transcria/i18n/js_catalog.py:274
 msgid "Le service redémarre — reconnexion…"
 msgstr "The service is restarting — reconnecting…"
 
-#: transcria/i18n/js_catalog.py:267
+#: transcria/i18n/js_catalog.py:275
 msgid "Synthèse mise à jour (versionnée — restaurable depuis le chat d'affinage)."
 msgstr "Synthesis updated (versioned — restorable from the refine chat)."
 
-#: transcria/i18n/js_catalog.py:268
+#: transcria/i18n/js_catalog.py:276
 msgid "Télécharger le DOCX à jour"
 msgstr "Download the updated DOCX"
 
-#: transcria/i18n/js_catalog.py:269
+#: transcria/i18n/js_catalog.py:277
 msgid "Voir le détail dans le chat"
 msgstr "See the details in the chat"
 
-#: transcria/i18n/js_catalog.py:270
+#: transcria/i18n/js_catalog.py:278
 msgid "Votre navigateur ne permet pas l'enregistrement audio."
 msgstr "Your browser does not support audio recording."
 
-#: transcria/i18n/js_catalog.py:271
+#: transcria/i18n/js_catalog.py:279
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "To note (e.g. budget amounts explicitly cited)"
 
-#: transcria/i18n/js_catalog.py:272
+#: transcria/i18n/js_catalog.py:280
 msgid "À valider"
 msgstr "To validate"
 
-#: transcria/i18n/js_catalog.py:273
+#: transcria/i18n/js_catalog.py:281
 #, python-format
 msgid "À vérifier %(done)s/%(total)s"
 msgstr "To review %(done)s/%(total)s"
 
-#: transcria/i18n/js_catalog.py:274
+#: transcria/i18n/js_catalog.py:282
 msgid "Écouter ce segment"
 msgstr "Listen to this segment"
 
-#: transcria/i18n/js_catalog.py:275
+#: transcria/i18n/js_catalog.py:283
 msgid "⇤ suivants −500 ms"
 msgstr "⇤ following −500 ms"
 
-#: transcria/i18n/js_catalog.py:276
+#: transcria/i18n/js_catalog.py:284
 msgid "✂ — couper au curseur · ⧉ — fusionner avec le précédent"
 msgstr "✂ — cut at cursor · ⧉ — merge with the previous one"
 
-#: transcria/i18n/js_catalog.py:278
+#: transcria/i18n/js_catalog.py:286
 msgid "Proposition"
 msgstr "Proposal"
 
-#: transcria/i18n/js_catalog.py:279
+#: transcria/i18n/js_catalog.py:287
 msgid "Appliquer cette proposition"
 msgstr "Apply this proposal"
 
-#: transcria/i18n/js_catalog.py:280
+#: transcria/i18n/js_catalog.py:288
 #: transcria/web/templates/admin_maintenance.html:11
 msgid "Version"
 msgstr "Version"
 
-#: transcria/i18n/js_catalog.py:281
+#: transcria/i18n/js_catalog.py:289
 #, python-brace-format
 msgid "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 msgstr "Refinement applied (version v{v}) — the documents above are regenerated on every download and include your changes."
 
-#: transcria/i18n/js_catalog.py:282
+#: transcria/i18n/js_catalog.py:290
 msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
 msgstr "Describe the change to apply, or click \"Apply this proposal\" under an assistant reply."
 
-#: transcria/i18n/js_catalog.py:283
+#: transcria/i18n/js_catalog.py:291
 msgid "Écrivez d'abord votre demande."
 msgstr "Write your request first."
 
-#: transcria/i18n/js_catalog.py:284
+#: transcria/i18n/js_catalog.py:292
 msgid "Appliquer aux documents :"
 msgstr "Apply to the documents:"
 
-#: transcria/i18n/js_catalog.py:285
+#: transcria/i18n/js_catalog.py:293
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "A restorable version will be created (you can revert)."
 
-#: transcria/i18n/js_catalog.py:286 transcria/notifications/mailer.py:263
+#: transcria/i18n/js_catalog.py:294 transcria/notifications/mailer.py:263
 #: transcria/notifications/mailer.py:323 transcria/queue/routes.py:42
 msgid "Erreur"
 msgstr "Error"
 
-#: transcria/i18n/js_catalog.py:287
+#: transcria/i18n/js_catalog.py:295
 msgid "Erreur réseau — réessayez."
 msgstr "Network error — please retry."
 
-#: transcria/i18n/js_catalog.py:288
+#: transcria/i18n/js_catalog.py:296
 msgid "Options invalides"
 msgstr "Invalid options"
 
-#: transcria/i18n/js_catalog.py:289
+#: transcria/i18n/js_catalog.py:297
 #, python-brace-format
 msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
 msgstr "Restore version v{v}? The documents will return to this state."
 
-#: transcria/i18n/js_catalog.py:290
+#: transcria/i18n/js_catalog.py:298
 msgid "Restauration impossible"
 msgstr "Restore failed"
 
-#: transcria/i18n/js_catalog.py:292
+#: transcria/i18n/js_catalog.py:300
 msgid "Impossible de modifier l'agenda."
 msgstr "Cannot change the schedule."
 
-#: transcria/i18n/js_catalog.py:293
+#: transcria/i18n/js_catalog.py:301
 msgid "Modification impossible."
 msgstr "Change not possible."
 
-#: transcria/i18n/js_catalog.py:294
+#: transcria/i18n/js_catalog.py:302
 msgid "Sélectionne au moins un jour."
 msgstr "Select at least one day."
 
-#: transcria/i18n/js_catalog.py:295
+#: transcria/i18n/js_catalog.py:303
 msgid "Supprimer ce créneau ?"
 msgstr "Delete this slot?"
 
-#: transcria/i18n/js_catalog.py:297
+#: transcria/i18n/js_catalog.py:305
 msgid "Action impossible sur ce job."
 msgstr "Action not possible on this job."
 
-#: transcria/i18n/js_catalog.py:298
+#: transcria/i18n/js_catalog.py:306
 msgid "Annuler ce job ?"
 msgstr "Cancel this job?"
 
-#: transcria/i18n/js_catalog.py:299
+#: transcria/i18n/js_catalog.py:307
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "Priority must be between 1 and 100."
 
-#: transcria/i18n/js_catalog.py:300
+#: transcria/i18n/js_catalog.py:308
 msgid "Supprimer tous les jobs de test ?"
 msgstr "Delete all test jobs?"
 
-#: transcria/i18n/js_catalog.py:301
-#: transcria/web/templates/wizard/_step_lexicon.html:79
+#: transcria/i18n/js_catalog.py:309
+#: transcria/web/templates/wizard/_step_lexicon.html:83
 msgid "Forme à écrire dans la transcription (si différente de la forme validée)"
 msgstr "Form to write in the transcript (if different from the validated form)"
 
-#: transcria/i18n/js_catalog.py:302
-#: transcria/web/templates/wizard/_step_lexicon.html:80
+#: transcria/i18n/js_catalog.py:310
+#: transcria/web/templates/wizard/_step_lexicon.html:84
 msgid "Ex. sigle développé, orthographe officielle"
 msgstr "E.g. expanded acronym, official spelling"
 
-#: transcria/i18n/js_catalog.py:303
+#: transcria/i18n/js_catalog.py:311
 msgid "En attente de mémoire GPU — le traitement reprendra tout seul dès qu'elle se libère."
 msgstr "Waiting for GPU memory — processing will resume on its own as soon as it is freed."
 
-#: transcria/i18n/js_catalog.py:304
+#: transcria/i18n/js_catalog.py:312
 msgid "En file d'attente — démarrage dès qu'une place se libère."
 msgstr "Queued — it will start as soon as a slot is free."
 
-#: transcria/i18n/js_catalog.py:305
+#: transcria/i18n/js_catalog.py:313
 #, python-format
 msgid "⏳ En attente de mémoire GPU : %(mb)s Mo requis, aucune carte ne les offre — le traitement partira dès qu'une carte se libère."
 msgstr "⏳ Waiting for GPU memory: %(mb)s MB required and no card can offer it — processing will start as soon as a card frees up."
 
-#: transcria/i18n/js_catalog.py:306
+#: transcria/i18n/js_catalog.py:314
 msgid "⏳ En attente : mémoire GPU insuffisante pour relancer la LLM d'arbitrage."
 msgstr "⏳ Waiting: not enough GPU memory to restart the arbitration LLM."
 
-#: transcria/i18n/js_catalog.py:307
+#: transcria/i18n/js_catalog.py:315
 msgid "⏳ En attente : le nœud de ressources manque de mémoire GPU."
 msgstr "⏳ Waiting: the resource node is short of GPU memory."
 
-#: transcria/i18n/js_catalog.py:308
+#: transcria/i18n/js_catalog.py:316
 msgid "Les jobs en cours seront ignorés."
 msgstr "Running jobs will be skipped."
 
-#: transcria/i18n/js_catalog.py:309
+#: transcria/i18n/js_catalog.py:317
 msgid "Nettoyage impossible."
 msgstr "Cleanup failed."
 
-#: transcria/i18n/js_catalog.py:310
+#: transcria/i18n/js_catalog.py:318
 msgid "job(s) de test supprimé(s)."
 msgstr "test job(s) deleted."
 
-#: transcria/i18n/js_catalog.py:312
+#: transcria/i18n/js_catalog.py:320
 msgid "tout local"
 msgstr "all local"
 
-#: transcria/i18n/js_catalog.py:313
+#: transcria/i18n/js_catalog.py:321
 msgid "Aucune ressource distante configurée (tout intégré)."
 msgstr "No remote resource configured (all integrated)."
 
-#: transcria/i18n/js_catalog.py:314
+#: transcria/i18n/js_catalog.py:322
 msgid "injoignable"
 msgstr "unreachable"
 
-#: transcria/i18n/js_catalog.py:315
+#: transcria/i18n/js_catalog.py:323
 #, python-brace-format
 msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}."
 msgstr "Resource node unreachable — remote transcriptions are queued. Required: {reqs}."
 
-#: transcria/i18n/js_catalog.py:316
+#: transcria/i18n/js_catalog.py:324
 msgid "distant"
 msgstr "remote"
 
-#: transcria/i18n/js_catalog.py:317
+#: transcria/i18n/js_catalog.py:325
 msgid "GPU :"
 msgstr "GPU:"
 
-#: transcria/i18n/js_catalog.py:318
+#: transcria/i18n/js_catalog.py:326
 #, python-brace-format
 msgid "GPU {i} — libre {free} / {total} Mo"
 msgstr "GPU {i} — free {free} / {total} MB"
 
-#: transcria/i18n/js_catalog.py:319
+#: transcria/i18n/js_catalog.py:327
 msgid "Aucun moteur déclaré."
 msgstr "No engine declared."
 
-#: transcria/i18n/js_catalog.py:320
+#: transcria/i18n/js_catalog.py:328
 msgid "erreur"
 msgstr "error"
 
-#: transcria/i18n/js_catalog.py:321
+#: transcria/i18n/js_catalog.py:329
 #, python-brace-format
 msgid "Statut indisponible ({e})."
 msgstr "Status unavailable ({e})."
 
-#: transcria/i18n/js_catalog.py:323
+#: transcria/i18n/js_catalog.py:331
 #: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_hardware.html:14
 #: transcria/web/templates/dashboard_status.html:32
@@ -1494,7 +1528,7 @@ msgstr "Status unavailable ({e})."
 msgid "Go"
 msgstr "GB"
 
-#: transcria/i18n/js_catalog.py:324
+#: transcria/i18n/js_catalog.py:332
 msgid "téléchargement…"
 msgstr "downloading…"
 
@@ -3070,11 +3104,11 @@ msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(ba
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Telephone-type bandwidth detected (codec)."
 
-#: transcria/web/pages_routes.py:566
+#: transcria/web/pages_routes.py:570
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:841
+#: transcria/web/pages_routes.py:850
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -4732,7 +4766,7 @@ msgstr "Job"
 #: transcria/web/templates/central_lexicon_detail.html:26
 #: transcria/web/templates/central_lexicons.html:19
 #: transcria/web/templates/groups.html:15
-#: transcria/web/templates/job_wizard.html:163
+#: transcria/web/templates/job_wizard.html:164
 #: transcria/web/templates/voice_form.html:26
 #: transcria/web/templates/voices.html:18
 msgid "Groupe"
@@ -5047,7 +5081,7 @@ msgstr "Add an entry"
 
 #: transcria/web/templates/central_lexicon_detail.html:140
 #: transcria/web/templates/group_form.html:96
-#: transcria/web/templates/job_wizard.html:172
+#: transcria/web/templates/job_wizard.html:173
 #: transcria/web/templates/schedule.html:179
 msgid "Ajouter"
 msgstr "Add"
@@ -5643,31 +5677,31 @@ msgstr "Your inputs (context, participants, glossary) are kept — you can resta
 msgid "Relancer le traitement"
 msgstr "Restart processing"
 
-#: transcria/web/templates/job_wizard.html:145
+#: transcria/web/templates/job_wizard.html:146
 msgid "Ajouter au lexique central"
 msgstr "Add to central glossary"
 
-#: transcria/web/templates/job_wizard.html:146
+#: transcria/web/templates/job_wizard.html:147
 msgid "Fermer"
 msgstr "Close"
 
-#: transcria/web/templates/job_wizard.html:149
+#: transcria/web/templates/job_wizard.html:150
 msgid "Forme :"
 msgstr "Form:"
 
-#: transcria/web/templates/job_wizard.html:151
+#: transcria/web/templates/job_wizard.html:152
 msgid "Lexique existant"
 msgstr "Existing glossary"
 
-#: transcria/web/templates/job_wizard.html:156
+#: transcria/web/templates/job_wizard.html:157
 msgid "— Nouveau lexique… —"
 msgstr "— New glossary… —"
 
-#: transcria/web/templates/job_wizard.html:160
+#: transcria/web/templates/job_wizard.html:161
 msgid "Nom du nouveau lexique"
 msgstr "New glossary name"
 
-#: transcria/web/templates/job_wizard.html:161
+#: transcria/web/templates/job_wizard.html:162
 msgid "Ex : Vocabulaire fromagerie"
 msgstr "E.g.: Cheese-making vocabulary"
 
@@ -6886,7 +6920,7 @@ msgid "Enregistrer le contexte"
 msgstr "Save context"
 
 #: transcria/web/templates/wizard/_step_context.html:114
-#: transcria/web/templates/wizard/_step_lexicon.html:168
+#: transcria/web/templates/wizard/_step_lexicon.html:172
 msgid "Enregistré"
 msgstr "Saved"
 
@@ -7110,40 +7144,40 @@ msgstr "How this lexicon is applied: the correction replaces a suspect form with
 msgid "Une forme validée écrite « A / B » n'est jamais remplacée, seulement signalée : choisissez une seule graphie."
 msgstr "A validated form written “A / B” is never replaced, only flagged: choose a single spelling."
 
-#: transcria/web/templates/wizard/_step_lexicon.html:87
+#: transcria/web/templates/wizard/_step_lexicon.html:91
 msgid "Forme ambiguë « A / B » : jamais remplacée, seulement signalée — gardez une seule graphie"
 msgstr "Ambiguous form “A / B”: never replaced, only flagged — keep a single spelling"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:99
+#: transcria/web/templates/wizard/_step_lexicon.html:103
 msgid "trouvé dans le texte"
 msgstr "found in the text"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:101
+#: transcria/web/templates/wizard/_step_lexicon.html:105
 msgid "variante détectée"
 msgstr "variant detected"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:103
+#: transcria/web/templates/wizard/_step_lexicon.html:107
 #, python-format
 msgid "priorité %(p)s"
 msgstr "priority %(p)s"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:146
+#: transcria/web/templates/wizard/_step_lexicon.html:150
 msgid "Audio indisponible pour ce timecode"
 msgstr "Audio unavailable for this timecode"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:162
+#: transcria/web/templates/wizard/_step_lexicon.html:166
 msgid "+ Ajouter un terme"
 msgstr "+ Add a term"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:163
+#: transcria/web/templates/wizard/_step_lexicon.html:167
 msgid "+ Importer depuis un fichier .txt"
 msgstr "+ Import from a .txt file"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:166
+#: transcria/web/templates/wizard/_step_lexicon.html:170
 msgid "Enregistrer le lexique"
 msgstr "Save glossary"
 
-#: transcria/web/templates/wizard/_step_lexicon.html:167
+#: transcria/web/templates/wizard/_step_lexicon.html:171
 msgid "Continuer sans lexique"
 msgstr "Continue without glossary"
 
